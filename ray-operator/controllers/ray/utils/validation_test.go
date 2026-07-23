@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -136,7 +137,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              false,
 		},
 		{
@@ -200,14 +201,87 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			annotations: map[string]string{
 				RayExternalStorageNSAnnotationKey: "myns",
 			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
+		},
+		// The redis backend does not require RedisAddress here: it may be supplied
+		// via env vars/annotations elsewhere, and master never enforced it.
+		{
+			name:                     "redis backend without RedisAddress is accepted",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
+			expectError:              false,
+		},
+		{
+			name: "redis backend rejects rocksdb-only storage field",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRedis,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("1Gi"))},
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend",
+		},
+		// rocksdb backend rules.
+		{
+			name:                     "rocksdb backend is valid with no redis fields",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			expectError:              false,
+		},
+		{
+			name: "rocksdb backend with operator-managed storage is valid",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("2Gi"))},
+			},
+			expectError: false,
+		},
+		{
+			name: "rocksdb backend rejects RedisAddress",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:      rayv1.GcsFTBackendRocksDB,
+				RedisAddress: "redis:6379",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.RedisAddress when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects ExternalStorageNamespace",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:                  rayv1.GcsFTBackendRocksDB,
+				ExternalStorageNamespace: "ns",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects claimName combined with size",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{
+					ClaimName: "my-pvc",
+					Size:      ptr.To(resource.MustParse("1Gi")),
+				},
+			},
+			expectError:  true,
+			errorMessage: "GcsFaultToleranceOptions.Storage.ClaimName is mutually exclusive with size, storageClassName, and accessModes",
+		},
+		{
+			name: "rocksdb backend rejects user-set RAY_gcs_storage env",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+			},
+			envVars: []corev1.EnvVar{
+				{Name: RAY_GCS_STORAGE, Value: "rocksdb"},
+			},
+			expectError: true,
+			errorMessage: fmt.Sprintf("cannot set `%s` or `%s` env var in head Pod when the embedded GCS FT backend is used - these are managed by KubeRay",
+				RAY_GCS_STORAGE, RAY_GCS_STORAGE_PATH),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -218,6 +292,85 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateRayClusterSpecEmbeddedGCSFeatureGate verifies the embedded RocksDB
+// backend is rejected unless the GCSFaultToleranceEmbeddedStorage feature gate is
+// enabled.
+func TestValidateRayClusterSpecEmbeddedGCSFeatureGate(t *testing.T) {
+	spec := &rayv1.RayClusterSpec{
+		GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: podTemplateSpec(nil, nil),
+		},
+	}
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, false)
+	err := ValidateRayClusterSpec(spec, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires the GCSFaultToleranceEmbeddedStorage feature gate")
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	require.NoError(t, ValidateRayClusterSpec(spec, nil))
+}
+
+func TestValidateGcsFaultToleranceEmbeddedReservedVolume(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	// The operator reserves the "gcs-storage" volume name and the /data/gcs
+	// mount path for the embedded backend. A user-supplied head volume, volume
+	// mount by that name, or mount at that path must be rejected, otherwise
+	// configureEmbeddedFT would append a duplicate and the head Pod would fail.
+	newSpec := func(mounts []corev1.VolumeMount, volumes []corev1.Volume) *rayv1.RayClusterSpec {
+		return &rayv1.RayClusterSpec{
+			GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{VolumeMounts: mounts}},
+						Volumes:    volumes,
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		spec        *rayv1.RayClusterSpec
+		expectError bool
+	}{
+		{
+			name:        "no reserved volume is valid",
+			spec:        newSpec(nil, nil),
+			expectError: false,
+		},
+		{
+			name:        "reserved mount path is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: "user-vol", MountPath: GCSStorageMountPath}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume mount name is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: GCSStorageVolumeName, MountPath: "/somewhere/else"}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume name is rejected",
+			spec:        newSpec(nil, []corev1.Volume{{Name: GCSStorageVolumeName}}),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -255,6 +408,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisPassword is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisPassword: &rayv1.RedisCredential{
 					Value: "password",
 				},
@@ -317,6 +471,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisUsername is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisUsername: &rayv1.RedisCredential{
 					Value: "username",
 				},

@@ -2614,6 +2614,101 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	// Redis cleanup is enabled by default; the embedded RocksDB backend must still
+	// not receive the Redis cleanup finalizer (there is no Redis to clean up, so
+	// the finalizer/Job would stall deletion).
+	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = nil
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		Backend: rayv1.GcsFTBackendRocksDB,
+	}
+	ctx := context.Background()
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	rayClusterList := rayv1.RayClusterList{}
+	require.NoError(t, fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr)))
+	require.Len(t, rayClusterList.Items, 1)
+	assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer),
+		"embedded RocksDB backend must not receive the Redis cleanup finalizer")
+}
+
+func Test_StaleRedisCleanupFinalizerRemovedForEmbeddedBackend(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// A cluster that previously used the Redis backend (so it carries the Redis
+	// cleanup finalizer) and was later switched to the embedded RocksDB backend,
+	// now being deleted.
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = nil
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		Backend: rayv1.GcsFTBackendRocksDB,
+	}
+	controllerutil.AddFinalizer(cluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	cluster.DeletionTimestamp = &now
+	ctx := context.Background()
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	// With the stale finalizer removed and a deletion timestamp set, the CR is no
+	// longer blocked: the fake client garbage-collects it. Either outcome (object
+	// gone, or present without the finalizer) proves it is not stuck Terminating.
+	rayClusterList := rayv1.RayClusterList{}
+	require.NoError(t, fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr)))
+	if len(rayClusterList.Items) == 1 {
+		assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer),
+			"stale Redis cleanup finalizer must be removed for an embedded-backend RayCluster being deleted")
+	} else {
+		assert.Empty(t, rayClusterList.Items, "RayCluster should be deleted once the stale finalizer is removed")
+	}
+}
+
 func TestEvents_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()

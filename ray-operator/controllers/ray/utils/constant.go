@@ -144,6 +144,8 @@ const (
 	REDIS_USERNAME                          = "REDIS_USERNAME"
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
+	RAY_GCS_STORAGE                         = "RAY_gcs_storage"
+	RAY_GCS_STORAGE_PATH                    = "RAY_gcs_storage_path"
 	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
@@ -180,6 +182,17 @@ const (
 	RayTokenVolumeName = "ray-token" // #nosec G101
 	// RayTokenMountPath is the mount path for the projected volume for Kubernetes token authentication.
 	RayTokenMountPath = "/var/run/secrets/ray.io/serviceaccount" // #nosec G101
+
+	// GCSStorageVolumeName is the name of the volume backing the embedded RocksDB GCS store.
+	GCSStorageVolumeName = "gcs-storage"
+	// GCSStorageMountPath is the mount path of the embedded RocksDB GCS store on the head Pod.
+	GCSStorageMountPath = "/data/gcs"
+	// GCSStorageRocksDBValue is the value of the RAY_gcs_storage env var selecting the embedded backend.
+	GCSStorageRocksDBValue = "rocksdb"
+	// GCSStoragePVCSuffix is appended to the RayCluster name for the operator-managed PVC.
+	GCSStoragePVCSuffix = "-gcs-pvc"
+	// GCSStorageDefaultSize is the default size of the operator-managed GCS storage PVC.
+	GCSStorageDefaultSize = "1Gi"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
@@ -460,6 +473,8 @@ const (
 	// ServiceAccount event list
 	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"
 	FailedToCreateServiceAccount     K8sEventType = "FailedToCreateServiceAccount"
+	CreatedPVC                       K8sEventType = "CreatedPVC"
+	FailedToCreatePVC                K8sEventType = "FailedToCreatePVC"
 	AutoscalerServiceAccountNotFound K8sEventType = "AutoscalerServiceAccountNotFound"
 
 	// Role event list

@@ -94,6 +94,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
@@ -195,7 +196,28 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	// manually after the RayCluster CR deletion.
 	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
-	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) {
+	// A RayCluster that was created with the Redis backend (and therefore received
+	// the Redis cleanup finalizer) and later switched to the embedded RocksDB
+	// backend still carries that finalizer. The embedded backend has no Redis to
+	// clean up and the main Redis-cleanup block below is skipped for it, so the
+	// finalizer-removal path would never run — leaving the CR stuck Terminating.
+	// Remove the stale finalizer here on deletion.
+	if !instance.DeletionTimestamp.IsZero() &&
+		utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) &&
+		controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
+		logger.Info(
+			"Removing the stale Redis cleanup finalizer from an embedded-backend RayCluster that is being deleted.",
+			"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
+		)
+		controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
+		if err := r.Update(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) &&
+		!utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
 				logger.Info(
@@ -314,6 +336,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		r.reconcileHeadService,
 		r.reconcileHeadlessService,
 		r.reconcileServeService,
+		r.reconcileGCSStoragePVC,
 		r.reconcilePods,
 	}
 
@@ -600,6 +623,217 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	}
 
 	return nil
+}
+
+// reconcileGCSStoragePVC provisions the persistent volume backing the embedded
+// RocksDB GCS store. It is a no-op unless GCS FT uses the embedded backend.
+//
+// Two lifecycles are supported:
+//
+//   - Operator-managed (default): the operator creates a PVC ({cluster}-gcs-pvc)
+//     owned by the RayCluster, so it is garbage-collected together with the
+//     cluster. This is the sane default for a standalone RayCluster. Because the
+//     PVC is keyed by (and owned by) the RayCluster, it does NOT survive a
+//     RayService zero-downtime upgrade: the new RayCluster gets a new name and a
+//     fresh PVC, and the old PVC is GC'd with the old RayCluster. Set
+//     Storage.DeletionPolicy: Retain to keep the PVC (and its data) after the
+//     cluster is deleted so it can be recovered later via ClaimName.
+//
+//   - User-managed (Storage.ClaimName): the operator never creates, deletes,
+//     or takes ownership of the PVC. This is the path for persisting GCS state
+//     across RayService upgrades: point every RayService generation at the same
+//     stable claim. During a zero-downtime upgrade the old and new head Pods run
+//     concurrently, so the claim must allow concurrent attach (ReadWriteMany) and
+//     single-writer semantics must be coordinated externally (RocksDB tolerates
+//     only one writer at a time). ReadWriteOnce is acceptable for active-passive /
+//     non-overlapping handoffs where only one Pod attaches at a time.
+//
+// Why not an operator-managed PVC re-parented to the RayService for automatic
+// cross-upgrade persistence?
+//
+// Re-parenting (keying the PVC by RayService name + ownerReference to the
+// RayService) would make the volume survive an upgrade, and Ray does resume the
+// prior session automatically (a head that mounts an existing store adopts the
+// persisted session_name), but that alone is NOT sufficient and would deadlock
+// the default zero-downtime (NewCluster) upgrade:
+//
+//   - RocksDB is a hard single-writer, enforced by its own on-disk LOCK file (not
+//     by the PVC access mode). A second DB open on the same directory fails rather
+//     than queueing/handing off.
+//   - In a zero-downtime upgrade the old and new RayClusters run concurrently, both
+//     wanting the one store. With RWX the new head's GCS cannot open the DB while
+//     the old head holds the lock (crash-loop); with RWO the new head cannot even
+//     attach the volume (multi-attach). Either way the new cluster never becomes
+//     healthy, so the RayService never tears down the old cluster -> the upgrade
+//     hangs.
+//
+// Making operator-managed cross-upgrade persistence safe requires an active-passive
+// handoff (stop the old head's GCS so it closes the DB, detach, then start the new
+// head) -- i.e. an in-place / RecreateCluster upgrade with a brief GCS-unavailability
+// window, which is a different upgrade strategy than the concurrent NewCluster path.
+// That is deferred as follow-up work; today, cross-upgrade persistence is served by
+// the user-managed ClaimName path above.
+func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if !utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) ||
+		!utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) {
+		return nil
+	}
+
+	pvcName := utils.GetGCSStoragePVCName(instance)
+
+	// BYO PVC: the user owns the lifecycle. Verify it exists and surface an event if not.
+	if storage := instance.Spec.GcsFaultToleranceOptions.Storage; storage != nil && storage.ClaimName != "" {
+		existing := &corev1.PersistentVolumeClaim{}
+		err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.ValidateAction),
+				"GcsFaultToleranceOptions.Storage.ClaimName %q not found in namespace %s; the head Pod will not start until it exists", pvcName, instance.Namespace)
+			return nil
+		}
+		return err
+	}
+
+	// Operator-managed PVC: create if absent. Once created the PVC is effectively
+	// immutable (StorageClassName and AccessModes cannot change, and most
+	// StorageClasses do not allow shrinking); if the desired spec later diverges
+	// from the live PVC we surface a warning event rather than silently dropping
+	// the change.
+	existing := &corev1.PersistentVolumeClaim{}
+	err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
+	if err == nil {
+		// An existing {cluster}-gcs-pvc is adopted as-is (drift is reported but the
+		// PVC is not recreated). This is deliberate: a same-named cluster recreated
+		// after a `deletionPolicy: Retain` delete reuses the retained RocksDB state,
+		// which is the documented same-name recovery path (see the GcsEmbeddedStorage
+		// field docs). We intentionally do NOT error on an "unowned" existing PVC to
+		// force explicit opt-in, because a `Retain` cluster deliberately creates its
+		// own PVC without an ownerReference: erroring on unowned PVCs would break the
+		// steady-state reconcile / restart of a Retain cluster (its own PVC would be
+		// rejected). To start from a fresh store instead, delete the leftover PVC.
+		if drift := gcsStoragePVCDrift(common.BuildGCSStoragePVC(instance), existing); drift != "" {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.UpdateAction),
+				"GCS storage PVC %s/%s already exists and cannot be reconfigured in place (%s); delete the PVC to recreate it with the new settings", existing.Namespace, existing.Name, drift)
+		}
+		// Reconcile the controller ownerReference so that changing
+		// DeletionPolicy takes effect on an already-provisioned PVC.
+		return r.reconcileGCSStoragePVCOwnerRef(ctx, instance, existing)
+	} else if !errors.IsNotFound(err) {
+		return err
+	}
+
+	pvc := common.BuildGCSStoragePVC(instance)
+	// When DeletionPolicy is Retain, deliberately omit the controller
+	// ownerReference so the PVC (and its data) outlives the RayCluster and can be
+	// recovered via ClaimName on a future cluster.
+	if !gcsStorageRetainOnDeletion(instance) {
+		if err := ctrl.SetControllerReference(instance, pvc, r.Scheme); err != nil {
+			return err
+		}
+	}
+
+	if err := r.Create(ctx, pvc); err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Lost a create race after the NotFound Get above: fetch the live PVC
+			// and reconcile its ownerReference, consistent with the already-exists
+			// path so DeletionPolicy is still honored.
+			if getErr := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing); getErr != nil {
+				return getErr
+			}
+			return r.reconcileGCSStoragePVCOwnerRef(ctx, instance, existing)
+		}
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.CreateAction),
+			"Failed to create GCS storage PVC %s/%s, %v", pvc.Namespace, pvc.Name, err)
+		return err
+	}
+	logger.Info("Created GCS storage PVC for embedded RocksDB backend", "name", pvc.Name)
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedPVC), string(utils.CreateAction),
+		"Created GCS storage PVC %s/%s", pvc.Namespace, pvc.Name)
+	return nil
+}
+
+// gcsStorageRetainOnDeletion reports whether the operator-managed GCS storage PVC
+// should be retained (kept without a controller ownerReference) after the owning
+// RayCluster is deleted, i.e. whether Storage.DeletionPolicy is Retain.
+func gcsStorageRetainOnDeletion(instance *rayv1.RayCluster) bool {
+	storage := instance.Spec.GcsFaultToleranceOptions.Storage
+	return storage != nil && storage.DeletionPolicy != nil &&
+		*storage.DeletionPolicy == rayv1.RetainGCSStorageDeletionPolicy
+}
+
+// reconcileGCSStoragePVCOwnerRef aligns the controller ownerReference on an
+// already-provisioned operator-managed PVC with the desired DeletionPolicy: it
+// removes the RayCluster's controller ownerReference when retention is requested
+// (DeletionPolicy: Retain), and (re)adds it otherwise. This makes changing the
+// policy effective on an existing PVC without recreating it.
+func (r *RayClusterReconciler) reconcileGCSStoragePVCOwnerRef(ctx context.Context, instance *rayv1.RayCluster, pvc *corev1.PersistentVolumeClaim) error {
+	retain := gcsStorageRetainOnDeletion(instance)
+	hasOwnerRef := metav1.IsControlledBy(pvc, instance)
+
+	switch {
+	case retain && hasOwnerRef:
+		if err := controllerutil.RemoveControllerReference(instance, pvc, r.Scheme); err != nil {
+			return err
+		}
+		return r.Update(ctx, pvc)
+	case !retain && !hasOwnerRef:
+		if err := ctrl.SetControllerReference(instance, pvc, r.Scheme); err != nil {
+			return err
+		}
+		return r.Update(ctx, pvc)
+	default:
+		return nil
+	}
+}
+
+// gcsStoragePVCDrift returns a human-readable description of the fields that
+// differ between the desired operator-managed GCS storage PVC and the live one,
+// or "" when they are equivalent for the immutable/relevant fields. It only
+// compares fields the operator manages and that Kubernetes cannot reconcile in
+// place (requested size, StorageClassName, AccessModes).
+func gcsStoragePVCDrift(desired, existing *corev1.PersistentVolumeClaim) string {
+	var diffs []string
+
+	wantSize := desired.Spec.Resources.Requests[corev1.ResourceStorage]
+	gotSize := existing.Spec.Resources.Requests[corev1.ResourceStorage]
+	if wantSize.Cmp(gotSize) != 0 {
+		diffs = append(diffs, fmt.Sprintf("requested size %s != current %s", wantSize.String(), gotSize.String()))
+	}
+
+	// Only compare StorageClassName when the desired value is explicitly set.
+	// When it is omitted (nil), the caller asked for the cluster's default
+	// StorageClass and Kubernetes populates the live PVC with the resolved default
+	// class name, so a nil-vs-resolved-default comparison would be a false positive.
+	if desired.Spec.StorageClassName != nil && !ptr.Equal(desired.Spec.StorageClassName, existing.Spec.StorageClassName) {
+		diffs = append(diffs, fmt.Sprintf("storageClassName %s != current %s",
+			ptr.Deref(desired.Spec.StorageClassName, "<default>"), ptr.Deref(existing.Spec.StorageClassName, "<default>")))
+	}
+
+	if !equalAccessModes(desired.Spec.AccessModes, existing.Spec.AccessModes) {
+		diffs = append(diffs, fmt.Sprintf("accessModes %v != current %v", desired.Spec.AccessModes, existing.Spec.AccessModes))
+	}
+
+	return strings.Join(diffs, "; ")
+}
+
+func equalAccessModes(a, b []corev1.PersistentVolumeAccessMode) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[corev1.PersistentVolumeAccessMode]int, len(a))
+	for _, m := range a {
+		seen[m]++
+	}
+	for _, m := range b {
+		seen[m]--
+	}
+	for _, count := range seen {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // Return nil only when the serve service successfully created or already exists.
@@ -1617,7 +1851,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.Secret{})
+		Owns(&corev1.Secret{}).
+		Owns(&corev1.PersistentVolumeClaim{})
 	if r.options.BatchSchedulerManager != nil {
 		r.options.BatchSchedulerManager.ConfigureReconciler(b)
 	}
