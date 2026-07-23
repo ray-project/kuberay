@@ -487,33 +487,70 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	headIngresses := networkingv1.IngressList{}
-	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
-	if err := r.List(ctx, &headIngresses, filterLabels...); err != nil {
+
+	desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
+	if err != nil {
 		return err
 	}
 
-	if len(headIngresses.Items) == 1 {
-		logger.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
+	existingIngress := &networkingv1.Ingress{}
+	switch err := r.Get(ctx, client.ObjectKeyFromObject(desiredIngress), existingIngress); {
+	case errors.IsNotFound(err):
+		return r.createHeadIngress(ctx, desiredIngress, instance)
+	case err != nil:
+		return err
+	}
+
+	if !metav1.IsControlledBy(existingIngress, instance) {
+		// An Ingress with our generated name already exists but is not owned
+		// by this RayCluster. Surface the collision via an event instead of
+		// silently swallowing the AlreadyExists error on create, and leave the
+		// user's Ingress untouched.
+		logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", existingIngress.Name)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), string(utils.CreateAction), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", existingIngress.Namespace, existingIngress.Name)
 		return nil
 	}
 
-	if len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
-		if err != nil {
+	if ingressNeedsUpdate(existingIngress, desiredIngress) {
+		if err := r.Update(ctx, existingIngress); err != nil {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), string(utils.UpdateAction), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
 			return err
 		}
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedIngress), string(utils.UpdateAction), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
+		logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
+	} else {
+		logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)
+	}
+	return nil
+}
 
-		if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-			return err
-		}
+func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) bool {
+	updated := false
 
-		if err := r.createHeadIngress(ctx, ingress, instance); err != nil {
-			return err
-		}
+	if !maps.Equal(existingIngress.Labels, desiredIngress.Labels) {
+		existingIngress.Labels = maps.Clone(desiredIngress.Labels)
+		updated = true
 	}
 
-	return nil
+	if !maps.Equal(existingIngress.Annotations, desiredIngress.Annotations) {
+		existingIngress.Annotations = maps.Clone(desiredIngress.Annotations)
+		updated = true
+	}
+
+	// When the RayCluster does not request an ingress class, the DefaultIngressClass
+	// admission plugin may set spec.ingressClassName on the live Ingress. We have no
+	// opinion in that case, so adopt the existing value instead of clearing it; doing
+	// otherwise would drop the class and thrash with the API server every reconcile.
+	if desiredIngress.Spec.IngressClassName == nil {
+		desiredIngress.Spec.IngressClassName = existingIngress.Spec.IngressClassName
+	}
+
+	if !reflect.DeepEqual(existingIngress.Spec, desiredIngress.Spec) {
+		existingIngress.Spec = desiredIngress.Spec
+		updated = true
+	}
+
+	return updated
 }
 
 // Return nil only when the head service successfully created or already exists.
@@ -1262,8 +1299,6 @@ func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTermin
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	// making sure the name is valid
-	ingress.Name = utils.CheckName(ingress.Name)
 	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
 		return err
 	}

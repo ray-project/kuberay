@@ -796,6 +796,31 @@ spec:
                                     type: object
                                 type: object
                             type: object
+                          ingressOptions:
+                            properties:
+                              host:
+                                type: string
+                              path:
+                                type: string
+                              pathType:
+                                enum:
+                                - Exact
+                                - Prefix
+                                - ImplementationSpecific
+                                type: string
+                              tls:
+                                items:
+                                  properties:
+                                    hosts:
+                                      items:
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    secretName:
+                                      type: string
+                                  type: object
+                                type: array
+                            type: object
                           labels:
                             additionalProperties:
                               type: string
