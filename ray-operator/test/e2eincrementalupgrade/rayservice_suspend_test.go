@@ -75,9 +75,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 		rs, err := GetRayService(test, namespace.Name, rayServiceName)
 		gg.Expect(err).NotTo(HaveOccurred())
 		rs.Spec.Suspend = true
-		rs, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rs, metav1.UpdateOptions{})
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rs, metav1.UpdateOptions{})
 		gg.Expect(err).NotTo(HaveOccurred())
-		rayService = rs
 	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for the Suspended condition to be True")
