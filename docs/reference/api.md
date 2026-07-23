@@ -260,10 +260,49 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s deployments, statefulsets, etc. |  |  |
 | `headService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | HeadService is the Kubernetes service of the head pod. |  |  |
 | `enableIngress` _boolean_ | EnableIngress indicates whether operator should create ingress object for head service or not. |  |  |
+| `ingressOptions` _[IngressOptions](#ingressoptions)_ | IngressOptions specifies optional ingress configuration for the head service. |  |  |
 | `resources` _object (keys:string, values:string)_ | Resources specifies the resource quantities for the head group.<br />These values override the resources passed to `rayStartParams` for the group, but<br />have no effect on the resources set at the K8s Pod container level. |  |  |
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for the head group.<br />These labels will also be added to the Pods of this head group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: node-manager-port, object-store-memory, ... |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
+
+
+#### IngressOptions
+
+
+
+IngressOptions defines the host, path, and TLS configuration for the ingress generated for the head group.
+
+
+
+_Appears in:_
+- [HeadGroupSpec](#headgroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `host` _string_ | Host is the fully-qualified domain name used to route external traffic to the<br />Ray head dashboard. When unset, the generated ingress rule matches any host. |  |  |
+| `path` _string_ | Path is the HTTP path that routes to the Ray head dashboard.<br />When unset, the operator defaults it to "/", which routes all traffic on the<br />host to the dashboard. |  |  |
+| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType is the path matching mode applied to Path.<br />When unset, the operator defaults it to "Prefix", which works out of the box<br />without a rewrite-target annotation or controller-specific regex support. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
+| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS configures TLS termination for the generated ingress. |  |  |
+
+
+#### IngressPathType
+
+_Underlying type:_ _string_
+
+
+
+_Validation:_
+- Enum: [Exact Prefix ImplementationSpecific]
+
+_Appears in:_
+- [IngressOptions](#ingressoptions)
+
+| Field | Description |
+| --- | --- |
+| `Exact` |  |
+| `Prefix` |  |
+| `ImplementationSpecific` |  |
 
 
 

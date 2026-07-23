@@ -217,6 +217,9 @@ type HeadGroupSpec struct {
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
+	// IngressOptions specifies optional ingress configuration for the head service.
+	// +optional
+	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -233,6 +236,36 @@ type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Exact;Prefix;ImplementationSpecific
+type IngressPathType string
+
+const (
+	IngressPathTypeExact                  IngressPathType = "Exact"
+	IngressPathTypePrefix                 IngressPathType = "Prefix"
+	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
+)
+
+// IngressOptions defines the host, path, and TLS configuration for the ingress generated for the head group.
+type IngressOptions struct {
+	// Host is the fully-qualified domain name used to route external traffic to the
+	// Ray head dashboard. When unset, the generated ingress rule matches any host.
+	// +optional
+	Host *string `json:"host,omitempty"`
+	// Path is the HTTP path that routes to the Ray head dashboard.
+	// When unset, the operator defaults it to "/", which routes all traffic on the
+	// host to the dashboard.
+	// +optional
+	Path *string `json:"path,omitempty"`
+	// PathType is the path matching mode applied to Path.
+	// When unset, the operator defaults it to "Prefix", which works out of the box
+	// without a rewrite-target annotation or controller-specific regex support.
+	// +optional
+	PathType *IngressPathType `json:"pathType,omitempty"`
+	// TLS configures TLS termination for the generated ingress.
+	// +optional
+	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
