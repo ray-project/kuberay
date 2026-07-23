@@ -188,6 +188,34 @@ func TestRayServiceActiveRayClusterNamespacedName(t *testing.T) {
 	}
 }
 
+// TestRayServiceGatewayNamespacedName covers both the default per-RayService Gateway
+// naming and the ExistingGatewayRef case, where the function must resolve to the
+// referenced (shared) Gateway instead.
+func TestRayServiceGatewayNamespacedName(t *testing.T) {
+	t.Run("default per-RayService gateway", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-svc", Namespace: "default"},
+		}
+		expected := types.NamespacedName{Namespace: "default", Name: "my-svc-gateway"}
+		assert.Equal(t, expected, RayServiceGatewayNamespacedName(rayService))
+	})
+
+	t.Run("ExistingGatewayRef targets the shared gateway", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-svc", Namespace: "default"},
+			Spec: rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+						ExistingGatewayRef: &rayv1.GatewayRef{Name: "shared-gw", Namespace: "gateways"},
+					},
+				},
+			},
+		}
+		expected := types.NamespacedName{Namespace: "gateways", Name: "shared-gw"}
+		assert.Equal(t, expected, RayServiceGatewayNamespacedName(rayService))
+	})
+}
+
 // TestRayServicePendingRayClusterNamespacedName tests the function for generating a NamespacedName for a RayService's pending RayCluster
 func TestRayServicePendingRayClusterNamespacedName(t *testing.T) {
 	rayService := &rayv1.RayService{

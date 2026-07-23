@@ -2043,14 +2043,15 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 
 func TestValidateClusterUpgradeOptions(t *testing.T) {
 	tests := []struct {
-		maxSurgePercent   *int32
-		stepSizePercent   *int32
-		intervalSeconds   *int32
-		name              string
-		gatewayClassName  string
-		spec              rayv1.RayServiceSpec
-		enableAutoscaling bool
-		expectError       bool
+		maxSurgePercent    *int32
+		stepSizePercent    *int32
+		intervalSeconds    *int32
+		name               string
+		gatewayClassName   string
+		existingGatewayRef *rayv1.GatewayRef
+		spec               rayv1.RayServiceSpec
+		enableAutoscaling  bool
+		expectError        bool
 	}{
 		{
 			name:              "valid config",
@@ -2111,26 +2112,64 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name:              "missing GatewayClassName",
+			name:              "missing GatewayClassName and ExistingGatewayRef",
 			maxSurgePercent:   new(int32(50)),
 			stepSizePercent:   new(int32(50)),
 			intervalSeconds:   new(int32(10)),
 			enableAutoscaling: true,
 			expectError:       true,
 		},
+		{
+			name:               "valid ExistingGatewayRef instead of GatewayClassName",
+			maxSurgePercent:    new(int32(50)),
+			stepSizePercent:    new(int32(50)),
+			intervalSeconds:    new(int32(10)),
+			existingGatewayRef: &rayv1.GatewayRef{Name: "shared-gw", Namespace: "gateways"},
+			enableAutoscaling:  true,
+			expectError:        false,
+		},
+		{
+			name:               "GatewayClassName and ExistingGatewayRef are mutually exclusive",
+			maxSurgePercent:    new(int32(50)),
+			stepSizePercent:    new(int32(50)),
+			intervalSeconds:    new(int32(10)),
+			gatewayClassName:   "istio",
+			existingGatewayRef: &rayv1.GatewayRef{Name: "shared-gw", Namespace: "gateways"},
+			enableAutoscaling:  true,
+			expectError:        true,
+		},
+		{
+			name:               "ExistingGatewayRef missing name",
+			maxSurgePercent:    new(int32(50)),
+			stepSizePercent:    new(int32(50)),
+			intervalSeconds:    new(int32(10)),
+			existingGatewayRef: &rayv1.GatewayRef{Namespace: "gateways"},
+			enableAutoscaling:  true,
+			expectError:        true,
+		},
+		{
+			name:               "ExistingGatewayRef missing namespace",
+			maxSurgePercent:    new(int32(50)),
+			stepSizePercent:    new(int32(50)),
+			intervalSeconds:    new(int32(10)),
+			existingGatewayRef: &rayv1.GatewayRef{Name: "shared-gw"},
+			enableAutoscaling:  true,
+			expectError:        true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
-			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
+			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" || tt.existingGatewayRef != nil {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
 					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
-						MaxSurgePercent:  tt.maxSurgePercent,
-						StepSizePercent:  tt.stepSizePercent,
-						IntervalSeconds:  tt.intervalSeconds,
-						GatewayClassName: tt.gatewayClassName,
+						MaxSurgePercent:    tt.maxSurgePercent,
+						StepSizePercent:    tt.stepSizePercent,
+						IntervalSeconds:    tt.intervalSeconds,
+						GatewayClassName:   tt.gatewayClassName,
+						ExistingGatewayRef: tt.existingGatewayRef,
 					},
 				}
 			} else if tt.expectError {
