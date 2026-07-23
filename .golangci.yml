@@ -86,7 +86,6 @@ linters:
     modernize:
       disable:
         - omitzero
-        # - newexpr
   exclusions:
     # Suppress SA1019 for the project's own deprecated API fields that are
     # intentionally maintained for backward compatibility. External deprecated
