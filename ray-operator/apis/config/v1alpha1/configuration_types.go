@@ -101,9 +101,9 @@ type Configuration struct {
 }
 
 func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(ctx, mgr, config.UseKubernetesProxy)
+	return utils.GetRayDashboardClientFunc(ctx, mgr, config.UseKubernetesProxy, config.EnableMetrics)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
-	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
+	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy, config.EnableMetrics)
 }

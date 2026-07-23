@@ -34,6 +34,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/httpclientmetrics"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -977,7 +978,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool, enableMetrics bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -1010,7 +1011,9 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 		}
 		dashboardURL := fmt.Sprintf("http://%s", url)
 
+		mode := httpclientmetrics.ModeDirect
 		if useKubernetesProxy {
+			mode = httpclientmetrics.ModeProxy
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
 			if headSvcName == "" {
@@ -1024,23 +1027,33 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			httpClient.Transport = mgr.GetHTTPClient().Transport
 			dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
 		}
+		if enableMetrics {
+			histogram := httpclientmetrics.DashboardClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, mode)
+		}
 		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
 		return dashboardClient, nil
 	}
 }
 
-func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool, enableMetrics bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 		httpClient := &http.Client{
 			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
 		}
 		httpProxyURL := fmt.Sprintf("http://%s:%d/", hostIp, port)
 
+		mode := httpclientmetrics.ModeDirect
 		if useKubernetesProxy {
+			mode = httpclientmetrics.ModeProxy
 			// Use the manager's transport for TLS and API server authentication.
 			httpClient.Transport = mgr.GetHTTPClient().Transport
 			httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port)
+		}
+		if enableMetrics {
+			histogram := httpclientmetrics.ServeClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, mode)
 		}
 
 		return &RayHttpProxyClient{
