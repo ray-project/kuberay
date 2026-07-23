@@ -1570,9 +1570,9 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			cluster:               *clusterNoAutoscaling,
 			expectedRestartPolicy: "",
 		},
-		"Pod template with autoscaling v1 enabled and no RestartPolicy set should default to Never": {
+		"Pod template with autoscaling v1 enabled and no RestartPolicy set should not set RestartPolicy": {
 			cluster:               *clusterAutoscalingV1,
-			expectedRestartPolicy: corev1.RestartPolicyNever,
+			expectedRestartPolicy: "",
 		},
 		"Pod template with autoscaling v1 enabled and RestartPolicy already set should not override it": {
 			cluster:               *clusterAutoscalingV1WithRestartPolicy,
@@ -1582,9 +1582,9 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			cluster:               *clusterAutoscalingV2,
 			expectedRestartPolicy: corev1.RestartPolicyNever,
 		},
-		"Pod template with autoscaling enabled and version not set (v2 default) should set RestartPolicy to Never": {
+		"Pod template with autoscaling enabled and version not set should not set RestartPolicy": {
 			cluster:               *clusterAutoscalingVersionNotSet,
-			expectedRestartPolicy: corev1.RestartPolicyNever,
+			expectedRestartPolicy: "",
 		},
 	}
 
