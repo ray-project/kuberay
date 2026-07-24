@@ -91,7 +91,7 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	}
 
 	// Read the current spec fresh so the auth decision is never based on stale cached data.
-	rayCluster, cli, err := getRayCluster(ctx, c.clients, namespace, name)
+	rayCluster, err := c.GetRayCluster(ctx, namespace, name)
 	if err != nil {
 		return "", err
 	}
@@ -116,13 +116,13 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		secretName = *secret
 	}
 
-	// Read the Secret fresh on every request, using the same client that served the RayCluster
+	// Read the Secret fresh on every request from the same cluster the RayCluster was read from
 	// (the auth Secret lives alongside its cluster). We deliberately do not cache the token: the
 	// history server uses a direct (non-watching) client, so there is no cheap way to invalidate a
 	// cached token when the operator rotates or updates the Secret. Reading fresh ensures a rotated
 	// token takes effect on the very next request instead of after a TTL.
 	secret := &corev1.Secret{}
-	if err := cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret); err != nil {
+	if err := c.Client().Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret); err != nil {
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", namespace, secretName, err)
 	}
 
@@ -139,22 +139,6 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	}
 
 	return token, nil
-}
-
-// getRayCluster fetches the named RayCluster fresh from the K8s API, trying each client in turn
-// and returning the first successful response together with the client that served it (so callers
-// can reuse the same client for related objects, e.g. the head service or the auth Secret).
-func getRayCluster(ctx context.Context, clients []client.Client, namespace, name string) (*rayv1.RayCluster, client.Client, error) {
-	var err error
-	for _, cli := range clients {
-		rc := &rayv1.RayCluster{}
-		if getErr := cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, rc); getErr == nil {
-			return rc, cli, nil
-		} else {
-			err = getErr
-		}
-	}
-	return nil, nil, fmt.Errorf("failed to get RayCluster %s/%s: %w", namespace, name, err)
 }
 
 // GetSvcInfo looks up the cluster's head service routing info, using a short-lived cache to reduce
@@ -174,7 +158,7 @@ func (c *ClientManager) GetSvcInfo(name, namespace string) (ServiceInfo, error) 
 	}
 
 	// Cache miss or expired — fetch from K8s.
-	svcInfo, err := fetchSvcInfo(c.clients, name, namespace)
+	svcInfo, err := c.fetchSvcInfo(name, namespace)
 	if err != nil {
 		return ServiceInfo{}, err
 	}

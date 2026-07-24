@@ -21,7 +21,6 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
@@ -1964,14 +1963,12 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 }
 
 // fetchSvcInfo retrieves the RayCluster and derives the head service routing info.
-func fetchSvcInfo(clientList []client.Client, name, namespace string) (ServiceInfo, error) {
-	if len(clientList) == 0 {
+func (c *ClientManager) fetchSvcInfo(name, namespace string) (ServiceInfo, error) {
+	if len(c.clients) == 0 {
 		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
 
-	// Fetch the RayCluster and the client that served it, so the head service is looked up
-	// from the same cluster.
-	rc, cli, err := getRayCluster(context.Background(), clientList, namespace, name)
+	rc, err := c.GetRayCluster(context.Background(), namespace, name)
 	if err != nil {
 		return ServiceInfo{}, err
 	}
@@ -1984,7 +1981,7 @@ func fetchSvcInfo(clientList []client.Client, name, namespace string) (ServiceIn
 	// because users can override the port in their HeadGroupSpec.
 	port := DefaultDashboardPort
 	headSvc := corev1.Service{}
-	if err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
+	if err := c.Client().Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
 		for _, p := range headSvc.Spec.Ports {
 			if p.Name == DashboardPortName {
 				port = int(p.Port)
