@@ -13,6 +13,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
+	kuberneteswasv1alpha2 "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was-v1alpha2"
 	schedulerplugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
@@ -63,6 +64,8 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface
 			factory = &yunikorn.YuniKornSchedulerFactory{}
 		case kaischeduler.GetPluginName():
 			factory = &kaischeduler.KaiSchedulerFactory{}
+		case kuberneteswasv1alpha2.GetPluginName():
+			factory = &kuberneteswasv1alpha2.KubernetesWASV1Alpha2SchedulerFactory{}
 		case schedulerplugins.GetPluginName():
 			factory = &schedulerplugins.KubeSchedulerFactory{}
 		default:

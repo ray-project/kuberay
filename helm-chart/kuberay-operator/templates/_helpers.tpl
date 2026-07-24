@@ -365,6 +365,21 @@ rules:
   - patch
   - update
   - watch
+{{- if eq .batchSchedulerName "kubernetes-was-v1alpha2" }}
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - podgroups
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
+	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -48,6 +49,7 @@ func init() {
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
+	utilruntime.Must(schedulingv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -96,7 +98,7 @@ func main() {
 	flag.BoolVar(&enableBatchScheduler, "enable-batch-scheduler", false,
 		"(Deprecated) Enable batch scheduler. Currently is volcano, which supports gang scheduler policy. Please use --batch-scheduler instead.")
 	flag.StringVar(&batchScheduler, "batch-scheduler", "",
-		"Batch scheduler name, supported values are volcano, yunikorn, kai-scheduler.")
+		"Batch scheduler name, supported values are volcano, yunikorn, kai-scheduler, kubernetes-was-v1alpha2, and scheduler-plugins.")
 	flag.StringVar(&configFile, "config", "", "Path to structured config file. Flags are ignored if config file is set.")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false,
 		"Use Kubernetes proxy subresource when connecting to the Ray Head node.")

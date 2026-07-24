@@ -104,6 +104,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=scheduling.k8s.io,resources=podgroups;workloads,verbs=get;list;watch;create;update;patch;delete
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 
@@ -323,7 +324,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		logger.Info("RayCluster is being deleted, just ignore")
+		logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
+		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -919,6 +923,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
+			return err
+		}
 
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted Pods for RayCluster %s/%s due to suspension",
@@ -945,13 +952,15 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
+			return err
+		}
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
 			instance.Namespace, instance.Name)
 		return nil
 	}
-
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
@@ -1548,6 +1557,18 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 	logger.Info("Created ingress for RayCluster", "name", ingress.Name)
 	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedIngress), string(utils.CreateAction), "Created ingress %s/%s", ingress.Namespace, ingress.Name)
 	return nil
+}
+
+func (r *RayClusterReconciler) cleanupBatchSchedulerResources(ctx context.Context, instance *rayv1.RayCluster) error {
+	if r.options.BatchSchedulerManager == nil {
+		return nil
+	}
+	scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+	if err != nil {
+		return err
+	}
+	_, err = scheduler.CleanupOnCompletion(ctx, instance)
+	return err
 }
 
 func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *routev1.Route, instance *rayv1.RayCluster) error {
