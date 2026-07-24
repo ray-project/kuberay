@@ -173,6 +173,23 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	// Validate the worker pod restartPolicy,
+	// If it is not empty or Never, it would output the warning log and the event.
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV1Enabled(&instance.Spec) {
+		var autoscalerV1GroupNames []string
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+				autoscalerV1GroupNames = append(autoscalerV1GroupNames, workerGroup.GroupName)
+			}
+		}
+		if len(autoscalerV1GroupNames) > 0 {
+			msg := fmt.Sprintf("restartPolicy for worker groups [%s] should be Never or unset when using autoscaler V1", strings.Join(autoscalerV1GroupNames, ", "))
+			logger.Info(msg)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
+				"RayCluster spec warning %s/%s: %s", instance.Namespace, instance.Name, msg)
+		}
+	}
+
 	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
 		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
