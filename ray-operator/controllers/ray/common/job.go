@@ -213,17 +213,68 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 // GetSubmitterTemplate creates a default submitter template for the Ray job.
 func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
-	if rayJobSpec.SubmitterPodTemplate != nil {
-		return *rayJobSpec.SubmitterPodTemplate.DeepCopy()
-	}
-	return corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				GetDefaultSubmitterContainer(rayClusterSpec),
+	defaultContainer := GetDefaultSubmitterContainer(rayClusterSpec)
+
+	// If no user template is provided, return the defaults
+	if rayJobSpec.SubmitterPodTemplate == nil {
+		return corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers:         []corev1.Container{defaultContainer},
+				RestartPolicy:      corev1.RestartPolicyNever,
+				ServiceAccountName: rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName,
+				ImagePullSecrets:   rayClusterSpec.HeadGroupSpec.Template.Spec.ImagePullSecrets,
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
-		},
+		}
 	}
+
+	// Start with a deep copy of the user's template to preserve all their custom fields
+	// (like Volumes, Env, Command, Tolerations, Labels, Annotations, etc.)
+	finalTemplate := *rayJobSpec.SubmitterPodTemplate.DeepCopy()
+
+	// Always enforce RestartPolicy: Never
+	finalTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Fallback to default ServiceAccountName if user omitted it
+	if finalTemplate.Spec.ServiceAccountName == "" {
+		finalTemplate.Spec.ServiceAccountName = rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName
+	}
+
+	// Fallback to default ImagePullSecrets if user omitted it
+	if len(finalTemplate.Spec.ImagePullSecrets) == 0 {
+		finalTemplate.Spec.ImagePullSecrets = rayClusterSpec.HeadGroupSpec.Template.Spec.ImagePullSecrets
+	}
+
+	// Ensure there is at least one container
+	if len(finalTemplate.Spec.Containers) == 0 {
+		finalTemplate.Spec.Containers = []corev1.Container{defaultContainer}
+	} else {
+		userContainer := &finalTemplate.Spec.Containers[0]
+
+		// Always enforce the KubeRay default container name
+		userContainer.Name = defaultContainer.Name
+
+		//  Fallback to default image if user omitted it
+		if userContainer.Image == "" {
+			userContainer.Image = defaultContainer.Image
+		}
+
+		// Fallback to default ImagePullPolicy if user omitted it
+		if userContainer.ImagePullPolicy == "" {
+			userContainer.ImagePullPolicy = defaultContainer.ImagePullPolicy
+		}
+
+		// Fallback to default Requests if user omitted them
+		if len(userContainer.Resources.Requests) == 0 {
+			userContainer.Resources.Requests = defaultContainer.Resources.Requests
+		}
+
+		// Fallback to default Limits if user omitted them
+		if len(userContainer.Resources.Limits) == 0 {
+			userContainer.Resources.Limits = defaultContainer.Resources.Limits
+		}
+	}
+
+	return finalTemplate
 }
 
 // GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
@@ -231,7 +282,8 @@ func GetDefaultSubmitterContainer(rayClusterSpec *rayv1.RayClusterSpec) corev1.C
 	return corev1.Container{
 		Name: utils.SubmitterContainerName,
 		// Use the image of the Ray head to be defensive against version mismatch issues
-		Image: rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
+		Image:           rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
+		ImagePullPolicy: rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("1"),
