@@ -700,16 +700,19 @@ _Appears in:_
 
 
 TLSOptions configures TLS encryption for the RayCluster.
-When TLSOptions is nil, TLS is disabled. When set, the operator uses
-cert-manager to automatically provision a full PKI (self-signed CA, head
-and worker leaf certificates) and keeps certificates up to date as pod IPs
-change during autoscaling.
+When TLSOptions is nil or Enabled is false, TLS is disabled.
+When Enabled is true, the operator uses cert-manager to automatically
+provision a full PKI (self-signed CA, head and worker leaf certificates)
+and keeps certificates up to date as pod IPs change during autoscaling.
 
 
 
 _Appears in:_
 - [RayClusterSpec](#rayclusterspec)
 
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls whether mTLS is active for this RayCluster.<br />Must be set to true to enable TLS; setting tlsOptions without this<br />field (or with enabled: false) is an error. |  |  |
 
 
 #### UpscalingMode

@@ -3180,13 +3180,21 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "TLS enabled, no options (auto-generate) - valid",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 			},
+		},
+		{
+			name: "tlsOptions set but enabled is false - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: false}
+			},
+			expectError: true,
+			errorMsg:    "spec.tlsOptions is set but enabled is false",
 		},
 		{
 			name: "RAY_USE_TLS in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_USE_TLS", Value: "1"}}
 			},
 			expectError: true,
@@ -3195,7 +3203,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_SERVER_CERT in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_TLS_SERVER_CERT", Value: "/x"}}
 			},
 			expectError: true,
@@ -3204,7 +3212,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_SERVER_KEY in worker container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 					GroupName: "wg",
 					Template: corev1.PodTemplateSpec{
@@ -3224,7 +3232,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_CA_CERT in worker container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 					GroupName: "wg",
 					Template: corev1.PodTemplateSpec{
@@ -3244,7 +3252,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "conflicting TLS volume name in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
 					{Name: RayTLSVolumeName, MountPath: "/some/path"},
 				}
@@ -3255,7 +3263,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "conflicting TLS mount path in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
 					{Name: "custom-tls", MountPath: RayTLSCertMountPath},
 				}
@@ -3266,7 +3274,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "conflicting TLS volume name in worker container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 					GroupName: "wg",
 					Template: corev1.PodTemplateSpec{
@@ -3288,7 +3296,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "non-conflicting volume mount in head container - valid",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
 					{Name: "user-volume", MountPath: "/user/path"},
 				}
@@ -3298,7 +3306,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "conflicting TLS volume name in autoscalerOptions - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: RayTLSVolumeName, MountPath: "/some/path"},
@@ -3311,7 +3319,7 @@ func TestValidateTLSOptions(t *testing.T) {
 		{
 			name: "conflicting TLS mount path in autoscalerOptions - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{}
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "custom-tls", MountPath: RayTLSCertMountPath},
@@ -3342,7 +3350,7 @@ func TestValidateRayClusterSpec_TLSOptionsRequiresFeatureGate(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, false)
 	cluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			TLSOptions: &rayv1.TLSOptions{},
+			TLSOptions: &rayv1.TLSOptions{Enabled: true},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},

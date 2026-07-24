@@ -2591,7 +2591,7 @@ func TestConfigureTLS_Disabled(t *testing.T) {
 func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	cluster := instance.DeepCopy()
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 	ctx := context.Background()
 
 	podName := "test-head"
@@ -2658,7 +2658,7 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	cluster := instance.DeepCopy()
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 	ctx := context.Background()
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -2718,7 +2718,7 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	cluster := instance.DeepCopy()
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: true}
 	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 	ctx := context.Background()
 

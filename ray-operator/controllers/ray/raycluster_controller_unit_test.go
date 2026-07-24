@@ -4518,7 +4518,7 @@ func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayClusterSpec{
-			TLSOptions: &rayv1.TLSOptions{},
+			TLSOptions: &rayv1.TLSOptions{Enabled: true},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
 				Template: corev1.PodTemplateSpec{

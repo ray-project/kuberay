@@ -777,12 +777,13 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 }
 
 // IsTLSEnabled returns whether TLS is enabled for the RayCluster.
-// TLS is enabled when the RayClusterMTLS feature gate is on and spec.TLSOptions is non-nil.
+// TLS is enabled when the RayClusterMTLS feature gate is on, spec.TLSOptions is non-nil,
+// and spec.TLSOptions.Enabled is true.
 func IsTLSEnabled(spec *rayv1.RayClusterSpec) bool {
 	if !features.Enabled(features.RayClusterMTLS) {
 		return false
 	}
-	return spec != nil && spec.TLSOptions != nil
+	return spec != nil && spec.TLSOptions != nil && spec.TLSOptions.Enabled
 }
 
 // GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.

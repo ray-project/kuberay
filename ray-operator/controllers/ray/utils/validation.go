@@ -343,6 +343,9 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 // validateTLSOptions checks that the TLS config is internally consistent.
 // It prevents users from setting TLS environment variables or volume mounts manually when TLS is enabled.
 func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if spec.TLSOptions != nil && !spec.TLSOptions.Enabled {
+		return fmt.Errorf("spec.tlsOptions is set but enabled is false; set enabled: true to enable mTLS")
+	}
 	if !IsTLSEnabled(spec) {
 		return nil
 	}

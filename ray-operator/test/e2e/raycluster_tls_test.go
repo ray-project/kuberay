@@ -34,7 +34,7 @@ func certManagerAvailable(test Test) bool {
 // NewRayClusterSpecWithMTLS creates a RayClusterSpec with mTLS enabled (auto-generated certs).
 func NewRayClusterSpecWithMTLS() *rayv1ac.RayClusterSpecApplyConfiguration {
 	return NewRayClusterSpec().
-		WithTLSOptions(rayv1.TLSOptions{})
+		WithTLSOptions(rayv1ac.TLSOptions().WithEnabled(true))
 }
 
 // verifyContainerTLSEnvVars asserts a container has the expected TLS environment variables.
@@ -326,7 +326,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		clusterName := "tls-multi-wg"
 		spec := rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
-			WithTLSOptions(rayv1.TLSOptions{}).
+			WithTLSOptions(rayv1ac.TLSOptions().WithEnabled(true)).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 				WithTemplate(HeadPodTemplateApplyConfiguration())).
