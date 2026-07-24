@@ -214,7 +214,7 @@ func TestAPIServerClientRetry(t *testing.T) {
 				MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
 				OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 			}
-			client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
+			client := NewKuberayAPIServerClient("http://mock", mockClient, retryCfg)
 
 			body, status, err := client.executeRequest(req, "http://mock/test")
 
@@ -270,7 +270,7 @@ func TestAPIServerClientBackoff(t *testing.T) {
 		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
 	}
 
-	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
+	client := NewKuberayAPIServerClient("http://mock", mockClient, retryCfg)
 
 	ctx := context.Background()
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
@@ -312,7 +312,7 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 		OverallTimeout: 1 * time.Millisecond,
 	}
 
-	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
+	client := NewKuberayAPIServerClient("http://mock", mockClient, retryCfg)
 
 	ctx := context.Background()
 	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
@@ -323,4 +323,61 @@ func TestAPIServerClientOverallTimeout(t *testing.T) {
 	// Expect a timeout error
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "retry timeout exceeded context deadline")
+}
+
+// Verify executeRequest refuses to dispatch when the request URL host does not match the
+// configured baseURL host, defending against accidental SSRF (and giving gosec G704 a
+// sanitization point).
+func TestExecuteRequestRejectsForeignHost(t *testing.T) {
+	retryCfg := util.RetryConfig{
+		MaxRetry:       util.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
+		InitBackoff:    util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
+	}
+
+	transport := &mockTransport{statusSequence: []int{http.StatusOK}}
+	mockClient := &http.Client{Transport: transport}
+	client := NewKuberayAPIServerClient("http://configured-host:8888", mockClient, retryCfg)
+
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://attacker.example/evil", nil)
+	require.NoError(t, err)
+
+	body, status, err := client.executeRequest(req, "http://attacker.example/evil")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not match configured baseURL host")
+	require.Nil(t, status)
+	require.Nil(t, body)
+	// The request must never reach the transport.
+	require.Equal(t, 0, transport.callCount)
+}
+
+// Verify executeRequest refuses to dispatch when the client was constructed with a
+// malformed baseURL that yields no host. Without this guard, gosec G704 has no
+// sanitization point and every Do() call would be flagged.
+func TestExecuteRequestRejectsEmptyBaseURLHost(t *testing.T) {
+	retryCfg := util.RetryConfig{
+		MaxRetry:       util.HTTPClientDefaultMaxRetry,
+		BackoffFactor:  util.HTTPClientDefaultBackoffFactor,
+		InitBackoff:    util.HTTPClientDefaultInitBackoff,
+		MaxBackoff:     util.HTTPClientDefaultMaxBackoff,
+		OverallTimeout: util.HTTPClientDefaultOverallTimeout,
+	}
+
+	transport := &mockTransport{statusSequence: []int{http.StatusOK}}
+	mockClient := &http.Client{Transport: transport}
+	// "baseurl" parses without error but yields an empty Host.
+	client := NewKuberayAPIServerClient("baseurl", mockClient, retryCfg)
+
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://mock/test", nil)
+	require.NoError(t, err)
+
+	_, _, err = client.executeRequest(req, "http://mock/test")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not match configured baseURL host")
+	require.Equal(t, 0, transport.callCount)
 }
