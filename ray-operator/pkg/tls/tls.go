@@ -3,6 +3,7 @@ package tls
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -77,6 +78,12 @@ func Resolve(ctx context.Context, cfg *rest.Config) (Result, error) {
 			log.Info("APIServer resource not found, using hardened defaults")
 		case apierrors.IsForbidden(err):
 			log.Info("APIServer access forbidden, using hardened defaults (restricted RBAC)")
+		case apierrors.IsServiceUnavailable(err),
+			apierrors.IsTimeout(err),
+			apierrors.IsServerTimeout(err),
+			apierrors.IsTooManyRequests(err),
+			errors.Is(err, context.DeadlineExceeded):
+			log.Info("Transient API error, using Intermediate defaults", "error", err)
 		default:
 			return result, fmt.Errorf("reading APIServer TLS profile: %w", err)
 		}
