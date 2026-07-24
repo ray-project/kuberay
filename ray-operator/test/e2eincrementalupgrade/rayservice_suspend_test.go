@@ -27,17 +27,9 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	interval := new(int32(20))
 	maxSurge := new(int32(30))
 
-	rayService, httpRoute, _ := bootstrapIncrementalRayService(
+	rayService, httpRoute, gatewayHost := bootstrapIncrementalRayService(
 		test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2)
 	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
-	// Curl through the backing Istio Service's cluster DNS rather than the
-	// LoadBalancer-assigned external IP. The DNS handle is stable across
-	// Gateway recreation (Istio names the backing Deployment + Service
-	// `<gateway-name>-istio` in the Gateway's namespace), so the assertions
-	// after Spec.Suspend cycles through don't need to re-resolve a possibly-
-	// new external IP. The traffic still flows through the Gateway envoy
-	// pods and exercises the HTTPRoute / weighted-backend routing.
-	gatewayHost := fmt.Sprintf("%s-istio.%s.svc.cluster.local", gatewayName, namespace.Name)
 
 	// Sanity-check that the service is wired up through the Gateway before
 	// touching Spec.Suspend.
@@ -114,9 +106,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	// Gateway and HTTPRoute must come back, and the resumed Gateway must
 	// serve traffic again so we know the network path is fully restored
 	// rather than just the K8s objects re-existing.
-	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready again", namespace.Name, gatewayName)
-	g.Eventually(Gateway(test, namespace.Name, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+	setGatewayServiceType(test, g, namespace.Name, gatewayName)
+	waitForGatewayReady(test, g, namespace.Name, gatewayName)
 
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready again", namespace.Name, httpRoute.Name)
 	g.Eventually(func() (bool, error) {

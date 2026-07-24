@@ -32,7 +32,7 @@ var (
 
 func setupNetworkPolicyTest(t *testing.T) {
 	t.Helper()
-	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkIsolation, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkPolicy, true)
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testScheme := runtime.NewScheme()
@@ -50,8 +50,8 @@ func setupNetworkPolicyTest(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{},
@@ -73,8 +73,8 @@ func setupNetworkPolicyTest(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{},
@@ -96,8 +96,8 @@ func setupNetworkPolicyTest(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{},
@@ -131,8 +131,8 @@ func setupNetworkPolicyTest(t *testing.T) {
 			},
 		},
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{},
@@ -152,7 +152,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterBasic, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterBasic, rayv1.NetworkPolicyDenyAll)
 
 	assert.Equal(t, "test-cluster-head", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
@@ -186,7 +186,7 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkIsolationDenyAllIngress)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkPolicyDenyAllIngress)
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
@@ -198,7 +198,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllEgress, rayv1.NetworkIsolationDenyAllEgress)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllEgress, rayv1.NetworkPolicyDenyAllEgress)
 
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
@@ -210,7 +210,7 @@ func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterBasic, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterBasic, rayv1.NetworkPolicyDenyAll)
 
 	assert.Equal(t, "test-cluster-workers", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
@@ -247,7 +247,7 @@ func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 func TestBuildWorkerNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkIsolationDenyAllIngress)
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkPolicyDenyAllIngress)
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
@@ -262,7 +262,7 @@ func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
 	customPort := intstr.FromInt32(9999)
 	tcpProto := corev1.ProtocolTCP
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.NetworkIsolation.Worker = &rayv1.NetworkPolicyRules{
+	cluster.Spec.NetworkPolicy.Worker = &rayv1.NetworkPolicyRules{
 		IngressRules: []networkingv1.NetworkPolicyIngressRule{
 			{
 				Ports: []networkingv1.NetworkPolicyPort{
@@ -272,7 +272,7 @@ func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	// 1 base intra-cluster + 1 custom = 2.
 	require.Len(t, policy.Spec.Ingress, 2)
@@ -296,7 +296,7 @@ func TestBuildBaseIngressRules(t *testing.T) {
 
 // TestBuildHeadIngressRules verifies the head base ingress rules: intra-cluster only.
 // The operator access rule is intentionally absent — platforms inject it via
-// spec.networkIsolation.head.ingressRules (e.g. a mutating webhook).
+// spec.networkPolicy.head.ingressRules (e.g. a mutating webhook).
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -372,7 +372,7 @@ func TestBuildBaseEgressRules(t *testing.T) {
 func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkPolicyDenyAll)
 
 	require.Len(t, policy.Spec.Ingress, 2)
 }
@@ -384,7 +384,7 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 	customPort := intstr.FromInt32(9999)
 	tcpProto := corev1.ProtocolTCP
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.NetworkIsolation.Head = &rayv1.NetworkPolicyRules{
+	cluster.Spec.NetworkPolicy.Head = &rayv1.NetworkPolicyRules{
 		IngressRules: []networkingv1.NetworkPolicyIngressRule{
 			{
 				Ports: []networkingv1.NetworkPolicyPort{
@@ -394,7 +394,7 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	// 1 base intra-cluster + 1 custom = 2.
 	require.Len(t, policy.Spec.Ingress, 2)
@@ -409,7 +409,7 @@ func TestBuildHeadNetworkPolicy_CustomEgressRules(t *testing.T) {
 	customPort := intstr.FromInt32(8080)
 	tcpProto := corev1.ProtocolTCP
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.NetworkIsolation.Head = &rayv1.NetworkPolicyRules{
+	cluster.Spec.NetworkPolicy.Head = &rayv1.NetworkPolicyRules{
 		EgressRules: []networkingv1.NetworkPolicyEgressRule{
 			{
 				Ports: []networkingv1.NetworkPolicyPort{
@@ -419,7 +419,7 @@ func TestBuildHeadNetworkPolicy_CustomEgressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	// 1 base egress + 1 custom = 2.
 	require.Len(t, policy.Spec.Egress, 2)
@@ -458,8 +458,8 @@ func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	cluster := testRayClusterBasic.DeepCopy()
 	cluster.Name = strings.Repeat("a", utils.MaxRayClusterNameLength)
 
-	headPolicy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
-	workerPolicy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	headPolicy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
+	workerPolicy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	assert.Equal(t, cluster.Name+"-head", headPolicy.Name)
 	assert.Equal(t, cluster.Name+"-workers", workerPolicy.Name)
@@ -473,13 +473,13 @@ func TestBuildHeadNetworkPolicy_WorkerRulesNotLeaked(t *testing.T) {
 	customPort := intstr.FromInt32(9999)
 	tcpProto := corev1.ProtocolTCP
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.NetworkIsolation.Worker = &rayv1.NetworkPolicyRules{
+	cluster.Spec.NetworkPolicy.Worker = &rayv1.NetworkPolicyRules{
 		IngressRules: []networkingv1.NetworkPolicyIngressRule{
 			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
 		},
 	}
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	// Head NP must only have the intra-cluster base rule — no worker rules.
 	require.Len(t, policy.Spec.Ingress, 1)
@@ -493,13 +493,13 @@ func TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
 	customPort := intstr.FromInt32(9999)
 	tcpProto := corev1.ProtocolTCP
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.NetworkIsolation.Head = &rayv1.NetworkPolicyRules{
+	cluster.Spec.NetworkPolicy.Head = &rayv1.NetworkPolicyRules{
 		IngressRules: []networkingv1.NetworkPolicyIngressRule{
 			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
 		},
 	}
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
 
 	// Worker NP must only have the intra-cluster base rule — no head rules.
 	require.Len(t, policy.Spec.Ingress, 1)

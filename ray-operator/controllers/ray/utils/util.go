@@ -465,7 +465,7 @@ func CalculateReadyReplicas(pods corev1.PodList) int32 {
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	count := int32(0)
 	for _, pod := range pods.Items {
-		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1.WorkerNode) {
+		if val, ok := pod.Labels[RayNodeTypeLabelKey]; !ok || val != string(rayv1.WorkerNode) {
 			continue
 		}
 		if pod.Status.Phase == corev1.PodRunning {
@@ -765,6 +765,31 @@ func IsAutoscalingV1Enabled(spec *rayv1.RayClusterSpec) bool {
 func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
 	v, ok := annotations[RayFTEnabledAnnotationKey]
 	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
+}
+
+// GetGcsFaultToleranceBackend returns the configured GCS FT backend, defaulting to
+// redis when unset (for backward compatibility).
+func GetGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions) rayv1.GcsFaultToleranceBackend {
+	if options == nil || options.Backend == "" {
+		return rayv1.GcsFTBackendRedis
+	}
+	return options.Backend
+}
+
+// IsGCSFaultToleranceEmbedded returns true when GCS FT uses the embedded RocksDB backend.
+func IsGCSFaultToleranceEmbedded(options *rayv1.GcsFaultToleranceOptions) bool {
+	return options != nil && GetGcsFaultToleranceBackend(options) == rayv1.GcsFTBackendRocksDB
+}
+
+// GetGCSStoragePVCName returns the name of the PVC backing the embedded RocksDB GCS
+// store. When the user brings their own claim via Storage.ClaimName, that name is
+// returned; otherwise the operator-managed name "{cluster}-gcs-pvc" is used.
+func GetGCSStoragePVCName(instance *rayv1.RayCluster) string {
+	options := instance.Spec.GcsFaultToleranceOptions
+	if options != nil && options.Storage != nil && options.Storage.ClaimName != "" {
+		return options.Storage.ClaimName
+	}
+	return instance.Name + GCSStoragePVCSuffix
 }
 
 // IsAuthEnabled returns whether Ray auth is enabled.

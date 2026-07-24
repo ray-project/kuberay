@@ -437,6 +437,14 @@ spec:
                     type: boolean
                   gcsFaultToleranceOptions:
                     properties:
+                      backend:
+                        enum:
+                        - redis
+                        - rocksdb
+                        type: string
+                        x-kubernetes-validations:
+                        - message: gcsFaultToleranceOptions.backend is immutable
+                          rule: self == oldSelf
                       externalStorageNamespace:
                         type: string
                       redisAddress:
@@ -595,8 +603,30 @@ spec:
                                 x-kubernetes-map-type: atomic
                             type: object
                         type: object
-                    required:
-                    - redisAddress
+                      storage:
+                        properties:
+                          accessModes:
+                            items:
+                              type: string
+                            type: array
+                          claimName:
+                            type: string
+                          deletionPolicy:
+                            enum:
+                            - DeleteWithCluster
+                            - Retain
+                            type: string
+                          size:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          storageClassName:
+                            type: string
+                          subPath:
+                            type: string
+                        type: object
                     type: object
                   headGroupSpec:
                     properties:
@@ -796,6 +826,31 @@ spec:
                                     x-kubernetes-list-type: atomic
                                 type: object
                             type: object
+                        type: object
+                      ingressOptions:
+                        properties:
+                          host:
+                            type: string
+                          path:
+                            type: string
+                          pathType:
+                            enum:
+                            - Exact
+                            - Prefix
+                            - ImplementationSpecific
+                            type: string
+                          tls:
+                            items:
+                              properties:
+                                hosts:
+                                  items:
+                                    type: string
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                                secretName:
+                                  type: string
+                              type: object
+                            type: array
                         type: object
                       labels:
                         additionalProperties:
@@ -4644,7 +4699,7 @@ spec:
                     - message: the managedBy field value must be either 'ray.io/kuberay-operator'
                         or 'kueue.x-k8s.io/multikueue'
                       rule: self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']
-                  networkIsolation:
+                  networkPolicy:
                     properties:
                       head:
                         properties:

@@ -150,6 +150,20 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - persistentvolumeclaims
+  - pods/status
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - create
@@ -175,19 +189,6 @@ rules:
   - pods/resize
   verbs:
   - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - ""
   resources:
