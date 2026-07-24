@@ -1,6 +1,8 @@
 package eventserver
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,14 +24,14 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
-	ClusterTaskMap     *types.ClusterTaskMap
+	ClusterTaskMap *types.ClusterTaskMap
 	ClusterActorMap    *types.ClusterActorMap
 	ClusterJobMap      *types.ClusterJobMap
 	ClusterNodeMap     *types.ClusterNodeMap
 	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
-var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(\.gz)?$`)
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(-\d+)?(\.jsonl)?(\.gz)?$`)
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage
 const taskPrefix = "task::"
@@ -39,8 +41,64 @@ func isValidEventFile(fileName string) bool {
 	if strings.HasSuffix(fileName, "/") {
 		return false
 	}
-	// Only files matching {nodeId}-{YYYY-MM-DD-HH} format are valid event files
+	// Accept both legacy files ({nodeId}-{YYYY-MM-DD-HH}) and the new
+	// disk-first JSONL files ({nodeId}-{YYYY-MM-DD-HH}.jsonl[.gz]).
 	return eventFilePattern.MatchString(fileName)
+}
+
+// maxJSONLLineBytes bounds a single JSONL line during scanning. It matches the
+// collector's default maximum rotated-file size (see eventcollector defaults),
+// so any single event the collector can persist to a file can also be read back
+// here. Without this, bufio.Scanner's default 64 KiB token limit would return
+// ErrTooLong for a large event (e.g. a big task profile) and cause the entire
+// file to be skipped.
+const maxJSONLLineBytes = 100 * 1024 * 1024
+
+// DecodeEventFileBytes parses the raw bytes of an event file.
+//
+// Gzip decompression is handled at the reader level in ProcessSingleSession
+// via compression.ReadCompressedContent, so data arriving here is always
+// already decompressed.
+//
+// Format auto-detection (JSON array vs JSONL) is always enabled so the
+// historyserver remains forward-compatible with new collectors that emit JSONL
+// and backward-compatible with legacy data stored as a JSON array.
+func DecodeEventFileBytes(fileName string, raw []byte) ([]map[string]any, error) {
+	trimmed := bytes.TrimLeft(raw, " \t\r\n")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+
+	// Format auto-detection is always enabled.
+	// JSON array (legacy format) starts with '['.
+	if trimmed[0] == '[' {
+		var out []map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, fmt.Errorf("unmarshal JSON array %s: %w", fileName, err)
+		}
+		return out, nil
+	}
+
+	// Otherwise treat as JSONL: one object per non-empty line.
+	var out []map[string]any
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	scanner.Buffer(make([]byte, 0, 64*1024), maxJSONLLineBytes)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal(line, &obj); err != nil {
+			logrus.Warnf("Skipping malformed JSONL line in %s: %v", fileName, err)
+			continue
+		}
+		out = append(out, obj)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan JSONL %s: %w", fileName, err)
+	}
+	return out, nil
 }
 
 func NewEventHandler(reader storage.StorageReader) *EventHandler {
@@ -1068,11 +1126,11 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		rayEventsRead++
 
-		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// DecodeEventFileBytes and storeEvent failures are treated as corrupt-data errors:
 		// retrying won't fix bad bytes, accepting partial loss.
-		var eventList []map[string]any
-		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
+		eventList, err := DecodeEventFileBytes(eventFile, eventbytes)
+		if err != nil {
+			logrus.Errorf("Failed to decode events for file %s: %v", eventFile, err)
 			continue
 		}
 

@@ -183,17 +183,19 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
 	ctx := context.TODO()
-	logrus.Infof("Prepare to get object %s info ...", fileName)
+	fullPath := path.Join(r.OssRootDir, clusterId, fileName)
+	logrus.Infof("Prepare to get object %s info ...", fullPath)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
 		Bucket: oss.Ptr(r.OssBucket),
-		Key:    oss.Ptr(fileName),
+		Key:    oss.Ptr(fullPath),
 	})
 	if err != nil {
-		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
+		dirPath := path.Dir(fullPath)
+		allFiles := r._listFiles(dirPath, "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == path.Base(fileName) {
+			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
 				result, err = r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
 					Bucket: oss.Ptr(r.OssBucket),
@@ -208,7 +210,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 			}
 		}
 		if !found {
-			logrus.Errorf("Failed to get object by list all files %s", fileName)
+			logrus.Errorf("Failed to get object by list all files %s", fullPath)
 			return nil
 		}
 	}
@@ -216,7 +218,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	data, err := io.ReadAll(result.Body)
 	if err != nil {
-		logrus.Errorf("Failed to read all data from object %s : %v", fileName, err)
+		logrus.Errorf("Failed to read all data from object %s : %v", fullPath, err)
 		return nil
 	}
 	return bytes.NewReader(data)
