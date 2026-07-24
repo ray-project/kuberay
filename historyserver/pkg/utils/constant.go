@@ -33,7 +33,3 @@ func GetRayPersistCompletePath() string {
 func GetRaySessionLatestPath() string {
 	return filepath.Join(GetTmpRayRoot(), "session_latest")
 }
-
-func GetRayNodeIDPath() string {
-	return filepath.Join(GetTmpRayRoot(), "raylet_node_id")
-}
