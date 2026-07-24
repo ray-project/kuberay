@@ -30,6 +30,8 @@ type RayClusterSpecApplyConfiguration struct {
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
 	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
+	// HistoryServerOptions used for history server related configuration
+	HistoryServerOptions *HistoryServerOptionsApplyConfiguration `json:"historyServerOptions,omitempty"`
 	// NetworkPolicy specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
@@ -118,6 +120,14 @@ func (b *RayClusterSpecApplyConfiguration) WithEnableInTreeAutoscaling(value boo
 // If called multiple times, the GcsFaultToleranceOptions field is set to the value of the last call.
 func (b *RayClusterSpecApplyConfiguration) WithGcsFaultToleranceOptions(value *GcsFaultToleranceOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
 	b.GcsFaultToleranceOptions = value
+	return b
+}
+
+// WithHistoryServerOptions sets the HistoryServerOptions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HistoryServerOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithHistoryServerOptions(value *HistoryServerOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.HistoryServerOptions = value
 	return b
 }
 

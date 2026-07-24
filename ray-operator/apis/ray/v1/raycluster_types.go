@@ -43,6 +43,9 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// HistoryServerOptions used for history server related configuration
+	// +optional
+	HistoryServerOptions *HistoryServerOptions `json:"historyServerOptions,omitempty"`
 	// NetworkPolicy specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
@@ -247,6 +250,29 @@ type RedisCredential struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	// +optional
 	Value string `json:"value,omitempty"`
+}
+
+// HistoryServerOptions used for history server related configuration
+type HistoryServerOptions struct {
+	// CollectorOptions used for collector sidecar configuration
+	// +optional
+	CollectorOptions *CollectorOptions `json:"collectorOptions,omitempty"`
+}
+
+// CollectorOptions defines settings for the history server collector sidecar.
+type CollectorOptions struct {
+	// Image is the collector container image to be used (e.g. quay.io/kuberay/collector:latest).
+	// +optional
+	Image *string `json:"image,omitempty"`
+	// ImagePullPolicy is the pull policy for the collector image.
+	// +optional
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// Resources specifies computing resource requirements.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Env allows injecting custom environment variables into the collector container.
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // NetworkPolicyMode is the type for network isolation mode constants.

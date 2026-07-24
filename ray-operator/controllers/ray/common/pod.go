@@ -285,6 +285,12 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
+	if features.Enabled(features.RayClusterHistoryServer) && instance.Spec.HistoryServerOptions != nil && instance.Spec.HistoryServerOptions.CollectorOptions != nil {
+		fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
+		collectorContainer := BuildCollectorContainer(instance.Spec.HistoryServerOptions.CollectorOptions, rayv1.HeadNode, instance.Name, instance.Namespace, fqdnRayIP, instance.Labels)
+		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
+	}
+
 	return podTemplate
 }
 
@@ -522,6 +528,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
+	if features.Enabled(features.RayClusterHistoryServer) && instance.Spec.HistoryServerOptions != nil && instance.Spec.HistoryServerOptions.CollectorOptions != nil {
+		collectorContainer := BuildCollectorContainer(instance.Spec.HistoryServerOptions.CollectorOptions, rayv1.WorkerNode, instance.Name, instance.Namespace, fqdnRayIP, instance.Labels)
+		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
+	}
+
 	return podTemplate
 }
 
@@ -674,6 +685,12 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		autoscalerContainerIndex := getAutoscalerContainerIndex(pod)
 		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
 		addEmptyDir(ctx, &pod.Spec.Containers[autoscalerContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+	}
+	if features.Enabled(features.RayClusterHistoryServer) {
+		if collectorContainerIndex := getCollectorContainerIndex(pod); collectorContainerIndex != -1 {
+			addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+			addEmptyDir(ctx, &pod.Spec.Containers[collectorContainerIndex], &pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+		}
 	}
 
 	var cmd, args string
@@ -854,6 +871,111 @@ func getAutoscalerContainerIndex(pod corev1.Pod) (autoscalerContainerIndex int) 
 	panic("Autoscaler container not found!")
 }
 
+// getCollectorContainerIndex returns the index of the collector container, or -1 if not found.
+func getCollectorContainerIndex(pod corev1.Pod) int {
+	for i, container := range pod.Spec.Containers {
+		if container.Name == utils.CollectorContainerName {
+			return i
+		}
+	}
+	return -1
+}
+
+// BuildCollectorContainer builds a history server collector container which can be appended to the head and worker pods.
+func BuildCollectorContainer(collectorOptions *rayv1.CollectorOptions, nodeType rayv1.RayNodeType, rayClusterName string, rayClusterNamespace string, fqdnRayIP string, labels map[string]string) corev1.Container {
+	image := ""
+	if collectorOptions.Image != nil {
+		image = *collectorOptions.Image
+	}
+	pullPolicy := corev1.PullIfNotPresent
+	if collectorOptions.ImagePullPolicy != nil {
+		pullPolicy = *collectorOptions.ImagePullPolicy
+	}
+	resources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
+		},
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("50m"),
+			corev1.ResourceMemory: resource.MustParse("64Mi"),
+		},
+	}
+	if collectorOptions.Resources != nil {
+		resources = *collectorOptions.Resources
+	}
+
+	role := "Worker"
+	if nodeType == rayv1.HeadNode {
+		role = "Head"
+	}
+
+	container := corev1.Container{
+		Name:            utils.CollectorContainerName,
+		Image:           image,
+		ImagePullPolicy: pullPolicy,
+		Resources:       resources,
+		Env: []corev1.EnvVar{
+			{
+				Name: utils.POD_IP,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.podIP",
+					},
+				},
+			},
+			{
+				Name:  utils.RAY_CLUSTER_NAME,
+				Value: rayClusterName,
+			},
+			{
+				Name:  utils.RAY_CLUSTER_NAMESPACE,
+				Value: rayClusterNamespace,
+			},
+			{
+				Name:  utils.RAY_ROLE,
+				Value: role,
+			},
+		},
+	}
+
+	if fqdnRayIP != "" {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.FQ_RAY_IP,
+			Value: fqdnRayIP,
+		})
+	}
+
+	if labels != nil && labels[utils.RayOriginatedFromCRDLabelKey] != "" {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.OWNER_KIND,
+			Value: labels[utils.RayOriginatedFromCRDLabelKey],
+		})
+	}
+
+	if labels != nil && labels[utils.RayOriginatedFromCRNameLabelKey] != "" {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.OWNER_NAME,
+			Value: labels[utils.RayOriginatedFromCRNameLabelKey],
+		})
+	}
+
+	if nodeType == rayv1.HeadNode {
+		if !utils.EnvVarExists(utils.RAY_DASHBOARD_ADDRESS, collectorOptions.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_DASHBOARD_ADDRESS,
+				Value: "http://localhost:8265",
+			})
+		}
+	}
+
+	if len(collectorOptions.Env) > 0 {
+		container.Env = append(container.Env, collectorOptions.Env...)
+	}
+
+	return container
+}
+
 // labelPod returns the labels for selecting the resources
 // belonging to the given RayCluster CR name.
 func labelPod(rayNodeType rayv1.RayNodeType, rayClusterName string, groupName string, overrideLabels map[string]string) map[string]string {
@@ -1013,6 +1135,24 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 	if !utils.EnvVarExists(utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, container.Env) {
 		// This flag enables the display of disk usage. Without this flag, the dashboard will not show disk usage.
 		container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, Value: "1"})
+	}
+
+	if features.Enabled(features.RayClusterHistoryServer) && getCollectorContainerIndex(*pod) != -1 {
+		if !utils.EnvVarExists(utils.RAY_ENABLE_RAY_EVENT, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_ENABLE_RAY_EVENT, Value: "true"})
+		}
+		if !utils.EnvVarExists(utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, Value: "true"})
+		}
+		if !utils.EnvVarExists(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, Value: "http://localhost:8080/v1/events"})
+		}
+		if !utils.EnvVarExists(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, Value: utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES})
+		}
+		if !utils.EnvVarExists(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, Value: utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES})
+		}
 	}
 }
 

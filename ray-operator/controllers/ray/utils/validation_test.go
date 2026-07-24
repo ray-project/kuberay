@@ -3307,3 +3307,320 @@ func TestValidateRayClusterSpec_NetworkPolicyRequiresFeatureGate(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "RayClusterNetworkPolicy")
 }
+
+func TestValidateRayClusterSpec_HistoryServerRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, false)
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HistoryServerOptions: &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{
+					Image: ptr.To("quay.io/kuberay/collector:latest"),
+					Env: []corev1.EnvVar{
+						{Name: "STORAGE_BACKEND", Value: "GCS"},
+						{Name: "GCS_BUCKET", Value: "my-bucket"},
+					},
+				},
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "worker-group",
+					Template:    podTemplateSpec(nil, nil),
+					MinReplicas: ptr.To(int32(1)),
+					MaxReplicas: ptr.To(int32(1)),
+				},
+			},
+		},
+	}
+	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RayClusterHistoryServer feature gate is not enabled")
+}
+
+func TestValidateCollectorOptions(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+
+	tests := []struct {
+		name         string
+		collector    *rayv1.CollectorOptions
+		headSpec     *rayv1.HeadGroupSpec
+		workerSpecs  []rayv1.WorkerGroupSpec
+		expectError  bool
+		errorMessage string
+	}{
+		{
+			name:         "nil collector options",
+			collector:    nil,
+			expectError:  true,
+			errorMessage: "historyServerOptions.collectorOptions must be set",
+		},
+		{
+			name: "missing image",
+			collector: &rayv1.CollectorOptions{
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "historyServerOptions.collectorOptions.image must be set",
+		},
+		{
+			name: "missing STORAGE_BACKEND",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+			},
+			expectError:  true,
+			errorMessage: "STORAGE_BACKEND environment variable must be set with a literal string value in historyServerOptions.collectorOptions.env",
+		},
+		{
+			name: "valid GCS",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+				},
+			},
+		},
+		{
+			name: "valid GCS with ValueFrom secret",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{
+						Name: "GCS_BUCKET",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{Name: "my-gcs-secret"},
+								Key:                  "bucket",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "missing GCS_BUCKET",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "GCS_BUCKET environment variable must be set when STORAGE_BACKEND is GCS",
+		},
+		{
+			name: "valid S3 with all fields",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "S3"},
+					{Name: "S3_BUCKET", Value: "my-bucket"},
+					{Name: "S3_ENDPOINT", Value: "s3.us-west-2.amazonaws.com"},
+					{Name: "S3_REGION", Value: "us-west-2"},
+				},
+			},
+		},
+		{
+			name: "missing S3_REGION",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "S3"},
+					{Name: "S3_BUCKET", Value: "my-bucket"},
+					{Name: "S3_ENDPOINT", Value: "s3.us-west-2.amazonaws.com"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "S3_REGION environment variable must be set when STORAGE_BACKEND is S3",
+		},
+		{
+			name: "valid AZUREBLOB with connection string mode",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "AZUREBLOB"},
+					{Name: "AZURE_STORAGE_AUTH_MODE", Value: "connection_string"},
+					{Name: "AZURE_STORAGE_CONNECTION_STRING", Value: "connection-string"},
+				},
+			},
+		},
+		{
+			name: "valid AZUREBLOB with workload identity mode",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "AZUREBLOB"},
+					{Name: "AZURE_STORAGE_AUTH_MODE", Value: "workload_identity"},
+					{Name: "AZURE_STORAGE_ACCOUNT_URL", Value: "https://myaccount.blob.core.windows.net"},
+				},
+			},
+		},
+		{
+			name: "missing connection string in connection_string auth mode",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "AZUREBLOB"},
+					{Name: "AZURE_STORAGE_AUTH_MODE", Value: "connection_string"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "AZURE_STORAGE_CONNECTION_STRING environment variable must be set when STORAGE_BACKEND is AZUREBLOB and AZURE_STORAGE_AUTH_MODE is connection_string",
+		},
+		{
+			name: "missing credentials in auto-detect auth mode",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "AZUREBLOB"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL environment variable must be set when STORAGE_BACKEND is AZUREBLOB",
+		},
+		{
+			name: "valid ALIYUNOSS",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "ALIYUNOSS"},
+					{Name: "OSS_BUCKET", Value: "my-bucket"},
+					{Name: "OSS_ENDPOINT", Value: "oss-cn-hangzhou.aliyuncs.com"},
+					{Name: "OSS_REGION", Value: "cn-hangzhou"},
+				},
+			},
+		},
+		{
+			name: "missing OSS_REGION",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "ALIYUNOSS"},
+					{Name: "OSS_BUCKET", Value: "my-bucket"},
+					{Name: "OSS_ENDPOINT", Value: "oss-cn-hangzhou.aliyuncs.com"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "OSS_REGION environment variable must be set when STORAGE_BACKEND is ALIYUNOSS",
+		},
+		{
+			name: "unknown storage backend (skips validation)",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "CUSTOM_BACKEND"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "manually defined ray-history-collector container in head template",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+				},
+			},
+			headSpec: &rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: CollectorContainerName, Image: "user-image"},
+						},
+					},
+				},
+			},
+			expectError:  true,
+			errorMessage: fmt.Sprintf("head pod template must not define a container with name '%s' when history server collector options are enabled", CollectorContainerName),
+		},
+		{
+			name: "manually defined ray-history-collector container in worker template",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+				},
+			},
+			workerSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "group-1",
+					MinReplicas: ptr.To(int32(1)),
+					MaxReplicas: ptr.To(int32(1)),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: CollectorContainerName, Image: "user-image"},
+							},
+						},
+					},
+				},
+			},
+			expectError:  true,
+			errorMessage: fmt.Sprintf("worker group group-1 pod template must not define a container with name '%s' when history server collector options are enabled", CollectorContainerName),
+		},
+		{
+			name: "manually defined POD_IP in collector env",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+					{Name: "POD_IP", Value: "10.244.0.5"},
+				},
+			},
+			expectError:  true,
+			errorMessage: "historyServerOptions.collectorOptions.env must not contain POD_IP: it is managed by KubeRay and injected automatically into the collector container",
+		},
+		{
+			name: "manually defined POD_IP with empty value in collector env",
+			collector: &rayv1.CollectorOptions{
+				Image: ptr.To("quay.io/kuberay/collector:latest"),
+				Env: []corev1.EnvVar{
+					{Name: "STORAGE_BACKEND", Value: "GCS"},
+					{Name: "GCS_BUCKET", Value: "my-bucket"},
+					{Name: "POD_IP", Value: ""},
+				},
+			},
+			expectError:  true,
+			errorMessage: "historyServerOptions.collectorOptions.env must not contain POD_IP: it is managed by KubeRay and injected automatically into the collector container",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var headGroupSpec rayv1.HeadGroupSpec
+			if tt.headSpec != nil {
+				headGroupSpec = *tt.headSpec
+			} else {
+				headGroupSpec = rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				}
+			}
+
+			cluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					HistoryServerOptions: &rayv1.HistoryServerOptions{
+						CollectorOptions: tt.collector,
+					},
+					HeadGroupSpec:    headGroupSpec,
+					WorkerGroupSpecs: tt.workerSpecs,
+				},
+			}
+			err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

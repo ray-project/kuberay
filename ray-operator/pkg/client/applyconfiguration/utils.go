@@ -24,6 +24,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ClusterUpgradeOptions"):
 		return &rayv1.ClusterUpgradeOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CollectorOptions"):
+		return &rayv1.CollectorOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionCondition"):
 		return &rayv1.DeletionConditionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
@@ -40,6 +42,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
 		return &rayv1.HeadInfoApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("HistoryServerOptions"):
+		return &rayv1.HistoryServerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
 		return &rayv1.IngressOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
