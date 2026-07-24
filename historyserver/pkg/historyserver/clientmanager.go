@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/cache"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -30,12 +31,15 @@ const (
 	AuthTokenSecretKey = rayutils.RAY_AUTH_TOKEN_SECRET_KEY
 	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
 	svcInfoCacheTTL = 30 * time.Second
+	// svcInfoCacheMaxSize bounds the number of cached ServiceInfo entries so a cluster with many
+	// RayClusters cannot grow the cache without limit. Least-recently-used entries are evicted first.
+	svcInfoCacheMaxSize = 1024
 )
 
 type ClientManager struct {
 	configs      []*rest.Config
 	clients      []client.Client
-	svcInfoCache *TTLCache[ServiceInfo]
+	svcInfoCache *cache.LRUExpireCache
 }
 
 // Client returns the primary controller-runtime client.
@@ -163,8 +167,10 @@ func (c *ClientManager) GetSvcInfo(name, namespace string) (ServiceInfo, error) 
 
 	// Check the cache first.
 	if cached, ok := c.svcInfoCache.Get(cacheKey); ok {
-		logrus.Debugf("svcInfo cache hit for cluster %s", cacheKey)
-		return cached, nil
+		if svcInfo, ok := cached.(ServiceInfo); ok {
+			logrus.Debugf("svcInfo cache hit for cluster %s", cacheKey)
+			return svcInfo, nil
+		}
 	}
 
 	// Cache miss or expired — fetch from K8s.
@@ -173,7 +179,7 @@ func (c *ClientManager) GetSvcInfo(name, namespace string) (ServiceInfo, error) 
 		return ServiceInfo{}, err
 	}
 
-	c.svcInfoCache.Set(cacheKey, svcInfo)
+	c.svcInfoCache.Add(cacheKey, svcInfo, svcInfoCacheTTL)
 
 	return svcInfo, nil
 }
@@ -247,7 +253,7 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 	clientManager := &ClientManager{
 		configs:      kubeconfigList,
 		clients:      clientList,
-		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
+		svcInfoCache: cache.NewLRUExpireCache(svcInfoCacheMaxSize),
 	}
 	return clientManager, nil
 }

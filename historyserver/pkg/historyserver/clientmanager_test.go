@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -49,7 +50,7 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
-		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
+		svcInfoCache: cache.NewLRUExpireCache(svcInfoCacheMaxSize),
 	}
 
 	// setAuthOptions reads the current RayCluster and updates its AuthOptions, so successive
@@ -152,7 +153,7 @@ func TestGetSvcInfo(t *testing.T) {
 
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
-		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
+		svcInfoCache: cache.NewLRUExpireCache(svcInfoCacheMaxSize),
 	}
 
 	// First call should fetch from K8s and populate cache.
@@ -167,12 +168,12 @@ func TestGetSvcInfo(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, svcInfo, svcInfo2)
 
-	// Expired cache entry should trigger a re-fetch.
-	clientManager.svcInfoCache.SetWithExpiry(cacheKey, ServiceInfo{
+	// Expired cache entry should trigger a re-fetch. A negative TTL makes the entry expire immediately.
+	clientManager.svcInfoCache.Add(cacheKey, ServiceInfo{
 		ServiceName: "stale-svc",
 		Namespace:   namespace,
 		Port:        int(portalPort),
-	}, time.Now().Add(-1*time.Second))
+	}, -1*time.Second)
 
 	svcInfo3, err := clientManager.GetSvcInfo(clusterName, namespace)
 	assert.NoError(t, err)
@@ -186,7 +187,7 @@ func TestGetSvcInfo(t *testing.T) {
 	// No clients should error.
 	emptyMgr := &ClientManager{
 		clients:      []client.Client{},
-		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
+		svcInfoCache: cache.NewLRUExpireCache(svcInfoCacheMaxSize),
 	}
 	_, err = emptyMgr.GetSvcInfo(clusterName, namespace)
 	assert.Error(t, err)
