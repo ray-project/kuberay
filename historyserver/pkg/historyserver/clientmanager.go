@@ -93,7 +93,7 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	}
 
 	// Check if auth is enabled
-	if rayCluster.Spec.AuthOptions == nil || rayCluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
+	if !rayutils.IsAuthEnabled(&rayCluster.Spec) {
 		logrus.Debugf("Auth not enabled for RayCluster %s/%s", namespace, name)
 		return "", nil
 	}
@@ -101,7 +101,7 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	// Kubernetes-delegated token auth has no static bearer token to inject (Ray authenticates against
 	// the K8s API server directly). Fail explicitly instead of proxying unauthenticated and letting
 	// the dashboard reject the call with a confusing auth error.
-	if rayCluster.Spec.AuthOptions.EnableK8sTokenAuth != nil && *rayCluster.Spec.AuthOptions.EnableK8sTokenAuth {
+	if rayutils.IsK8sAuthEnabled(rayCluster.Spec.AuthOptions) {
 		return "", fmt.Errorf("cannot authenticate proxied requests to RayCluster %s/%s: Kubernetes-delegated token auth (enableK8sTokenAuth) is not supported by the history server", namespace, name)
 	}
 
