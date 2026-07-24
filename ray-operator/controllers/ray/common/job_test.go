@@ -584,7 +584,7 @@ func TestGetSubmitterPodTemplateNoOverride(t *testing.T) {
 		},
 	}
 	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
-	
+
 	// Verify that user-provided fields are NOT overridden by the Head Pod
 	assert.Equal(t, corev1.PullIfNotPresent, template.Spec.Containers[0].ImagePullPolicy)
 	assert.Equal(t, "user-sa", template.Spec.ServiceAccountName)
