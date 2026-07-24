@@ -176,9 +176,6 @@ func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
-func PodPhase(pod corev1.Pod) corev1.PodPhase {
-	return pod.Status.Phase
-}
 
 func RateLimitedReplicas(t Test, rayCluster *rayv1.RayCluster, limit int32) bool {
 	// The number of new launches must be less than or equal to the size of the RayCluster.
