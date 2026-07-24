@@ -76,8 +76,6 @@ func Resolve(ctx context.Context, cfg *rest.Config) (Result, error) {
 			log.Info("TLS profile not available, using hardened defaults (non-OpenShift cluster)")
 		case apierrors.IsNotFound(err):
 			log.Info("APIServer resource not found, using hardened defaults")
-		case apierrors.IsForbidden(err):
-			log.Info("APIServer access forbidden, using hardened defaults (restricted RBAC)")
 		case apierrors.IsServiceUnavailable(err),
 			apierrors.IsTimeout(err),
 			apierrors.IsServerTimeout(err),
