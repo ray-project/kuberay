@@ -916,7 +916,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			AuthOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
+				EnableK8sTokenAuth: new(true),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{

@@ -216,7 +216,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			name: "redis backend rejects rocksdb-only storage field",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
 				Backend: rayv1.GcsFTBackendRedis,
-				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("1Gi"))},
+				Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("1Gi"))},
 			},
 			expectError:  true,
 			errorMessage: "cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend",
@@ -231,7 +231,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			name: "rocksdb backend with operator-managed storage is valid",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
 				Backend: rayv1.GcsFTBackendRocksDB,
-				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("2Gi"))},
+				Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("2Gi"))},
 			},
 			expectError: false,
 		},
@@ -259,7 +259,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 				Backend: rayv1.GcsFTBackendRocksDB,
 				Storage: &rayv1.GcsEmbeddedStorage{
 					ClaimName: "my-pvc",
-					Size:      ptr.To(resource.MustParse("1Gi")),
+					Size:      new(resource.MustParse("1Gi")),
 				},
 			},
 			expectError:  true,
@@ -2662,7 +2662,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 9 * * *",
-					TimeZone: ptr.To("Asia/Taipei"),
+					TimeZone: new("Asia/Taipei"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2693,7 +2693,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 0 * * *",
-					TimeZone: ptr.To("UTC"),
+					TimeZone: new("UTC"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2724,7 +2724,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					TimeZone: ptr.To("Invalid/Zone"),
+					TimeZone: new("Invalid/Zone"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -3297,8 +3297,8 @@ func TestValidateRayClusterSpec_NetworkPolicyRequiresFeatureGate(t *testing.T) {
 				{
 					GroupName:   "worker-group",
 					Template:    podTemplateSpec(nil, nil),
-					MinReplicas: ptr.To(int32(1)),
-					MaxReplicas: ptr.To(int32(1)),
+					MinReplicas: new(int32(1)),
+					MaxReplicas: new(int32(1)),
 				},
 			},
 		},

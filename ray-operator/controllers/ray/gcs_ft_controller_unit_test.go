@@ -94,7 +94,7 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
 			Storage: &rayv1.GcsEmbeddedStorage{
-				Size:        ptr.To(resource.MustParse("5Gi")),
+				Size:        new(resource.MustParse("5Gi")),
 				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
 			},
 		})
@@ -132,7 +132,7 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 				Kind:       "RayService",
 				Name:       "my-service",
 				UID:        "service-uid",
-				Controller: ptr.To(true),
+				Controller: new(true),
 			},
 		}
 		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).Build()
@@ -168,7 +168,7 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 	t.Run("emits a warning event when the existing PVC diverges from the desired spec", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("5Gi"))},
+			Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("5Gi"))},
 		})
 		// Pre-existing PVC provisioned with a smaller size (drift).
 		existing := &corev1.PersistentVolumeClaim{
@@ -198,7 +198,7 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 	t.Run("no drift event when the existing PVC matches the desired spec", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("1Gi"))},
+			Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("1Gi"))},
 		})
 		existing := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
@@ -227,13 +227,13 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		// PVC with the resolved default class. This must not be reported as drift.
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse(utils.GCSStorageDefaultSize))},
+			Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse(utils.GCSStorageDefaultSize))},
 		})
 		existing := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				StorageClassName: ptr.To("standard"),
+				StorageClassName: new("standard"),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(utils.GCSStorageDefaultSize)},
 				},
@@ -256,15 +256,15 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
 			Storage: &rayv1.GcsEmbeddedStorage{
-				Size:             ptr.To(resource.MustParse(utils.GCSStorageDefaultSize)),
-				StorageClassName: ptr.To("fast"),
+				Size:             new(resource.MustParse(utils.GCSStorageDefaultSize)),
+				StorageClassName: new("fast"),
 			},
 		})
 		existing := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				StorageClassName: ptr.To("standard"),
+				StorageClassName: new("standard"),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(utils.GCSStorageDefaultSize)},
 				},
