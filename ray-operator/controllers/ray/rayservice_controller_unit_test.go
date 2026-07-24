@@ -2746,7 +2746,7 @@ func TestReconcileRollbackState(t *testing.T) {
 			}
 
 			if tt.isRollbackInProgress {
-				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "rolling back")
 			}
 
 			reconciler := RayServiceReconciler{
@@ -2961,10 +2961,10 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			}
 
 			if tt.isRollback {
-				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
-				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrade still in progress during rollback")
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "rolling back")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "upgrade still in progress during rollback")
 			} else {
-				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrading")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "upgrading")
 			}
 
 			// Run reconcileServe
@@ -3015,7 +3015,7 @@ func TestRayServiceFinalizer(t *testing.T) {
 			rayService: &rayv1.RayService{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 				Spec: rayv1.RayServiceSpec{
-					ManagedBy: ptr.To("kueue.x-k8s.io/multikueue"),
+					ManagedBy: new("kueue.x-k8s.io/multikueue"),
 				},
 			},
 			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {

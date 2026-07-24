@@ -303,6 +303,8 @@ func main() {
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
+		DefaultPodAnnotations:    config.DefaultPodAnnotations,
+		DefaultPodLabels:         config.DefaultPodLabels,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
@@ -320,6 +322,10 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
+		exitOnError(webhooks.SetupRayJobWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayJob")
+		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayService")
 	}
 
 	if features.Enabled(features.RayCronJob) {
@@ -330,14 +336,14 @@ func main() {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 
-	if features.Enabled(features.RayClusterNetworkIsolation) {
-		setupLog.Info("RayClusterNetworkIsolation feature gate is enabled, starting NetworkPolicy controller")
+	if features.Enabled(features.RayClusterNetworkPolicy) {
+		setupLog.Info("RayClusterNetworkPolicy feature gate is enabled, starting NetworkPolicy controller")
 		networkPolicyController, err := ray.NewNetworkPolicyController(mgr)
 		exitOnError(err, "unable to create controller", "controller", "NetworkPolicy")
 		exitOnError(networkPolicyController.SetupWithManager(mgr, config.ReconcileConcurrency),
 			"unable to setup controller", "controller", "NetworkPolicy")
 	} else {
-		setupLog.Info("RayClusterNetworkIsolation feature gate is disabled, skipping NetworkPolicy controller setup")
+		setupLog.Info("RayClusterNetworkPolicy feature gate is disabled, skipping NetworkPolicy controller setup")
 	}
 	// +kubebuilder:scaffold:builder
 

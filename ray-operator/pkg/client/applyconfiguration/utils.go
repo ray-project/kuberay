@@ -32,14 +32,18 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.DeletionRuleApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
 		return &rayv1.DeletionStrategyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("GcsEmbeddedStorage"):
+		return &rayv1.GcsEmbeddedStorageApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
 		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
 		return &rayv1.HeadInfoApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NetworkIsolationConfig"):
-		return &rayv1.NetworkIsolationConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
+		return &rayv1.IngressOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
+		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):

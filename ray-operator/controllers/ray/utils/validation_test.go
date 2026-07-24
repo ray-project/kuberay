@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -136,7 +137,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              false,
 		},
 		{
@@ -200,14 +201,87 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			annotations: map[string]string{
 				RayExternalStorageNSAnnotationKey: "myns",
 			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
+		},
+		// The redis backend does not require RedisAddress here: it may be supplied
+		// via env vars/annotations elsewhere, and master never enforced it.
+		{
+			name:                     "redis backend without RedisAddress is accepted",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
+			expectError:              false,
+		},
+		{
+			name: "redis backend rejects rocksdb-only storage field",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRedis,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("1Gi"))},
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend",
+		},
+		// rocksdb backend rules.
+		{
+			name:                     "rocksdb backend is valid with no redis fields",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			expectError:              false,
+		},
+		{
+			name: "rocksdb backend with operator-managed storage is valid",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: new(resource.MustParse("2Gi"))},
+			},
+			expectError: false,
+		},
+		{
+			name: "rocksdb backend rejects RedisAddress",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:      rayv1.GcsFTBackendRocksDB,
+				RedisAddress: "redis:6379",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.RedisAddress when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects ExternalStorageNamespace",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:                  rayv1.GcsFTBackendRocksDB,
+				ExternalStorageNamespace: "ns",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects claimName combined with size",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{
+					ClaimName: "my-pvc",
+					Size:      new(resource.MustParse("1Gi")),
+				},
+			},
+			expectError:  true,
+			errorMessage: "GcsFaultToleranceOptions.Storage.ClaimName is mutually exclusive with size, storageClassName, and accessModes",
+		},
+		{
+			name: "rocksdb backend rejects user-set RAY_gcs_storage env",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+			},
+			envVars: []corev1.EnvVar{
+				{Name: RAY_GCS_STORAGE, Value: "rocksdb"},
+			},
+			expectError: true,
+			errorMessage: fmt.Sprintf("cannot set `%s` or `%s` env var in head Pod when the embedded GCS FT backend is used - these are managed by KubeRay",
+				RAY_GCS_STORAGE, RAY_GCS_STORAGE_PATH),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -218,6 +292,85 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestValidateRayClusterSpecEmbeddedGCSFeatureGate verifies the embedded RocksDB
+// backend is rejected unless the GCSFaultToleranceEmbeddedStorage feature gate is
+// enabled.
+func TestValidateRayClusterSpecEmbeddedGCSFeatureGate(t *testing.T) {
+	spec := &rayv1.RayClusterSpec{
+		GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: podTemplateSpec(nil, nil),
+		},
+	}
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, false)
+	err := ValidateRayClusterSpec(spec, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires the GCSFaultToleranceEmbeddedStorage feature gate")
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	require.NoError(t, ValidateRayClusterSpec(spec, nil))
+}
+
+func TestValidateGcsFaultToleranceEmbeddedReservedVolume(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	// The operator reserves the "gcs-storage" volume name and the /data/gcs
+	// mount path for the embedded backend. A user-supplied head volume, volume
+	// mount by that name, or mount at that path must be rejected, otherwise
+	// configureEmbeddedFT would append a duplicate and the head Pod would fail.
+	newSpec := func(mounts []corev1.VolumeMount, volumes []corev1.Volume) *rayv1.RayClusterSpec {
+		return &rayv1.RayClusterSpec{
+			GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{VolumeMounts: mounts}},
+						Volumes:    volumes,
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		spec        *rayv1.RayClusterSpec
+		expectError bool
+	}{
+		{
+			name:        "no reserved volume is valid",
+			spec:        newSpec(nil, nil),
+			expectError: false,
+		},
+		{
+			name:        "reserved mount path is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: "user-vol", MountPath: GCSStorageMountPath}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume mount name is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: GCSStorageVolumeName, MountPath: "/somewhere/else"}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume name is rejected",
+			spec:        newSpec(nil, []corev1.Volume{{Name: GCSStorageVolumeName}}),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -255,6 +408,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisPassword is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisPassword: &rayv1.RedisCredential{
 					Value: "password",
 				},
@@ -317,6 +471,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisUsername is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisUsername: &rayv1.RedisCredential{
 					Value: "username",
 				},
@@ -624,6 +779,49 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 				},
 			},
 			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+		"should return error if autoscaler v1 is enabled and a worker group has a restartPolicy other than Never or unset": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+			expectedErr: "restartPolicy for worker group worker-group-2 should be Never or unset when using autoscaler V1",
+		},
+		"should not return error if autoscaler v1 is enabled and all worker groups have restartPolicy Never or unset": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, nil),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					},
+				},
+			},
 		},
 		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
@@ -2464,7 +2662,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 9 * * *",
-					TimeZone: ptr.To("Asia/Taipei"),
+					TimeZone: new("Asia/Taipei"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2495,7 +2693,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 0 * * *",
-					TimeZone: ptr.To("UTC"),
+					TimeZone: new("UTC"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2526,7 +2724,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					TimeZone: ptr.To("Invalid/Zone"),
+					TimeZone: new("Invalid/Zone"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2991,61 +3189,61 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 	}
 }
 
-func TestValidateNetworkIsolation(t *testing.T) {
+func TestValidateNetworkPolicy(t *testing.T) {
 	tests := []struct {
-		ni          *rayv1.NetworkIsolationConfig
+		ni          *rayv1.NetworkPolicyConfig
 		name        string
 		errorMsg    string
 		expectError bool
 	}{
 		{
 			name: "DenyAllEgress with head IngressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
 				Head: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkPolicy.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
 			name: "DenyAllEgress with worker IngressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
 				Worker: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkPolicy.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
 			name: "DenyAllIngress with head EgressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
 				Head: &rayv1.NetworkPolicyRules{
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkPolicy.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
 		},
 		{
 			name: "DenyAllIngress with worker EgressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
 				Worker: &rayv1.NetworkPolicyRules{
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkPolicy.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
 		},
 		{
 			name: "DenyAll with both head and worker rules is valid",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 				Head: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
@@ -3058,14 +3256,14 @@ func TestValidateNetworkIsolation(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "nil NetworkIsolation is valid",
+			name:        "nil NetworkPolicy is valid",
 			ni:          nil,
 			expectError: false,
 		},
 		{
 			name: "mode only with no head or worker rules is valid",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			expectError: false,
 		},
@@ -3073,8 +3271,8 @@ func TestValidateNetworkIsolation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec := &rayv1.RayClusterSpec{NetworkIsolation: tt.ni}
-			err := validateNetworkIsolation(spec)
+			spec := &rayv1.RayClusterSpec{NetworkPolicy: tt.ni}
+			err := validateNetworkPolicy(spec)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMsg)
@@ -3085,12 +3283,12 @@ func TestValidateNetworkIsolation(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkIsolation, false)
+func TestValidateRayClusterSpec_NetworkPolicyRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkPolicy, false)
 	cluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
@@ -3099,13 +3297,13 @@ func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T
 				{
 					GroupName:   "worker-group",
 					Template:    podTemplateSpec(nil, nil),
-					MinReplicas: ptr.To(int32(1)),
-					MaxReplicas: ptr.To(int32(1)),
+					MinReplicas: new(int32(1)),
+					MaxReplicas: new(int32(1)),
 				},
 			},
 		},
 	}
 	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "RayClusterNetworkIsolation")
+	assert.Contains(t, err.Error(), "RayClusterNetworkPolicy")
 }

@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -22,6 +23,42 @@ import (
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
+
+const (
+	gatewayServiceTypeAnnotation = "networking.istio.io/service-type"
+	// e2eGatewayServiceType is the Istio Gateway backing-service type for e2e tests.
+	// Kind has no LoadBalancer controller, so the default LoadBalancer Gateway never
+	// becomes Programmed. ClusterIP satisfies Programmed=True; curls use GetGatewayHost().
+	e2eGatewayServiceType = "ClusterIP"
+)
+
+// setGatewayServiceType waits for the Gateway CR and annotates it for in-cluster e2e.
+func setGatewayServiceType(test Test, g *WithT, namespace, gatewayName string) {
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to exist", namespace, gatewayName)
+	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).ShouldNot(BeNil())
+
+	LogWithTimestamp(test.T(), "Annotating Gateway %s/%s with %s=%s",
+		namespace, gatewayName, gatewayServiceTypeAnnotation, e2eGatewayServiceType)
+	patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:%q}}}`,
+		gatewayServiceTypeAnnotation, e2eGatewayServiceType)
+	g.Eventually(func() error {
+		_, err := test.Client().Gateway().GatewayV1().Gateways(namespace).
+			Patch(test.Ctx(), gatewayName, types.MergePatchType, patch, metav1.PatchOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
+}
+
+// waitForGatewayReady waits until IsGatewayReady (Accepted and Programmed).
+func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gwv1.Gateway {
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", namespace, gatewayName)
+	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
+	gateway, err := GetGateway(test, namespace, gatewayName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(gateway).NotTo(BeNil())
+	return gateway
+}
 
 // bootstrapIncrementalRayService creates a RayService with incremental upgrade enabled
 // and waits for all required components to be ready, including:
@@ -35,7 +72,7 @@ import (
 //   - maxSurge: The percentage of capacity (Serve replicas) to add to the new cluster in each scaling step.
 //   - serveConfigV2: The Serve config V2 to use for the RayService.
 //
-// Returns the RayService, HTTPRoute, and Gateway IP.
+// Returns the RayService, HTTPRoute, and in-cluster Gateway host DNS name.
 func bootstrapIncrementalRayService(
 	test Test,
 	g *WithT,
@@ -43,7 +80,7 @@ func bootstrapIncrementalRayService(
 	rayServiceName string,
 	stepSize, interval, maxSurge *int32,
 	serveConfigV2 serveConfigV2,
-) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
+) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayHost string) {
 	var err error
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace).
 		WithSpec(incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2))
@@ -56,14 +93,8 @@ func bootstrapIncrementalRayService(
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
-	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", rayService.Namespace, gatewayName)
-	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
-
-	var gateway *gwv1.Gateway
-	gateway, err = GetGateway(test, rayService.Namespace, gatewayName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(gateway).NotTo(BeNil())
+	setGatewayServiceType(test, g, rayService.Namespace, gatewayName)
+	gateway := waitForGatewayReady(test, g, rayService.Namespace, gatewayName)
 
 	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
@@ -75,8 +106,8 @@ func bootstrapIncrementalRayService(
 		return utils.IsHTTPRouteReady(gateway, httpRoute), err
 	}, TestTimeoutMedium).Should(BeTrue())
 
-	gatewayIP = GetGatewayIP(gateway)
-	g.Expect(gatewayIP).NotTo(BeEmpty())
+	gatewayHost = GetGatewayHost(gateway)
+	g.Expect(gatewayHost).NotTo(BeEmpty())
 
 	return
 }
@@ -100,7 +131,7 @@ const (
 // This method currently supports POST and GET methods.
 func CurlRayServiceGateway(
 	t Test,
-	gatewayIP string,
+	gatewayHost string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
 	method,
@@ -113,7 +144,7 @@ func CurlRayServiceGateway(
 		"-X", method,
 		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
-		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
+		fmt.Sprintf("http://%s%s", gatewayHost, rayServicePath),
 	}
 	if body != "" {
 		cmd = append(cmd, "-d", body)
@@ -180,18 +211,15 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 		)
 }
 
-// GetGatewayIP retrieves the external IP for a Gateway object
-func GetGatewayIP(gateway *gwv1.Gateway) string {
+// GetGatewayHost returns the in-cluster DNS name for the Istio-managed
+// service backing the Gateway. Istio names both the Deployment and the
+// Service "<gateway-name>-istio" in the same namespace as the Gateway,
+// so pods inside the cluster can reach it without a LoadBalancer IP.
+func GetGatewayHost(gateway *gwv1.Gateway) string {
 	if gateway == nil {
 		return ""
 	}
-	for _, addr := range gateway.Status.Addresses {
-		if addr.Type == nil || *addr.Type == gwv1.IPAddressType {
-			return addr.Value
-		}
-	}
-
-	return ""
+	return fmt.Sprintf("%s-istio.%s.svc.cluster.local", gateway.Name, gateway.Namespace)
 }
 
 // incrementalUpgrade is a wrapper around triggerIncrementalUpgrade that returns a function that can be used with g.Eventually.

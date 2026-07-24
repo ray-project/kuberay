@@ -30,13 +30,13 @@ type RayClusterSpecApplyConfiguration struct {
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
 	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
-	// NetworkIsolation specifies optional configuration for network isolation.
+	// NetworkPolicy specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
 	// Note: under DenyAll/DenyAllEgress, DNS egress is not added
 	// automatically; since Ray pods reach the head via its service FQDN, you must
 	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
-	NetworkIsolation *NetworkIsolationConfigApplyConfiguration `json:"networkIsolation,omitempty"`
+	NetworkPolicy *NetworkPolicyConfigApplyConfiguration `json:"networkPolicy,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -121,11 +121,11 @@ func (b *RayClusterSpecApplyConfiguration) WithGcsFaultToleranceOptions(value *G
 	return b
 }
 
-// WithNetworkIsolation sets the NetworkIsolation field in the declarative configuration to the given value
+// WithNetworkPolicy sets the NetworkPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the NetworkIsolation field is set to the value of the last call.
-func (b *RayClusterSpecApplyConfiguration) WithNetworkIsolation(value *NetworkIsolationConfigApplyConfiguration) *RayClusterSpecApplyConfiguration {
-	b.NetworkIsolation = value
+// If called multiple times, the NetworkPolicy field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithNetworkPolicy(value *NetworkPolicyConfigApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.NetworkPolicy = value
 	return b
 }
 
