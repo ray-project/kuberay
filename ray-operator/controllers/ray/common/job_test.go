@@ -466,9 +466,14 @@ func TestGetSubmitterTemplate(t *testing.T) {
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						ServiceAccountName: "head-sa",
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "head-secret"},
+						},
 						Containers: []corev1.Container{
 							{
-								Image: "rayproject/ray:test-submitter-template",
+								Image:           "rayproject/ray:test-submitter-template",
+								ImagePullPolicy: corev1.PullAlways,
 							},
 						},
 					},
@@ -478,7 +483,9 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	}
 	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
-
+	assert.Equal(t, corev1.PullAlways, template.Spec.Containers[0].ImagePullPolicy)
+	assert.Equal(t, "head-sa", template.Spec.ServiceAccountName)
+	assert.Equal(t, "head-secret", template.Spec.ImagePullSecrets[0].Name)
 }
 
 func TestGetSubmitterPodTemplate(t *testing.T) {
@@ -490,9 +497,14 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						ServiceAccountName: "head-sa",
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "head-secret"},
+						},
 						Containers: []corev1.Container{
 							{
-								Image: "my-custom-image:latest",
+								Image:           "my-custom-image:latest",
+								ImagePullPolicy: corev1.PullAlways,
 							},
 						},
 					},
@@ -527,4 +539,54 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 	assert.Equal(t, resource.MustParse("250m"), template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU])
 	assert.Equal(t, resource.MustParse("1"), template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU])
 	assert.Equal(t, resource.MustParse("1Gi"), template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory])
+
+	// Verify that omitted fields are copied from the Head Pod
+	assert.Equal(t, corev1.PullAlways, template.Spec.Containers[0].ImagePullPolicy)
+	assert.Equal(t, "head-sa", template.Spec.ServiceAccountName)
+	assert.Equal(t, "head-secret", template.Spec.ImagePullSecrets[0].Name)
+}
+
+func TestGetSubmitterPodTemplateNoOverride(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{},
+	}
+	rayCluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						ServiceAccountName: "head-sa",
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "head-secret"},
+						},
+						Containers: []corev1.Container{
+							{
+								Image:           "my-custom-image:latest",
+								ImagePullPolicy: corev1.PullAlways,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	rayJob.Spec.SubmitterPodTemplate = &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			ServiceAccountName: "user-sa",
+			ImagePullSecrets: []corev1.LocalObjectReference{
+				{Name: "user-secret"},
+			},
+			Containers: []corev1.Container{
+				{
+					ImagePullPolicy: corev1.PullIfNotPresent,
+				},
+			},
+		},
+	}
+	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
+	
+	// Verify that user-provided fields are NOT overridden by the Head Pod
+	assert.Equal(t, corev1.PullIfNotPresent, template.Spec.Containers[0].ImagePullPolicy)
+	assert.Equal(t, "user-sa", template.Spec.ServiceAccountName)
+	assert.Equal(t, "user-secret", template.Spec.ImagePullSecrets[0].Name)
 }
