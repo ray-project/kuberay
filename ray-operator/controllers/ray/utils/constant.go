@@ -273,6 +273,11 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
+	// GCS active-passive head default leader election values (in seconds)
+	DefaultLeaderElectionLeaseDurationSeconds = 15
+	DefaultLeaderElectionRenewDeadlineSeconds = 10
+	DefaultLeaderElectionRetryPeriodSeconds   = 2
+
 	// RayHTTPClientDirectTimeoutSeconds applies to HTTP clients that send requests directly to pod IP or in-cluster Service.
 	RayHTTPClientDirectTimeoutSeconds = 2
 	// RayHTTPClientProxyTimeoutSeconds applies when requests are proxied through the Kubernetes apiserver.

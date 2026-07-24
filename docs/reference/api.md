@@ -307,6 +307,10 @@ _Appears in:_
 | `externalStorageNamespace` _string_ |  |  |  |
 | `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
+| `enableActivePassiveHead` _boolean_ | EnableActivePassiveHead enables active-passive high availability for the GCS.<br />If enabled, KubeRay will provision a standby head node to ensure quick recovery.<br />EnableActivePassiveHead can be true only when Redis is configured (i.e. Backend<br />is "redis" and RedisAddress is set); it is not supported with the "rocksdb" backend. | false |  |
+| `leaderElectionLeaseDurationSeconds` _integer_ | LeaderElectionLeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition. |  |  |
+| `leaderElectionRenewDeadlineSeconds` _integer_ | LeaderElectionRenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences. |  |  |
+| `leaderElectionRetryPeriodSeconds` _integer_ | LeaderElectionRetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts. |  |  |
 
 
 #### HeadGroupSpec

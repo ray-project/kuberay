@@ -156,6 +156,24 @@ type GcsFaultToleranceOptions struct {
 	// store. Only used when Backend is "rocksdb".
 	// +optional
 	Storage *GcsEmbeddedStorage `json:"storage,omitempty"`
+
+	// ----- Active-Passive Head HA fields -----
+
+	// EnableActivePassiveHead enables active-passive high availability for the GCS.
+	// If enabled, KubeRay will provision a standby head node to ensure quick recovery.
+	// EnableActivePassiveHead can be true only when Redis is configured (i.e. Backend
+	// is "redis" and RedisAddress is set); it is not supported with the "rocksdb" backend.
+	// +kubebuilder:default:=false
+	EnableActivePassiveHead *bool `json:"enableActivePassiveHead,omitempty"`
+	// LeaderElectionLeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
+	// +optional
+	LeaderElectionLeaseDurationSeconds *int32 `json:"leaderElectionLeaseDurationSeconds,omitempty"`
+	// LeaderElectionRenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences.
+	// +optional
+	LeaderElectionRenewDeadlineSeconds *int32 `json:"leaderElectionRenewDeadlineSeconds,omitempty"`
+	// LeaderElectionRetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts.
+	// +optional
+	LeaderElectionRetryPeriodSeconds *int32 `json:"leaderElectionRetryPeriodSeconds,omitempty"`
 }
 
 // GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
