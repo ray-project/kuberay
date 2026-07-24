@@ -176,7 +176,6 @@ func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
-
 func RateLimitedReplicas(t Test, rayCluster *rayv1.RayCluster, limit int32) bool {
 	// The number of new launches must be less than or equal to the size of the RayCluster.
 	// The minimum number of pending launches is 5 regardless of RayCluster size and upscaling_speed.
