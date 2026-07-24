@@ -3534,6 +3534,80 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
+func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = rbacv1.AddToScheme(newScheme)
+
+	tests := []struct {
+		mutate        func(*rayv1.RayCluster)
+		name          string
+		expectDeleted bool
+	}{
+		{
+			name: "annotation true and feature enabled deletes the cluster",
+			mutate: func(c *rayv1.RayCluster) {
+				c.Spec.EnableInTreeAutoscaling = ptr.To(true)
+				c.Spec.RayVersion = "2.56.0"
+				c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:                ptr.To(rayv1.AutoscalerVersionV2),
+					NoDriverTimeoutSeconds: ptr.To[int32](600),
+				}
+				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
+			},
+			expectDeleted: true,
+		},
+		{
+			name: "annotation true but feature disabled keeps the cluster",
+			mutate: func(c *rayv1.RayCluster) {
+				c.Spec.EnableInTreeAutoscaling = ptr.To(false)
+				c.Spec.AutoscalerOptions = nil
+				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
+			},
+			expectDeleted: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := testRayCluster.DeepCopy()
+			cluster.Status = rayv1.RayClusterStatus{}
+			tc.mutate(cluster)
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithObjects(cluster).
+				WithStatusSubresource(cluster).
+				Build()
+			recorder := events.NewFakeRecorder(10)
+			reconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   recorder,
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			_, err := reconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			got := &rayv1.RayCluster{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got)
+			if tc.expectDeleted {
+				assert.True(t, k8serrors.IsNotFound(err))
+				event := <-recorder.Events
+				assert.Contains(t, event, string(utils.DeletedRayClusterNoDriverTimeout))
+				assert.Contains(t, event, "noDriverTimeoutSeconds=600")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	clusterName := "test-ray-cluster"
 	clusterNamespace := "default"
