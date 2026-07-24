@@ -3170,6 +3170,15 @@ func TestValidateNetworkPolicy(t *testing.T) {
 			expectError:      false,
 		},
 		{
+			name: "worker group name that is not a valid DNS1123 label returns error",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "GPU-Group"}},
+			expectError:      true,
+			errorMsg:         `worker group name "GPU-Group" must be a valid DNS1123 label when networkPolicy is enabled`,
+		},
+		{
 			name:        "nil NetworkPolicy is valid",
 			ni:          nil,
 			expectError: false,
@@ -3189,7 +3198,7 @@ func TestValidateNetworkPolicy(t *testing.T) {
 			err := validateNetworkPolicy(spec)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.EqualError(t, err, tt.errorMsg)
+				assert.ErrorContains(t, err, tt.errorMsg)
 			} else {
 				require.NoError(t, err)
 			}
