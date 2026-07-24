@@ -207,12 +207,12 @@ func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 }
 
 // TestBuildWorkerNetworkPolicy_DenyAll verifies the worker NetworkPolicy in DenyAll mode.
-func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
+func TestBuildWorkerGroupNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterBasic, rayv1.NetworkPolicyDenyAll)
+	policy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(testRayClusterBasic, rayv1.NetworkPolicyDenyAll, "small-group")
 
-	assert.Equal(t, "test-cluster-workers", policy.Name)
+	assert.Equal(t, "test-cluster-workers-small-group", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
 
 	// Labels must identify the cluster and the operator.
@@ -223,10 +223,11 @@ func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 	}
 	assert.Equal(t, expectedLabels, policy.Labels)
 
-	// PodSelector must target worker pods of this cluster.
+	// PodSelector must target this group's worker pods only.
 	assert.Equal(t, map[string]string{
-		utils.RayClusterLabelKey:  "test-cluster",
-		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+		utils.RayClusterLabelKey:   "test-cluster",
+		utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+		utils.RayNodeGroupLabelKey: "small-group",
 	}, policy.Spec.PodSelector.MatchLabels)
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
@@ -243,11 +244,11 @@ func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Len(t, policy.Spec.Egress, 1)
 }
 
-// TestBuildWorkerNetworkPolicy_DenyAllIngress verifies no egress is added for DenyAllIngress mode.
-func TestBuildWorkerNetworkPolicy_DenyAllIngress(t *testing.T) {
+// TestBuildWorkerGroupNetworkPolicy_DenyAllIngress verifies no egress is added for DenyAllIngress mode.
+func TestBuildWorkerGroupNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkPolicyDenyAllIngress)
+	policy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkPolicyDenyAllIngress, "small-group")
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
@@ -255,8 +256,9 @@ func TestBuildWorkerNetworkPolicy_DenyAllIngress(t *testing.T) {
 	assert.Empty(t, policy.Spec.Egress)
 }
 
-// TestBuildWorkerNetworkPolicy_CustomIngressRules verifies that custom Worker.IngressRules are appended to the worker policy.
-func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
+// TestBuildWorkerGroupNetworkPolicy_FallsBackToWorkerRules verifies that a group
+// without a workerGroups entry uses the default Worker rules.
+func TestBuildWorkerGroupNetworkPolicy_FallsBackToWorkerRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	customPort := intstr.FromInt32(9999)
@@ -272,12 +274,53 @@ func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
+	policy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll, "small-group")
 
 	// 1 base intra-cluster + 1 custom = 2.
 	require.Len(t, policy.Spec.Ingress, 2)
 	require.Len(t, policy.Spec.Ingress[1].Ports, 1)
 	assert.Equal(t, &customPort, policy.Spec.Ingress[1].Ports[0].Port)
+}
+
+// TestBuildWorkerGroupNetworkPolicy_ReplacesWorkerRules verifies that a workerGroups
+// entry's rules replace the default Worker rules for that group.
+func TestBuildWorkerGroupNetworkPolicy_ReplacesWorkerRules(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	customPort := intstr.FromInt32(9999)
+	tcpProto := corev1.ProtocolTCP
+	cluster := testRayClusterBasic.DeepCopy()
+	cluster.Spec.NetworkPolicy.Worker = &rayv1.NetworkPolicyRules{
+		EgressRules: []networkingv1.NetworkPolicyEgressRule{
+			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
+		},
+	}
+	cluster.Spec.NetworkPolicy.WorkerGroups = []rayv1.WorkerGroupNetworkPolicyRules{
+		{
+			GroupName: "gpu-group",
+			NetworkPolicyRules: rayv1.NetworkPolicyRules{
+				IngressRules: []networkingv1.NetworkPolicyIngressRule{
+					{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
+				},
+			},
+		},
+	}
+
+	policy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll, "gpu-group")
+
+	assert.Equal(t, "test-cluster-workers-gpu-group", policy.Name)
+	assert.Equal(t, map[string]string{
+		utils.RayClusterLabelKey:   "test-cluster",
+		utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+		utils.RayNodeGroupLabelKey: "gpu-group",
+	}, policy.Spec.PodSelector.MatchLabels)
+
+	// 1 base intra-cluster + 1 custom ingress from the group entry.
+	require.Len(t, policy.Spec.Ingress, 2)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[1].Ports[0].Port)
+
+	// base intra-cluster rule only.
+	assert.Len(t, policy.Spec.Egress, 1)
 }
 
 // TestBuildBaseIngressRules verifies the shared intra-cluster ingress rule used by both head and workers.
@@ -459,10 +502,10 @@ func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	cluster.Name = strings.Repeat("a", utils.MaxRayClusterNameLength)
 
 	headPolicy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
-	workerPolicy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
+	workerPolicy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll, "small-group")
 
 	assert.Equal(t, cluster.Name+"-head", headPolicy.Name)
-	assert.Equal(t, cluster.Name+"-workers", workerPolicy.Name)
+	assert.Equal(t, cluster.Name+"-workers-small-group", workerPolicy.Name)
 }
 
 // TestBuildHeadNetworkPolicy_WorkerRulesNotLeaked verifies that worker-specific
@@ -485,9 +528,9 @@ func TestBuildHeadNetworkPolicy_WorkerRulesNotLeaked(t *testing.T) {
 	require.Len(t, policy.Spec.Ingress, 1)
 }
 
-// TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked verifies that head-specific
+// TestBuildWorkerGroupNetworkPolicy_HeadRulesNotLeaked verifies that head-specific
 // IngressRules are not applied to the worker NetworkPolicy.
-func TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
+func TestBuildWorkerGroupNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	customPort := intstr.FromInt32(9999)
@@ -499,7 +542,7 @@ func TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll)
+	policy := testNetworkPolicyController.buildWorkerGroupNetworkPolicy(cluster, rayv1.NetworkPolicyDenyAll, "small-group")
 
 	// Worker NP must only have the intra-cluster base rule — no head rules.
 	require.Len(t, policy.Spec.Ingress, 1)

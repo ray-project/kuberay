@@ -3191,10 +3191,11 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 
 func TestValidateNetworkPolicy(t *testing.T) {
 	tests := []struct {
-		ni          *rayv1.NetworkPolicyConfig
-		name        string
-		errorMsg    string
-		expectError bool
+		ni               *rayv1.NetworkPolicyConfig
+		name             string
+		errorMsg         string
+		workerGroupSpecs []rayv1.WorkerGroupSpec
+		expectError      bool
 	}{
 		{
 			name: "DenyAllEgress with head IngressRules set returns error",
@@ -3256,6 +3257,83 @@ func TestValidateNetworkPolicy(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "DenyAllEgress with worker group IngressRules set returns error",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
+				WorkerGroups: []rayv1.WorkerGroupNetworkPolicyRules{
+					{
+						GroupName: "small-group",
+						NetworkPolicyRules: rayv1.NetworkPolicyRules{
+							IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+						},
+					},
+				},
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "small-group"}},
+			expectError:      true,
+			errorMsg:         `networkPolicy.workerGroups["small-group"].ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with worker group EgressRules set returns error",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
+				WorkerGroups: []rayv1.WorkerGroupNetworkPolicyRules{
+					{
+						GroupName: "small-group",
+						NetworkPolicyRules: rayv1.NetworkPolicyRules{
+							EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+						},
+					},
+				},
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "small-group"}},
+			expectError:      true,
+			errorMsg:         `networkPolicy.workerGroups["small-group"].egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "worker group entry not matching any workerGroupSpecs returns error",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
+				WorkerGroups: []rayv1.WorkerGroupNetworkPolicyRules{
+					{
+						GroupName: "samll-group",
+						NetworkPolicyRules: rayv1.NetworkPolicyRules{
+							IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+						},
+					},
+				},
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "small-group"}},
+			expectError:      true,
+			errorMsg:         `networkPolicy.workerGroups["samll-group"] does not match any group name in workerGroupSpecs`,
+		},
+		{
+			name: "worker group entry matching workerGroupSpecs is valid",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
+				WorkerGroups: []rayv1.WorkerGroupNetworkPolicyRules{
+					{
+						GroupName: "small-group",
+						NetworkPolicyRules: rayv1.NetworkPolicyRules{
+							IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+							EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+						},
+					},
+				},
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "small-group"}},
+			expectError:      false,
+		},
+		{
+			name: "worker group name that is not a valid DNS1123 label returns error",
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
+			},
+			workerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "GPU-Group"}},
+			expectError:      true,
+			errorMsg:         `worker group name "GPU-Group" must be a valid DNS1123 label when networkPolicy is enabled`,
+		},
+		{
 			name:        "nil NetworkPolicy is valid",
 			ni:          nil,
 			expectError: false,
@@ -3271,11 +3349,11 @@ func TestValidateNetworkPolicy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec := &rayv1.RayClusterSpec{NetworkPolicy: tt.ni}
+			spec := &rayv1.RayClusterSpec{NetworkPolicy: tt.ni, WorkerGroupSpecs: tt.workerGroupSpecs}
 			err := validateNetworkPolicy(spec)
 			if tt.expectError {
 				require.Error(t, err)
-				assert.EqualError(t, err, tt.errorMsg)
+				assert.ErrorContains(t, err, tt.errorMsg)
 			} else {
 				require.NoError(t, err)
 			}

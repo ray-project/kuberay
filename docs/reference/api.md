@@ -409,7 +409,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `mode` _[NetworkPolicyMode](#networkpolicymode)_ | Mode controls the security level. All modes permit intra-cluster pod-to-pod<br />traffic (DNS egress excluded, see EgressRules).<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
 | `head` _[NetworkPolicyRules](#networkpolicyrules)_ | Head specifies custom NetworkPolicy rules applied only to the head pod's policy.<br />The base head policy always allows intra-cluster traffic and (for K8sJobMode<br />RayJob-owned clusters) the submitter pod. Rules here are appended to those<br />base rules. Platforms that need operator dashboard access should add it here<br />(e.g. via a mutating webhook). |  |  |
-| `worker` _[NetworkPolicyRules](#networkpolicyrules)_ | Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.<br />The base worker policy always allows intra-cluster traffic.<br />Rules here are appended to that base rule. |  |  |
+| `worker` _[NetworkPolicyRules](#networkpolicyrules)_ | Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.<br />The base worker policy always allows intra-cluster traffic.<br />Rules here are appended to that base rule.<br />Acts as the default for all worker groups; see WorkerGroups for per-group overrides. |  |  |
+| `workerGroups` _[WorkerGroupNetworkPolicyRules](#workergroupnetworkpolicyrules) array_ | WorkerGroups specifies per-worker-group NetworkPolicy rules, keyed by group name.<br />If an entry exists for a worker group, it replaces (not merges with) Worker for<br />that group. Worker groups without an entry fall back to Worker. |  |  |
 
 
 #### NetworkPolicyMode
@@ -441,6 +442,7 @@ NetworkPolicyRules defines custom ingress and egress rules for a NetworkPolicy.
 
 _Appears in:_
 - [NetworkPolicyConfig](#networkpolicyconfig)
+- [WorkerGroupNetworkPolicyRules](#workergroupnetworkpolicyrules)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -771,6 +773,24 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
+
+
+#### WorkerGroupNetworkPolicyRules
+
+
+
+WorkerGroupNetworkPolicyRules is NetworkPolicyRules bound to one worker group.
+
+
+
+_Appears in:_
+- [NetworkPolicyConfig](#networkpolicyconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `groupName` _string_ | GroupName matches WorkerGroupSpec.GroupName. |  | Required: \{\} <br /> |
+| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules appended to the base policy.<br />Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress). |  |  |
+| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-policy-deny-all sample. |  |  |
 
 
 #### WorkerGroupSpec

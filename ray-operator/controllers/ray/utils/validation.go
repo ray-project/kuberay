@@ -382,6 +382,37 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
+	// Validate per-worker-group rules against mode, and that each entry references
+	// an existing worker group.
+	//
+	// Group names are embedded in NetworkPolicy object names ({cluster}-workers-{group}),
+	// so they must be valid DNS1123 labels when NetworkPolicy is enabled. This is only
+	// enforced here to avoid breaking existing clusters that don't use NetworkPolicy.
+	//
+	// TODO(machichima): consider validating group name format for all clusters under
+	// ValidateRayClusterSpec. Note this is a breaking change: uppercase group names
+	// currently work because pod names are lowercased in PodName().
+	groupNames := make(map[string]struct{}, len(spec.WorkerGroupSpecs))
+	for i := range spec.WorkerGroupSpecs {
+		groupName := spec.WorkerGroupSpecs[i].GroupName
+		if errs := validation.IsDNS1123Label(groupName); len(errs) > 0 {
+			return fmt.Errorf("worker group name %q must be a valid DNS1123 label when networkPolicy is enabled (it is embedded in the NetworkPolicy name): %v", groupName, errs)
+		}
+		groupNames[groupName] = struct{}{}
+	}
+	for i := range np.WorkerGroups {
+		wg := &np.WorkerGroups[i]
+		if mode == rayv1.NetworkPolicyDenyAllEgress && len(wg.IngressRules) > 0 {
+			return fmt.Errorf("networkPolicy.workerGroups[%q].ingressRules cannot be set when mode is %q (ingress is not restricted)", wg.GroupName, mode)
+		}
+		if mode == rayv1.NetworkPolicyDenyAllIngress && len(wg.EgressRules) > 0 {
+			return fmt.Errorf("networkPolicy.workerGroups[%q].egressRules cannot be set when mode is %q (egress is not restricted)", wg.GroupName, mode)
+		}
+		if _, ok := groupNames[wg.GroupName]; !ok {
+			return fmt.Errorf("networkPolicy.workerGroups[%q] does not match any group name in workerGroupSpecs", wg.GroupName)
+		}
+	}
+
 	return nil
 }
 
