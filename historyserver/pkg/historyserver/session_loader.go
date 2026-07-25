@@ -35,16 +35,14 @@ type SessionLoader struct {
 	processor      processor
 	cache          *expirable.LRU[string, *eventserver.SessionSnapshot]
 	sf             singleflight.Group
-	serverCtx      context.Context
 	processTimeout time.Duration
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int, cacheTTL time.Duration) *SessionLoader {
+func NewSessionLoader(p processor, processTimeout time.Duration, cacheSize int, cacheTTL time.Duration) *SessionLoader {
 	return &SessionLoader{
 		processor:      p,
 		cache:          expirable.NewLRU[string, *eventserver.SessionSnapshot](cacheSize, nil, cacheTTL),
-		serverCtx:      serverCtx,
 		processTimeout: processTimeout,
 	}
 }
@@ -64,7 +62,7 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 
 // LoadSession blocks until a dead session is processed and cached or an
 // unrecoverable error is observed.
-func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
+func (s *SessionLoader) LoadSession(ctx context.Context, serverCtx context.Context, info utils.ClusterInfo) (live bool, err error) {
 	// Fast pre-flight: skip singleflight entirely if ctx is already dead.
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -79,7 +77,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	// SIGTERM, serverCtx is cancelled immediately, causing any in-flight cold-load
 	// requests to return ctx.Err() and clients to receive HTTP 500.
 	ch := s.sf.DoChan(clusterSessionKey, func() (interface{}, error) {
-		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.processTimeout)
+		loadCtx, cancel := context.WithTimeout(serverCtx, s.processTimeout)
 		defer cancel()
 		return s.doLoadSession(loadCtx, info, clusterSessionKey)
 	})

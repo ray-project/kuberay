@@ -6,7 +6,6 @@ import (
 	"flag"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
@@ -100,29 +99,15 @@ func main() {
 	defer serverCancel()
 
 	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
-	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheTTL)
-
-	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
-	var wg sync.WaitGroup
-	stop := make(chan struct{})
-	go func() {
-		<-serverCtx.Done()
-		logrus.Info("Received shutdown signal, initiating graceful shutdown...")
-		close(stop)
-	}()
+	sessionLoader := historyserver.NewSessionLoader(processor, sessionProcessTimeout, sessionCacheSize, sessionCacheTTL)
 
 	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		handler.Run(stop)
-		logrus.Info("HTTP server shutdown complete")
-	}()
-
-	wg.Wait()
+	if err := handler.Run(serverCtx); err != nil {
+		logrus.Fatalf("HTTP server exited with error: %v", err)
+	}
 	logrus.Info("Graceful shutdown complete")
 }

@@ -39,7 +39,7 @@ func newTestSessionLoader(t *testing.T, p processor, cacheSize int) *SessionLoad
 	if cacheSize <= 0 {
 		cacheSize = DefaultSessionCacheSize
 	}
-	return NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize, DefaultSessionCacheTTL)
+	return NewSessionLoader(p, DefaultSessionProcessTimeout, cacheSize, DefaultSessionCacheTTL)
 }
 
 func testEnterClusterInfo() utils.ClusterInfo {
@@ -80,7 +80,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, errs[idx] = sessionLoader.LoadSession(context.Background(), info)
+			_, errs[idx] = sessionLoader.LoadSession(context.Background(), context.Background(), info)
 		}(i)
 	}
 
@@ -102,7 +102,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	})
-	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+	if _, err := sessionLoader.LoadSession(context.Background(), context.Background(), info); err != nil {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
@@ -123,7 +123,7 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 	}
 	sessionLoader := newTestSessionLoader(t, fp, 0)
 
-	_, err := sessionLoader.LoadSession(context.Background(), info)
+	_, err := sessionLoader.LoadSession(context.Background(), context.Background(), info)
 	if !errors.Is(err, processorErr) {
 		t.Fatalf("expected LoadSession to return processorErr, got %v", err)
 	}
@@ -134,7 +134,7 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	})
-	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+	if _, err := sessionLoader.LoadSession(context.Background(), context.Background(), info); err != nil {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
@@ -166,7 +166,7 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 			}
 			sessionLoader := newTestSessionLoader(t, fp, 0)
 
-			live, err := sessionLoader.LoadSession(context.Background(), testEnterClusterInfo())
+			live, err := sessionLoader.LoadSession(context.Background(), context.Background(), testEnterClusterInfo())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -188,7 +188,7 @@ func TestLoadSession_ZeroValueStatus_DoesNotSilentlyMatchLive(t *testing.T) {
 	}
 	sessionLoader := newTestSessionLoader(t, fp, 0)
 
-	live, err := sessionLoader.LoadSession(context.Background(), testEnterClusterInfo())
+	live, err := sessionLoader.LoadSession(context.Background(), context.Background(), testEnterClusterInfo())
 	if err == nil {
 		t.Fatalf("expected error from zero-value status, got nil (live=%v)", live)
 	}
@@ -209,7 +209,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	info := testEnterClusterInfo()
 
 	// First call: cold path, processor runs, session marked loaded.
-	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+	if _, err := sessionLoader.LoadSession(context.Background(), context.Background(), info); err != nil {
 		t.Fatalf("cold-path LoadSession: %v", err)
 	}
 	if got := fp.callCount(); got != 1 {
@@ -218,7 +218,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 
 	// Subsequent calls: fast path, processor must NOT be invoked again.
 	for i := 0; i < 5; i++ {
-		if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+		if _, err := sessionLoader.LoadSession(context.Background(), context.Background(), info); err != nil {
 			t.Fatalf("fast path LoadSession #%d: %v", i, err)
 		}
 	}
@@ -341,7 +341,7 @@ func TestGetSnapshot_TTLExpiry(t *testing.T) {
 	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
 	const ttl = 30 * time.Millisecond
-	sl := NewSessionLoader(&fakeProcessor{}, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
+	sl := NewSessionLoader(&fakeProcessor{}, DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
 	sl.putSnapshot(key, testSnapshot(key))
 
 	if _, ok := sl.GetSnapshot(key); !ok {
@@ -361,7 +361,7 @@ func TestGetSnapshot_SlidingTTLRenewal(t *testing.T) {
 	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
 	const ttl = 30 * time.Millisecond
-	sl := NewSessionLoader(&fakeProcessor{}, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
+	sl := NewSessionLoader(&fakeProcessor{}, DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
 	sl.putSnapshot(key, testSnapshot(key))
 
 	deadline := time.Now().Add(100 * time.Millisecond)
