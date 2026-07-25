@@ -2240,3 +2240,84 @@ tests:
       - equal:
           path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.spec.runtimeClassName
           value: nvidia
+
+  # ===========================================================================
+  # Test common.envFrom
+  # ===========================================================================
+
+  - it: Should prepend common.envFrom before each group's envFrom
+    set:
+      common:
+        envFrom:
+          - configMapRef:
+              name: common-config
+          - secretRef:
+              name: common-secret
+      head:
+        envFrom:
+          - secretRef:
+              name: head-secret
+      worker:
+        envFrom:
+          - secretRef:
+              name: worker-secret
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+          replicas: 1
+          minReplicas: 0
+          maxReplicas: 1
+          envFrom:
+            - secretRef:
+                name: additional-secret
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.template.spec.containers[?(@.name=="ray-head")].envFrom
+          value:
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: common-secret
+            - secretRef:
+                name: head-secret
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
+          value:
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: common-secret
+            - secretRef:
+                name: worker-secret
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
+          value:
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: common-secret
+            - secretRef:
+                name: additional-secret
+
+  - it: Should apply common.envFrom to custom additional worker groups without local envFrom
+    set:
+      common:
+        envFrom:
+          - secretRef:
+              name: common-secret
+      additionalWorkerGroups:
+        customGroup:
+          replicas: 1
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="customGroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
+          value:
+            - secretRef:
+                name: common-secret
+
+  - it: Should not render envFrom when both common and local lists are empty
+    asserts:
+      - notExists:
+          path: spec.headGroupSpec.template.spec.containers[?(@.name=="ray-head")].envFrom
+      - notExists:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
