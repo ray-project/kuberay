@@ -22,17 +22,23 @@ spec:
         - env:
           - name: RAY_TMP_ROOT
             value: &rayTmpRoot /tmp/ray
+          # Switch the event collection backend from the legacy Export API to Ray Event
           - name: RAY_enable_ray_event
             value: "true"
+          # Whether to enable the ray event to send to the event aggregator
+          # Currently, only task events are supported
           - name: RAY_enable_core_worker_ray_event_to_aggregator
             value: "true"
+          # External HTTP endpoint the aggregator forwards events to
+          # Pointed at the collector sidecar in this pod
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
+          # Comma-separated list of event types that are allowed to be exposed to external HTTP services
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
                     TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
                     ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.55.0
           imagePullPolicy: IfNotPresent
           command:
           - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
@@ -112,17 +118,23 @@ spec:
         - env:
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
+          # Switch the event collection backend from the legacy Export API to Ray Event
           - name: RAY_enable_ray_event
             value: "true"
+          # Whether to enable the ray event to send to the event aggregator
+          # Currently, only task events are supported
           - name: RAY_enable_core_worker_ray_event_to_aggregator
             value: "true"
+          # External HTTP endpoint the aggregator forwards events to
+          # Pointed at the collector sidecar in this pod
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
+          # Comma-separated list of event types that are allowed to be exposed to external HTTP services
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
                     TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
                     ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.55.0
           command:
           - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
           imagePullPolicy: IfNotPresent
