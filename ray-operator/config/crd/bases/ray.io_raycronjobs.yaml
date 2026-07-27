@@ -5082,6 +5082,11 @@ spec:
                         type: string
                       suspend:
                         type: boolean
+                      tlsOptions:
+                        properties:
+                          enabled:
+                            type: boolean
+                        type: object
                       upgradeStrategy:
                         properties:
                           type:

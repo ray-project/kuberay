@@ -180,7 +180,10 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --output-path=../docs/reference/api.md
 
 certmanager:
-	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.4/cert-manager.yaml
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=120s
 
 deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
 	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}

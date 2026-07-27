@@ -195,8 +195,10 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - ""
@@ -228,6 +230,31 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates/status
+  verbs:
+  - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  verbs:
+  - create
+  - get
+  - list
   - watch
 - apiGroups:
   - coordination.k8s.io
