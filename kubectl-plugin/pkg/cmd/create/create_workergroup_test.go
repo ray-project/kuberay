@@ -96,7 +96,8 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			name: "Valid input with namespace",
 			args: []string{"example-group"},
 			flags: map[string]string{
-				"namespace": "test-namespace",
+				"namespace":   "test-namespace",
+				"ray-version": "latest",
 			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:  "test-namespace",
@@ -108,6 +109,9 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 		{
 			name: "Valid input without namespace flag",
 			args: []string{"example-group"},
+			flags: map[string]string{
+				"ray-version": "latest",
+			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:  "default",
 				groupName:  "example-group",
@@ -119,7 +123,8 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			name: "mMissing group name",
 			args: []string{},
 			flags: map[string]string{
-				"namespace": "",
+				"namespace":   "",
+				"ray-version": "latest",
 			},
 			expectedError: "See ' -h' for help and examples",
 		},
@@ -127,7 +132,8 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			name: "Empty namespace flag",
 			args: []string{"example-group"},
 			flags: map[string]string{
-				"namespace": "",
+				"namespace":   "",
+				"ray-version": "latest",
 			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:  "default",
@@ -142,6 +148,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			flags: map[string]string{
 				"namespace":               "test-namespace",
 				"worker-ray-start-params": "dashboard-host=0.0.0.0,num-cpus=2",
+				"ray-version":             "latest",
 			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:  "test-namespace",
@@ -160,6 +167,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			flags: map[string]string{
 				"namespace":               "test-namespace",
 				"worker-ray-start-params": "",
+				"ray-version":             "latest",
 			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:      "test-namespace",
@@ -173,7 +181,8 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			name: "Not assign rayStartParams",
 			args: []string{"example-group"},
 			flags: map[string]string{
-				"namespace": "test-namespace",
+				"namespace":   "test-namespace",
+				"ray-version": "latest",
 			},
 			expected: &CreateWorkerGroupOptions{
 				namespace:      "test-namespace",
@@ -195,17 +204,19 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				"",
 				"ray start parameters for worker",
 			)
+
+			factory := cmdutil.NewFactory(configFlags)
+			options := &CreateWorkerGroupOptions{
+				cmdFactory: factory,
+			}
+			
+			cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
+
 			for key, value := range tt.flags {
 				err := cmd.Flags().Set(key, value)
 				if err != nil {
 					require.NoError(t, err)
 				}
-			}
-
-			factory := cmdutil.NewFactory(configFlags)
-			options := &CreateWorkerGroupOptions{
-				cmdFactory: factory,
-				rayVersion: "latest",
 			}
 
 			err := options.Complete(cmd, tt.args)
