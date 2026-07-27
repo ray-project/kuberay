@@ -126,6 +126,10 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 	if options.image == "" {
 		options.image = fmt.Sprintf("rayproject/ray:%s", options.rayVersion)
 	}
+	// If the image is the default but the ray version is not the default, set the image to use the specified ray version
+	if options.image == defaultImageWithTag && options.rayVersion != util.RayVersion {
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
+	}
 
 	return nil
 }
