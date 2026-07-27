@@ -6,14 +6,13 @@ package v1
 // with apply.
 //
 // TLSOptions configures TLS encryption for the RayCluster.
-// When TLSOptions is nil or Enabled is false, TLS is disabled.
+// When TLSOptions is nil or Enabled is nil/false, TLS is disabled.
 // When Enabled is true, the operator uses cert-manager to automatically
 // provision a full PKI (self-signed CA, head and worker leaf certificates)
 // and keeps certificates up to date as pod IPs change during autoscaling.
 type TLSOptionsApplyConfiguration struct {
 	// Enabled controls whether mTLS is active for this RayCluster.
-	// Must be set to true to enable TLS; setting tlsOptions without this
-	// field (or with enabled: false) is an error.
+	// Defaults to false when omitted. Set to true to enable mTLS.
 	Enabled *bool `json:"enabled,omitempty"`
 }
 

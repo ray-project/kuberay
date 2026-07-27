@@ -52,8 +52,8 @@ type RayClusterSpec struct {
 	// +optional
 	NetworkPolicy *NetworkPolicyConfig `json:"networkPolicy,omitempty"`
 	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
-	// If omitted, TLS is disabled. When set, the operator enables mTLS using
-	// cert-manager to provision and manage certificates.
+	// If omitted or Enabled is false, TLS is disabled. When Enabled is true,
+	// the operator enables mTLS using cert-manager to provision and manage certificates.
 	// Requires the RayClusterMTLS feature gate on the operator.
 	// +optional
 	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
@@ -68,15 +68,15 @@ type RayClusterSpec struct {
 }
 
 // TLSOptions configures TLS encryption for the RayCluster.
-// When TLSOptions is nil or Enabled is false, TLS is disabled.
+// When TLSOptions is nil or Enabled is nil/false, TLS is disabled.
 // When Enabled is true, the operator uses cert-manager to automatically
 // provision a full PKI (self-signed CA, head and worker leaf certificates)
 // and keeps certificates up to date as pod IPs change during autoscaling.
 type TLSOptions struct {
 	// Enabled controls whether mTLS is active for this RayCluster.
-	// Must be set to true to enable TLS; setting tlsOptions without this
-	// field (or with enabled: false) is an error.
-	Enabled bool `json:"enabled"`
+	// Defaults to false when omitted. Set to true to enable mTLS.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None

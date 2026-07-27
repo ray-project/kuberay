@@ -38,8 +38,8 @@ type RayClusterSpecApplyConfiguration struct {
 	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
 	NetworkPolicy *NetworkPolicyConfigApplyConfiguration `json:"networkPolicy,omitempty"`
 	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
-	// If omitted, TLS is disabled. When set, the operator enables mTLS using
-	// cert-manager to provision and manage certificates.
+	// If omitted or Enabled is false, TLS is disabled. When Enabled is true,
+	// the operator enables mTLS using cert-manager to provision and manage certificates.
 	// Requires the RayClusterMTLS feature gate on the operator.
 	TLSOptions *TLSOptionsApplyConfiguration `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod

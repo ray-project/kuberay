@@ -783,7 +783,7 @@ func IsTLSEnabled(spec *rayv1.RayClusterSpec) bool {
 	if !features.Enabled(features.RayClusterMTLS) {
 		return false
 	}
-	return spec != nil && spec.TLSOptions != nil && spec.TLSOptions.Enabled
+	return spec != nil && spec.TLSOptions != nil && spec.TLSOptions.Enabled != nil && *spec.TLSOptions.Enabled
 }
 
 // GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.
