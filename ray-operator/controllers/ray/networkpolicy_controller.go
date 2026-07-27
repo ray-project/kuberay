@@ -437,7 +437,10 @@ func (r *NetworkPolicyController) deleteStaleNetworkPolicies(ctx context.Context
 			logger.V(1).Info("NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", networkPolicy.Name)
 			continue
 		}
-		if err := r.Delete(ctx, networkPolicy); err != nil && !errors.IsNotFound(err) {
+		if err := r.Delete(ctx, networkPolicy); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
 			logger.Error(err, "Failed to delete NetworkPolicy", "name", networkPolicy.Name)
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy), string(utils.DeleteAction),
 				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, networkPolicy.Name, err)
