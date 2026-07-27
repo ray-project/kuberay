@@ -6,4 +6,10 @@ metadata:
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
 {{ include "role.consistentRules" (dict "batchSchedulerEnabled" .Values.batchScheduler.enabled "batchSchedulerName" .Values.batchScheduler.name) }}
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  verbs:
+  - get
 {{- end }}
