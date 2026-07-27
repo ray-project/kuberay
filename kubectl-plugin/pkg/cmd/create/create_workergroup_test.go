@@ -226,7 +226,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			}
 
 			cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-			cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+			cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", util.RayVersion), "container image to use")
 
 			for key, value := range tt.flags {
 				err := cmd.Flags().Set(key, value)
