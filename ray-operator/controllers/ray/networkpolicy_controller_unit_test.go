@@ -12,8 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -23,6 +26,7 @@ import (
 )
 
 var (
+	testScheme                   *runtime.Scheme
 	testNetworkPolicyController  *NetworkPolicyController
 	testRayClusterBasic          *rayv1.RayCluster
 	testRayClusterDenyAllIngress *rayv1.RayCluster
@@ -35,7 +39,9 @@ func setupNetworkPolicyTest(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkPolicy, true)
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	testScheme := runtime.NewScheme()
+	testScheme = runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(testScheme))
+	require.NoError(t, networkingv1.AddToScheme(testScheme))
 	testNetworkPolicyController = &NetworkPolicyController{
 		Scheme: testScheme,
 		Client: clientFake.NewClientBuilder().
@@ -157,9 +163,10 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Equal(t, "test-cluster-head", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
 
-	// Labels must identify the cluster and the operator.
+	// Labels must identify the cluster, the operator, and the head group.
 	expectedLabels := map[string]string{
 		utils.RayClusterLabelKey:                testRayClusterBasic.Name,
+		utils.RayNodeGroupLabelKey:              utils.RayNodeHeadGroupLabelValue,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
@@ -215,11 +222,12 @@ func TestBuildWorkerGroupNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Equal(t, "test-cluster-workers-small-group", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
 
-	// Labels must identify the cluster and the operator.
+	// Labels must identify the cluster, the operator, and the worker group.
 	expectedLabels := map[string]string{
 		utils.RayClusterLabelKey:                testRayClusterBasic.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
+		utils.RayNodeGroupLabelKey:              "small-group",
 	}
 	assert.Equal(t, expectedLabels, policy.Labels)
 
@@ -546,4 +554,54 @@ func TestBuildWorkerGroupNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
 
 	// Worker NP must only have the intra-cluster base rule — no head rules.
 	require.Len(t, policy.Spec.Ingress, 1)
+}
+
+// TestDeleteStaleNetworkPolicies verifies that only NetworkPolicies that are both
+// stale (not in desiredNames) and owned by the RayCluster are deleted. This is what
+// removes a worker group's NetworkPolicy after the group is dropped from the spec.
+func TestDeleteStaleNetworkPolicies(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	instance := testRayClusterBasic.DeepCopy()
+	instance.UID = "test-uid"
+
+	newNetworkPolicy := func(name string, owned bool) *networkingv1.NetworkPolicy {
+		networkPolicy := &networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: instance.Namespace,
+				Labels:    networkPolicyLabels(instance, "some-group"),
+			},
+		}
+		if owned {
+			require.NoError(t, controllerutil.SetControllerReference(instance, networkPolicy, testScheme))
+		}
+		return networkPolicy
+	}
+
+	desired := newNetworkPolicy("test-cluster-workers-small-group", true)
+	stale := newNetworkPolicy("test-cluster-workers-removed-group", true)
+	foreign := newNetworkPolicy("test-cluster-workers-foreign-group", false)
+
+	controller := &NetworkPolicyController{
+		Scheme:   testScheme,
+		Recorder: &events.FakeRecorder{},
+		Client: clientFake.NewClientBuilder().
+			WithScheme(testScheme).
+			WithObjects(desired, stale, foreign).
+			Build(),
+	}
+
+	err := controller.deleteStaleNetworkPolicies(t.Context(), instance, map[string]bool{desired.Name: true})
+	require.NoError(t, err)
+
+	remaining := &networkingv1.NetworkPolicyList{}
+	require.NoError(t, controller.List(t.Context(), remaining, client.InNamespace(instance.Namespace)))
+
+	names := make([]string, 0, len(remaining.Items))
+	for _, item := range remaining.Items {
+		names = append(names, item.Name)
+	}
+	// The stale owned policy is gone; the desired one and the unowned one survive.
+	assert.ElementsMatch(t, []string{desired.Name, foreign.Name}, names)
 }

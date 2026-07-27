@@ -202,7 +202,7 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      headNetworkPolicyName(instance.Name),
 			Namespace: instance.Namespace,
-			Labels:    networkPolicyLabels(instance),
+			Labels:    networkPolicyLabels(instance, utils.RayNodeHeadGroupLabelValue),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -218,9 +218,10 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 	}
 }
 
-func networkPolicyLabels(instance *rayv1.RayCluster) map[string]string {
+func networkPolicyLabels(instance *rayv1.RayCluster, groupName string) map[string]string {
 	return map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
+		utils.RayNodeGroupLabelKey:              groupName,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
 		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
 	}
@@ -267,7 +268,7 @@ func (r *NetworkPolicyController) buildWorkerGroupNetworkPolicy(instance *rayv1.
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workerGroupNetworkPolicyName(instance.Name, groupName),
 			Namespace: instance.Namespace,
-			Labels:    networkPolicyLabels(instance),
+			Labels:    networkPolicyLabels(instance, groupName),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
