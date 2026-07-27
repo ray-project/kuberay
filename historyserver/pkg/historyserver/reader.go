@@ -22,6 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -46,28 +49,54 @@ func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
 }
 
+func buildLiveClusterInfo(liveCluster *rayv1.RayCluster) utils.ClusterInfo {
+	var ownerKind, ownerName string
+	if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
+		k := strings.ToLower(ownerRef.Kind)
+		// Only set owner info for the Kuberay CRD resources for now.
+		if k == utils.RayJobKind || k == utils.RayServiceKind || k == utils.RayClusterKind {
+			ownerKind = k
+			ownerName = ownerRef.Name
+		} else {
+			logrus.Warnf("RayCluster %s/%s has an unknown owner controller kind %q, which is currently not supported", liveCluster.Namespace, liveCluster.Name, ownerRef.Kind)
+		}
+	}
+	return utils.ClusterInfo{
+		Name:            liveCluster.Name,
+		Namespace:       liveCluster.Namespace,
+		CreateTime:      liveCluster.CreationTimestamp.String(),
+		CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
+		SessionName:     "live",
+		OwnerKind:       ownerKind,
+		OwnerName:       ownerName,
+	}
+}
+
+func crdLabelValueFor(kindLower string) string {
+	switch kindLower {
+	case utils.RayJobKind:
+		return "RayJob"
+	case utils.RayServiceKind:
+		return "RayService"
+	case utils.RayClusterKind:
+		return "RayCluster"
+	default:
+		return kindLower
+	}
+}
+
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
 	ctx := context.Background()
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
-	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
+	liveClusters, err := s.clientManager.ListRayClusters(ctx)
+	if err != nil {
+		logrus.Errorf("Failed to list live RayClusters: %v", err)
+	}
 	for _, liveCluster := range liveClusters {
-		var ownerKind, ownerName string
-		if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
-			ownerKind = strings.ToLower(ownerRef.Kind)
-			ownerName = ownerRef.Name
-		}
-		liveClusterInfo := utils.ClusterInfo{
-			Name:            liveCluster.Name,
-			Namespace:       liveCluster.Namespace,
-			CreateTime:      liveCluster.CreationTimestamp.String(),
-			CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
-			SessionName:     "live",
-			OwnerKind:       ownerKind,
-			OwnerName:       ownerName,
-		}
+		liveClusterInfo := buildLiveClusterInfo(liveCluster)
 		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
 	}
@@ -86,54 +115,40 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceType, resourceName, session string) (utils.ClusterInfo, bool, error) {
 	isLatestOrEmpty := session == "latest" || session == ""
 	resTypeLower := strings.ToLower(resourceType)
+	if resTypeLower != utils.RayClusterKind && resTypeLower != utils.RayJobKind && resTypeLower != utils.RayServiceKind {
+		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
+	}
 
 	// Check live clusters first if applicable
 	if isLatestOrEmpty || session == "live" {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
 			if err == nil {
-				var ownerKind, ownerName string
-				if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
-					ownerKind = strings.ToLower(ownerRef.Kind)
-					ownerName = ownerRef.Name
-				}
-				liveClusterInfo := utils.ClusterInfo{
-					Name:            liveCluster.Name,
-					Namespace:       liveCluster.Namespace,
-					CreateTime:      liveCluster.CreationTimestamp.String(),
-					CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
-					SessionName:     "live",
-					OwnerKind:       ownerKind,
-					OwnerName:       ownerName,
-				}
-				return liveClusterInfo, true, nil
+				return buildLiveClusterInfo(liveCluster), true, nil
 			} else if !apierrors.IsNotFound(err) {
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to check live RayCluster %s/%s: %w", namespace, resourceName, err)
 			}
 		} else {
-			liveClusters, err := s.clientManager.ListRayClusters(ctx)
-			if err == nil {
-				for _, liveCluster := range liveClusters {
-					if liveCluster.Namespace != namespace {
-						continue
-					}
-					if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
-						if strings.EqualFold(ownerRef.Kind, resourceType) && ownerRef.Name == resourceName {
-							liveClusterInfo := utils.ClusterInfo{
-								Name:            liveCluster.Name,
-								Namespace:       liveCluster.Namespace,
-								CreateTime:      liveCluster.CreationTimestamp.String(),
-								CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
-								SessionName:     "live",
-								OwnerKind:       ownerRef.Kind,
-								OwnerName:       ownerRef.Name,
-							}
-							return liveClusterInfo, true, nil
-						}
-					}
-				}
-			} else {
+			// Both labels are needed: name alone is ambiguous since a RayJob and a
+			// RayService in the same namespace can share a name.
+			liveClusters, err := s.clientManager.ListRayClusters(ctx,
+				client.InNamespace(namespace),
+				client.MatchingLabels{
+					rayutils.RayOriginatedFromCRNameLabelKey: resourceName,
+					rayutils.RayOriginatedFromCRDLabelKey:    crdLabelValueFor(resTypeLower),
+				},
+			)
+			if err != nil {
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to list live RayClusters: %w", err)
+			}
+			// TODO: A RayService owns both an active and a pending cluster during an upgrade. Needs to decide which one to take.
+			if len(liveClusters) > 0 {
+				info := buildLiveClusterInfo(liveClusters[0])
+				if info.OwnerKind == "" {
+					info.OwnerKind = resTypeLower
+					info.OwnerName = resourceName
+				}
+				return info, true, nil
 			}
 		}
 		if session == "live" {
@@ -160,10 +175,13 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		if c.SessionName == session {
 			return c, true, nil
 		}
-		sessions = append(sessions, c)
+		// If session is latest or "", we fall back to picking the latest dead session.
+		if isLatestOrEmpty {
+			sessions = append(sessions, c)
+		}
 	}
 
-	if isLatestOrEmpty && len(sessions) > 0 {
+	if len(sessions) > 0 {
 		sort.Sort(utils.ClusterInfoList(sessions))
 		return sessions[0], true, nil
 	}
@@ -612,9 +630,8 @@ func (s *ServerHandler) ipToNodeId(clusterLogPathPrefix, sessionID, nodeIP strin
 		return "", fmt.Errorf("node_ip is empty")
 	}
 
-	// Use targeted listing to find candidate node_events directories
+	// Use targeted listing to find node_events directories under each node
 	var candidatePrefixes []string
-	candidatePrefixes = append(candidatePrefixes, sessionID+"/node_events/")
 	for _, rawEntry := range s.reader.ListFiles(clusterLogPathPrefix, sessionID) {
 		if strings.HasSuffix(rawEntry, "/") {
 			nodeName := strings.TrimSuffix(rawEntry, "/")

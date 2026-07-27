@@ -49,11 +49,10 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // ReadLogEvents reads all Log Events from logs/{nodeId}/events/event_*.log files
 // and stores them in the provided ClusterLogEventMap.
 //
-// Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
+// Path structure in storage: cluster-history/{ownerKind}/{namespace}/{ownerName}/{clusterName}/{sessionName}/{nodeId}/logs/events/event_*.log
 //
 // Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
-	// Build cluster ID used by StorageReader
 	// Build cluster ID (clusterLogPathPrefix) used by StorageReader
 	clusterLogPathPrefix := clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 
@@ -75,25 +74,20 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	total := 0
 	read := 0
 	for _, nodeID := range nodeIDs {
-		// Candidate events dirs: hierarchical (<sessionName>/<nodeId>/logs/events) and flat (<sessionName>/logs/<nodeId>/events)
-		candidateEventsDirs := []string{
-			path.Join(clusterlogs.RelLogsDir(clusterInfo.SessionName, nodeID), "events"),
-			path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events"),
-		}
-		for _, eventsDir := range candidateEventsDirs {
-			eventFileNames := r.reader.ListFiles(clusterLogPathPrefix, eventsDir)
-			for _, fileName := range eventFileNames {
-				if !strings.HasPrefix(fileName, "event_") || !strings.HasSuffix(fileName, ".log") {
-					continue
-				}
-				eventFilePath := path.Join(eventsDir, fileName)
-				total++
-				if err := r.readEventFile(clusterLogPathPrefix, eventFilePath, jobEventMap); err != nil {
-					logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
-					continue
-				}
-				read++
+		// Events directory: hierarchical (<sessionName>/<nodeId>/logs/events)
+		eventsDir := path.Join(clusterlogs.RelLogsDir(clusterInfo.SessionName, nodeID), "events")
+		eventFileNames := r.reader.ListFiles(clusterLogPathPrefix, eventsDir)
+		for _, fileName := range eventFileNames {
+			if !strings.HasPrefix(fileName, "event_") || !strings.HasSuffix(fileName, ".log") {
+				continue
 			}
+			eventFilePath := path.Join(eventsDir, fileName)
+			total++
+			if err := r.readEventFile(clusterLogPathPrefix, eventFilePath, jobEventMap); err != nil {
+				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
+				continue
+			}
+			read++
 		}
 	}
 

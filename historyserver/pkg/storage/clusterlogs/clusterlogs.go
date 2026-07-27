@@ -27,16 +27,13 @@ func Prefix(rootDir, ownerKind, ownerName, namespace, clusterName string) string
 		subDir = k
 	}
 
-	parts := []string{ClusterHistoryDir, subDir, namespace}
+	parts := []string{rootDir, ClusterHistoryDir, subDir, namespace}
 	if hasOwner {
 		parts = append(parts, strings.TrimSpace(ownerName))
 	}
 	parts = append(parts, clusterName)
 
-	if rootDir == "" {
-		return path.Join(parts...)
-	}
-	return path.Join(rootDir, path.Join(parts...))
+	return path.Join(parts...)
 }
 
 // SessionDir returns the path to a session's directory under a cluster:

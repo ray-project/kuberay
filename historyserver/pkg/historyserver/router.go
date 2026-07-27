@@ -330,7 +330,7 @@ func routerRayClusterSet(s *ServerHandler) {
 			return
 		}
 		if !found {
-			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster not found"))
+			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s/%s with session %s not found", namespace, resourceType, resourceName, session))
 			return
 		}
 
@@ -988,6 +988,11 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 	for nodeID := range snap.Nodes {
 		nodeIDs = append(nodeIDs, nodeID)
 	}
+	// Fallback: snap.Nodes is populated from parsed node events in event storage.
+	// If node events were disabled, failed to upload, or the node crashed early
+	// before emitting events, snap.Nodes may be empty even if log files (such as debug_state.txt)
+	// exist in the object store. We scan the storage directory under the session to discover
+	// node IDs directly so we can still read debug_state.txt.
 	if len(nodeIDs) == 0 {
 		rawEntries := s.reader.ListFiles(clusterLogPathPrefix, sessionName+"/")
 		for _, e := range rawEntries {
@@ -1189,6 +1194,8 @@ func ensurePlacementGroupFields(data []byte) []byte {
 	return patched
 }
 
+// getClusterLogPathPrefix returns the cluster storage prefix:
+// e.g., cluster-history/{ownerKind}/{clusterNamespace}/{ownerName}/{clusterName}
 func (s *ServerHandler) getClusterLogPathPrefix(req *restful.Request) string {
 	clusterName, _ := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace, _ := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
@@ -1941,9 +1948,12 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (cluster_name=%s, cluster_namespace=%s, session_name=%s)", clusterName.Value, clusterNamespace.Value, sessionName.Value))
 		return
 	}
-	if ownerKind.Value != "" && !fs.ValidPath(ownerKind.Value) {
-		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (owner_kind=%s)", ownerKind.Value))
-		return
+	if ownerKind.Value != "" {
+		kindLower := strings.ToLower(ownerKind.Value)
+		if kindLower != utils.RayClusterKind && kindLower != utils.RayJobKind && kindLower != utils.RayServiceKind {
+			resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: unsupported owner_kind=%s (must be raycluster, rayjob, or rayservice)", ownerKind.Value))
+			return
+		}
 	}
 	if ownerName.Value != "" && !fs.ValidPath(ownerName.Value) {
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (owner_name=%s)", ownerName.Value))

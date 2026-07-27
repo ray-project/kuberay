@@ -958,10 +958,11 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("returns error when every listed file fails I/O", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{"job-01000000/"})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/job-01000000/",
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{"job-01000000/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/job-01000000/",
 			[]string{"01000000-2024-01-01-00.gz"})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/",
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/",
 			[]string{"node1-2024-01-01-00.gz"})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{})
 
@@ -973,8 +974,9 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("empty file list returns nil (legit empty session)", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
@@ -984,8 +986,11 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("partial success does not return error", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/",
-			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/", "node2/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/",
+			[]string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/node_events/",
+			[]string{"node2-2024-01-01-00.gz"})
 
 		var buf bytes.Buffer
 		gw := gzip.NewWriter(&buf)
@@ -993,8 +998,9 @@ func TestProcessSingleSession(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, gw.Close())
 
-		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/job_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
@@ -1004,8 +1010,11 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("all corrupt JSON does not return error", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/",
-			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/", "node2/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/",
+			[]string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/node_events/",
+			[]string{"node2-2024-01-01-00.gz"})
 
 		var buf bytes.Buffer
 		gw := gzip.NewWriter(&buf)
@@ -1013,9 +1022,10 @@ func TestProcessSingleSession(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, gw.Close())
 
-		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
-		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node_events/node2-2024-01-01-00.gz", buf.String())
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node2/node_events/node2-2024-01-01-00.gz", buf.String())
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/job_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
@@ -1025,8 +1035,9 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("log events failure alone does not surface as error", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs/node1/events", []string{"event_GCS.log"})
 
@@ -1037,8 +1048,9 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("ray events failure surfaces; log events failure stays silent", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/", []string{"node1-2024-01-01-00.gz"})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/", []string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs/node1/events", []string{"event_GCS.log"})
 
@@ -1051,8 +1063,11 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("transparent decompression of compressed .gz files and reading uncompressed legacy files", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node_events/",
-			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/", "node2/"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/",
+			[]string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/node_events/",
+			[]string{"node2-2024-01-01-00"})
 
 		// 1. Compress node1 event file
 		var buf bytes.Buffer
@@ -1060,13 +1075,14 @@ func TestProcessSingleSession(t *testing.T) {
 		_, err := gw.Write([]byte(`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`))
 		require.NoError(t, err)
 		require.NoError(t, gw.Close())
-		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/node_events/node1-2024-01-01-00.gz", buf.String())
 
 		// 2. Keep node2 event file uncompressed
-		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node_events/node2-2024-01-01-00",
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node2/node_events/node2-2024-01-01-00",
 			`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"ZWZnaA=="}}]`)
 
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/job_events/", []string{})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/job_events/", []string{})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)

@@ -461,6 +461,8 @@ func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]
 	return nil
 }
 
+// getClusterLogPathPrefix returns the cluster storage prefix:
+// e.g., cluster-history/{ownerKind}/{namespace}/{ownerName}/{clusterName}
 func (h *EventHandler) getClusterLogPathPrefix(clusterInfo utils.ClusterInfo) string {
 	return clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 }
@@ -470,9 +472,8 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	var allJobFiles []string
 	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
-	// Check candidate prefixes: both flat (<sessionName>/job_events/) and hierarchical (<nodeName>/<sessionName>/job_events/)
+	// Check candidate prefixes under each node (<sessionName>/<nodeName>/job_events/)
 	var candidatePrefixes []string
-	candidatePrefixes = append(candidatePrefixes, clusterInfo.SessionName+"/job_events/")
 	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
 		if strings.HasSuffix(rawEntry, "/") {
 			nodeName := strings.TrimSuffix(rawEntry, "/")
@@ -502,8 +503,8 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
 	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
+	// Check candidate prefixes under each node (<sessionName>/<nodeName>/node_events/)
 	var candidatePrefixes []string
-	candidatePrefixes = append(candidatePrefixes, clusterInfo.SessionName+"/node_events/")
 	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
 		if strings.HasSuffix(rawEntry, "/") {
 			nodeName := strings.TrimSuffix(rawEntry, "/")

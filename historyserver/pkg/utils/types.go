@@ -10,12 +10,6 @@ type ClusterInfo struct {
 	OwnerName       string `json:"ownerName,omitempty"`
 }
 
-type ClusterKey struct {
-	Namespace    string
-	ResourceType string
-	ResourceName string
-}
-
 type ClusterInfoList []ClusterInfo
 
 func (a ClusterInfoList) Len() int           { return len(a) }
