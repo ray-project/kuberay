@@ -1,6 +1,7 @@
 package create
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -192,6 +193,20 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				rayStartParams: map[string]string{},
 			},
 		},
+		{
+			name: "Custom Ray version",
+			args: []string{"example-group"},
+			flags: map[string]string{
+				"namespace":   "test-namespace",
+				"ray-version": "custom",
+			},
+			expected: &CreateWorkerGroupOptions{
+				namespace:  "test-namespace",
+				groupName:  "example-group",
+				image:      "rayproject/ray:custom",
+				rayVersion: "custom",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -209,8 +224,9 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			options := &CreateWorkerGroupOptions{
 				cmdFactory: factory,
 			}
-			
+
 			cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
+			cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
 
 			for key, value := range tt.flags {
 				err := cmd.Flags().Set(key, value)
