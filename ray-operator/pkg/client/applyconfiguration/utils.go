@@ -32,6 +32,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.DeletionRuleApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
 		return &rayv1.DeletionStrategyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("GcsEmbeddedStorage"):
+		return &rayv1.GcsEmbeddedStorageApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
 		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):

@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -129,7 +128,7 @@ func TestMTLSController_Disabled(t *testing.T) {
 
 func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -212,7 +211,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 
 func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -244,7 +243,7 @@ func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 
 func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -365,7 +364,7 @@ func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
 // that require wildcard headless-service entries.
 func TestMTLSController_WorkerCertHasLocalhostOnly(t *testing.T) {
 	cluster := newMTLSTestCluster("wc-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -399,7 +398,7 @@ func TestMTLSController_WorkerCertHasLocalhostOnly(t *testing.T) {
 
 func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	cluster := newMTLSTestCluster("ready-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -443,7 +442,7 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 func TestMTLSController_DeletionIsNoop(t *testing.T) {
 	now := metav1.Now()
 	cluster := newMTLSTestCluster("del-noop")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 	cluster.DeletionTimestamp = &now
 	cluster.Finalizers = []string{"some-other-finalizer"}
 
@@ -459,7 +458,7 @@ func TestMTLSController_DeletionIsNoop(t *testing.T) {
 
 func TestMTLSController_SecretGetsOwnerRefToCertificate(t *testing.T) {
 	cluster := newMTLSTestCluster("owner-ref-test")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	cert := &certmanagerv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -501,7 +500,7 @@ func TestMTLSController_SecretGetsOwnerRefToCertificate(t *testing.T) {
 
 func TestMTLSController_SecretOwnerRefIdempotent(t *testing.T) {
 	cluster := newMTLSTestCluster("owner-ref-idem")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	blockOwnerDeletion := true
 	cert := &certmanagerv1.Certificate{
@@ -616,7 +615,7 @@ func newReadyCertificate(name string) *certmanagerv1.Certificate {
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
 	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))
@@ -660,7 +659,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 
 func TestCheckMTLSSecretsReady_AutoGenerate_CertNotReady(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	// Certificate exists but is not yet ready (e.g. reissuing after a SAN update).
 	headCert := &certmanagerv1.Certificate{
@@ -685,7 +684,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_CertNotReady(t *testing.T) {
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
 	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))
@@ -707,7 +706,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: ptr.To(true)}
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
 	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
 	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))

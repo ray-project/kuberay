@@ -225,6 +225,69 @@ _Appears in:_
 
 
 
+#### GCSStorageDeletionPolicy
+
+_Underlying type:_ _string_
+
+GCSStorageDeletionPolicy specifies what happens to the operator-managed GCS
+storage PVC when the owning RayCluster is deleted.
+
+_Validation:_
+- Enum: [DeleteWithCluster Retain]
+
+_Appears in:_
+- [GcsEmbeddedStorage](#gcsembeddedstorage)
+
+| Field | Description |
+| --- | --- |
+| `DeleteWithCluster` | DeleteWithClusterGCSStorageDeletionPolicy (the default) makes the<br />operator-managed PVC a child of the RayCluster via an ownerReference, so it<br />(and its RocksDB data) is garbage-collected together with the cluster.<br /> |
+| `Retain` | RetainGCSStorageDeletionPolicy keeps the operator-managed PVC (and its data)<br />after the owning RayCluster is deleted: the operator omits the ownerReference<br />so the PVC outlives the cluster. Recover the GCS state by pointing a new<br />cluster's ClaimName at the retained PVC.<br /> |
+
+
+#### GcsEmbeddedStorage
+
+
+
+GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
+
+RocksDB tolerates only a single writer at a time. The operator mounts the
+volume on the head Pod but does not itself enforce mutual exclusion, so when a
+volume can be attached to more than one Pod concurrently (see AccessModes) the
+caller is responsible for ensuring only one Ray head writes to it at a time.
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `claimName` _string_ | ClaimName is the name of an existing, user-provided PersistentVolumeClaim to<br />use as the RocksDB store ("bring your own" PVC). When set, the operator<br />consumes that PVC as-is: it does not create, delete, resize, or set<br />ownerReferences on it -- the user owns its entire lifecycle. Mutually<br />exclusive with Size/StorageClassName/AccessModes (those configure an<br />operator-managed PVC, which is used instead when ClaimName is empty).<br />This is the supported path for persisting GCS state across a RayService<br />zero-downtime upgrade: point every RayService generation at the same claim.<br />(An operator-managed PVC is keyed by and owned by the RayCluster, so it is<br />not reused across upgrades.) Because the old and new head Pods overlap during<br />a zero-downtime upgrade, the claim must permit concurrent attach<br />(ReadWriteMany) with externally-coordinated single-writer semantics, or an<br />active-passive handoff where only one Pod attaches at once. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ | Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ClaimName is set.<br />Defaults to 1Gi. The operator-managed PVC is created once and not<br />reconfigured in place; to change size/class/accessModes, delete the PVC (or<br />switch to ClaimName). A warning event is emitted if this diverges from the<br />live PVC. |  |  |
+| `storageClassName` _string_ | StorageClassName for the operator-managed PVC. Uses the cluster default<br />StorageClass when omitted. Ignored when ClaimName is set. |  |  |
+| `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].<br />Ignored when ClaimName is set.<br />ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod<br />attaches at a time). ReadWriteMany is a valid choice when you need the volume<br />attached to multiple Pods concurrently (e.g. to overlap the old and new head<br />during a RayService upgrade); RocksDB still requires that only one of them<br />writes at a time, which you must coordinate externally. |  |  |
+| `subPath` _string_ | SubPath mounts a subdirectory of the volume instead of its root. |  |  |
+| `deletionPolicy` _[GCSStorageDeletionPolicy](#gcsstoragedeletionpolicy)_ | DeletionPolicy controls the lifecycle of the operator-managed PVC relative to<br />the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName<br />is set (the operator never owns a bring-your-own PVC, so it is never deleted<br />or retained by the operator).<br />Recovery after Retain: a PVC left behind by a Retain delete can be recovered<br />either by pointing a new cluster's ClaimName at it, or by recreating a<br />RayCluster with the same name on the operator-managed path -- the operator<br />adopts the existing \{cluster\}-gcs-pvc and reuses its RocksDB state. To start<br />from a fresh store instead, delete the leftover PVC first. |  | Enum: [DeleteWithCluster Retain] <br /> |
+
+
+#### GcsFaultToleranceBackend
+
+_Underlying type:_ _string_
+
+GcsFaultToleranceBackend selects the GCS fault tolerance persistence backend.
+
+_Validation:_
+- Enum: [redis rocksdb]
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description |
+| --- | --- |
+| `redis` | GcsFTBackendRedis persists GCS metadata in an external Redis service.<br /> |
+| `rocksdb` | GcsFTBackendRocksDB persists GCS metadata in an embedded RocksDB store on a<br />persistent volume mounted on the head Pod.<br /> |
+
+
 #### GcsFaultToleranceOptions
 
 
@@ -238,10 +301,12 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[GcsFaultToleranceBackend](#gcsfaulttolerancebackend)_ | Backend selects the GCS FT persistence backend. Defaults to "redis" for<br />backward compatibility. Immutable: the backend cannot be switched on an<br />existing RayCluster (doing so would swap the entire GCS store and head-Pod<br />wiring, losing fault-tolerance state). |  | Enum: [redis rocksdb] <br /> |
 | `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
-| `redisAddress` _string_ |  |  |  |
+| `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
+| `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
 
 
 #### HeadGroupSpec

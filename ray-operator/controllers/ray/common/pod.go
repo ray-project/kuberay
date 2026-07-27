@@ -101,65 +101,113 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 			container.Env = append(container.Env, gcsTimeout)
 		}
 
-		// Configure the Redis address, username and password for GCS FT.
+		// Configure the backend-specific settings for GCS FT on the head Pod.
 		if rayNodeType == rayv1.HeadNode {
-			// Configure the external storage namespace for GCS FT.
-			storageNS := string(instance.UID)
-			if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-				storageNS = v
-			}
-			if options != nil && options.ExternalStorageNamespace != "" {
-				storageNS = options.ExternalStorageNamespace
-			}
-			podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
-			if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
-				storageNS := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
-				container.Env = append(container.Env, storageNS)
-			}
-
-			if options != nil {
-				container.Env = append(container.Env, corev1.EnvVar{
-					Name:  utils.RAY_REDIS_ADDRESS,
-					Value: options.RedisAddress,
-				})
-				if options.RedisUsername != nil {
-					// Note that `redis-username` will be supported starting from Ray 2.41.
-					// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
-					// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
-					// rayStartParams to refer to the environment variable.
-					instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] = "$REDIS_USERNAME"
-					container.Env = append(container.Env, corev1.EnvVar{
-						Name:      utils.REDIS_USERNAME,
-						Value:     options.RedisUsername.Value,
-						ValueFrom: options.RedisUsername.ValueFrom,
-					})
-				}
-				if options.RedisPassword != nil {
-					// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the
-					// `REDIS_PASSWORD` environment variable later. Here, we use `$REDIS_PASSWORD` in
-					// rayStartParams to refer to the environment variable.
-					instance.Spec.HeadGroupSpec.RayStartParams["redis-password"] = "$REDIS_PASSWORD"
-					container.Env = append(container.Env, corev1.EnvVar{
-						Name:      utils.REDIS_PASSWORD,
-						Value:     options.RedisPassword.Value,
-						ValueFrom: options.RedisPassword.ValueFrom,
-					})
-				}
+			if utils.IsGCSFaultToleranceEmbedded(options) {
+				configureEmbeddedFT(podTemplate, instance, container)
 			} else {
-				// If users directly set the `redis-password` in `rayStartParams` instead of referring
-				// to a K8s secret, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
-				// job can connect to Redis using the password. This is not recommended.
-				if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
-					// setting the REDIS_PASSWORD env var from the params
-					redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
-					if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; ok {
-						redisPasswordEnv.Value = value
-						container.Env = append(container.Env, redisPasswordEnv)
-					}
-				}
+				configureRedisFT(podTemplate, &instance, options, container)
 			}
 		}
 	}
+}
+
+// configureRedisFT wires the Redis-backed GCS FT settings (external storage
+// namespace, Redis address, username, and password) onto the head container.
+func configureRedisFT(podTemplate *corev1.PodTemplateSpec, instance *rayv1.RayCluster, options *rayv1.GcsFaultToleranceOptions, container *corev1.Container) {
+	// Configure the external storage namespace for GCS FT.
+	storageNS := string(instance.UID)
+	if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+		storageNS = v
+	}
+	if options != nil && options.ExternalStorageNamespace != "" {
+		storageNS = options.ExternalStorageNamespace
+	}
+	podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
+		storageNSEnv := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
+		container.Env = append(container.Env, storageNSEnv)
+	}
+
+	if options != nil {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_REDIS_ADDRESS,
+			Value: options.RedisAddress,
+		})
+		if options.RedisUsername != nil {
+			// Note that `redis-username` will be supported starting from Ray 2.41.
+			// If `GcsFaultToleranceOptions.RedisUsername` is set, it will be put into the
+			// `REDIS_USERNAME` environment variable later. Here, we use `$REDIS_USERNAME` in
+			// rayStartParams to refer to the environment variable.
+			instance.Spec.HeadGroupSpec.RayStartParams["redis-username"] = "$REDIS_USERNAME"
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:      utils.REDIS_USERNAME,
+				Value:     options.RedisUsername.Value,
+				ValueFrom: options.RedisUsername.ValueFrom,
+			})
+		}
+		if options.RedisPassword != nil {
+			// If `GcsFaultToleranceOptions.RedisPassword` is set, it will be put into the
+			// `REDIS_PASSWORD` environment variable later. Here, we use `$REDIS_PASSWORD` in
+			// rayStartParams to refer to the environment variable.
+			instance.Spec.HeadGroupSpec.RayStartParams["redis-password"] = "$REDIS_PASSWORD"
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:      utils.REDIS_PASSWORD,
+				Value:     options.RedisPassword.Value,
+				ValueFrom: options.RedisPassword.ValueFrom,
+			})
+		}
+	} else {
+		// If users directly set the `redis-password` in `rayStartParams` instead of referring
+		// to a K8s secret, we need to set the `REDIS_PASSWORD` env var so that the Redis cleanup
+		// job can connect to Redis using the password. This is not recommended.
+		if !utils.EnvVarExists(utils.REDIS_PASSWORD, container.Env) {
+			// setting the REDIS_PASSWORD env var from the params
+			redisPasswordEnv := corev1.EnvVar{Name: utils.REDIS_PASSWORD}
+			if value, ok := instance.Spec.HeadGroupSpec.RayStartParams["redis-password"]; ok {
+				redisPasswordEnv.Value = value
+				container.Env = append(container.Env, redisPasswordEnv)
+			}
+		}
+	}
+}
+
+// configureEmbeddedFT wires the embedded RocksDB GCS FT settings onto the head
+// Pod: selects the RocksDB backend, points it at the mounted persistent volume,
+// and mounts the PVC backing the store.
+func configureEmbeddedFT(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, container *corev1.Container) {
+	options := instance.Spec.GcsFaultToleranceOptions
+
+	if !utils.EnvVarExists(utils.RAY_GCS_STORAGE, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_GCS_STORAGE,
+			Value: utils.GCSStorageRocksDBValue,
+		})
+	}
+	if !utils.EnvVarExists(utils.RAY_GCS_STORAGE_PATH, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_GCS_STORAGE_PATH,
+			Value: utils.GCSStorageMountPath,
+		})
+	}
+
+	subPath := ""
+	if options.Storage != nil {
+		subPath = options.Storage.SubPath
+	}
+	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+		Name:      utils.GCSStorageVolumeName,
+		MountPath: utils.GCSStorageMountPath,
+		SubPath:   subPath,
+	})
+	podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
+		Name: utils.GCSStorageVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: utils.GetGCSStoragePVCName(&instance),
+			},
+		},
+	})
 }
 
 // DefaultHeadPodTemplate sets the config values

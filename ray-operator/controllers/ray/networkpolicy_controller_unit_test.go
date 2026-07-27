@@ -126,7 +126,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 					Kind:       "RayJob",
 					Name:       "test-job",
 					UID:        "12345",
-					Controller: ptr.To(true),
+					Controller: new(true),
 				},
 			},
 		},

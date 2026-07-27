@@ -2617,6 +2617,101 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	// Redis cleanup is enabled by default; the embedded RocksDB backend must still
+	// not receive the Redis cleanup finalizer (there is no Redis to clean up, so
+	// the finalizer/Job would stall deletion).
+	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = nil
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		Backend: rayv1.GcsFTBackendRocksDB,
+	}
+	ctx := context.Background()
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	rayClusterList := rayv1.RayClusterList{}
+	require.NoError(t, fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr)))
+	require.Len(t, rayClusterList.Items, 1)
+	assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer),
+		"embedded RocksDB backend must not receive the Redis cleanup finalizer")
+}
+
+func Test_StaleRedisCleanupFinalizerRemovedForEmbeddedBackend(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// A cluster that previously used the Redis backend (so it carries the Redis
+	// cleanup finalizer) and was later switched to the embedded RocksDB backend,
+	// now being deleted.
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = nil
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		Backend: rayv1.GcsFTBackendRocksDB,
+	}
+	controllerutil.AddFinalizer(cluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	cluster.DeletionTimestamp = &now
+	ctx := context.Background()
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	// With the stale finalizer removed and a deletion timestamp set, the CR is no
+	// longer blocked: the fake client garbage-collects it. Either outcome (object
+	// gone, or present without the finalizer) proves it is not stuck Terminating.
+	rayClusterList := rayv1.RayClusterList{}
+	require.NoError(t, fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr)))
+	if len(rayClusterList.Items) == 1 {
+		assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer),
+			"stale Redis cleanup finalizer must be removed for an embedded-backend RayCluster being deleted")
+	} else {
+		assert.Empty(t, rayClusterList.Items, "RayCluster should be deleted once the stale finalizer is removed")
+	}
+}
+
 func TestEvents_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()
@@ -4261,7 +4356,7 @@ func TestReconcileIngressKubernetesFindsOwnedIngressWhenNameIsShortened(t *testi
 	cluster := testRayCluster.DeepCopy()
 	cluster.Name = "this-is-a-very-long-raycluster-name-that-exceeds-limits"
 	cluster.UID = "raycluster-uid"
-	cluster.Spec.HeadGroupSpec.IngressOptions = &rayv1.IngressOptions{Host: ptr.To("a.example.com")}
+	cluster.Spec.HeadGroupSpec.IngressOptions = &rayv1.IngressOptions{Host: new("a.example.com")}
 
 	require.NotEqual(t,
 		utils.GenerateIngressName(cluster.Name),
@@ -4284,7 +4379,7 @@ func TestReconcileIngressKubernetesFindsOwnedIngressWhenNameIsShortened(t *testi
 	require.Len(t, ingresses.Items, 1, "first reconcile should create exactly one ingress")
 	assert.Equal(t, utils.CheckName(utils.GenerateIngressName(cluster.Name)), ingresses.Items[0].Name)
 
-	cluster.Spec.HeadGroupSpec.IngressOptions.Host = ptr.To("b.example.com")
+	cluster.Spec.HeadGroupSpec.IngressOptions.Host = new("b.example.com")
 	require.NoError(t, r.reconcileIngressKubernetes(ctx, cluster))
 
 	ingresses = &networkingv1.IngressList{}
@@ -4457,7 +4552,7 @@ func TestIngressNeedsUpdatePreservesDefaultedIngressClassName(t *testing.T) {
 	existing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
 		Spec: networkingv1.IngressSpec{
-			IngressClassName: ptr.To("nginx"),
+			IngressClassName: new("nginx"),
 			Rules:            rules,
 		},
 	}
@@ -4490,14 +4585,14 @@ func TestIngressNeedsUpdateOverridesIngressClassNameWhenRequested(t *testing.T) 
 	existing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
 		Spec: networkingv1.IngressSpec{
-			IngressClassName: ptr.To("nginx"),
+			IngressClassName: new("nginx"),
 			Rules:            rules,
 		},
 	}
 	desired := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
 		Spec: networkingv1.IngressSpec{
-			IngressClassName: ptr.To("traefik"),
+			IngressClassName: new("traefik"),
 			Rules:            rules,
 		},
 	}
@@ -4518,7 +4613,7 @@ func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: rayv1.RayClusterSpec{
-			TLSOptions: &rayv1.TLSOptions{Enabled: ptr.To(true)},
+			TLSOptions: &rayv1.TLSOptions{Enabled: new(true)},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
 				Template: corev1.PodTemplateSpec{
