@@ -491,8 +491,7 @@ func TestMTLSController_SecretGetsOwnerRefToCertificate(t *testing.T) {
 			found = true
 			assert.Equal(t, "Certificate", ref.Kind)
 			assert.Equal(t, cert.Name, ref.Name)
-			assert.NotNil(t, ref.BlockOwnerDeletion)
-			assert.True(t, *ref.BlockOwnerDeletion)
+			assert.Nil(t, ref.BlockOwnerDeletion)
 		}
 	}
 	assert.True(t, found, "secret should have owner reference to the Certificate")
@@ -502,7 +501,6 @@ func TestMTLSController_SecretOwnerRefIdempotent(t *testing.T) {
 	cluster := newMTLSTestCluster("owner-ref-idem")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
-	blockOwnerDeletion := true
 	cert := &certmanagerv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
@@ -518,7 +516,7 @@ func TestMTLSController_SecretOwnerRefIdempotent(t *testing.T) {
 			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
 			Namespace: "default",
 			OwnerReferences: []metav1.OwnerReference{
-				{UID: cert.UID, Name: cert.Name, Kind: "Certificate", APIVersion: certmanagerv1.SchemeGroupVersion.String(), BlockOwnerDeletion: &blockOwnerDeletion},
+				{UID: cert.UID, Name: cert.Name, Kind: "Certificate", APIVersion: certmanagerv1.SchemeGroupVersion.String()},
 			},
 		},
 	}
