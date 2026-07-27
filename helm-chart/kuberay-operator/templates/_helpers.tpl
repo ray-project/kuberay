@@ -195,6 +195,7 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
   - update
