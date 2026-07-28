@@ -495,7 +495,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	savedNodeIP := headPod.Status.PodIP
-	savedNodeID := GetNodeIDFromHeadPod(test, g, rayCluster)
+	savedNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	LogWithTimestamp(test.T(), "Captured node IP %s and node ID %s before cluster deletion", savedNodeIP, savedNodeID)
 
 	// Delete RayCluster to trigger log upload

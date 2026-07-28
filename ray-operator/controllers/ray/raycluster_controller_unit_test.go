@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -47,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -2511,6 +2513,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
+	_ = certmanagerv1.AddToScheme(newScheme)
 
 	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
 	gcsFTEnabledCluster := testRayCluster.DeepCopy()
@@ -4599,4 +4602,58 @@ func TestIngressNeedsUpdateOverridesIngressClassNameWhenRequested(t *testing.T) 
 	assert.True(t, updated)
 	require.NotNil(t, existing.Spec.IngressClassName)
 	assert.Equal(t, "traefik", *existing.Spec.IngressClassName, "an explicitly requested ingress class must override the live value")
+}
+
+func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-cluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			TLSOptions: &rayv1.TLSOptions{Enabled: new(true)},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithRuntimeObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	recorder := events.NewFakeRecorder(10)
+	r := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Scheme:                     scheme.Scheme,
+		Recorder:                   recorder,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+		options:                    RayClusterReconcilerOptions{CertManagerAvailable: false},
+	}
+
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+
+	require.NoError(t, err, "should not return an error (no requeue)")
+	assert.Equal(t, ctrl.Result{}, result, "should not requeue")
+
+	var foundEvent bool
+	for len(recorder.Events) > 0 {
+		event := <-recorder.Events
+		if strings.Contains(event, "cert-manager") && strings.Contains(event, "Warning") {
+			foundEvent = true
+			break
+		}
+	}
+	assert.True(t, foundEvent, "expected a warning event about cert-manager")
 }

@@ -43,6 +43,9 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// HistoryServerOptions used for history server related configuration
+	// +optional
+	HistoryServerOptions *HistoryServerOptions `json:"historyServerOptions,omitempty"`
 	// NetworkPolicy specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
@@ -51,6 +54,12 @@ type RayClusterSpec struct {
 	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
 	// +optional
 	NetworkPolicy *NetworkPolicyConfig `json:"networkPolicy,omitempty"`
+	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
+	// If omitted or Enabled is false, TLS is disabled. When Enabled is true,
+	// the operator enables mTLS using cert-manager to provision and manage certificates.
+	// Requires the RayClusterMTLS feature gate on the operator.
+	// +optional
+	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -59,6 +68,18 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// TLSOptions configures TLS encryption for the RayCluster.
+// When TLSOptions is nil or Enabled is nil/false, TLS is disabled.
+// When Enabled is true, the operator uses cert-manager to automatically
+// provision a full PKI (self-signed CA, head and worker leaf certificates)
+// and keeps certificates up to date as pod IPs change during autoscaling.
+type TLSOptions struct {
+	// Enabled controls whether mTLS is active for this RayCluster.
+	// Defaults to false when omitted. Set to true to enable mTLS.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None
@@ -247,6 +268,29 @@ type RedisCredential struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	// +optional
 	Value string `json:"value,omitempty"`
+}
+
+// HistoryServerOptions used for history server related configuration
+type HistoryServerOptions struct {
+	// CollectorOptions used for collector sidecar configuration
+	// +optional
+	CollectorOptions *CollectorOptions `json:"collectorOptions,omitempty"`
+}
+
+// CollectorOptions defines settings for the history server collector sidecar.
+type CollectorOptions struct {
+	// Image is the collector container image to be used (e.g. quay.io/kuberay/collector:latest).
+	// +optional
+	Image *string `json:"image,omitempty"`
+	// ImagePullPolicy is the pull policy for the collector image.
+	// +optional
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// Resources specifies computing resource requirements.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Env allows injecting custom environment variables into the collector container.
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // NetworkPolicyMode is the type for network isolation mode constants.
