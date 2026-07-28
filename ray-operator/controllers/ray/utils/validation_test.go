@@ -2569,7 +2569,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2588,7 +2588,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2604,7 +2604,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(0)),
+						Priority:    new(int32(0)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2636,7 +2636,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2655,7 +2655,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(2)),
+						Priority:    new(int32(2)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2675,7 +2675,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2695,7 +2695,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},
@@ -2715,7 +2715,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						Priority:    ptr.To(int32(1)),
+						Priority:    new(int32(1)),
 						MinReplicas: new(int32(0)),
 						MaxReplicas: new(int32(10)),
 					},

@@ -439,7 +439,7 @@ type WorkerGroupSpec struct {
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
 	// Priority influences which worker group the autoscaler prefers when multiple
 	// groups can satisfy the same resource demand. Higher priority groups are
-	// preferred for scale-up. Only honored by Ray Autoscaler v2.
+	// preferred for scale-up. Only honored by Ray Autoscaler v2 (Ray >= 2.56).
 	// +kubebuilder:default:=0
 	// +optional
 	Priority *int32 `json:"priority,omitempty"`
