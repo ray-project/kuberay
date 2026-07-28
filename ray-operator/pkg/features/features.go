@@ -37,6 +37,7 @@ const (
 	// owner: @ryanaoleary
 	// rep: https://github.com/ray-project/enhancements/pull/58
 	// alpha: v1.5
+	// beta: v1.7
 	//
 	// Enabled NewClusterWithIncrementalUpgrade type for RayService zero-downtime upgrades.
 	RayServiceIncrementalUpgrade featuregate.Feature = "RayServiceIncrementalUpgrade"
@@ -95,7 +96,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions:       {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:             {Default: true, PreRelease: featuregate.Beta},
 	RayMultiHostIndexing:             {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade:     {Default: false, PreRelease: featuregate.Alpha},
+	RayServiceIncrementalUpgrade:     {Default: true, PreRelease: featuregate.Beta},
 	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
