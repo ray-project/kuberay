@@ -118,6 +118,9 @@ var (
 		# Generate Ray job with specifications and print out the generated RayJob YAML
 		kubectl ray job submit --dry-run --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))
+
+	defaultImage        = "rayproject/ray"
+	defaultImageWithTag = fmt.Sprintf("%s:%s", defaultImage, util.RayVersion)
 )
 
 func NewJobSubmitOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SubmitJobOptions {
@@ -200,6 +203,12 @@ func (options *SubmitJobOptions) Complete() error {
 	if options.fileName != "" {
 		options.fileName = filepath.Clean(options.fileName)
 	}
+
+	// If the image is the default but the ray version is not the default, set the image to use the specified ray version
+	if options.image == defaultImageWithTag && options.rayVersion != util.RayVersion {
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
+	}
+
 	return nil
 }
 
