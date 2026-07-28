@@ -13,23 +13,60 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestRayJobSubmitComplete(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	configFlags := genericclioptions.NewConfigFlags(true)
-	cmdFactory := cmdutil.NewFactory(configFlags)
-	fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
-	fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
-	fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
+	tests := []struct {
+		flags    map[string]string
+		expected *SubmitJobOptions
+		name     string
+		args     []string
+	}{
+		{
+			name: "Custom Ray version",
+			flags: map[string]string{
+				"ray-version": "custom",
+			},
+			expected: &SubmitJobOptions{
+				image:      "rayproject/ray:custom",
+				rayVersion: "custom",
+			},
+		},
+	}
 
-	cmd := &cobra.Command{}
-	configFlags.AddFlags(cmd.Flags())
-	err := fakeSubmitJobOptions.Complete()
-	require.NoError(t, err)
-	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
-	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+			configFlags := genericclioptions.NewConfigFlags(true)
+			cmdFactory := cmdutil.NewFactory(configFlags)
+
+			fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
+			fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
+			fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
+
+			cmd := &cobra.Command{}
+			configFlags.AddFlags(cmd.Flags())
+
+			cmd.Flags().StringVar(&fakeSubmitJobOptions.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
+			cmd.Flags().StringVar(&fakeSubmitJobOptions.image, "image", fmt.Sprintf("rayproject/ray:%s", fakeSubmitJobOptions.rayVersion), "container image to use")
+
+			for key, value := range tc.flags {
+				err := cmd.Flags().Set(key, value)
+				if err != nil {
+					require.NoError(t, err)
+				}
+			}
+
+			err := fakeSubmitJobOptions.Complete()
+
+			require.NoError(t, err)
+			assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
+			assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
+			assert.Equal(t, tc.expected.image, fakeSubmitJobOptions.image)
+		})
+	}
 }
 
 func TestRayJobSubmitWithYamlValidate(t *testing.T) {
