@@ -432,16 +432,26 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 
 	// Copy headers from original request to proxy request.
 	for key, values := range req.Request.Header {
-		if strings.ToLower(key) != "host" {
-			// In auth-token mode, drop any client-supplied x-ray-authorization
-			// to avoid bypassing server-managed tokens.
-			if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
-				continue
-			}
-			for _, value := range values {
-				// Use Add() to preserve multiple values for the same header key.
-				proxyReq.Header.Add(key, value)
-			}
+		if strings.EqualFold(key, "host") {
+			continue
+		}
+		// In auth-token mode, drop the client-supplied x-ray-authorization so it cannot bypass
+		// the server-managed token injected below.
+		if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+			continue
+		}
+		// Authorization has to be dropped in two cases. In auth-token mode, Ray only falls back to
+		// x-ray-authorization when Authorization is absent, so a forwarded value would win over the
+		// injected token. On the Kubernetes proxy path the header is addressed to the API server
+		// instead of Ray, and client-go's transport skips injecting the service account token when
+		// Authorization is already set, so forwarding it would make the proxied request fail
+		// authentication.
+		if (s.useAuthTokenMode || s.useKubernetesProxy) && strings.EqualFold(key, "authorization") {
+			continue
+		}
+		for _, value := range values {
+			// Use Add() to preserve multiple values for the same header key.
+			proxyReq.Header.Add(key, value)
 		}
 	}
 

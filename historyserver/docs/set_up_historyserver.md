@@ -152,8 +152,10 @@ When a RayCluster enables token authentication (`spec.authOptions.mode: token`),
 rejects unauthenticated requests, so the history server cannot proxy live-cluster endpoints out of the
 box. Starting the history server with `--use-auth-token-mode=true` makes it read the cluster's auth
 token from the Kubernetes Secret the operator generates for that cluster (key `auth_token`) and attach
-an `x-ray-authorization: Bearer <token>` header when proxying live-session requests. Any client-supplied
-`x-ray-authorization` header is dropped first, so the server-managed token cannot be bypassed.
+an `x-ray-authorization: Bearer <token>` header when proxying live-session requests. Client-supplied
+`x-ray-authorization` and `Authorization` headers are both dropped first, so the server-managed token
+cannot be bypassed — Ray reads `Authorization` in preference to `x-ray-authorization`, so stripping only
+the latter would let a client override the injected token.
 
 The flag only affects the live-cluster path: replaying a dead session reads from object storage and never
 talks to a Ray Dashboard. It is also safe to leave enabled when only some of your clusters use auth — for
