@@ -53,6 +53,12 @@ spec:
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: FQ_RAY_IP
+            value: raycluster-historyserver-head-svc.default.svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: GCS_BUCKET
@@ -142,6 +148,12 @@ spec:
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: FQ_RAY_IP
+            value: raycluster-historyserver-head-svc.default.svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: GCS_BUCKET
