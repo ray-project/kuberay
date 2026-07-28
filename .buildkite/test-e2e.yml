@@ -111,10 +111,11 @@
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
-- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro'
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-1'
   # repro-ci: deterministic fail-before repro for the instant-cutover race in
   # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
   # false when the upgrade completes before the first test request is made).
+  # Independent run 1/50.
   # DO NOT MERGE.
   instance_size: large
   image: golang:1.26-bookworm
@@ -140,14 +141,1826 @@
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
 
     # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
-    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro (nightly operator) tests"
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 1/50 (nightly operator) tests"
     - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
-    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro (nightly operator) tests finished"
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 1/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-2'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 2/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
 
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 2/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 2/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-3'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 3/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 3/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 3/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-4'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 4/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 4/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 4/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-5'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 5/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 5/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 5/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-6'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 6/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 6/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 6/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-7'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 7/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 7/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 7/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-8'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 8/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 8/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 8/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-9'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 9/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 9/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 9/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-10'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 10/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 10/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 10/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-11'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 11/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 11/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 11/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-12'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 12/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 12/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 12/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-13'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 13/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 13/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 13/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-14'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 14/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 14/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 14/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-15'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 15/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 15/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 15/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-16'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 16/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 16/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 16/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-17'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 17/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 17/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 17/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-18'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 18/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 18/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 18/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-19'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 19/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 19/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 19/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-20'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 20/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 20/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 20/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-21'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 21/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 21/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 21/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-22'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 22/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 22/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 22/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-23'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 23/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 23/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 23/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-24'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 24/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 24/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 24/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-25'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 25/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 25/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 25/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-26'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 26/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 26/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 26/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-27'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 27/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 27/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 27/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-28'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 28/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 28/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 28/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-29'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 29/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 29/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 29/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-30'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 30/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 30/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 30/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-31'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 31/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 31/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 31/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-32'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 32/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 32/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 32/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-33'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 33/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 33/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 33/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-34'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 34/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 34/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 34/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-35'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 35/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 35/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 35/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-36'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 36/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 36/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 36/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-37'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 37/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 37/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 37/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-38'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 38/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 38/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 38/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-39'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 39/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 39/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 39/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-40'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 40/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 40/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 40/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-41'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 41/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 41/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 41/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-42'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 42/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 42/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 42/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-43'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 43/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 43/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 43/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-44'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 44/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 44/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 44/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-45'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 45/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 45/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 45/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-46'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 46/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 46/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 46/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-47'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 47/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 47/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 47/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-48'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 48/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 48/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 48/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-49'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 49/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 49/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 49/50 (nightly operator) tests finished"
+- label: 'Test RayService Incremental Upgrade Blue/Green Flaky Repro-50'
+  # repro-ci: deterministic fail-before repro for the instant-cutover race in
+  # https://github.com/ray-project/kuberay/issues/4783 (oldVersionServed can stay
+  # false when the upgrade completes before the first test request is made).
+  # Independent run 50/50.
+  # DO NOT MERGE.
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run BlueGreen Test (test code waits for the upgrade to fully complete before the first request to force the race)
+    - echo "--- START:Running RayService Incremental Upgrade Blue/Green flaky repro 50/50 (nightly operator) tests"
+    - if [ -n "$${KUBERAY_TEST_RAY_IMAGE}" ]; then echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"; fi
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -count=1 -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgrade$/BlueGreen$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade Blue/Green flaky repro 50/50 (nightly operator) tests finished"
 - label: 'Test Autoscaler E2E Part 1 (nightly operator)'
   instance_size: large
   image: golang:1.26-bookworm
