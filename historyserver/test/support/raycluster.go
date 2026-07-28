@@ -35,11 +35,11 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	}
 
 	// Inject namespace name as the ray-cluster-namespace for head group collector
-	injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+	injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 
 	// Inject namespace name as the ray-cluster-namespace for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
-		injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+		injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
@@ -59,16 +59,43 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
-// injectCollectorRayClusterNamespace injects the ray-cluster-namespace argument into all collector containers.
-func injectCollectorRayClusterNamespace(containers []corev1.Container, rayClusterNamespace string) {
+// injectCollectorRayClusterNamespaceAndEnvVar injects the ray-cluster-namespace argument and required environment variables (POD_IP, FQ_RAY_IP) into all collector containers.
+func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, rayClusterName string, rayClusterNamespace string) {
+	fqdnRayIP := fmt.Sprintf("%s-head-svc.%s.svc.cluster.local", rayClusterName, rayClusterNamespace)
 	for i := range containers {
 		if containers[i].Name == "collector" {
 			containers[i].Command = append(
 				containers[i].Command,
 				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
 			)
+			if containers[i].Env == nil {
+				containers[i].Env = []corev1.EnvVar{}
+			}
+			setOrAppendEnv(&containers[i], "POD_IP", "", &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			})
+			setOrAppendEnv(&containers[i], "FQ_RAY_IP", fqdnRayIP, nil)
 		}
 	}
+}
+
+// setOrAppendEnv updates an environment variable in-place if it already exists (e.g., from static YAML manifests)
+// or appends a new entry if missing. This prevents duplicate environment variable entries in the pod spec.
+func setOrAppendEnv(container *corev1.Container, name string, val string, valFrom *corev1.EnvVarSource) {
+	for i := range container.Env {
+		if container.Env[i].Name == name {
+			container.Env[i].Value = val
+			container.Env[i].ValueFrom = valFrom
+			return
+		}
+	}
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name:      name,
+		Value:     val,
+		ValueFrom: valFrom,
+	})
 }
 
 // GetSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
