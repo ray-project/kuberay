@@ -86,6 +86,18 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          # POD_IP and FQ_RAY_IP are required by the collector to discover its own Ray NodeID
+          # via the Ray Dashboard HTTP endpoint. The operator sets these automatically when the
+          # collector is injected via spec.historyServerOptions.collectorOptions, but this manifest
+          # declares the sidecar manually, so they must be provided here.
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          # The head collector shares a Pod with the Ray Dashboard, so it can reach it over
+          # loopback without hardcoding the Service name.
+          - name: FQ_RAY_IP
+            value: "localhost"
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
@@ -216,6 +228,15 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          # See the head collector above for why POD_IP and FQ_RAY_IP are required here.
+          # Unlike the head, a worker collector has to reach the Dashboard over the head Service.
+          # The short name resolves within the RayCluster's own namespace.
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: FQ_RAY_IP
+            value: "raycluster-historyserver-head-svc"
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: AWS_ACCESS_KEY_ID
