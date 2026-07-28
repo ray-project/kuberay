@@ -284,7 +284,7 @@ env_vars:
 				WithRayClusterSpec(NewRayClusterSpec()).
 				WithEntrypoint("python -c \"import time; time.sleep(60)\"").
 				// BackoffLimit=0 prevents the submitter Job from retrying after the head Pod is deleted.
-				// Otherwise it may resubmit to the recreated (non GCS FT) GCS and non-deterministically succeed.
+				// Otherwise it may resubmit to the recreated (non GCS FT) head pod and non-deterministically succeed.
 				WithSubmitterConfig(rayv1ac.SubmitterConfig().WithBackoffLimit(0)).
 				WithShutdownAfterJobFinishes(true))
 
