@@ -19,13 +19,12 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -37,11 +36,12 @@ const (
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
 
-	// DashboardPortName is the name of the dashboard service port assigned by the ray-operator.
-	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	// https://github.com/ray-project/kuberay/pull/4520#discussion_r3659300100
+	// RayContainerIndex is the index of the Ray container in the head pod template.
+	RayContainerIndex = 0
+	// DashboardPortName is the name the ray-operator gives the dashboard port.
 	DashboardPortName = "dashboard"
-	// DefaultDashboardPort is the default port for the Ray Dashboard if the service port is not found.
-	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	// DefaultDashboardPort is used when the head container does not declare a dashboard port.
 	DefaultDashboardPort = 8265
 )
 
@@ -1977,22 +1977,31 @@ func (c *ClientManager) fetchSvcInfo(name, namespace string) (ServiceInfo, error
 		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
 
-	// Look up the actual dashboard port from the head service instead of hardcoding the default,
-	// because users can override the port in their HeadGroupSpec.
-	port := DefaultDashboardPort
-	headSvc := corev1.Service{}
-	if err := c.Client().Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
-		for _, p := range headSvc.Spec.Ports {
+	return ServiceInfo{
+		ServiceName: svcName,
+		Namespace:   namespace,
+		Port:        getDashboardPort(&rc.Spec),
+	}, nil
+}
+
+// getDashboardPort resolves the dashboard port the ray-operator assigns to the head service,
+// which mirrors the dashboard port declared on the head container.
+//
+// Only the dashboard port is resolved here, because that is the only port the history server
+// proxies to. If other head service ports (e.g. client, serve, metrics) are needed later, copy
+// the relevant port-resolution code from the ray-operator into this package rather than
+// importing it, so the history server stays independent of the operator's internal packages:
+// https://github.com/ray-project/kuberay/blob/11de28835b73585091190b9b08c0d8bd5b84f779/ray-operator/controllers/ray/common/service.go#L402-L444
+func getDashboardPort(spec *rayv1.RayClusterSpec) int {
+	containers := spec.HeadGroupSpec.Template.Spec.Containers
+	if len(containers) > RayContainerIndex {
+		for _, p := range containers[RayContainerIndex].Ports {
 			if p.Name == DashboardPortName {
-				port = int(p.Port)
-				break
+				return int(p.ContainerPort)
 			}
 		}
-	} else {
-		logrus.Warnf("Could not fetch head service %s/%s to determine dashboard port, falling back to %d: %v", namespace, svcName, port, err)
 	}
-
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: port}, nil
+	return DefaultDashboardPort
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.

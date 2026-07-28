@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/cache"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -113,12 +112,29 @@ func TestGetSvcInfo(t *testing.T) {
 	serviceName := "test-cluster-head-svc"
 	cacheKey := namespace + "/" + clusterName
 
-	portalPort := int32(8265)
+	// Use a non-default port so the test covers the HeadGroupSpec override.
+	portalPort := int32(9265)
 
 	rc := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: namespace,
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{Name: DashboardPortName, ContainerPort: portalPort},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		Status: rayv1.RayClusterStatus{
 			Head: rayv1.HeadInfo{
@@ -126,25 +142,10 @@ func TestGetSvcInfo(t *testing.T) {
 			},
 		},
 	}
-	headSvc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName,
-			Namespace: namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:       DashboardPortName,
-					Port:       portalPort,
-					TargetPort: intstr.FromInt32(portalPort),
-				},
-			},
-		},
-	}
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(rc, headSvc).
+		WithObjects(rc).
 		WithStatusSubresource(rc).
 		Build()
 
