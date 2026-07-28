@@ -138,15 +138,6 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 
 			upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
 
-			// TEMP repro (do not merge): force the "instant cutover completes before the
-			// first test request" race described in
-			// https://github.com/ray-project/kuberay/issues/4783 by waiting for the
-			// controller to report the migration as fully complete before the loop below
-			// issues its first curl. Remove once the fail-before case is captured.
-			LogWithTimestamp(test.T(), "TEMP repro: waiting for upgrade to fully complete before first request")
-			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-				Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
-
 			for _, step := range upgradeSteps {
 				// Behavior 1: Current state value matches the expected value or the RayService finished upgrading
 				LogWithTimestamp(test.T(), "%s", step.name)
