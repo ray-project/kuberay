@@ -56,6 +56,13 @@ spec:
         - historyserver
         - --runtime-class-name=s3
         - --ray-root-dir=log
+        # Uncomment to proxy live-cluster requests to RayClusters that have token authentication
+        # enabled (spec.authOptions.mode: token in raycluster.yaml). The history server then reads
+        # each cluster's auth token from its Kubernetes Secret and attaches an
+        # `x-ray-authorization: Bearer <token>` header when proxying. This requires the extra RBAC
+        # in service_account_auth_token_mode.yaml so the history server can read those Secrets.
+        # See docs/set_up_historyserver.md.
+        # - --use-auth-token-mode=true
         ports:
         - containerPort: 8080
         resources:

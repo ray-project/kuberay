@@ -6,6 +6,13 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
+  # Uncomment both fields below to enable Ray token authentication. rayVersion is required
+  # alongside authOptions: the operator rejects the RayCluster without it. Pair this with
+  # the history server's --use-auth-token-mode=true flag; see docs/set_up_historyserver.md.
+
+  # rayVersion: "2.52.0"
+  # authOptions:
+  #   mode: token
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
