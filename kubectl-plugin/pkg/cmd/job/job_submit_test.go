@@ -50,7 +50,7 @@ func TestRayJobSubmitComplete(t *testing.T) {
 			configFlags.AddFlags(cmd.Flags())
 
 			cmd.Flags().StringVar(&fakeSubmitJobOptions.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-			cmd.Flags().StringVar(&fakeSubmitJobOptions.image, "image", fmt.Sprintf("rayproject/ray:%s", fakeSubmitJobOptions.rayVersion), "container image to use")
+			cmd.Flags().StringVar(&fakeSubmitJobOptions.image, "image", fmt.Sprintf("rayproject/ray:%s", util.RayVersion), "container image to use")
 
 			for key, value := range tc.flags {
 				err := cmd.Flags().Set(key, value)
