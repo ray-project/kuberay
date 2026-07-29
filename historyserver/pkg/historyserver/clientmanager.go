@@ -3,11 +3,11 @@ package historyserver
 import (
 	"context"
 	"fmt"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"strings"
 	"time"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
@@ -28,7 +28,7 @@ const (
 	DefaultKubeAPIBurst = 200
 
 	// AuthTokenSecretKey is the key used to store the auth token in a Kubernetes Secret
-	AuthTokenSecretKey = rayutils.RAY_AUTH_TOKEN_SECRET_KEY
+	AuthTokenSecretKey = utils.RAY_AUTH_TOKEN_SECRET_KEY
 	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
 	svcInfoCacheTTL = 30 * time.Second
 	// svcInfoCacheMaxSize bounds the number of cached ServiceInfo entries so a cluster with many
@@ -97,7 +97,7 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	}
 
 	// Check if auth is enabled
-	if !rayutils.IsAuthEnabled(&rayCluster.Spec) {
+	if !utils.IsAuthEnabled(&rayCluster.Spec) {
 		logrus.Debugf("Auth not enabled for RayCluster %s/%s", namespace, name)
 		return "", nil
 	}
@@ -105,13 +105,13 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	// Kubernetes-delegated token auth has no static bearer token to inject (Ray authenticates against
 	// the K8s API server directly). Fail explicitly instead of proxying unauthenticated and letting
 	// the dashboard reject the call with a confusing auth error.
-	if rayutils.IsK8sAuthEnabled(rayCluster.Spec.AuthOptions) {
+	if utils.IsK8sAuthEnabled(rayCluster.Spec.AuthOptions) {
 		return "", fmt.Errorf("cannot authenticate proxied requests to RayCluster %s/%s: Kubernetes-delegated token auth (enableK8sTokenAuth) is not supported by the history server", namespace, name)
 	}
 
 	// Honor a user-supplied secret name when set, matching the operator's
 	// SetContainerTokenAuthEnvVars logic; otherwise fall back to the default.
-	secretName := rayutils.CheckName(name)
+	secretName := utils.CheckName(name)
 	if secret := rayCluster.Spec.AuthOptions.SecretName; secret != nil && *secret != "" {
 		secretName = *secret
 	}

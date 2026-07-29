@@ -35,14 +35,6 @@ const (
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
-
-	// https://github.com/ray-project/kuberay/pull/4520#discussion_r3659300100
-	// RayContainerIndex is the index of the Ray container in the head pod template.
-	RayContainerIndex = 0
-	// DashboardPortName is the name the ray-operator gives the dashboard port.
-	DashboardPortName = "dashboard"
-	// DefaultDashboardPort is used when the head container does not declare a dashboard port.
-	DefaultDashboardPort = 8265
 )
 
 // handleMissingSnapshot responds 503 when the session snapshot is not in the cache.
@@ -2004,14 +1996,14 @@ func (c *ClientManager) fetchSvcInfo(name, namespace string) (ServiceInfo, error
 // https://github.com/ray-project/kuberay/blob/11de28835b73585091190b9b08c0d8bd5b84f779/ray-operator/controllers/ray/common/service.go#L402-L444
 func getDashboardPort(spec *rayv1.RayClusterSpec) int {
 	containers := spec.HeadGroupSpec.Template.Spec.Containers
-	if len(containers) > RayContainerIndex {
-		for _, p := range containers[RayContainerIndex].Ports {
-			if p.Name == DashboardPortName {
+	if len(containers) > utils.RayContainerIndex {
+		for _, p := range containers[utils.RayContainerIndex].Ports {
+			if p.Name == utils.DashboardPortName {
 				return int(p.ContainerPort)
 			}
 		}
 	}
-	return DefaultDashboardPort
+	return utils.DefaultDashboardPort
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
