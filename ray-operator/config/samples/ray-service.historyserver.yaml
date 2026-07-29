@@ -1,0 +1,81 @@
+# This example demonstrates how to use the history server sidecar injection feature with a RayService.
+# The collector is automatically injected into head and worker pods to stream logs and events.
+#
+# Note: History Server feature is currently in Alpha status. To use this feature, enable the
+# RayClusterHistoryServer feature gate on the KubeRay operator:
+#   - Operator CLI flag: --feature-gates=RayClusterHistoryServer=true
+#   - Helm value: featureGates.RayClusterHistoryServer=true
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-historyserver
+spec:
+  serveConfigV2: |
+    applications:
+      - name: fruit_app
+        import_path: fruit.deployment_graph
+        route_prefix: /fruit
+        runtime_env:
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: MangoStand
+            num_replicas: 1
+            user_config:
+              price: 3
+            ray_actor_options:
+              num_cpus: 0.1
+  rayClusterConfig:
+    rayVersion: "2.52.0"
+    historyServerOptions:
+      collectorOptions:
+        image: us-west1-docker.pkg.dev/aaronliang-gke-dev/ray-ar/ray-collector:ownerincluded
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        env:
+        - name: STORAGE_BACKEND
+          value: "GCS"
+        - name: GCS_BUCKET
+          value: "aaronliang-hs-ray-bucket"
+        - name: RAY_ROOT_DIR
+          value: "final-test"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: 0.0.0.0
+      template:
+        spec:
+          serviceAccountName: my-ksa
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.52.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "200m"
+                memory: "512Mi"
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      groupName: small-group
+      rayStartParams: {}
+      template:
+        spec:
+          serviceAccountName: my-ksa
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.52.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "2Gi"
+              requests:
+                cpu: "200m"
+                memory: "512Mi"
