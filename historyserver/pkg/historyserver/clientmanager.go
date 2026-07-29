@@ -90,21 +90,18 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", fmt.Errorf("no Kubernetes client available")
 	}
 
-	// Read the current spec fresh so the auth decision is never based on stale cached data.
 	rayCluster, err := c.GetRayCluster(ctx, namespace, name)
 	if err != nil {
 		return "", err
 	}
 
-	// Check if auth is enabled
 	if !utils.IsAuthEnabled(&rayCluster.Spec) {
 		logrus.Debugf("Auth not enabled for RayCluster %s/%s", namespace, name)
 		return "", nil
 	}
 
-	// Kubernetes-delegated token auth has no static bearer token to inject (Ray authenticates against
-	// the K8s API server directly). Fail explicitly instead of proxying unauthenticated and letting
-	// the dashboard reject the call with a confusing auth error.
+	// Kubernetes-delegated token auth has no static bearer token to inject, so fail explicitly
+	// instead of proxying unauthenticated and surfacing a confusing dashboard error.
 	if utils.IsK8sAuthEnabled(rayCluster.Spec.AuthOptions) {
 		return "", fmt.Errorf("cannot authenticate proxied requests to RayCluster %s/%s: Kubernetes-delegated token auth (enableK8sTokenAuth) is not supported by the history server", namespace, name)
 	}
@@ -116,17 +113,18 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		secretName = *secret
 	}
 
-	// Read the Secret fresh on every request from the same cluster the RayCluster was read from
-	// (the auth Secret lives alongside its cluster). We deliberately do not cache the token: the
-	// history server uses a direct (non-watching) client, so there is no cheap way to invalidate a
-	// cached token when the operator rotates or updates the Secret. Reading fresh ensures a rotated
-	// token takes effect on the very next request instead of after a TTL.
+	// The token is not cached: the history server uses a direct (non-watching) client, so there is no
+	// cheap way to invalidate a cached token once the operator rotates the Secret.
+	//
+	// TODO: together with the RayCluster read above, this makes two API server calls per proxied
+	// request to an auth-enabled cluster and may become a bottleneck. Revisit with a watch-backed
+	// cache that can invalidate on Secret updates.
+	// https://github.com/ray-project/kuberay/pull/4520#discussion_r3671743181
 	secret := &corev1.Secret{}
 	if err := c.Client().Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret); err != nil {
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", namespace, secretName, err)
 	}
 
-	// Extract the token from the secret.
 	tokenBytes, exists := secret.Data[AuthTokenSecretKey]
 	if !exists {
 		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, namespace, secretName)
