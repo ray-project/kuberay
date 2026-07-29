@@ -211,6 +211,26 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 		)
 }
 
+// applyIncrementalUpgradeWorkerCPU triggers an incremental upgrade or rollback
+// by server-side applying a RayService spec with the worker group's CPU request overridden.
+func applyIncrementalUpgradeWorkerCPU(
+	test Test,
+	namespace, rayServiceName string,
+	stepSize, interval, maxSurge *int32,
+	serveConfigV2 serveConfigV2,
+	cpuRequest string,
+) error {
+	specAC := incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2)
+	(*specAC.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests)[corev1.ResourceCPU] = resource.MustParse(cpuRequest)
+
+	_, err := test.Client().Ray().RayV1().RayServices(namespace).Apply(
+		test.Ctx(),
+		rayv1ac.RayService(rayServiceName, namespace).WithSpec(specAC),
+		TestApplyOptions,
+	)
+	return err
+}
+
 // GetGatewayHost returns the in-cluster DNS name for the Istio-managed
 // service backing the Gateway. Istio names both the Deployment and the
 // Service "<gateway-name>-istio" in the same namespace as the Gateway,
