@@ -387,7 +387,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger a rollback by updating the spec back to the original version.
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
-	err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("2"))
+	err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(defaultWorkerCPURequest))
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Verify that the controller enters the rollback state.
@@ -580,7 +580,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			if rs.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
 				activeBeforeRollback = *rs.Status.ActiveServiceStatus.TrafficRoutedPercent
 			}
-			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("2"))
+			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(defaultWorkerCPURequest))
 			g.Expect(err).NotTo(HaveOccurred())
 
 			if tc.TriggerStage != TriggerBeforeTraffic {
