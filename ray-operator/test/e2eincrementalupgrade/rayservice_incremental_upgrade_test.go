@@ -78,7 +78,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 
 			LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
 			stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
-			g.Expect(stdout.String()).To(Equal("6"))
+			oldVersionServedBeforeUpgrade := stdout.String() == "6"
+			g.Expect(oldVersionServedBeforeUpgrade).To(BeTrue(), "The old version of the service should be serving traffic before the upgrade.")
 			stdout, _ = CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
@@ -125,7 +126,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			// that no requests are dropped throughout the upgrade process.
 			LogWithTimestamp(test.T(), "Performing behavioral checks, validating stepwise traffic and capacity migration")
 
-			oldVersionServed := false
+			oldVersionServedDuringUpgrade := false
 			newVersionServed := false
 
 			intervalSeconds := *interval
@@ -153,7 +154,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 				response := stdout.String()
 				g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 				if response == "6" {
-					oldVersionServed = true
+					oldVersionServedDuringUpgrade = true
 				}
 				if response == "8" {
 					newVersionServed = true
@@ -202,7 +203,11 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			}
 
 			LogWithTimestamp(test.T(), "Verifying both old and new versions served traffic during the upgrade")
-			g.Expect(oldVersionServed).To(BeTrue(), "The old version of the service should have served traffic during the upgrade.")
+			// BlueGreen is an instant cutover, so the test's polling loop can possibly never observe the old version mid-upgrade
+			// if the cutover completes before the loop's first request.
+			if params.Name != "BlueGreen" {
+				g.Expect(oldVersionServedDuringUpgrade).To(BeTrue(), "The old version of the service should have served traffic during the upgrade.")
+			}
 			g.Expect(newVersionServed).To(BeTrue(), "The new version of the service should have served traffic during the upgrade.")
 
 			// Check that RayService completed upgrade
