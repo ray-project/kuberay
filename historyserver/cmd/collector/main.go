@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -63,6 +64,24 @@ func main() {
 	}
 	if val := os.Getenv("OWNER_NAME"); val != "" {
 		ownerName = val
+	}
+	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
+		rayRootDir = val
+	}
+	if val := os.Getenv("EVENTS_PORT"); val != "" {
+		if port, err := strconv.Atoi(val); err == nil {
+			eventsPort = port
+		}
+	}
+	if val := os.Getenv("LOG_BATCHING"); val != "" {
+		if batch, err := strconv.Atoi(val); err == nil {
+			logBatching = batch
+		}
+	}
+	if val := os.Getenv("PUSH_INTERVAL"); val != "" {
+		if interval, err := time.ParseDuration(val); err == nil {
+			pushInterval = interval
+		}
 	}
 	role = strings.TrimSpace(role)
 	// Check incase users manually set role env var

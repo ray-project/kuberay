@@ -145,6 +145,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -1080,4 +1083,36 @@ func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
 	}
 
 	return nil
+}
+
+// validateWorkerGroupPriority validates that the priority field is only allowed when Autoscaler V2 is enabled
+func validateWorkerGroupPriority(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	priority := workerGroup.Priority
+	if priority == nil || *priority == 0 {
+		return nil
+	}
+
+	// The priority field was added in Ray 2.56.0.
+	if spec.RayVersion == "" {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion was not specified. Ray version 2.56.0 or later is required", workerGroup.GroupName)
+	}
+	rayVersion, err := version.ParseGeneric(spec.RayVersion)
+	if err != nil {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion format is invalid: %s, %w", workerGroup.GroupName, spec.RayVersion, err)
+	}
+	minVersion := version.MustParseGeneric("2.56.0")
+	if rayVersion.LessThan(minVersion) {
+		return fmt.Errorf("worker group %s: priority is set, but minimum Ray version is 2.56.0, got %s", workerGroup.GroupName, spec.RayVersion)
+	}
+
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("worker group %s: priority is set to %d, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled", workerGroup.GroupName, *priority)
 }
