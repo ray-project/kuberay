@@ -1038,6 +1038,51 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "RayService with GCS FT ExternalStorageNamespace and ValueFrom",
+			rayService: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						utils.RayExternalStorageNSAnnotationKey: "my-static-namespace",
+					},
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+							ExternalStorageNamespace: "my-static-namespace",
+						},
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Env: []corev1.EnvVar{
+												{
+													Name: utils.RAY_EXTERNAL_STORAGE_NS,
+													ValueFrom: &corev1.EnvVarSource{
+														SecretKeyRef: &corev1.SecretKeySelector{
+															LocalObjectReference: corev1.LocalObjectReference{
+																Name: "my-secret",
+															},
+															Key: "namespace",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "worker-group-1",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1083,6 +1128,16 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 				assert.Equal(t, expectedNamespace, rayCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace)
 				assert.Equal(t, expectedNamespace, rayCluster.Annotations[utils.RayExternalStorageNSAnnotationKey])
 				assert.Equal(t, expectedNamespace, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].Value)
+			}
+
+			if tt.name == "RayService with GCS FT ExternalStorageNamespace and ValueFrom" {
+				expectedNamespace := "my-static-namespace-" + clusterName
+				assert.Equal(t, expectedNamespace, rayCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace)
+				assert.Equal(t, expectedNamespace, rayCluster.Annotations[utils.RayExternalStorageNSAnnotationKey])
+				// Ensure that Value remains empty and ValueFrom is preserved
+				assert.Empty(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].Value)
+				assert.NotNil(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].ValueFrom)
+				assert.Equal(t, "my-secret", rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].ValueFrom.SecretKeyRef.Name)
 			}
 
 			// Check owner reference

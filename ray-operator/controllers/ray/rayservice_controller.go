@@ -1460,7 +1460,7 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	var existingEnvVal string
 	if len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
 		for _, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
 				existingEnvVal = env.Value
 				break
 			}
@@ -1478,7 +1478,7 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	}
 	if existingEnvVal != "" && len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
 		for k, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
 				currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[k].Value = existingEnvVal
 				break
 			}
@@ -1570,7 +1570,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	}
 	for i, container := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
 		for j, env := range container.Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
 				clusterSpec.HeadGroupSpec.Template.Spec.Containers[i].Env[j].Value = fmt.Sprintf("%s-%s", env.Value, rayClusterName)
 			}
 		}
