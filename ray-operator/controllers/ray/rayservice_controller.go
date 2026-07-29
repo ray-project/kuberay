@@ -1451,50 +1451,12 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	// existing cluster's Suspend here instead of letting the goal spec
 	// overwrite it.
 	existingSuspend := currentCluster.Spec.Suspend
-
-	// Capture the existing GCS FT external storage namespace and its corresponding Env/Annotation fields.
-	var existingNamespace string
-	if currentCluster.Spec.GcsFaultToleranceOptions != nil && currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
-		existingNamespace = currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace
-	}
-	var existingEnvVal string
-	if len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
-		for _, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
-				existingEnvVal = env.Value
-				break
-			}
-		}
-	}
-	existingAnnotation, hasExistingAnnotation := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]
-
-	// Overwrite the current cluster's spec with the new goal spec.
 	currentCluster.Spec = goalCluster.Spec
 	currentCluster.Spec.Suspend = existingSuspend
-
-	// Re-apply the immutable external storage namespace values to the new goal spec.
-	if existingNamespace != "" && currentCluster.Spec.GcsFaultToleranceOptions != nil {
-		currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace = existingNamespace
-	}
-	if existingEnvVal != "" && len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
-		for k, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
-				currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[k].Value = existingEnvVal
-				break
-			}
-		}
-	}
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
 	currentCluster.Annotations = goalCluster.Annotations
-
-	if hasExistingAnnotation && existingAnnotation != "" {
-		if currentCluster.Annotations == nil {
-			currentCluster.Annotations = make(map[string]string)
-		}
-		currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = existingAnnotation
-	}
 }
 
 func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, error) {
@@ -1556,23 +1518,6 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 		// that it autoscales based on the value of target_capacity from MinReplicas.
 		for i := range clusterSpec.WorkerGroupSpecs {
 			clusterSpec.WorkerGroupSpecs[i].Replicas = nil
-		}
-	}
-
-	// KubeRay defaults to using the generated RayCluster UID for the GCS FT namespace.
-	// However, if a user hardcodes the namespace in the RayService spec, we must append
-	// the unique cluster name to prevent the new cluster from sharing the old cluster's state.
-	if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
-		clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace = fmt.Sprintf("%s-%s", clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace, rayClusterName)
-	}
-	if val, ok := rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-		rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = fmt.Sprintf("%s-%s", val, rayClusterName)
-	}
-	for i, container := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
-		for j, env := range container.Env {
-			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
-				clusterSpec.HeadGroupSpec.Template.Spec.Containers[i].Env[j].Value = fmt.Sprintf("%s-%s", env.Value, rayClusterName)
-			}
 		}
 	}
 

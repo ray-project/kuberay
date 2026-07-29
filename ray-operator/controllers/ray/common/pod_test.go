@@ -719,6 +719,95 @@ func TestConfigureGCSFaultToleranceEmbedded(t *testing.T) {
 	}
 }
 
+func TestConfigureRedisFTForRayService(t *testing.T) {
+	tests := []struct {
+		name                 string
+		labels               map[string]string
+		existingEnvVars      []corev1.EnvVar
+		expectedStorageNS    string
+		expectedValueFromSet bool
+	}{
+		{
+			name:              "No labels, no existing env vars, uses default UID",
+			labels:            nil,
+			existingEnvVars:   []corev1.EnvVar{},
+			expectedStorageNS: "test-uid",
+		},
+		{
+			name: "RayService label present, UID is not suffixed",
+			labels: map[string]string{
+				utils.RayOriginatedFromCRDLabelKey: string(utils.RayServiceCRD),
+			},
+			existingEnvVars:   []corev1.EnvVar{},
+			expectedStorageNS: "test-uid",
+		},
+		{
+			name: "RayService label present, existing hardcoded EnvVar is suffixed",
+			labels: map[string]string{
+				utils.RayOriginatedFromCRDLabelKey: string(utils.RayServiceCRD),
+			},
+			existingEnvVars: []corev1.EnvVar{
+				{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "my-static-ns"},
+			},
+			expectedStorageNS: "my-static-ns-test-cluster",
+		},
+		{
+			name: "RayService label present, existing ValueFrom is NOT suffixed",
+			labels: map[string]string{
+				utils.RayOriginatedFromCRDLabelKey: string(utils.RayServiceCRD),
+			},
+			existingEnvVars: []corev1.EnvVar{
+				{
+					Name: utils.RAY_EXTERNAL_STORAGE_NS,
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "my-secret"},
+							Key:                  "namespace",
+						},
+					},
+				},
+			},
+			expectedStorageNS:    "", // Value is empty when ValueFrom is used
+			expectedValueFromSet: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", UID: "test-uid", Labels: test.labels},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{Annotations: make(map[string]string)},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Env: test.existingEnvVars},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			// Pass empty options to fallback to UID, but configureRedisFT still runs
+			configureRedisFT(podTemplate, &cluster, nil, &podTemplate.Spec.Containers[0])
+			container := podTemplate.Spec.Containers[0]
+
+			env := getEnvVar(container, utils.RAY_EXTERNAL_STORAGE_NS)
+			assert.Equal(t, test.expectedStorageNS, env.Value)
+			if test.expectedValueFromSet {
+				assert.NotNil(t, env.ValueFrom)
+				assert.Equal(t, "my-secret", env.ValueFrom.SecretKeyRef.Name)
+			} else {
+				assert.Nil(t, env.ValueFrom)
+			}
+		})
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()

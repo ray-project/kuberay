@@ -123,10 +123,32 @@ func configureRedisFT(podTemplate *corev1.PodTemplateSpec, instance *rayv1.RayCl
 	if options != nil && options.ExternalStorageNamespace != "" {
 		storageNS = options.ExternalStorageNamespace
 	}
+
+	// For clusters owned by a RayService, we dynamically suffix the namespace with the cluster name
+	// if the user explicitly provided a static namespace. We do not suffix the default UID namespace,
+	// as UIDs are inherently unique per cluster and doing so would break GCS state on head pod restarts.
+	if instance.Labels[utils.RayOriginatedFromCRDLabelKey] == string(utils.RayServiceCRD) {
+		isStaticNamespace := storageNS != string(instance.UID)
+		if isStaticNamespace && !strings.HasSuffix(storageNS, instance.Name) {
+			storageNS = fmt.Sprintf("%s-%s", storageNS, instance.Name)
+		}
+	}
+
 	podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
 	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		storageNSEnv := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
 		container.Env = append(container.Env, storageNSEnv)
+	} else {
+		// If the user hardcoded RAY_EXTERNAL_STORAGE_NS in the PodTemplate, we must enforce the suffix
+		// to prevent ghost state crashes. We skip ValueFrom because runtime Secrets cannot be suffixed.
+		for i, env := range container.Env {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
+				isStaticNamespace := env.Value != string(instance.UID)
+				if instance.Labels[utils.RayOriginatedFromCRDLabelKey] == string(utils.RayServiceCRD) && isStaticNamespace && !strings.HasSuffix(env.Value, instance.Name) {
+					container.Env[i].Value = fmt.Sprintf("%s-%s", env.Value, instance.Name)
+				}
+			}
+		}
 	}
 
 	if options != nil {
