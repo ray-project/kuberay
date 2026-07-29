@@ -41,7 +41,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	// Trigger an incremental upgrade so both active and pending RayClusters
 	// exist when Spec.Suspend kicks in.
 	LogWithTimestamp(test.T(), "Triggering incremental upgrade so both active and pending clusters exist before suspend")
-	g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed())
+	g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2,
+		withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed())
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 

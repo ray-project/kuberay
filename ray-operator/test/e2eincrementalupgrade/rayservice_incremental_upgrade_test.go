@@ -83,7 +83,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by modifying RayCluster spec and updating serve deployment by changing RayService serve config")
-			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+			g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2,
+				withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -320,7 +321,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec")
-			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+			g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2,
+				withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -363,7 +365,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger an incremental upgrade through a change to the RayCluster spec.
 	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
-	err := applyIncrementalUpgradeWorkerCPU(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, "500m")
+	err := triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("500m"))
 	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
@@ -385,7 +387,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger a rollback by updating the spec back to the original version.
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
-	err = applyIncrementalUpgradeWorkerCPU(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, "2")
+	err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("2"))
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Verify that the controller enters the rollback state.
@@ -529,7 +531,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Phase 4: Trigger incremental upgrade (A -> B)
 			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
-			err = applyIncrementalUpgradeWorkerCPU(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, "500m")
+			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("500m"))
 			g.Expect(err).NotTo(HaveOccurred())
 
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
@@ -578,7 +580,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			if rs.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
 				activeBeforeRollback = *rs.Status.ActiveServiceStatus.TrafficRoutedPercent
 			}
-			err = applyIncrementalUpgradeWorkerCPU(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, "2")
+			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("2"))
 			g.Expect(err).NotTo(HaveOccurred())
 
 			if tc.TriggerStage != TriggerBeforeTraffic {
@@ -610,7 +612,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", namespace.Name, rayServiceName)
 					cpuRequest = "600m" // Spec C
 				}
-				err = applyIncrementalUpgradeWorkerCPU(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, cpuRequest)
+				err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(cpuRequest))
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 
