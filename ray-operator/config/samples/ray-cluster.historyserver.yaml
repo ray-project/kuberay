@@ -27,6 +27,8 @@ spec:
         value: "GCS"
       - name: GCS_BUCKET
         value: "my-gcs-bucket"
+      - name: RAY_ROOT_DIR
+        value: "log"
   headGroupSpec:
     rayStartParams: {}
     template:
