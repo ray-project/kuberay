@@ -89,24 +89,29 @@ func IsSessionDirActive(sessionDir string) bool {
 	return false
 }
 
+// GetSessionDirOnce resolves the session_latest symlink once without retrying.
+func GetSessionDirOnce() (string, error) {
+	symlinkPath := GetRaySessionLatestPath()
+	resolvedPath, resolveErr := filepath.EvalSymlinks(symlinkPath)
+	if resolveErr != nil {
+		var rp string
+		rp, resolveErr = os.Readlink(symlinkPath)
+		if resolveErr != nil {
+			return "", resolveErr
+		}
+		if !filepath.IsAbs(rp) {
+			rp = filepath.Join(filepath.Dir(symlinkPath), rp)
+		}
+		resolvedPath = filepath.Clean(rp)
+	}
+	return resolvedPath, nil
+}
+
+// GetSessionDir resolves the active session directory, retrying at startup until active.
 func GetSessionDir() (string, error) {
 	var lastErr error
 	for i := 0; i < 12; i++ {
-		symlinkPath := GetRaySessionLatestPath()
-		resolvedPath, resolveErr := filepath.EvalSymlinks(symlinkPath)
-		if resolveErr != nil {
-			// Fallback: readlink directly
-			var rp string
-			rp, resolveErr = os.Readlink(symlinkPath)
-			if resolveErr == nil {
-				// If readlink returned a relative target (e.g. session_2026-...), convert to absolute
-				if !filepath.IsAbs(rp) {
-					rp = filepath.Join(filepath.Dir(symlinkPath), rp)
-				}
-				resolvedPath = filepath.Clean(rp)
-			}
-		}
-
+		resolvedPath, resolveErr := GetSessionDirOnce()
 		if resolveErr == nil {
 			if IsSessionDirActive(resolvedPath) {
 				return resolvedPath, nil
@@ -114,7 +119,7 @@ func GetSessionDir() (string, error) {
 			logrus.Infof("Session directory resolved to %s, but it is not active (raylet socket not ready). Retrying...", resolvedPath)
 		} else {
 			if !os.IsNotExist(resolveErr) {
-				return "", fmt.Errorf("failed to resolve session_latest symlink %s: %w", symlinkPath, resolveErr)
+				return "", fmt.Errorf("failed to resolve session_latest symlink: %w", resolveErr)
 			}
 			lastErr = resolveErr
 			logrus.Warnf("Failed to read/resolve session_latest symlink: %v. Retrying...", resolveErr)

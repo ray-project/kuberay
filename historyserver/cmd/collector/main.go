@@ -90,7 +90,7 @@ func main() {
 	} else if strings.EqualFold(role, "worker") {
 		role = "Worker"
 	} else {
-		panic("Invalid role: " + role + ", must be Head or Worker")
+		logrus.Fatalf("Invalid role: %s, must be Head or Worker", role)
 	}
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
@@ -111,22 +111,22 @@ func main() {
 	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
 		parsed, parseErr := time.ParseDuration(intervalStr)
 		if parseErr != nil {
-			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+			logrus.Warnf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL (%q): %v. Falling back to default %v", intervalStr, parseErr, endpointPollInterval)
+		} else if parsed <= 0 {
+			logrus.Warnf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s. Falling back to default %v", intervalStr, endpointPollInterval)
+		} else {
+			endpointPollInterval = parsed
 		}
-		if parsed <= 0 {
-			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
-		}
-		endpointPollInterval = parsed
 	}
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			panic(fmt.Sprintf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 
@@ -140,22 +140,22 @@ func main() {
 	registry := collector.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		logrus.Fatalf("Not supported runtime class name: %s for role: %s.", runtimeClassName, role)
 	}
 
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
 	if err != nil {
-		panic("Failed to get ray node id via HTTP endpoint: " + err.Error())
+		logrus.Fatalf("Failed to get ray node id via HTTP endpoint: %v", err)
 	}
 
 	rayNodeId, err = utils.ConvertBase64ToHex(rayNodeId)
 	if err != nil {
-		panic("Failed to normalize ray node id to hex: " + err.Error())
+		logrus.Fatalf("Failed to normalize ray node id to hex: %v", err)
 	}
 
 	activeSessionDir, err := utils.GetSessionDir()
 	if err != nil {
-		panic("Failed to get active session dir after discovering node id: " + err.Error())
+		logrus.Fatalf("Failed to get active session dir after discovering node id: %v", err)
 	}
 
 	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
@@ -184,7 +184,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
+		logrus.Fatalf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err)
 	}
 
 	var wg sync.WaitGroup
@@ -193,11 +193,13 @@ func main() {
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+	logCollector := runtime.NewCollector(&globalConfig, writer)
+
 	wg.Add(1)
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")
 	}()
@@ -205,9 +207,45 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		logCollector := runtime.NewCollector(&globalConfig, writer)
 		logCollector.Run(stop)
 		logrus.Info("Log collector shutdown")
+	}()
+
+	// Centralized periodic session & Node ID lifecycle poller
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		currentSessionDir := activeSessionDir
+
+		for {
+			select {
+			case <-ticker.C:
+				// STEP 1: Check if session directory changed (Ray restart)
+				if newSessionDir, err := utils.GetSessionDirOnce(); err == nil && newSessionDir != "" {
+					if currentSessionDir == "" {
+						currentSessionDir = newSessionDir
+					} else if newSessionDir != currentSessionDir {
+						if err := logCollector.HandleSessionChange(newSessionDir); err == nil {
+							currentSessionDir = newSessionDir
+						} else {
+							logrus.Warnf("CentralizedPoller: failed to relocate session logs to %s: %v. Retrying on next tick.", newSessionDir, err)
+						}
+					}
+				}
+
+				// STEP 2: Update Node ID for collectors AFTER session log relocation
+				if newNodeID, err := utils.FetchCurrentNodeID(); err == nil && newNodeID != "" {
+					if hexID, err := utils.ConvertBase64ToHex(newNodeID); err == nil && hexID != "" {
+						eventCollector.UpdateNodeID(hexID)
+						logCollector.UpdateNodeID(hexID)
+					}
+				}
+			case <-stop:
+				return
+			}
+		}
 	}()
 
 	<-sigChan

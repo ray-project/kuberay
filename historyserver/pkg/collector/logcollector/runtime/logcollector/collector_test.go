@@ -1,10 +1,7 @@
 package logcollector
 
 import (
-	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -242,7 +239,7 @@ func TestProcessLogs_SkipSymlinks(t *testing.T) {
 	mockWriter.mu.Unlock()
 }
 
-func TestPollActiveSessionChanges(t *testing.T) {
+func TestHandleSessionChange(t *testing.T) {
 	g := NewWithT(t)
 	baseDir := t.TempDir()
 
@@ -265,38 +262,22 @@ func TestPollActiveSessionChanges(t *testing.T) {
 	logsDirA := filepath.Join(sessionDirA, "logs")
 	createTestLogFile(t, filepath.Join(logsDirA, "raylet.out"), "log content A")
 
-	symlinkPath := filepath.Join(baseDir, "session_latest")
-	if err := os.Symlink(sessionNameA, symlinkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
-
-	go handler.PollActiveSessionChanges()
-
-	time.Sleep(500 * time.Millisecond)
-
 	sessionNameB := "session_2026-07-08_16-00-00_123456_1"
 	sessionDirB := filepath.Join(baseDir, sessionNameB)
 	logsDirB := filepath.Join(sessionDirB, "logs")
 	createTestLogFile(t, filepath.Join(logsDirB, "raylet.out"), "log content B")
 
-	os.Remove(symlinkPath)
-	if err := os.Symlink(sessionNameB, symlinkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
+	handler.HandleSessionChange(sessionDirB)
 
 	expectedPrevLogsDir := filepath.Join(handler.prevLogsDir, sessionNameA, handler.RayNodeName, "logs")
-	g.Eventually(func() bool {
-		_, err := os.Stat(filepath.Join(expectedPrevLogsDir, "raylet.out"))
-		return err == nil
-	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Logs from session_A should be moved to prev-logs")
+	_, err := os.Stat(filepath.Join(expectedPrevLogsDir, "raylet.out"))
+	g.Expect(err).To(BeNil(), "Logs from session_A should be moved to prev-logs")
 
-	_, err := os.Stat(filepath.Join(logsDirA, "raylet.out"))
+	_, err = os.Stat(filepath.Join(logsDirA, "raylet.out"))
 	g.Expect(os.IsNotExist(err)).To(BeTrue(), "Original logs in session_A/logs should be deleted (moved)")
-
-	close(handler.ShutdownChan)
 }
 
-func TestPollActiveSessionChanges_MultipleIntermediateSessions(t *testing.T) {
+func TestHandleSessionChange_MultipleIntermediateSessions(t *testing.T) {
 	g := NewWithT(t)
 	baseDir := t.TempDir()
 
@@ -318,15 +299,6 @@ func TestPollActiveSessionChanges_MultipleIntermediateSessions(t *testing.T) {
 	sessionDirA := filepath.Join(baseDir, sessionNameA)
 	createTestLogFile(t, filepath.Join(sessionDirA, "logs", "raylet.out"), "log content A")
 
-	symlinkPath := filepath.Join(baseDir, "session_latest")
-	if err := os.Symlink(sessionNameA, symlinkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
-
-	go handler.PollActiveSessionChanges()
-	time.Sleep(200 * time.Millisecond)
-
-	// Simulate rapid restart: session B created (intermediate), then session C created before next ticker poll
 	sessionNameB := "session_2026-07-08_15-30-00_123456_1"
 	sessionDirB := filepath.Join(baseDir, sessionNameB)
 	createTestLogFile(t, filepath.Join(sessionDirB, "logs", "raylet.out"), "log content B")
@@ -335,93 +307,25 @@ func TestPollActiveSessionChanges_MultipleIntermediateSessions(t *testing.T) {
 	sessionDirC := filepath.Join(baseDir, sessionNameC)
 	createTestLogFile(t, filepath.Join(sessionDirC, "logs", "raylet.out"), "log content C")
 
-	os.Remove(symlinkPath)
-	if err := os.Symlink(sessionNameC, symlinkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
+	handler.HandleSessionChange(sessionDirC)
 
 	expectedPrevLogsA := filepath.Join(handler.prevLogsDir, sessionNameA, handler.RayNodeName, "logs")
 	expectedPrevLogsB := filepath.Join(handler.prevLogsDir, sessionNameB, handler.RayNodeName, "logs")
 
-	g.Eventually(func() bool {
-		_, errA := os.Stat(filepath.Join(expectedPrevLogsA, "raylet.out"))
-		_, errB := os.Stat(filepath.Join(expectedPrevLogsB, "raylet.out"))
-		return errA == nil && errB == nil
-	}, 6*time.Second, 100*time.Millisecond).Should(BeTrue(), "Logs from both session_A and intermediate session_B should be moved to prev-logs")
-
-	close(handler.ShutdownChan)
+	_, errA := os.Stat(filepath.Join(expectedPrevLogsA, "raylet.out"))
+	_, errB := os.Stat(filepath.Join(expectedPrevLogsB, "raylet.out"))
+	g.Expect(errA == nil && errB == nil).To(BeTrue(), "Logs from both session_A and intermediate session_B should be moved to prev-logs")
 }
 
-func TestNodeIDRefresh(t *testing.T) {
+func TestUpdateNodeID(t *testing.T) {
 	g := NewWithT(t)
-	baseDir := t.TempDir()
-
-	origPodIP := os.Getenv("POD_IP")
-	origFQRayIP := os.Getenv("FQ_RAY_IP")
-	origTmpRoot := os.Getenv("RAY_TMP_ROOT")
-	defer func() {
-		os.Setenv("POD_IP", origPodIP)
-		os.Setenv("FQ_RAY_IP", origFQRayIP)
-		os.Setenv("RAY_TMP_ROOT", origTmpRoot)
-	}()
-
-	os.Setenv("POD_IP", "127.0.0.1")
-	os.Setenv("RAY_TMP_ROOT", baseDir)
-
-	var mu sync.Mutex
-	mockNodeID := "11111111111111111111111111111111"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v0/nodes" {
-			mu.Lock()
-			nodeID := mockNodeID
-			mu.Unlock()
-			resp := fmt.Sprintf(`{
-				"data": {
-					"result": {
-						"result": [
-							{
-								"node_id": "%s",
-								"node_ip": "127.0.0.1",
-								"state": "ALIVE"
-							}
-						]
-					}
-				}
-			}`, nodeID)
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(resp))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer ts.Close()
-
-	os.Setenv("FQ_RAY_IP", ts.URL)
 
 	handler := &RayLogHandler{
-		SessionDir:             baseDir,
-		prevLogsDir:            filepath.Join(baseDir, "prev-logs"),
-		persistCompleteLogsDir: filepath.Join(baseDir, "persist-complete-logs"),
-		ShutdownChan:           make(chan struct{}),
-		RayNodeName:            "11111111111111111111111111111111",
+		RayNodeName: "11111111111111111111111111111111",
 	}
-
-	symlinkPath := filepath.Join(baseDir, "session_latest")
-	if err := os.Symlink(baseDir, symlinkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
-	defer os.Remove(symlinkPath)
-
-	go handler.PollActiveSessionChanges()
-	defer close(handler.ShutdownChan)
 
 	g.Expect(handler.GetRayNodeName()).To(Equal("11111111111111111111111111111111"))
 
-	mu.Lock()
-	mockNodeID = "22222222222222222222222222222222"
-	mu.Unlock()
-
-	g.Eventually(func() string {
-		return handler.GetRayNodeName()
-	}, 10*time.Second, 100*time.Millisecond).Should(Equal("22222222222222222222222222222222"), "GetRayNodeName should update dynamically when node ID changes")
+	handler.UpdateNodeID("22222222222222222222222222222222")
+	g.Expect(handler.GetRayNodeName()).To(Equal("22222222222222222222222222222222"), "GetRayNodeName should update when UpdateNodeID is called")
 }

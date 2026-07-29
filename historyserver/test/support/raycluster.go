@@ -68,9 +68,6 @@ func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, 
 				containers[i].Command,
 				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
 			)
-			if containers[i].Env == nil {
-				containers[i].Env = []corev1.EnvVar{}
-			}
 			setOrAppendEnv(&containers[i], "POD_IP", "", &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "status.podIP",

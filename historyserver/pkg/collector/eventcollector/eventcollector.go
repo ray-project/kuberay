@@ -200,19 +200,10 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 
 func (ec *EventCollector) periodicFlush() {
 	flushTicker := time.NewTicker(ec.flushInterval)
-	// Periodic node ID update with shorter interval to handle frequent node restarts
-	nodeIDTicker := time.NewTicker(5 * time.Second)
 	defer flushTicker.Stop()
-	defer nodeIDTicker.Stop()
 
 	for {
 		select {
-		case <-nodeIDTicker.C:
-			if freshNodeID, err := utils.FetchCurrentNodeID(); err == nil && freshNodeID != "" {
-				if hexID, err := utils.ConvertBase64ToHex(freshNodeID); err == nil && hexID != "" {
-					ec.UpdateNodeID(hexID)
-				}
-			}
 		case <-flushTicker.C:
 			logrus.Info("Periodic flush triggered")
 			ec.flushEvents()
