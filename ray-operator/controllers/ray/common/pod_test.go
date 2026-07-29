@@ -801,8 +801,10 @@ func TestConfigureRedisFTForRayService(t *testing.T) {
 			if test.expectedValueFromSet {
 				assert.NotNil(t, env.ValueFrom)
 				assert.Equal(t, "my-secret", env.ValueFrom.SecretKeyRef.Name)
+				assert.Empty(t, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
 			} else {
 				assert.Nil(t, env.ValueFrom)
+				assert.Equal(t, test.expectedStorageNS, podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey])
 			}
 		})
 	}
