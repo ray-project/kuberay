@@ -1000,6 +1000,44 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "RayService with hardcoded GCS FT ExternalStorageNamespace",
+			rayService: rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						utils.RayExternalStorageNSAnnotationKey: "my-static-namespace",
+					},
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+							ExternalStorageNamespace: "my-static-namespace",
+						},
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Env: []corev1.EnvVar{
+												{
+													Name:  utils.RAY_EXTERNAL_STORAGE_NS,
+													Value: "my-static-namespace",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "worker-group-1",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1032,7 +1070,19 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 
 			// Check whether the RayService's annotations are copied to the RayCluster
 			for key, value := range rayService.Annotations {
-				assert.Equal(t, rayCluster.Annotations[key], value)
+				if key == utils.RayExternalStorageNSAnnotationKey && value != "" {
+					assert.Equal(t, fmt.Sprintf("%s-%s", value, clusterName), rayCluster.Annotations[key])
+				} else {
+					assert.Equal(t, rayCluster.Annotations[key], value)
+				}
+			}
+
+			// Check if dynamic appending happened
+			if tt.name == "RayService with hardcoded GCS FT ExternalStorageNamespace" {
+				expectedNamespace := "my-static-namespace-" + clusterName
+				assert.Equal(t, expectedNamespace, rayCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace)
+				assert.Equal(t, expectedNamespace, rayCluster.Annotations[utils.RayExternalStorageNSAnnotationKey])
+				assert.Equal(t, expectedNamespace, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].Value)
 			}
 
 			// Check owner reference

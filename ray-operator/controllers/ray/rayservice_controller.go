@@ -1521,6 +1521,23 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 		}
 	}
 
+	// KubeRay defaults to using the generated RayCluster UID for the GCS FT namespace.
+	// However, if a user hardcodes the namespace in the RayService spec, we must append
+	// the unique cluster name to prevent the new cluster from sharing the old cluster's state.
+	if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
+		clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace = fmt.Sprintf("%s-%s", clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace, rayClusterName)
+	}
+	if val, ok := rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+		rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = fmt.Sprintf("%s-%s", val, rayClusterName)
+	}
+	for i, container := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
+		for j, env := range container.Env {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+				clusterSpec.HeadGroupSpec.Template.Spec.Containers[i].Env[j].Value = fmt.Sprintf("%s-%s", env.Value, rayClusterName)
+			}
+		}
+	}
+
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      rayClusterLabel,
