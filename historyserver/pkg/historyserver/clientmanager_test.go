@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -128,7 +129,7 @@ func TestGetSvcInfo(t *testing.T) {
 							{
 								Name: "ray-head",
 								Ports: []corev1.ContainerPort{
-									{Name: DashboardPortName, ContainerPort: portalPort},
+									{Name: utils.DashboardPortName, ContainerPort: portalPort},
 								},
 							},
 						},

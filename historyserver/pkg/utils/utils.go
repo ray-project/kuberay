@@ -369,7 +369,7 @@ func CheckName(s string) string {
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
+		logrus.Debugf("Name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
 		s = s[offset:]
 	}
 
@@ -380,7 +380,7 @@ func CheckName(s string) string {
 
 	// cannot start with a punctuation
 	if unicode.IsPunct(rune(s[0])) {
-		fmt.Println(s)
+		logrus.Debugf("Name starts with a punctuation: %s, we will prefix it with 'r'", s)
 		s = "r" + s[1:]
 	}
 
