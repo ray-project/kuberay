@@ -145,6 +145,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -261,6 +264,30 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	if spec.HistoryServerOptions != nil {
+		if !features.Enabled(features.RayClusterHistoryServer) {
+			return fmt.Errorf("RayClusterHistoryServer feature gate is not enabled")
+		}
+		if spec.HistoryServerOptions.CollectorOptions == nil {
+			return fmt.Errorf("historyServerOptions.collectorOptions must be set")
+		}
+		if err := validateCollectorOptions(spec.HistoryServerOptions.CollectorOptions); err != nil {
+			return err
+		}
+		for _, headPodContainer := range spec.HeadGroupSpec.Template.Spec.Containers {
+			if headPodContainer.Name == CollectorContainerName {
+				return fmt.Errorf("head pod template must not define a container with name '%s' when history server collector options are enabled", CollectorContainerName)
+			}
+		}
+		for _, workerGroup := range spec.WorkerGroupSpecs {
+			for _, workerPodContainer := range workerGroup.Template.Spec.Containers {
+				if workerPodContainer.Name == CollectorContainerName {
+					return fmt.Errorf("worker group %s pod template must not define a container with name '%s' when history server collector options are enabled", workerGroup.GroupName, CollectorContainerName)
+				}
+			}
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
@@ -296,7 +323,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if spec.NetworkPolicy != nil && !features.Enabled(features.RayClusterNetworkPolicy) {
 		return fmt.Errorf("spec.networkPolicy requires the RayClusterNetworkPolicy feature gate to be enabled")
 	}
-	return validateNetworkPolicy(spec)
+	if err := validateNetworkPolicy(spec); err != nil {
+		return err
+	}
+
+	if spec.TLSOptions != nil && !features.Enabled(features.RayClusterMTLS) {
+		return fmt.Errorf("spec.tlsOptions requires the RayClusterMTLS feature gate to be enabled")
+	}
+	return validateTLSOptions(spec)
 }
 
 // validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
@@ -382,6 +416,86 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
+	return nil
+}
+
+// validateTLSOptions checks that the TLS config is internally consistent.
+// It prevents users from setting TLS environment variables or volume mounts manually when TLS is enabled.
+func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if !IsTLSEnabled(spec) {
+		return nil
+	}
+
+	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+		if err := validateNoConflictingTLSVolumeMount(headContainer, "head Pod"); err != nil {
+			return err
+		}
+	}
+
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if len(worker.Template.Spec.Containers) > 0 {
+			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
+			}
+			if err := validateNoConflictingTLSVolumeMount(workerContainer, fmt.Sprintf("worker group %q", worker.GroupName)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Prevent conflict in autoscalerOptions: user-supplied env vars are appended after
+	// operator-managed TLS vars, so duplicates would silently override them at runtime.
+	// Volume mounts at the managed TLS path have the same risk.
+	if spec.AutoscalerOptions != nil {
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, spec.AutoscalerOptions.Env) {
+				return fmt.Errorf("cannot set %s environment variable in autoscalerOptions.env when tlsOptions is set "+
+					"- the operator manages TLS configuration for the autoscaler automatically", envName)
+			}
+		}
+		for _, m := range spec.AutoscalerOptions.VolumeMounts {
+			if m.Name == RayTLSVolumeName {
+				return fmt.Errorf("cannot use volume mount named %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSVolumeName)
+			}
+			if m.MountPath == RayTLSCertMountPath {
+				return fmt.Errorf("cannot use volume mount at path %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSCertMountPath)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateNoConflictingTLSVolumeMount returns an error if the container already has a volume
+// mount that conflicts with the operator-managed TLS mount (same name or same mount path).
+func validateNoConflictingTLSVolumeMount(container corev1.Container, location string) error {
+	for _, m := range container.VolumeMounts {
+		if m.Name == RayTLSVolumeName {
+			return fmt.Errorf("cannot use volume mount named %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSVolumeName, location)
+		}
+		if m.MountPath == RayTLSCertMountPath {
+			return fmt.Errorf("cannot use volume mount at path %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSCertMountPath, location)
+		}
+	}
 	return nil
 }
 
@@ -886,4 +1000,119 @@ func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *ray
 	}
 
 	return fmt.Errorf("worker group %s: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
+}
+
+func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
+	if collectorOpts == nil {
+		return nil
+	}
+	if collectorOpts.Image == nil || *collectorOpts.Image == "" {
+		return fmt.Errorf("historyServerOptions.collectorOptions.image must be set")
+	}
+
+	envMap := make(map[string]corev1.EnvVar)
+	for _, env := range collectorOpts.Env {
+		envMap[env.Name] = env
+	}
+
+	hasValue := func(name string) bool {
+		env, exists := envMap[name]
+		return exists && (env.Value != "" || env.ValueFrom != nil)
+	}
+
+	forbiddenEnvVars := []string{
+		POD_IP,
+		FQ_RAY_IP,
+		RAY_CLUSTER_NAME,
+		RAY_CLUSTER_NAMESPACE,
+		RAY_ROLE,
+		OWNER_KIND,
+		OWNER_NAME,
+		EVENTS_PORT,
+	}
+
+	for _, name := range forbiddenEnvVars {
+		if _, exists := envMap[name]; exists {
+			return fmt.Errorf("historyServerOptions.collectorOptions.env must not contain %s: it is managed by KubeRay and injected automatically into the collector container", name)
+		}
+	}
+
+	backendEnv, ok := envMap[STORAGE_BACKEND]
+	if !ok || backendEnv.Value == "" {
+		return fmt.Errorf("%s environment variable must be set with a literal string value in historyServerOptions.collectorOptions.env", STORAGE_BACKEND)
+	}
+
+	switch strings.ToUpper(backendEnv.Value) {
+	case "GCS":
+		if !hasValue(GCS_BUCKET) {
+			return fmt.Errorf("%s environment variable must be set when %s is GCS", GCS_BUCKET, STORAGE_BACKEND)
+		}
+	case "S3":
+		if !hasValue(S3_REGION) {
+			return fmt.Errorf("%s environment variable must be set when %s is S3", S3_REGION, STORAGE_BACKEND)
+		}
+	case "AZUREBLOB":
+		authMode := ""
+		if env, exists := envMap[AZURE_STORAGE_AUTH_MODE]; exists && env.Value != "" {
+			authMode = strings.ToLower(strings.TrimSpace(env.Value))
+		}
+		switch authMode {
+		case "connection_string":
+			if !hasValue(AZURE_STORAGE_CONNECTION_STRING) {
+				return fmt.Errorf("%s environment variable must be set when %s is AZUREBLOB and %s is connection_string", AZURE_STORAGE_CONNECTION_STRING, STORAGE_BACKEND, AZURE_STORAGE_AUTH_MODE)
+			}
+		case "workload_identity", "default":
+			if !hasValue(AZURE_STORAGE_ACCOUNT_URL) {
+				return fmt.Errorf("%s environment variable must be set when %s is AZUREBLOB and %s is %s", AZURE_STORAGE_ACCOUNT_URL, STORAGE_BACKEND, AZURE_STORAGE_AUTH_MODE, authMode)
+			}
+		default:
+			if !hasValue(AZURE_STORAGE_CONNECTION_STRING) && !hasValue(AZURE_STORAGE_ACCOUNT_URL) {
+				return fmt.Errorf("either %s or %s environment variable must be set when %s is AZUREBLOB", AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_ACCOUNT_URL, STORAGE_BACKEND)
+			}
+		}
+	case "ALIYUNOSS":
+		if !hasValue(ALIYUN_BUCKET) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_BUCKET, STORAGE_BACKEND)
+		}
+		if !hasValue(ALIYUN_ENDPOINT) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_ENDPOINT, STORAGE_BACKEND)
+		}
+		if !hasValue(ALIYUN_REGION) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_REGION, STORAGE_BACKEND)
+		}
+	}
+
+	return nil
+}
+
+// validateWorkerGroupPriority validates that the priority field is only allowed when Autoscaler V2 is enabled
+func validateWorkerGroupPriority(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	priority := workerGroup.Priority
+	if priority == nil || *priority == 0 {
+		return nil
+	}
+
+	// The priority field was added in Ray 2.56.0.
+	if spec.RayVersion == "" {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion was not specified. Ray version 2.56.0 or later is required", workerGroup.GroupName)
+	}
+	rayVersion, err := version.ParseGeneric(spec.RayVersion)
+	if err != nil {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion format is invalid: %s, %w", workerGroup.GroupName, spec.RayVersion, err)
+	}
+	minVersion := version.MustParseGeneric("2.56.0")
+	if rayVersion.LessThan(minVersion) {
+		return fmt.Errorf("worker group %s: priority is set, but minimum Ray version is 2.56.0, got %s", workerGroup.GroupName, spec.RayVersion)
+	}
+
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("worker group %s: priority is set to %d, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled", workerGroup.GroupName, *priority)
 }

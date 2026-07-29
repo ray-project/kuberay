@@ -116,6 +116,25 @@ _Appears in:_
 | `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
 
 
+#### CollectorOptions
+
+
+
+CollectorOptions defines settings for the history server collector sidecar.
+
+
+
+_Appears in:_
+- [HistoryServerOptions](#historyserveroptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `image` _string_ | Image is the collector container image to be used (e.g. quay.io/kuberay/collector:latest). |  |  |
+| `imagePullPolicy` _[PullPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#pullpolicy-v1-core)_ | ImagePullPolicy is the pull policy for the collector image. |  |  |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ | Resources specifies computing resource requirements. |  |  |
+| `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ | Env allows injecting custom environment variables into the collector container. |  |  |
+
+
 #### DeletionCondition
 
 
@@ -332,6 +351,22 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
 
 
+#### HistoryServerOptions
+
+
+
+HistoryServerOptions used for history server related configuration
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `collectorOptions` _[CollectorOptions](#collectoroptions)_ | CollectorOptions used for collector sidecar configuration |  |  |
+
+
 #### IngressOptions
 
 
@@ -491,7 +526,9 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
+| `historyServerOptions` _[HistoryServerOptions](#historyserveroptions)_ | HistoryServerOptions used for history server related configuration |  |  |
 | `networkPolicy` _[NetworkPolicyConfig](#networkpolicyconfig)_ | NetworkPolicy specifies optional configuration for network isolation.<br />When set, separate NetworkPolicies are created for head and worker pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic.<br />Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via Head/Worker EgressRules or the cluster will fail to start. |  |  |
+| `tlsOptions` _[TLSOptions](#tlsoptions)_ | TLSOptions specifies optional TLS encryption settings for the RayCluster.<br />If omitted or Enabled is false, TLS is disabled. When Enabled is true,<br />the operator enables mTLS using cert-manager to provision and manage certificates.<br />Requires the RayClusterMTLS feature gate on the operator. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
@@ -759,6 +796,26 @@ _Appears in:_
 | `backoffLimit` _integer_ | BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.<br />In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count. |  |  |
 
 
+#### TLSOptions
+
+
+
+TLSOptions configures TLS encryption for the RayCluster.
+When TLSOptions is nil or Enabled is nil/false, TLS is disabled.
+When Enabled is true, the operator uses cert-manager to automatically
+provision a full PKI (self-signed CA, head and worker leaf certificates)
+and keeps certificates up to date as pod IPs change during autoscaling.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls whether mTLS is active for this RayCluster.<br />Defaults to false when omitted. Set to true to enable mTLS. |  |  |
+
+
 #### UpscalingMode
 
 _Underlying type:_ _string_
@@ -792,6 +849,7 @@ _Appears in:_
 | `minReplicas` _integer_ | MinReplicas denotes the minimum number of desired Pods for this worker group. | 0 |  |
 | `maxReplicas` _integer_ | MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32. | 2147483647 |  |
 | `idleTimeoutSeconds` _integer_ | IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.<br />This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group. |  |  |
+| `priority` _integer_ | Priority influences which worker group the autoscaler prefers when multiple<br />groups can satisfy the same resource demand. Higher priority groups are<br />preferred for scale-up. Only honored by Ray Autoscaler v2 (Ray >= 2.56). | 0 |  |
 | `resources` _object (keys:string, values:string)_ | Resources specifies the resource quantities for this worker group.<br />These values override the resources passed to `rayStartParams` for the group, but<br />have no effect on the resources set at the K8s Pod container level. |  |  |
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for this worker group.<br />These labels will also be added to the Pods of this worker group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: address, object-store-memory, ... |  |  |
