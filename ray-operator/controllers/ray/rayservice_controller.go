@@ -1451,12 +1451,50 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	// existing cluster's Suspend here instead of letting the goal spec
 	// overwrite it.
 	existingSuspend := currentCluster.Spec.Suspend
+
+	// Capture the existing GCS FT external storage namespace and its corresponding Env/Annotation fields.
+	var existingNamespace string
+	if currentCluster.Spec.GcsFaultToleranceOptions != nil && currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
+		existingNamespace = currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace
+	}
+	var existingEnvVal string
+	if len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		for _, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+				existingEnvVal = env.Value
+				break
+			}
+		}
+	}
+	existingAnnotation, hasExistingAnnotation := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]
+
+	// Overwrite the current cluster's spec with the new goal spec.
 	currentCluster.Spec = goalCluster.Spec
 	currentCluster.Spec.Suspend = existingSuspend
+
+	// Re-apply the immutable external storage namespace values to the new goal spec.
+	if existingNamespace != "" && currentCluster.Spec.GcsFaultToleranceOptions != nil {
+		currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace = existingNamespace
+	}
+	if existingEnvVal != "" && len(currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		for k, env := range currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env {
+			if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+				currentCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[k].Value = existingEnvVal
+				break
+			}
+		}
+	}
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
 	currentCluster.Annotations = goalCluster.Annotations
+
+	if hasExistingAnnotation && existingAnnotation != "" {
+		if currentCluster.Annotations == nil {
+			currentCluster.Annotations = make(map[string]string)
+		}
+		currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = existingAnnotation
+	}
 }
 
 func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, error) {
