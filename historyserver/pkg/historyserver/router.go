@@ -998,7 +998,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 		for _, e := range rawEntries {
 			if strings.HasSuffix(e, "/") {
 				name := strings.TrimSuffix(e, "/")
-				if name != clusterlogs.LogsSubDir && name != clusterlogs.NodeEventsSubDir && name != clusterlogs.JobEventsSubDir && name != utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
+				if name != utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
 					nodeIDs = append(nodeIDs, name)
 				}
 			}
