@@ -13,33 +13,29 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestRayJobSubmitComplete(t *testing.T) {
 	tests := []struct {
-		flags    map[string]string
-		expected *SubmitJobOptions
-		name     string
-		args     []string
+		expected   *SubmitJobOptions
+		name       string
+		image      string
+		rayVersion string
 	}{
 		{
-			name: "Custom Ray version",
-			flags: map[string]string{
-				"ray-version": "custom",
-			},
+			name:       "Custom Ray version",
+			image:      defaultImageWithTag,
+			rayVersion: "custom",
 			expected: &SubmitJobOptions{
 				image:      "rayproject/ray:custom",
 				rayVersion: "custom",
 			},
 		},
 		{
-			name: "Custom Ray version with custom image",
-			flags: map[string]string{
-				"ray-version": "custom",
-				"image":       "custom-image",
-			},
+			name:       "Custom Ray version with non-default custom image",
+			image:      "custom-image",
+			rayVersion: "custom",
 			expected: &SubmitJobOptions{
 				image:      "custom-image",
 				rayVersion: "custom",
@@ -56,19 +52,8 @@ func TestRayJobSubmitComplete(t *testing.T) {
 			fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
 			fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
 			fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
-
-			cmd := &cobra.Command{}
-			configFlags.AddFlags(cmd.Flags())
-
-			cmd.Flags().StringVar(&fakeSubmitJobOptions.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-			cmd.Flags().StringVar(&fakeSubmitJobOptions.image, "image", fmt.Sprintf("rayproject/ray:%s", util.RayVersion), "container image to use")
-
-			for key, value := range tc.flags {
-				err := cmd.Flags().Set(key, value)
-				if err != nil {
-					require.NoError(t, err)
-				}
-			}
+			fakeSubmitJobOptions.image = tc.image
+			fakeSubmitJobOptions.rayVersion = tc.rayVersion
 
 			err := fakeSubmitJobOptions.Complete()
 
