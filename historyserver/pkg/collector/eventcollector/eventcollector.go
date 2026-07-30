@@ -34,7 +34,7 @@ const (
 	diskReconcileInterval = 1 * time.Minute
 	// Raylet restarts hand out a new node ID. Poll often enough that events are
 	// filed under the right one; matches the log collector's poll cadence.
-	nodeIDPollInterval = 5 * time.Second
+	nodeIDPollInterval    = 5 * time.Second
 	bufWriterSize         = 64 * 1024
 	diskPressureWatermark = 0.8
 	rotationQueueSize     = 256
@@ -84,7 +84,11 @@ type activeFileState struct {
 	sessionName string
 	nodeID      string
 	size        int64
-	createdAt   time.Time
+	// accountedSize is the byte count already added to ec.totalDiskUsed for this
+	// file. A file accumulates across many PersistEvents calls, so reconciling
+	// against the real on-disk size needs this baseline to avoid double-counting.
+	accountedSize int64
+	createdAt     time.Time
 }
 
 // rotationTask describes a rotated JSONL file ready for upload.
@@ -324,8 +328,12 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 				if writeErr == nil {
 					writeErr = fmt.Errorf("flush %s: %w", state.path, err)
 				}
+				// Flush is partial on error: bytes before the failure point reached disk.
+				// Reconcile so accounting matches what actually landed.
+				ec.reconcileDiskAccountingLocked(state)
 			} else {
 				ec.totalDiskUsed.Add(pendingDiskBytes[state])
+				state.accountedSize += pendingDiskBytes[state]
 			}
 		}
 		if writeErr != nil {
@@ -340,15 +348,17 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 
 		if ec.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
-			// Account for bytes already written to the current session's files
-			// before rotation flushes and hands them to the upload worker. The
-			// deferred accounting below only covers writers still in
-			// touchedWriters, and rotateAllFilesLocked closes these writers so
-			// the defer can no longer flush them. Without this, the bytes are
-			// never added to totalDiskUsed while processRotatedFile still
-			// subtracts them on cleanup, drifting the counter negative.
+			// Flush and account for touched writers before rotation closes them;
+			// otherwise the deferred flush becomes a no-op and processRotatedFile
+			// subtracts bytes that were never added, drifting totalDiskUsed negative.
 			for state := range touchedWriters {
-				ec.totalDiskUsed.Add(pendingDiskBytes[state])
+				if err := state.writer.Flush(); err != nil {
+					logrus.Errorf("Failed to flush %s before session rotation: %v", state.path, err)
+					ec.reconcileDiskAccountingLocked(state)
+				} else {
+					ec.totalDiskUsed.Add(pendingDiskBytes[state])
+					state.accountedSize += pendingDiskBytes[state]
+				}
 				delete(pendingDiskBytes, state)
 			}
 			ec.rotateAllFilesLocked()
@@ -403,6 +413,23 @@ func (ec *EventCollector) categorize(eventData map[string]interface{}) string {
 		return path.Join(categoryJobPrefix, jobID)
 	}
 	return categoryNodeEvents
+}
+
+// reconcileDiskAccountingLocked realigns a file's accountedSize with its real
+// on-disk size after a partial flush, so cleanup subtracts what was really
+// written instead of what we thought we wrote. Must be called with writeMu held.
+func (ec *EventCollector) reconcileDiskAccountingLocked(state *activeFileState) {
+	info, err := os.Stat(state.path)
+	if err != nil {
+		logrus.Warnf("Failed to stat %s for disk accounting: %v", state.path, err)
+		return
+	}
+	actual := info.Size()
+	ec.totalDiskUsed.Add(actual - state.accountedSize)
+	state.accountedSize = actual
+	// Keep size truthful too, so size-based rotation is not triggered early by
+	// bytes that were never written.
+	state.size = actual
 }
 
 // getOrCreateActiveFileLocked returns the active file for a category,
@@ -553,6 +580,10 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 	if err := state.writer.Flush(); err != nil {
 		logrus.Errorf("Failed to flush %s before rotation: %v", state.path, err)
 		flushFailed = true
+		// Realign accounting with what actually landed before handing the file
+		// off: the cleanup path subtracts the real size, so any gap here drifts
+		// totalDiskUsed negative.
+		ec.reconcileDiskAccountingLocked(state)
 	}
 	if err := state.file.Sync(); err != nil {
 		logrus.Warnf("Failed to sync %s before rotation: %v", state.path, err)
@@ -572,6 +603,9 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		if err := os.Remove(state.path); err != nil && !os.IsNotExist(err) {
 			logrus.Warnf("Failed to remove empty rotated file %s: %v", state.path, err)
 		}
+		// Nothing downstream will subtract for this file, so release whatever was
+		// counted for it here or totalDiskUsed drifts upward.
+		ec.totalDiskUsed.Add(-state.accountedSize)
 		return nil
 	}
 
@@ -806,7 +840,7 @@ func (ec *EventCollector) resumePendingFiles() {
 	}
 
 	// First pass: collect all event files.
-	gzFiles := make(map[string]pendingFile)   // keyed by base path without .gz
+	gzFiles := make(map[string]pendingFile)    // keyed by base path without .gz
 	jsonlFiles := make(map[string]pendingFile) // keyed by full path
 
 	_ = filepath.Walk(clusterRoot, func(p string, info os.FileInfo, err error) error {
@@ -1046,7 +1080,8 @@ func nodeIDFromFileName(name string) string {
 }
 
 // createdAtFromFileName parses the UnixNano timestamp embedded in filenames
-// like "{nodeId}_{unixNano}.jsonl[.gz]". Falls back to fallback if parsing fails.
+// like "{nodeId}_{unixNano}.jsonl[.gz]". Returns fallback if the filename
+// does not match this format or the timestamp cannot be parsed.
 func createdAtFromFileName(name string, fallback time.Time) time.Time {
 	base := strings.TrimSuffix(name, ".gz")
 	base = strings.TrimSuffix(base, ".jsonl")
