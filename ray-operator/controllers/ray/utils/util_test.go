@@ -2466,3 +2466,30 @@ func TestIsJobFinished(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGcsFaultToleranceBackend(t *testing.T) {
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(nil))
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{}))
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis}))
+	assert.Equal(t, rayv1.GcsFTBackendRocksDB, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB}))
+}
+
+func TestIsGCSFaultToleranceEmbedded(t *testing.T) {
+	assert.False(t, IsGCSFaultToleranceEmbedded(nil))
+	assert.False(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{}))
+	assert.False(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis}))
+	assert.True(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB}))
+}
+
+func TestGetGCSStoragePVCName(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster"},
+		Spec: rayv1.RayClusterSpec{
+			GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+		},
+	}
+	assert.Equal(t, "my-cluster-gcs-pvc", GetGCSStoragePVCName(instance))
+
+	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ClaimName: "byo-pvc"}
+	assert.Equal(t, "byo-pvc", GetGCSStoragePVCName(instance))
+}

@@ -34,35 +34,10 @@ spec:
                     ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
           image: rayproject/ray:2.52.0
           imagePullPolicy: IfNotPresent
-          command:
-          - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
           securityContext:
             allowPrivilegeEscalation: true
             privileged: true
           name: ray-head
-          lifecycle:
-            postStart:
-              exec:
-                command:
-                - /bin/sh
-                - -lc
-                - --
-                - |
-                  GetNodeId(){
-                    while true;
-                    do
-                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
-                      if [ -n "$nodeid" ]; then
-                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> "$RAY_TMP_ROOT/init.log"
-                        echo $nodeid > "$RAY_TMP_ROOT/raylet_node_id"
-                        break
-                      else
-                        echo "$(date) raylet not start >> $RAY_TMP_ROOT/init.log"
-                        sleep 1
-                      fi
-                    done
-                  }
-                  GetNodeId
           resources:
             limits:
               cpu: "5"
@@ -77,6 +52,12 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: FQ_RAY_IP
+            value: raycluster-historyserver-head-svc.default.svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
@@ -123,36 +104,11 @@ spec:
                     TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
                     ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
           image: rayproject/ray:2.52.0
-          command:
-          - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
           imagePullPolicy: IfNotPresent
           name: ray-worker
           securityContext:
             allowPrivilegeEscalation: true
             privileged: true
-          lifecycle:
-            postStart:
-              exec:
-                command:
-                - /bin/sh
-                - -lc
-                - --
-                - |
-                  GetNodeId(){
-                    while true;
-                    do
-                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
-                      if [ -n "$nodeid" ]; then
-                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> "$RAY_TMP_ROOT/init.log"
-                        echo $nodeid > "$RAY_TMP_ROOT/raylet_node_id"
-                        break
-                      else
-                        echo "$(date) raylet not start >> $RAY_TMP_ROOT/init.log"
-                        sleep 1
-                      fi
-                    done
-                  }
-                  GetNodeId
           resources:
             limits:
               cpu: "2"
@@ -167,6 +123,12 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: FQ_RAY_IP
+            value: raycluster-historyserver-head-svc.default.svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer

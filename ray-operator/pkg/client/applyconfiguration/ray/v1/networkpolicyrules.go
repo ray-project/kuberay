@@ -19,7 +19,7 @@ type NetworkPolicyRulesApplyConfiguration struct {
 	// DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST
 	// add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on
 	// port 53), because Ray workers reach the head via its service FQDN and cannot
-	// resolve it without DNS. See the network-isolation-deny-all sample.
+	// resolve it without DNS. See the network-policy-deny-all sample.
 	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
 }
 

@@ -140,11 +140,11 @@ func ApplyAzureRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Na
 	rayClusterFromYaml.Namespace = namespace.Name
 
 	// Inject namespace name as the ray-cluster-namespace for head group collector
-	injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+	injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 
 	// Inject namespace name as the ray-cluster-namespace for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
-		injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+		injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 	}
 
 	rayCluster, err := test.Client().Ray().RayV1().

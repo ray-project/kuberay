@@ -70,6 +70,16 @@ type Configuration struct {
 	// DefaultContainerEnvs specifies default environment variables to inject into all Ray containers
 	DefaultContainerEnvs []corev1.EnvVar `json:"defaultContainerEnvs,omitempty"`
 
+	// DefaultPodAnnotations specifies default annotations to add to all Ray pod templates.
+	// These annotations are merged with any annotations specified in the RayCluster/RayJob/RayService CR.
+	// User-specified annotations take precedence over default annotations.
+	DefaultPodAnnotations map[string]string `json:"defaultPodAnnotations,omitempty"`
+
+	// DefaultPodLabels specifies default labels to add to all Ray pod templates.
+	// These labels are merged with any labels specified in the RayCluster/RayJob/RayService CR.
+	// User-specified labels take precedence over default labels.
+	DefaultPodLabels map[string]string `json:"defaultPodLabels,omitempty"`
+
 	// ReconcileConcurrency is the max concurrency for each reconciler.
 	ReconcileConcurrency int `json:"reconcileConcurrency,omitempty"`
 
