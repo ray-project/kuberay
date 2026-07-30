@@ -34,6 +34,17 @@ func TestRayJobSubmitComplete(t *testing.T) {
 				rayVersion: "custom",
 			},
 		},
+		{
+			name: "Custom Ray version with custom image",
+			flags: map[string]string{
+				"ray-version": "custom",
+				"image":       "custom-image",
+			},
+			expected: &SubmitJobOptions{
+				image:      "custom-image",
+				rayVersion: "custom",
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -65,6 +76,7 @@ func TestRayJobSubmitComplete(t *testing.T) {
 			assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
 			assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 			assert.Equal(t, tc.expected.image, fakeSubmitJobOptions.image)
+			assert.Equal(t, tc.expected.rayVersion, fakeSubmitJobOptions.rayVersion)
 		})
 	}
 }

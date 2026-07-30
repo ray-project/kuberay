@@ -207,6 +207,21 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				rayVersion: "custom",
 			},
 		},
+		{
+			name: "Custom Ray version with custom image",
+			args: []string{"example-group"},
+			flags: map[string]string{
+				"namespace":   "test-namespace",
+				"ray-version": "custom",
+				"image":       "custom-image",
+			},
+			expected: &CreateWorkerGroupOptions{
+				namespace:  "test-namespace",
+				groupName:  "example-group",
+				image:      "custom-image",
+				rayVersion: "custom",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -245,6 +260,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				assert.Equal(t, tt.expected.namespace, options.namespace)
 				assert.Equal(t, tt.expected.groupName, options.groupName)
 				assert.Equal(t, tt.expected.image, options.image)
+				assert.Equal(t, tt.expected.rayVersion, options.rayVersion)
 			}
 		})
 	}
