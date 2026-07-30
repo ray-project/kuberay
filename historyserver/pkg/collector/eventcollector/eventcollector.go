@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -33,6 +32,9 @@ const (
 
 	rotationCheckInterval = 30 * time.Second
 	diskReconcileInterval = 1 * time.Minute
+	// Raylet restarts hand out a new node ID. Poll often enough that events are
+	// filed under the right one; matches the log collector's poll cadence.
+	nodeIDPollInterval = 5 * time.Second
 	bufWriterSize         = 64 * 1024
 	diskPressureWatermark = 0.8
 	rotationQueueSize     = 256
@@ -173,14 +175,24 @@ func NewEventCollector(
 		rotationQueue:      make(chan rotationTask, rotationQueueSize),
 	}
 
-	// Start goroutine to watch nodeID file changes.
-	go collector.watchNodeIDFile()
-
 	return collector
 }
 
-// Run starts the HTTP server, rotation loop, upload worker and disk
-// reconciler. It blocks until stop is closed.
+// UpdateNodeID switches the node ID used for subsequent writes. Active files are
+// rotated first so already-written events keep the old node ID in their remote
+// key, while later events land in files named after the new one.
+func (ec *EventCollector) UpdateNodeID(newNodeID string) {
+	ec.writeMu.Lock()
+	defer ec.writeMu.Unlock()
+
+	if ec.currentNodeID == newNodeID {
+		return
+	}
+	logrus.Infof("Node ID changed from %s to %s, rotating active files", ec.currentNodeID, newNodeID)
+	ec.currentNodeID = newNodeID
+	ec.rotateAllFilesLocked()
+}
+
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	if err := os.MkdirAll(ec.dataDir, 0o755); err != nil {
 		logrus.Fatalf("Failed to create event data dir %s: %v", ec.dataDir, err)
@@ -229,74 +241,6 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 
 	ec.workersWG.Wait()
-}
-
-// watchNodeIDFile watches the configured raylet_node_id file for content
-// changes; on change we rotate all active files so rotated content keeps the
-// old nodeID while subsequent writes use the new one.
-func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := utils.GetRayNodeIDPath()
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logrus.Errorf("Failed to create file watcher: %v", err)
-		return
-	}
-	defer watcher.Close()
-
-	if err := watcher.Add(nodeIDFilePath); err != nil {
-		logrus.Infof("Failed to add %s to watcher, will watch parent directory: %v", nodeIDFilePath, err)
-		tmpRayRoot := utils.GetTmpRayRoot()
-		if err := watcher.Add(tmpRayRoot); err != nil {
-			logrus.Errorf("Failed to watch directory %s: %v", tmpRayRoot, err)
-			return
-		}
-	}
-
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Name != nodeIDFilePath {
-				continue
-			}
-			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
-				continue
-			}
-
-			content, err := os.ReadFile(nodeIDFilePath)
-			if err != nil {
-				logrus.Errorf("Failed to read node ID file %s: %v", nodeIDFilePath, err)
-				continue
-			}
-			newNodeID := strings.TrimSpace(string(content))
-			if newNodeID == "" {
-				continue
-			}
-
-			ec.writeMu.Lock()
-			if ec.currentNodeID == newNodeID {
-				ec.writeMu.Unlock()
-				continue
-			}
-			oldNodeID := ec.currentNodeID
-			logrus.Infof("Node ID changed from %s to %s, flushing/rotating events", oldNodeID, newNodeID)
-			ec.currentNodeID = newNodeID
-			ec.rotateAllFilesLocked()
-			ec.writeMu.Unlock()
-
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			logrus.Errorf("File watcher error: %v", err)
-		case <-ec.stopped:
-			logrus.Info("Event collector stopped, exiting node ID watcher")
-			return
-		}
-	}
 }
 
 // PersistEvents is the HTTP handler for POST /v1/events. Events are always
@@ -506,16 +450,26 @@ func (ec *EventCollector) clusterKey() string {
 	return fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace)
 }
 
-// rotationLoop periodically checks rotation conditions for each active file.
+// rotationLoop periodically checks rotation conditions for each active file and
+// refreshes the node ID. The node ID is polled from the Ray dashboard, so a raylet
+// restart is picked up within nodeIDPollInterval.
 func (ec *EventCollector) rotationLoop() {
 	defer ec.workersWG.Done()
 	ticker := time.NewTicker(rotationCheckInterval)
 	defer ticker.Stop()
+	nodeIDTicker := time.NewTicker(nodeIDPollInterval)
+	defer nodeIDTicker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			ec.checkRotation()
+		case <-nodeIDTicker.C:
+			if freshNodeID, err := utils.FetchCurrentNodeID(); err == nil && freshNodeID != "" {
+				if hexID, err := utils.ConvertBase64ToHex(freshNodeID); err == nil && hexID != "" {
+					ec.UpdateNodeID(hexID)
+				}
+			}
 		case <-ec.stopped:
 			return
 		}

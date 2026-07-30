@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -41,9 +42,16 @@ func main() {
 	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
 	flag.Parse()
 
-	if runtimeClassName == "" {
-		logrus.Fatal("--runtime-class-name is required")
+	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
+		runtimeClassName = val
+	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
+		runtimeClassName = val
 	}
+	if runtimeClassName == "" {
+		logrus.Fatal("--runtime-class-name, STORAGE_BACKEND, or RUNTIME_CLASS_NAME environment variable is required")
+	}
+	runtimeClassName = strings.ToLower(runtimeClassName)
+
 	if qps <= 0 {
 		logrus.Fatalf("--kube-api-qps must be > 0, got %v", qps)
 	}

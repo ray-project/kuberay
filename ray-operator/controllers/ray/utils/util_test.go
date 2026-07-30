@@ -1296,6 +1296,31 @@ func createRayClusterTemplate(
 	return cluster
 }
 
+func TestCalculatePodResourceDoesNotMutateInput(t *testing.T) {
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("1"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					},
+				},
+			},
+		},
+	}
+	wantRequests := podSpec.Containers[0].Resources.Requests.DeepCopy()
+
+	got := CalculatePodResource(podSpec)
+
+	assert.Equal(t, "1", got.Cpu().String())
+	assert.Equal(t, "200Mi", got.Memory().String())
+	assert.Equal(t, wantRequests, podSpec.Containers[0].Resources.Requests)
+}
+
 func TestCalculateResources(t *testing.T) {
 	headStruct := struct {
 		cpu    string
@@ -1433,6 +1458,72 @@ func TestCalculateResources(t *testing.T) {
 				},
 				minResources: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
+		{
+			name: "Head pod with suspended worker group with min replicas",
+			cluster: createRayClusterTemplate(headStruct, []struct {
+				replicas    *int32
+				minReplicas *int32
+				suspend     *bool
+				cpu         string
+				memory      string
+				numOfHosts  int32
+			}{
+				{
+					numOfHosts:  1,
+					replicas:    ptr.To[int32](3),
+					minReplicas: ptr.To[int32](2),
+					cpu:         "4",
+					memory:      "200Mi",
+					suspend:     new(true),
+				},
+			}),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
+		{
+			name: "Head pod with worker group having max possible replicas",
+			cluster: createRayClusterTemplate(headStruct, []struct {
+				replicas    *int32
+				minReplicas *int32
+				suspend     *bool
+				cpu         string
+				memory      string
+				numOfHosts  int32
+			}{
+				{
+					numOfHosts:  1,
+					replicas:    ptr.To[int32](2147483647),
+					minReplicas: ptr.To[int32](2147483647),
+					cpu:         "1",
+					memory:      "0",
+					suspend:     nil,
+				},
+			}),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
 					corev1.ResourceMemory: resource.MustParse("100Mi"),
 				},
 			},
@@ -2374,4 +2465,31 @@ func TestIsJobFinished(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetGcsFaultToleranceBackend(t *testing.T) {
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(nil))
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{}))
+	assert.Equal(t, rayv1.GcsFTBackendRedis, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis}))
+	assert.Equal(t, rayv1.GcsFTBackendRocksDB, GetGcsFaultToleranceBackend(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB}))
+}
+
+func TestIsGCSFaultToleranceEmbedded(t *testing.T) {
+	assert.False(t, IsGCSFaultToleranceEmbedded(nil))
+	assert.False(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{}))
+	assert.False(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis}))
+	assert.True(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB}))
+}
+
+func TestGetGCSStoragePVCName(t *testing.T) {
+	instance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster"},
+		Spec: rayv1.RayClusterSpec{
+			GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+		},
+	}
+	assert.Equal(t, "my-cluster-gcs-pvc", GetGCSStoragePVCName(instance))
+
+	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ClaimName: "byo-pvc"}
+	assert.Equal(t, "byo-pvc", GetGCSStoragePVCName(instance))
 }

@@ -68,10 +68,9 @@ POST /v1/events (PersistEvents)
 
 | Goroutine | Lifecycle | Responsibility |
 |-----------|-----------|----------------|
-| `rotationLoop` | Runs for collector lifetime | Checks rotation conditions every 30 s via `checkRotation()` |
+| `rotationLoop` | Runs for collector lifetime | Checks rotation conditions every 30 s via `checkRotation()`; polls the Ray dashboard for the current node ID every 5 s and rotates all files when it changes |
 | `compressionUploadWorker` | Runs for collector lifetime | Drains `rotationQueue`, optionally compresses, uploads, cleans up |
 | `diskReconcileLoop` | Runs for collector lifetime | Reconciles `totalDiskUsed` counter with actual directory walk every 60 s |
-| `watchNodeIDFile` | Runs for collector lifetime | Watches `raylet_node_id` via fsnotify; rotates all files on content change |
 | HTTP server | Runs for collector lifetime | Serves `POST /v1/events` |
 
 All goroutines are joined via `workersWG` on graceful shutdown after `stop` is closed.
@@ -85,7 +84,7 @@ Five conditions trigger file rotation (close current JSONL → enqueue for uploa
 | 1 | **Time-based** | File age ≥ `--event-rotation-interval` (default 5 min) | `rotationLoop` → `checkRotation()` |
 | 2 | **Size-based** | File size ≥ `--event-max-file-size-mb` (default 100 MB) | Same check, `\|\|` with time |
 | 3 | **Session change** | Incoming `sessionName` ≠ current session | `PersistEvents()` — synchronous |
-| 4 | **Node ID change** | `raylet_node_id` file content changes | `watchNodeIDFile()` via fsnotify |
+| 4 | **Node ID change** | Node ID polled from the Ray dashboard differs from the current one | `rotationLoop` → `UpdateNodeID()` |
 | 5 | **Graceful shutdown** | `stop` channel closed | `Run()` → `rotateAllFiles()` |
 
 When the rotation queue is full (256 tasks), a retry goroutine sleeps 5 s and re-enqueues.
@@ -320,7 +319,7 @@ During verification, a bug was discovered in the Aliyun OSS storage implementati
 
 | File | Changes |
 |------|---------|
-| `pkg/collector/eventcollector/eventcollector.go` | Removed 7 functions, `memEvent` struct, `flushInterval`/`memEvents` fields. Simplified `Run()`, `PersistEvents()`, `watchNodeIDFile()` to single disk-only path. |
+| `pkg/collector/eventcollector/eventcollector.go` | Removed 7 functions, `memEvent` struct, `flushInterval`/`memEvents` fields. Simplified `Run()` and `PersistEvents()` to a single disk-only path; `UpdateNodeID()` now rotates active files instead of flushing a buffer. |
 | `pkg/collector/types/types.go` | Removed `EventFlushInterval` field. Updated `EventCompressionEnabled` documentation. |
 | `cmd/collector/main.go` | Removed `eventFlushInterval` variable, flag, env override, config field. Updated flag description. |
 | `pkg/collector/eventcollector/eventcollector_test.go` | Removed 7 memory-buffer tests. Retained 18 disk-pipeline tests. |

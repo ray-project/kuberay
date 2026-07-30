@@ -49,6 +49,14 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
+func (c *ClientManager) GetRayCluster(ctx context.Context, namespace, name string) (*rayv1.RayCluster, error) {
+	var rayCluster rayv1.RayCluster
+	if err := c.Client().Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &rayCluster); err != nil {
+		return nil, err
+	}
+	return &rayCluster, nil
+}
+
 type ClientManagerConfig struct {
 	Kubeconfigs        string
 	UseKubernetesProxy bool

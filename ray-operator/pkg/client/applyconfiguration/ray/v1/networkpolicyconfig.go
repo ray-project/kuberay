@@ -6,20 +6,20 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// NetworkIsolationConfigApplyConfiguration represents a declarative configuration of the NetworkIsolationConfig type for use
+// NetworkPolicyConfigApplyConfiguration represents a declarative configuration of the NetworkPolicyConfig type for use
 // with apply.
 //
-// NetworkIsolationConfig defines network isolation settings for Ray cluster.
+// NetworkPolicyConfig defines network isolation settings for Ray cluster.
 // All modes permit intra-cluster pod-to-pod traffic.
 // DNS egress is not included automatically; see NetworkPolicyRules.EgressRules
 // for why it must be added under DenyAll/DenyAllEgress.
-type NetworkIsolationConfigApplyConfiguration struct {
+type NetworkPolicyConfigApplyConfiguration struct {
 	// Mode controls the security level. All modes permit intra-cluster pod-to-pod
 	// traffic (DNS egress excluded, see EgressRules).
 	// - "DenyAll": Denies all Ingress and Egress.
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
-	Mode *rayv1.NetworkIsolationMode `json:"mode,omitempty"`
+	Mode *rayv1.NetworkPolicyMode `json:"mode,omitempty"`
 	// Head specifies custom NetworkPolicy rules applied only to the head pod's policy.
 	// The base head policy always allows intra-cluster traffic and (for K8sJobMode
 	// RayJob-owned clusters) the submitter pod. Rules here are appended to those
@@ -32,16 +32,16 @@ type NetworkIsolationConfigApplyConfiguration struct {
 	Worker *NetworkPolicyRulesApplyConfiguration `json:"worker,omitempty"`
 }
 
-// NetworkIsolationConfigApplyConfiguration constructs a declarative configuration of the NetworkIsolationConfig type for use with
+// NetworkPolicyConfigApplyConfiguration constructs a declarative configuration of the NetworkPolicyConfig type for use with
 // apply.
-func NetworkIsolationConfig() *NetworkIsolationConfigApplyConfiguration {
-	return &NetworkIsolationConfigApplyConfiguration{}
+func NetworkPolicyConfig() *NetworkPolicyConfigApplyConfiguration {
+	return &NetworkPolicyConfigApplyConfiguration{}
 }
 
 // WithMode sets the Mode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Mode field is set to the value of the last call.
-func (b *NetworkIsolationConfigApplyConfiguration) WithMode(value rayv1.NetworkIsolationMode) *NetworkIsolationConfigApplyConfiguration {
+func (b *NetworkPolicyConfigApplyConfiguration) WithMode(value rayv1.NetworkPolicyMode) *NetworkPolicyConfigApplyConfiguration {
 	b.Mode = &value
 	return b
 }
@@ -49,7 +49,7 @@ func (b *NetworkIsolationConfigApplyConfiguration) WithMode(value rayv1.NetworkI
 // WithHead sets the Head field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Head field is set to the value of the last call.
-func (b *NetworkIsolationConfigApplyConfiguration) WithHead(value *NetworkPolicyRulesApplyConfiguration) *NetworkIsolationConfigApplyConfiguration {
+func (b *NetworkPolicyConfigApplyConfiguration) WithHead(value *NetworkPolicyRulesApplyConfiguration) *NetworkPolicyConfigApplyConfiguration {
 	b.Head = value
 	return b
 }
@@ -57,7 +57,7 @@ func (b *NetworkIsolationConfigApplyConfiguration) WithHead(value *NetworkPolicy
 // WithWorker sets the Worker field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Worker field is set to the value of the last call.
-func (b *NetworkIsolationConfigApplyConfiguration) WithWorker(value *NetworkPolicyRulesApplyConfiguration) *NetworkIsolationConfigApplyConfiguration {
+func (b *NetworkPolicyConfigApplyConfiguration) WithWorker(value *NetworkPolicyRulesApplyConfiguration) *NetworkPolicyConfigApplyConfiguration {
 	b.Worker = value
 	return b
 }

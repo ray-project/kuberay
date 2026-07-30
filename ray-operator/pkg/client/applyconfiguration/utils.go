@@ -24,6 +24,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ClusterUpgradeOptions"):
 		return &rayv1.ClusterUpgradeOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("CollectorOptions"):
+		return &rayv1.CollectorOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionCondition"):
 		return &rayv1.DeletionConditionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
@@ -32,14 +34,20 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.DeletionRuleApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
 		return &rayv1.DeletionStrategyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("GcsEmbeddedStorage"):
+		return &rayv1.GcsEmbeddedStorageApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
 		return &rayv1.GcsFaultToleranceOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadGroupSpec"):
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
 		return &rayv1.HeadInfoApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NetworkIsolationConfig"):
-		return &rayv1.NetworkIsolationConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("HistoryServerOptions"):
+		return &rayv1.HistoryServerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
+		return &rayv1.IngressOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
+		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
@@ -82,6 +90,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.ServeDeploymentStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("SubmitterConfig"):
 		return &rayv1.SubmitterConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("TLSOptions"):
+		return &rayv1.TLSOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupSpec"):
 		return &rayv1.WorkerGroupSpecApplyConfiguration{}
 

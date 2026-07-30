@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -259,7 +260,6 @@ func routerAPI(s *ServerHandler) {
 // }
 
 func routerHealthz(s *ServerHandler) {
-
 	http.HandleFunc("/readz", func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
@@ -273,6 +273,18 @@ func routerHealthz(s *ServerHandler) {
 		logrus.Debugf("request /livez")
 	})
 
+}
+
+func routerSelectCluster(s *ServerHandler) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		logrus.Infof("Serving cluster selector page: %s %s", r.Method, r.URL.String())
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
+		w.Write(html.ClusterSelectorHTML)
+	}
+	http.HandleFunc("/select_cluster", handler)
 }
 
 func routerLogical(s *ServerHandler) {
@@ -302,14 +314,12 @@ func routerRayClusterSet(s *ServerHandler) {
 
 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
 	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, name, session string) {
-		resolvedSession, found := s.findSessionInMap(namespace, name, session)
-		if !found {
-			if s.clientManager != nil && s.reader != nil {
-				s.listClusters(s.maxClusters)
-			}
-			resolvedSession, found = s.findSessionInMap(namespace, name, session)
+		resolvedSession, found, err := s.resolveSession(r1.Request.Context(), namespace, name, session)
+		if err != nil {
+			logrus.Errorf("Failed to resolve session %s/%s/%s: %v", namespace, name, session, err)
+			r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+			return
 		}
-
 		if !found {
 			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s with session %s not found", namespace, name, session))
 			return
@@ -359,6 +369,16 @@ func routerRayClusterSet(s *ServerHandler) {
 		Param(ws.PathParameter("name", "name")).
 		Param(ws.PathParameter("session", "session")).
 		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/{namespace}/{name}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		enterHandler(r1, r2, namespace, name, "latest")
+	}).
+		Doc("set cookie for cluster (defaults session to latest)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("name", "name")).
+		Writes(""))
 }
 
 func (s *ServerHandler) RegisterRouter() {
@@ -368,6 +388,7 @@ func (s *ServerHandler) RegisterRouter() {
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
+	routerSelectCluster(s)
 	// routerRoot(s)
 	// routerHomepage(s)
 	routerHealthz(s)
@@ -1177,6 +1198,8 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		resp.WriteError(400, err)
 		return
 	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
 	resp.Write(data)
 }
 
@@ -1391,6 +1414,8 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		resp.AddHeader("Content-Disposition", disposition)
 	}
 
+	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
 	resp.Write(content)
 }
 
