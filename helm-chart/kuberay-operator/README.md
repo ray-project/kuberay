@@ -51,7 +51,8 @@ helm version
 
 - Install with Kubernetes WAS v1alpha2 batch scheduling
 
-  Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with the `scheduling.k8s.io/v1alpha2` API served by the API server, `GenericWorkload` enabled on the API server and controller manager, and `GangScheduling` enabled on kube-scheduler.
+  Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with the `scheduling.k8s.io/v1alpha2` API served by the API server,
+  `GenericWorkload` enabled on the API server and controller manager, and `GangScheduling` enabled on kube-scheduler.
 
   ```sh
   helm install kuberay-operator . \

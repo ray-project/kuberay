@@ -26,14 +26,16 @@ import (
 const (
 	pluginName                  = "kubernetes-was-v1alpha2"
 	podGroupProtectionFinalizer = "scheduling.k8s.io/podgroup-protection"
+	// clusterPodGroupTemplateName is the name of the single PodGroupTemplate that
+	// gang schedules the entire RayCluster (head + all worker groups) together.
+	clusterPodGroupTemplateName = "cluster"
 )
 
 type schedulingSkipReason string
 
 const (
-	skipReasonNone                schedulingSkipReason = ""
-	skipReasonAutoscaling         schedulingSkipReason = "autoscaling enabled"
-	skipReasonTooManyWorkerGroups schedulingSkipReason = "too many worker groups"
+	skipReasonNone        schedulingSkipReason = ""
+	skipReasonAutoscaling schedulingSkipReason = "autoscaling enabled"
 )
 
 type KubernetesWASV1Alpha2Scheduler struct {
@@ -61,14 +63,16 @@ func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx conte
 	return k.syncSchedulingResources(ctx, rayCluster)
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, groupName string) {
+func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
 	setDefaultSchedulerName(child)
 
 	rayCluster, ok := parent.(*rayv1.RayCluster)
 	if !ok || nativeSchedulingSkipReason(rayCluster) != skipReasonNone {
 		return
 	}
-	setSchedulingGroup(child, podGroupName(rayCluster.Name, podGroupTemplateName(groupName)))
+	// The entire RayCluster (head + every worker group) is gang scheduled as a
+	// single PodGroup, so all pods reference the same PodGroup regardless of group.
+	setSchedulingGroup(child, clusterPodGroupName(rayCluster.Name))
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
@@ -131,63 +135,48 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Con
 		}
 	}
 
-	for _, podGroupSpec := range buildPodGroupSpecs(rayCluster) {
-		podGroup, err := k.buildPodGroup(rayCluster, podGroupSpec.templateName, podGroupSpec.schedulingPolicy)
-		if err != nil {
-			return fmt.Errorf("failed to build PodGroup %s for RayCluster %s/%s: %w", podGroupSpec.templateName, rayCluster.Namespace, rayCluster.Name, err)
-		}
+	podGroupSpec := buildClusterPodGroupSpec(rayCluster)
+	podGroup, err := k.buildPodGroup(rayCluster, podGroupSpec.templateName, podGroupSpec.schedulingPolicy)
+	if err != nil {
+		return fmt.Errorf("failed to build PodGroup for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
+	}
 
-		if err := k.cli.Create(ctx, podGroup); err != nil {
-			if !errors.IsAlreadyExists(err) {
-				return fmt.Errorf("failed to create PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
-			}
-			existing := &schedulingv1alpha2.PodGroup{}
-			if err := k.cli.Get(ctx, types.NamespacedName{Name: podGroup.Name, Namespace: podGroup.Namespace}, existing); err != nil {
-				return fmt.Errorf("failed to get existing PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
-			}
-			if existing.DeletionTimestamp != nil {
-				return fmt.Errorf("PodGroup %s/%s is being deleted (finalizer pending), will retry", podGroup.Namespace, podGroup.Name)
-			}
+	if err := k.cli.Create(ctx, podGroup); err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
+		}
+		existing := &schedulingv1alpha2.PodGroup{}
+		if err := k.cli.Get(ctx, types.NamespacedName{Name: podGroup.Name, Namespace: podGroup.Namespace}, existing); err != nil {
+			return fmt.Errorf("failed to get existing PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
+		}
+		if existing.DeletionTimestamp != nil {
+			return fmt.Errorf("PodGroup %s/%s is being deleted (finalizer pending), will retry", podGroup.Namespace, podGroup.Name)
 		}
 	}
 
 	return nil
 }
 
-func buildPodGroupSpecs(rayCluster *rayv1.RayCluster) []podGroupSpec {
-	specs := make([]podGroupSpec, 0, 1+len(rayCluster.Spec.WorkerGroupSpecs))
-	specs = append(specs, podGroupSpec{
-		templateName: "head",
+// buildClusterPodGroupSpec builds the single PodGroupTemplate spec that gang
+// schedules the entire RayCluster. MinCount is the head pod plus the desired
+// number of worker replicas (accounting for NumOfHosts) across all worker groups.
+func buildClusterPodGroupSpec(rayCluster *rayv1.RayCluster) podGroupSpec {
+	minCount := int32(1) + utils.CalculateDesiredReplicas(rayCluster)
+	return podGroupSpec{
+		templateName: clusterPodGroupTemplateName,
 		schedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{
-			Basic: &schedulingv1alpha2.BasicSchedulingPolicy{},
+			Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: minCount},
 		},
-	})
-
-	for _, workerGroup := range rayCluster.Spec.WorkerGroupSpecs {
-		minCount := utils.GetWorkerGroupDesiredReplicas(workerGroup)
-		templateName := podGroupTemplateName(workerGroup.GroupName)
-
-		var policy schedulingv1alpha2.PodGroupSchedulingPolicy
-		if minCount == 0 {
-			policy = schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}
-		} else {
-			policy = schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: minCount}}
-		}
-
-		specs = append(specs, podGroupSpec{templateName: templateName, schedulingPolicy: policy})
 	}
-
-	return specs
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) buildWorkload(rayCluster *rayv1.RayCluster) (*schedulingv1alpha2.Workload, error) {
-	podGroupSpecs := buildPodGroupSpecs(rayCluster)
-	templates := make([]schedulingv1alpha2.PodGroupTemplate, 0, len(podGroupSpecs))
-	for _, podGroupSpec := range podGroupSpecs {
-		templates = append(templates, schedulingv1alpha2.PodGroupTemplate{
+	podGroupSpec := buildClusterPodGroupSpec(rayCluster)
+	templates := []schedulingv1alpha2.PodGroupTemplate{
+		{
 			Name:             podGroupSpec.templateName,
 			SchedulingPolicy: podGroupSpec.schedulingPolicy,
-		})
+		},
 	}
 
 	workload := &schedulingv1alpha2.Workload{
@@ -218,7 +207,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildWorkload(rayCluster *rayv1.RayClus
 func (k *KubernetesWASV1Alpha2Scheduler) buildPodGroup(rayCluster *rayv1.RayCluster, templateName string, policy schedulingv1alpha2.PodGroupSchedulingPolicy) (*schedulingv1alpha2.PodGroup, error) {
 	podGroup := &schedulingv1alpha2.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      podGroupName(rayCluster.Name, templateName),
+			Name:      clusterPodGroupName(rayCluster.Name),
 			Namespace: rayCluster.Namespace,
 			Labels: map[string]string{
 				utils.RayClusterLabelKey: rayCluster.Name,
@@ -281,31 +270,20 @@ func nativeSchedulingSkipReason(rayCluster *rayv1.RayCluster) schedulingSkipReas
 	if utils.IsAutoscalingEnabled(&rayCluster.Spec) {
 		return skipReasonAutoscaling
 	}
-	if len(rayCluster.Spec.WorkerGroupSpecs) > schedulingv1alpha2.WorkloadMaxPodGroupTemplates-1 {
-		return skipReasonTooManyWorkerGroups
-	}
 	return skipReasonNone
 }
 
 func isWorkloadStale(existing *schedulingv1alpha2.Workload, rayCluster *rayv1.RayCluster) bool {
-	desired := buildPodGroupSpecs(rayCluster)
-	if len(existing.Spec.PodGroupTemplates) != len(desired) {
+	desired := buildClusterPodGroupSpec(rayCluster)
+	if len(existing.Spec.PodGroupTemplates) != 1 {
 		return true
 	}
 
-	existingByName := make(map[string]schedulingv1alpha2.PodGroupTemplate, len(existing.Spec.PodGroupTemplates))
-	for _, template := range existing.Spec.PodGroupTemplates {
-		existingByName[template.Name] = template
+	existingTemplate := existing.Spec.PodGroupTemplates[0]
+	if existingTemplate.Name != desired.templateName {
+		return true
 	}
-
-	for _, desiredPodGroup := range desired {
-		existingPodGroup, ok := existingByName[desiredPodGroup.templateName]
-		if !ok || !schedulingPoliciesMatch(existingPodGroup.SchedulingPolicy, desiredPodGroup.schedulingPolicy) {
-			return true
-		}
-	}
-
-	return false
+	return !schedulingPoliciesMatch(existingTemplate.SchedulingPolicy, desired.schedulingPolicy)
 }
 
 func schedulingPoliciesMatch(a, b schedulingv1alpha2.PodGroupSchedulingPolicy) bool {
@@ -321,15 +299,8 @@ func schedulingPoliciesMatch(a, b schedulingv1alpha2.PodGroupSchedulingPolicy) b
 	return false
 }
 
-func podGroupName(clusterName, templateName string) string {
-	return clusterName + "-" + templateName
-}
-
-func podGroupTemplateName(groupName string) string {
-	if groupName == utils.RayNodeHeadGroupLabelValue {
-		return "head"
-	}
-	return "worker-" + groupName
+func clusterPodGroupName(clusterName string) string {
+	return clusterName + "-" + clusterPodGroupTemplateName
 }
 
 func setDefaultSchedulerName(obj metav1.Object) {
