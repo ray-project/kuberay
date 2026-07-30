@@ -929,6 +929,9 @@ func (ec *EventCollector) resumePendingFiles() {
 // uploadOnly uploads a pre-existing compressed file to remote storage and
 // removes it locally. Used during startup resume for .jsonl.gz leftovers.
 func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
+	ec.workersWG.Add(1)
+	defer ec.workersWG.Done()
+
 	key := ec.buildEventStorageKey(task)
 	f, err := os.Open(gzPath)
 	if err != nil {
