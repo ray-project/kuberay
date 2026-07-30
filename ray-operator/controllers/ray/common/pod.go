@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,39 +117,16 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 func configureRedisFT(podTemplate *corev1.PodTemplateSpec, instance *rayv1.RayCluster, options *rayv1.GcsFaultToleranceOptions, container *corev1.Container) {
 	// Configure the external storage namespace for GCS FT.
 	storageNS := string(instance.UID)
-	if options != nil && options.ExternalStorageNamespace != "" {
-		storageNS = options.ExternalStorageNamespace
-	}
-
-	// Check if RAY_EXTERNAL_STORAGE_NS is explicitly set in container.Env.
-	// Note: ValidateRayClusterSpec rejects RAY_EXTERNAL_STORAGE_NS in container.Env whenever
-	// GcsFaultToleranceOptions is set, so this branch is reachable only via legacy FT configs.
-	hasValueFromEnv := false
-	idx := slices.IndexFunc(container.Env, func(e corev1.EnvVar) bool {
-		return e.Name == utils.RAY_EXTERNAL_STORAGE_NS
-	})
-	if idx >= 0 {
-		if container.Env[idx].ValueFrom != nil {
-			hasValueFromEnv = true
-		} else if container.Env[idx].Value != "" {
-			storageNS = container.Env[idx].Value
-		}
-	}
-
-	// Stamped annotation on the RayCluster CR takes precedence over spec options and env vars.
 	if v, ok := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
 		storageNS = v
 	}
-
-	if !hasValueFromEnv {
-		podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+	if options != nil && options.ExternalStorageNamespace != "" {
+		storageNS = options.ExternalStorageNamespace
 	}
-
-	if idx < 0 {
+	podTemplate.Annotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+	if !utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env) {
 		storageNSEnv := corev1.EnvVar{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: storageNS}
 		container.Env = append(container.Env, storageNSEnv)
-	} else if !hasValueFromEnv {
-		container.Env[idx].Value = storageNS
 	}
 
 	if options != nil {

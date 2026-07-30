@@ -1212,7 +1212,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if shouldUpdateCluster(rayServiceInstance, activeRayCluster, true) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the active RayCluster instance", "clusterName", activeRayCluster.Name)
-		goalCluster, err := constructRayClusterForRayService(rayServiceInstance, activeRayCluster.Name, r.Scheme)
+		goalCluster, err := constructRayClusterForRayService(ctx, rayServiceInstance, activeRayCluster.Name, r.Scheme)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1227,7 +1227,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
 		// TODO(kevin85421): We should not reconstruct the cluster to update it. This will cause issues if autoscaler is enabled.
 		logger.Info("Updating the pending RayCluster instance", "clusterName", pendingRayCluster.Name)
-		goalCluster, err := constructRayClusterForRayService(rayServiceInstance, pendingRayCluster.Name, r.Scheme)
+		goalCluster, err := constructRayClusterForRayService(ctx, rayServiceInstance, pendingRayCluster.Name, r.Scheme)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1451,28 +1451,36 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	// existing cluster's Suspend here instead of letting the goal spec
 	// overwrite it.
 	existingSuspend := currentCluster.Spec.Suspend
+
+	// Preserve the existing cluster's GCS FT external storage namespace to avoid orphaning the existing GCS state.
+	existingStorageNS := ""
+	if currentCluster.Spec.GcsFaultToleranceOptions != nil {
+		existingStorageNS = currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace
+	}
+	existingStampedNS, hadStampedNS := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]
+
 	currentCluster.Spec = goalCluster.Spec
 	currentCluster.Spec.Suspend = existingSuspend
 
-	// If currentCluster is an existing RayCluster that was created without a stamped GCS FT
-	// external storage namespace (e.g. created by an older operator version), preserve its
-	// existing external storage namespace during in-place updates so that existing GCS state
-	// in Redis is not orphaned.
-	if currentCluster.Spec.GcsFaultToleranceOptions != nil && goalCluster.Spec.GcsFaultToleranceOptions != nil {
-		goalCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace = currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace
-	}
-	if oldNS, ok := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
-		if goalCluster.Annotations == nil {
-			goalCluster.Annotations = make(map[string]string)
-		}
-		goalCluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = oldNS
-	} else {
-		delete(goalCluster.Annotations, utils.RayExternalStorageNSAnnotationKey)
+	if existingStorageNS != "" && currentCluster.Spec.GcsFaultToleranceOptions != nil {
+		// Deep-copy GcsFaultToleranceOptions before mutating so we don't modify
+		// the pointer shared with goalCluster.Spec.
+		opts := currentCluster.Spec.GcsFaultToleranceOptions.DeepCopy()
+		opts.ExternalStorageNamespace = existingStorageNS
+		currentCluster.Spec.GcsFaultToleranceOptions = opts
 	}
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
-	currentCluster.Annotations = goalCluster.Annotations
+	currentCluster.Annotations = maps.Clone(goalCluster.Annotations)
+	if hadStampedNS {
+		if currentCluster.Annotations == nil {
+			currentCluster.Annotations = map[string]string{}
+		}
+		currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = existingStampedNS
+	} else {
+		delete(currentCluster.Annotations, utils.RayExternalStorageNSAnnotationKey)
+	}
 }
 
 func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (*rayv1.RayCluster, error) {
@@ -1480,7 +1488,7 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	rayClusterKey := common.RayServicePendingRayClusterNamespacedName(rayServiceInstance)
 	logger.Info("createRayClusterInstance", "clusterName", rayClusterKey.Name)
 
-	rayClusterInstance, err := constructRayClusterForRayService(rayServiceInstance, rayClusterKey.Name, r.Scheme)
+	rayClusterInstance, err := constructRayClusterForRayService(ctx, rayServiceInstance, rayClusterKey.Name, r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -1508,7 +1516,7 @@ func rayClusterSpecForHashing(rayService *rayv1.RayService) *rayv1.RayClusterSpe
 	return spec
 }
 
-func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
+func constructRayClusterForRayService(ctx context.Context, rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
 	maps.Copy(rayClusterLabel, rayService.Labels)
@@ -1527,7 +1535,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
 	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
-	resolveAndStampExternalStorageNamespace(rayClusterAnnotations, clusterSpec, rayClusterName)
+	resolveAndStampExternalStorageNamespace(ctx, rayClusterAnnotations, clusterSpec, rayClusterName)
 
 	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
 		rayService.Status.ActiveServiceStatus.RayClusterName != ""
@@ -1562,7 +1570,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 // it is suffixed with "-<rayClusterName>" so that each RayCluster instance during an upgrade
 // gets its own isolated GCS state in Redis. The resolved value is stamped onto the RayCluster's
 // annotations so it is immutable across pod recreations and discoverable.
-func resolveAndStampExternalStorageNamespace(rayClusterAnnotations map[string]string, clusterSpec *rayv1.RayClusterSpec, rayClusterName string) {
+func resolveAndStampExternalStorageNamespace(ctx context.Context, rayClusterAnnotations map[string]string, clusterSpec *rayv1.RayClusterSpec, rayClusterName string) {
 	storageNS := ""
 	if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
 		storageNS = clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace
@@ -1572,15 +1580,21 @@ func resolveAndStampExternalStorageNamespace(rayClusterAnnotations map[string]st
 		// Check if RAY_EXTERNAL_STORAGE_NS is set as a literal env var on the head container.
 		// Note: ValidateRayClusterSpec rejects RAY_EXTERNAL_STORAGE_NS in container.Env whenever
 		// GcsFaultToleranceOptions is set, so this branch is reachable only via legacy FT configs.
-		for _, container := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
-			for _, env := range container.Env {
-				if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil && env.Value != "" {
-					storageNS = env.Value
-					break
+		containers := clusterSpec.HeadGroupSpec.Template.Spec.Containers
+		if len(containers) > utils.RayContainerIndex {
+			rayContainer := &containers[utils.RayContainerIndex]
+			for _, env := range rayContainer.Env {
+				if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+					if env.ValueFrom != nil {
+						logger := ctrl.LoggerFrom(ctx)
+						logger.Info("RAY_EXTERNAL_STORAGE_NS is sourced from ValueFrom (secret or ConfigMap); KubeRay cannot resolve or suffix static values from ValueFrom at build time, so zero-downtime upgrade clusters may share GCS state in Redis", "RayService", rayClusterAnnotations[utils.RayOriginatedFromCRNameLabelKey])
+						break
+					}
+					if env.Value != "" {
+						storageNS = env.Value
+						break
+					}
 				}
-			}
-			if storageNS != "" {
-				break
 			}
 		}
 	}
@@ -1592,13 +1606,16 @@ func resolveAndStampExternalStorageNamespace(rayClusterAnnotations map[string]st
 
 		if clusterSpec.GcsFaultToleranceOptions != nil {
 			clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace = storageNS
+			if _, ok := rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+				rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+			}
 		} else {
 			rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
 
-			for cIdx := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
-				for eIdx, env := range clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env {
+			if len(clusterSpec.HeadGroupSpec.Template.Spec.Containers) > utils.RayContainerIndex {
+				for eIdx, env := range clusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env {
 					if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
-						clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env[eIdx].Value = storageNS
+						clusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env[eIdx].Value = storageNS
 					}
 				}
 			}

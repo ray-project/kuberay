@@ -1008,7 +1008,8 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 			rayService.Name = "test-service"
 			rayService.Namespace = "test-namespace"
 			clusterName := "test-cluster"
-			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme.Scheme)
+			ctx := context.Background()
+			rayCluster, err := constructRayClusterForRayService(ctx, &rayService, clusterName, scheme.Scheme)
 			require.NoError(t, err)
 
 			// Check ObjectMeta of the RayCluster
@@ -1045,6 +1046,7 @@ func TestConstructRayClusterForRayService(t *testing.T) {
 func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, rayv1.AddToScheme(scheme))
+	ctx := context.Background()
 
 	tests := []struct {
 		name                  string
@@ -1057,39 +1059,60 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 		expectedEnvValue      string
 	}{
 		{
-			name:                  "GcsFaultToleranceOptions ExternalStorageNamespace gets suffixed",
+			name:                  "suffix GcsFaultToleranceOptions namespace",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "my-static-ns"},
 			expectedAnnotationSet: false,
 			expectedOptionsNS:     "my-static-ns-test-cluster",
 		},
 		{
-			name:                  "RayExternalStorageNSAnnotationKey annotation gets suffixed",
+			name:                  "suffix external-storage-namespace annotation",
 			annotations:           map[string]string{utils.RayExternalStorageNSAnnotationKey: "annot-ns"},
 			expectedAnnotation:    "annot-ns-test-cluster",
 			expectedAnnotationSet: true,
 		},
 		{
-			name:                  "Literal env var RAY_EXTERNAL_STORAGE_NS gets suffixed",
+			name:                  "suffix literal env var",
 			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "env-ns"}},
 			expectedAnnotation:    "env-ns-test-cluster",
 			expectedAnnotationSet: true,
 			expectedEnvValue:      "env-ns-test-cluster",
 		},
 		{
-			name:                  "No static namespace specified leaves annotation unset",
+			name:                  "no namespace leaves annotation unset",
 			expectedAnnotationSet: false,
 		},
 		{
-			name:                  "Separator check: namespace ending with substring of cluster name is still suffixed",
+			name:                  "suffix namespace even if ending with cluster name substring",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "prodtest-cluster"},
 			expectedAnnotationSet: false,
 			expectedOptionsNS:     "prodtest-cluster-test-cluster",
 		},
 		{
-			name:                  "Idempotency: already suffixed namespace is not suffixed again",
+			name:                  "skip suffixing if already suffixed",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "my-ns-test-cluster"},
 			expectedAnnotationSet: false,
 			expectedOptionsNS:     "my-ns-test-cluster",
+		},
+		{
+			name:                  "options take precedence and align annotation",
+			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "my-static-ns"},
+			annotations:           map[string]string{utils.RayExternalStorageNSAnnotationKey: "other-ns"},
+			expectedAnnotation:    "my-static-ns-test-cluster",
+			expectedAnnotationSet: true,
+			expectedOptionsNS:     "my-static-ns-test-cluster",
+		},
+		{
+			name:                  "annotation takes precedence over env var",
+			annotations:           map[string]string{utils.RayExternalStorageNSAnnotationKey: "annot-ns"},
+			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "env-ns"}},
+			expectedAnnotation:    "annot-ns-test-cluster",
+			expectedAnnotationSet: true,
+			expectedEnvValue:      "annot-ns-test-cluster",
+		},
+		{
+			name:                  "ignore env var with ValueFrom",
+			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{}}}},
+			expectedAnnotationSet: false,
 		},
 	}
 
@@ -1118,7 +1141,7 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 			}
 
 			clusterName := "test-cluster"
-			rayCluster, err := constructRayClusterForRayService(&rayService, clusterName, scheme)
+			rayCluster, err := constructRayClusterForRayService(ctx, &rayService, clusterName, scheme)
 			require.NoError(t, err)
 
 			if tt.expectedAnnotationSet {
@@ -1133,59 +1156,167 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 			}
 
 			if tt.expectedEnvValue != "" {
-				assert.Equal(t, tt.expectedEnvValue, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env[0].Value)
+				assert.Equal(t, tt.expectedEnvValue, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env[0].Value)
 			}
 		})
 	}
 }
 
+func TestConstructRayClusterForRayService_SidecarContainerAndHashStability(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(scheme))
+	ctx := context.Background()
+
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: "test-ns",
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name: "ray-head",
+									Env: []corev1.EnvVar{
+										{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "ray-ns"},
+									},
+								},
+								{
+									Name: "sidecar",
+									Env: []corev1.EnvVar{
+										{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "sidecar-ns"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cluster1, err := constructRayClusterForRayService(ctx, &rayService, "cluster-one", scheme)
+	require.NoError(t, err)
+	cluster2, err := constructRayClusterForRayService(ctx, &rayService, "cluster-two", scheme)
+	require.NoError(t, err)
+
+	// Verify only Ray container is suffixed, sidecar is untouched.
+	assert.Equal(t, "ray-ns-cluster-one", cluster1.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env[0].Value)
+	assert.Equal(t, "sidecar-ns", cluster1.Spec.HeadGroupSpec.Template.Spec.Containers[1].Env[0].Value)
+
+	// Verify hash stability across different cluster names.
+	hash1 := cluster1.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	hash2 := cluster2.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	require.NotEmpty(t, hash1)
+	assert.Equal(t, hash1, hash2, "Hash should be identical regardless of cluster name")
+}
+
 func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 	ctx := context.Background()
 
-	// Case 1: Existing cluster without stamped annotation undergoes in-place update.
-	currentUnstamped := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "test-cluster",
-			Namespace:   "default",
-			Annotations: map[string]string{},
+	tests := []struct {
+		name            string
+		currentOptsNS   string
+		goalOptsNS      string
+		currentAnnot    *string
+		goalAnnot       *string
+		expectedOptsNS  string
+		expectedAnnot   *string
+		expectedSuspend *bool
+	}{
+		{
+			name:           "preserve legacy unstamped options namespace",
+			currentOptsNS:  "my-ns",
+			goalOptsNS:     "my-ns-test-cluster",
+			expectedOptsNS: "my-ns",
 		},
-	}
-	goalStamped := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Annotations: map[string]string{
-				utils.RayExternalStorageNSAnnotationKey: "my-ns-test-cluster",
-			},
+		{
+			name:          "preserve absence of stamped annotation",
+			currentAnnot:  nil,
+			goalAnnot:     new("my-ns-test-cluster"),
+			expectedAnnot: nil,
+		},
+		{
+			name:          "preserve existing stamped annotation",
+			currentAnnot:  new("my-ns-test-cluster"),
+			goalAnnot:     new("other-ns-test-cluster"),
+			expectedAnnot: new("my-ns-test-cluster"),
+		},
+		{
+			name:           "preserve existing stamped options namespace",
+			currentOptsNS:  "my-ns-abcde",
+			goalOptsNS:     "my-ns-vwxyz",
+			expectedOptsNS: "my-ns-abcde",
+		},
+		{
+			name:            "preserve existing suspend field",
+			expectedSuspend: new(true),
+		},
+		{
+			name: "no-op when GCS FT is disabled",
 		},
 	}
 
-	modifyRayCluster(ctx, currentUnstamped, goalStamped)
-	_, exists := currentUnstamped.Annotations[utils.RayExternalStorageNSAnnotationKey]
-	assert.False(t, exists, "Should preserve absence of stamped annotation on existing v1.6 cluster")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-cluster",
+					Namespace:   "default",
+					Annotations: map[string]string{},
+				},
+				Spec: rayv1.RayClusterSpec{
+					RayVersion: "2.56.0",
+					Suspend:    tt.expectedSuspend,
+				},
+			}
+			goal := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-cluster",
+					Namespace:   "default",
+					Annotations: map[string]string{},
+				},
+				Spec: rayv1.RayClusterSpec{
+					RayVersion: "2.56.0",
+					Suspend:    new(false),
+				},
+			}
 
-	// Case 2: Existing cluster with stamped annotation undergoes in-place update.
-	currentStamped := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Annotations: map[string]string{
-				utils.RayExternalStorageNSAnnotationKey: "my-ns-test-cluster",
-			},
-		},
-	}
-	goalNew := &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Annotations: map[string]string{
-				utils.RayExternalStorageNSAnnotationKey: "my-ns-test-cluster",
-			},
-		},
-	}
+			if tt.currentOptsNS != "" {
+				current.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: tt.currentOptsNS}
+			}
+			if tt.goalOptsNS != "" {
+				goal.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: tt.goalOptsNS}
+			}
+			if tt.currentAnnot != nil {
+				current.Annotations[utils.RayExternalStorageNSAnnotationKey] = *tt.currentAnnot
+			}
+			if tt.goalAnnot != nil {
+				goal.Annotations[utils.RayExternalStorageNSAnnotationKey] = *tt.goalAnnot
+			}
 
-	modifyRayCluster(ctx, currentStamped, goalNew)
-	assert.Equal(t, "my-ns-test-cluster", currentStamped.Annotations[utils.RayExternalStorageNSAnnotationKey])
+			modifyRayCluster(ctx, current, goal)
+
+			if tt.expectedOptsNS != "" {
+				require.NotNil(t, current.Spec.GcsFaultToleranceOptions)
+				assert.Equal(t, tt.expectedOptsNS, current.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace)
+			}
+			if tt.expectedAnnot != nil {
+				val, ok := current.Annotations[utils.RayExternalStorageNSAnnotationKey]
+				assert.True(t, ok)
+				assert.Equal(t, *tt.expectedAnnot, val)
+			} else {
+				_, ok := current.Annotations[utils.RayExternalStorageNSAnnotationKey]
+				assert.False(t, ok)
+			}
+			if tt.expectedSuspend != nil {
+				assert.Equal(t, *tt.expectedSuspend, *current.Spec.Suspend)
+			}
+		})
+	}
 }
 
 func TestIsClusterSpecHashEqual(t *testing.T) {
