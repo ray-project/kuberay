@@ -1454,6 +1454,19 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	currentCluster.Spec = goalCluster.Spec
 	currentCluster.Spec.Suspend = existingSuspend
 
+	// If currentCluster is an existing RayCluster that was created without a stamped GCS FT
+	// external storage namespace (e.g. created by an older operator version), preserve its
+	// existing external storage namespace during in-place updates so that existing GCS state
+	// in Redis is not orphaned.
+	if oldNS, ok := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+		if goalCluster.Annotations == nil {
+			goalCluster.Annotations = make(map[string]string)
+		}
+		goalCluster.Annotations[utils.RayExternalStorageNSAnnotationKey] = oldNS
+	} else {
+		delete(goalCluster.Annotations, utils.RayExternalStorageNSAnnotationKey)
+	}
+
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
 	currentCluster.Annotations = goalCluster.Annotations
@@ -1511,6 +1524,8 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
 	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
+	resolveAndStampExternalStorageNamespace(rayClusterAnnotations, clusterSpec, rayClusterName)
+
 	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
 		rayService.Status.ActiveServiceStatus.RayClusterName != ""
 	if isPendingClusterForUpgrade {
@@ -1537,6 +1552,54 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	}
 
 	return rayCluster, nil
+}
+
+// resolveAndStampExternalStorageNamespace ensures that for a RayCluster created by a RayService,
+// if the user specified a static external storage namespace for Redis GCS fault tolerance,
+// it is suffixed with "-<rayClusterName>" so that each RayCluster instance during an upgrade
+// gets its own isolated GCS state in Redis. The resolved value is stamped onto the RayCluster's
+// annotations so it is immutable across pod recreations and discoverable.
+func resolveAndStampExternalStorageNamespace(rayClusterAnnotations map[string]string, clusterSpec *rayv1.RayClusterSpec, rayClusterName string) {
+	storageNS := ""
+	if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
+		storageNS = clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace
+	} else if v, ok := rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey]; ok {
+		storageNS = v
+	} else {
+		// Check if RAY_EXTERNAL_STORAGE_NS is set as a literal env var on the head container.
+		// Note: ValidateRayClusterSpec rejects RAY_EXTERNAL_STORAGE_NS in container.Env whenever
+		// GcsFaultToleranceOptions is set, so this branch is reachable only via legacy FT configs.
+		for _, container := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
+			for _, env := range container.Env {
+				if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil && env.Value != "" {
+					storageNS = env.Value
+					break
+				}
+			}
+			if storageNS != "" {
+				break
+			}
+		}
+	}
+
+	if storageNS != "" {
+		if !strings.HasSuffix(storageNS, "-"+rayClusterName) {
+			storageNS = fmt.Sprintf("%s-%s", storageNS, rayClusterName)
+		}
+		rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
+
+		if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
+			clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace = storageNS
+		}
+
+		for cIdx := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
+			for eIdx, env := range clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env {
+				if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
+					clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env[eIdx].Value = storageNS
+				}
+			}
+		}
+	}
 }
 
 func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveApplications map[string]rayv1.AppStatus) (bool, string) {
