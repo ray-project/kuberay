@@ -261,6 +261,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 				assert.Equal(t, tt.expected.groupName, options.groupName)
 				assert.Equal(t, tt.expected.image, options.image)
 				assert.Equal(t, tt.expected.rayVersion, options.rayVersion)
+				assert.Equal(t, tt.expected.rayStartParams, options.rayStartParams)
 			}
 		})
 	}
