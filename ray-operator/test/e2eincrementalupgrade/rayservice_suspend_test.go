@@ -61,11 +61,6 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true while incremental upgrade is in progress")
-	// Server-side apply instead of Get-modify-Update: the controller concurrently
-	// updates the RayService status (e.g. upgrade progress), and a plain
-	// Get-modify-Update can lose that race and hit a 409 Conflict. Apply is a
-	// declarative PATCH that doesn't depend on ResourceVersion, so it isn't
-	// susceptible to the same conflict.
 	g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2,
 		withWorkerCPURequest("500m"), withUpgradedServeConfig(), withSuspend(true))).To(Succeed())
 
