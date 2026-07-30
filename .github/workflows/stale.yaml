@@ -10,6 +10,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     permissions:
+      actions: write # Required to manage the actions cache used to persist state across runs.
       issues: write # Required to add labels, comment, close issues.
       pull-requests: write # Required to add labels, comment, close PRs.
 
