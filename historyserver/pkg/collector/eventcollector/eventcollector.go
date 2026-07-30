@@ -639,7 +639,7 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		sessionName: state.sessionName,
 		nodeID:      state.nodeID,
 		createdAt:   state.createdAt,
-		size:        state.size,
+		size:        diskSize,
 	}
 
 	ec.enqueueRotationTask(task, blocking)
