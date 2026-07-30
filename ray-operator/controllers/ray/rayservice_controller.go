@@ -1458,6 +1458,9 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	// external storage namespace (e.g. created by an older operator version), preserve its
 	// existing external storage namespace during in-place updates so that existing GCS state
 	// in Redis is not orphaned.
+	if currentCluster.Spec.GcsFaultToleranceOptions != nil && goalCluster.Spec.GcsFaultToleranceOptions != nil {
+		goalCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace = currentCluster.Spec.GcsFaultToleranceOptions.ExternalStorageNamespace
+	}
 	if oldNS, ok := currentCluster.Annotations[utils.RayExternalStorageNSAnnotationKey]; ok {
 		if goalCluster.Annotations == nil {
 			goalCluster.Annotations = make(map[string]string)
@@ -1586,16 +1589,17 @@ func resolveAndStampExternalStorageNamespace(rayClusterAnnotations map[string]st
 		if !strings.HasSuffix(storageNS, "-"+rayClusterName) {
 			storageNS = fmt.Sprintf("%s-%s", storageNS, rayClusterName)
 		}
-		rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
 
-		if clusterSpec.GcsFaultToleranceOptions != nil && clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace != "" {
+		if clusterSpec.GcsFaultToleranceOptions != nil {
 			clusterSpec.GcsFaultToleranceOptions.ExternalStorageNamespace = storageNS
-		}
+		} else {
+			rayClusterAnnotations[utils.RayExternalStorageNSAnnotationKey] = storageNS
 
-		for cIdx := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
-			for eIdx, env := range clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env {
-				if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
-					clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env[eIdx].Value = storageNS
+			for cIdx := range clusterSpec.HeadGroupSpec.Template.Spec.Containers {
+				for eIdx, env := range clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env {
+					if env.Name == utils.RAY_EXTERNAL_STORAGE_NS && env.ValueFrom == nil {
+						clusterSpec.HeadGroupSpec.Template.Spec.Containers[cIdx].Env[eIdx].Value = storageNS
+					}
 				}
 			}
 		}

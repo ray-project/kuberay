@@ -1059,8 +1059,7 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 		{
 			name:                  "GcsFaultToleranceOptions ExternalStorageNamespace gets suffixed",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "my-static-ns"},
-			expectedAnnotation:    "my-static-ns-test-cluster",
-			expectedAnnotationSet: true,
+			expectedAnnotationSet: false,
 			expectedOptionsNS:     "my-static-ns-test-cluster",
 		},
 		{
@@ -1083,15 +1082,13 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 		{
 			name:                  "Separator check: namespace ending with substring of cluster name is still suffixed",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "prodtest-cluster"},
-			expectedAnnotation:    "prodtest-cluster-test-cluster",
-			expectedAnnotationSet: true,
+			expectedAnnotationSet: false,
 			expectedOptionsNS:     "prodtest-cluster-test-cluster",
 		},
 		{
 			name:                  "Idempotency: already suffixed namespace is not suffixed again",
 			options:               &rayv1.GcsFaultToleranceOptions{ExternalStorageNamespace: "my-ns-test-cluster"},
-			expectedAnnotation:    "my-ns-test-cluster",
-			expectedAnnotationSet: true,
+			expectedAnnotationSet: false,
 			expectedOptionsNS:     "my-ns-test-cluster",
 		},
 	}
