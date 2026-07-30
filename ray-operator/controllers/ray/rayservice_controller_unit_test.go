@@ -1102,15 +1102,21 @@ func TestConstructRayClusterForRayService_ExternalStorageNamespace(t *testing.T)
 			expectedOptionsNS:     "my-static-ns-test-cluster",
 		},
 		{
-			name:                  "annotation takes precedence over env var",
+			name:                  "literal env var takes precedence over annotation",
 			annotations:           map[string]string{utils.RayExternalStorageNSAnnotationKey: "annot-ns"},
 			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: "env-ns"}},
-			expectedAnnotation:    "annot-ns-test-cluster",
+			expectedAnnotation:    "env-ns-test-cluster",
 			expectedAnnotationSet: true,
-			expectedEnvValue:      "annot-ns-test-cluster",
+			expectedEnvValue:      "env-ns-test-cluster",
 		},
 		{
 			name:                  "ignore env var with ValueFrom",
+			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{}}}},
+			expectedAnnotationSet: false,
+		},
+		{
+			name:                  "ignore env var with ValueFrom even if annotation is present",
+			annotations:           map[string]string{utils.RayExternalStorageNSAnnotationKey: "annot-ns"},
 			existingEnvVars:       []corev1.EnvVar{{Name: utils.RAY_EXTERNAL_STORAGE_NS, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{}}}},
 			expectedAnnotationSet: false,
 		},
@@ -1223,8 +1229,14 @@ func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 		goalOptsNS      string
 		currentAnnot    *string
 		goalAnnot       *string
+		currentEnvNS    *string
+		goalEnvNS       *string
+		sidecarEnvNS    *string
+		currentSuspend  *bool
+		goalSuspend     *bool
 		expectedOptsNS  string
 		expectedAnnot   *string
+		expectedEnvNS   *string
 		expectedSuspend *bool
 	}{
 		{
@@ -1246,13 +1258,45 @@ func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 			expectedAnnot: new("my-ns-test-cluster"),
 		},
 		{
+			name:          "preserve stamped annotation even when goal annotations map is nil",
+			currentAnnot:  new("my-ns-test-cluster"),
+			goalAnnot:     nil,
+			expectedAnnot: new("my-ns-test-cluster"),
+		},
+		{
 			name:           "preserve existing stamped options namespace",
 			currentOptsNS:  "my-ns-abcde",
 			goalOptsNS:     "my-ns-vwxyz",
 			expectedOptsNS: "my-ns-abcde",
 		},
 		{
+			name:          "preserve legacy literal env namespace",
+			currentEnvNS:  new("my-ns"),
+			goalEnvNS:     new("my-ns-test-cluster"),
+			goalAnnot:     new("my-ns-test-cluster"),
+			expectedEnvNS: new("my-ns"),
+			expectedAnnot: nil,
+		},
+		{
+			name:          "preserve stamped literal env namespace",
+			currentEnvNS:  new("my-ns-abcde"),
+			currentAnnot:  new("my-ns-abcde"),
+			goalEnvNS:     new("my-ns-vwxyz"),
+			goalAnnot:     new("my-ns-vwxyz"),
+			expectedEnvNS: new("my-ns-abcde"),
+			expectedAnnot: new("my-ns-abcde"),
+		},
+		{
+			name:          "sidecar env untouched",
+			currentEnvNS:  new("ray-ns"),
+			goalEnvNS:     new("ray-ns-goal"),
+			sidecarEnvNS:  new("sidecar-ns"),
+			expectedEnvNS: new("ray-ns"),
+		},
+		{
 			name:            "preserve existing suspend field",
+			currentSuspend:  new(true),
+			goalSuspend:     new(false),
 			expectedSuspend: new(true),
 		},
 		{
@@ -1270,19 +1314,21 @@ func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 				},
 				Spec: rayv1.RayClusterSpec{
 					RayVersion: "2.56.0",
-					Suspend:    tt.expectedSuspend,
+					Suspend:    tt.currentSuspend,
 				},
 			}
 			goal := &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-cluster",
-					Namespace:   "default",
-					Annotations: map[string]string{},
+					Name:      "test-cluster",
+					Namespace: "default",
 				},
 				Spec: rayv1.RayClusterSpec{
 					RayVersion: "2.56.0",
-					Suspend:    new(false),
+					Suspend:    tt.goalSuspend,
 				},
+			}
+			if tt.goalAnnot != nil {
+				goal.Annotations = map[string]string{}
 			}
 
 			if tt.currentOptsNS != "" {
@@ -1296,6 +1342,48 @@ func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 			}
 			if tt.goalAnnot != nil {
 				goal.Annotations[utils.RayExternalStorageNSAnnotationKey] = *tt.goalAnnot
+			}
+			if tt.currentEnvNS != nil || tt.sidecarEnvNS != nil {
+				current.Spec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+					{Name: "ray-head"},
+				}
+				if tt.currentEnvNS != nil {
+					current.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
+						{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: *tt.currentEnvNS},
+					}
+				}
+				if tt.sidecarEnvNS != nil {
+					current.Spec.HeadGroupSpec.Template.Spec.Containers = append(
+						current.Spec.HeadGroupSpec.Template.Spec.Containers,
+						corev1.Container{
+							Name: "sidecar",
+							Env: []corev1.EnvVar{
+								{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: *tt.sidecarEnvNS},
+							},
+						},
+					)
+				}
+			}
+			if tt.goalEnvNS != nil || tt.sidecarEnvNS != nil {
+				goal.Spec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+					{Name: "ray-head"},
+				}
+				if tt.goalEnvNS != nil {
+					goal.Spec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
+						{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: *tt.goalEnvNS},
+					}
+				}
+				if tt.sidecarEnvNS != nil {
+					goal.Spec.HeadGroupSpec.Template.Spec.Containers = append(
+						goal.Spec.HeadGroupSpec.Template.Spec.Containers,
+						corev1.Container{
+							Name: "sidecar",
+							Env: []corev1.EnvVar{
+								{Name: utils.RAY_EXTERNAL_STORAGE_NS, Value: *tt.sidecarEnvNS},
+							},
+						},
+					)
+				}
 			}
 
 			modifyRayCluster(ctx, current, goal)
@@ -1311,6 +1399,28 @@ func TestModifyRayCluster_ExternalStorageNamespacePreservation(t *testing.T) {
 			} else {
 				_, ok := current.Annotations[utils.RayExternalStorageNSAnnotationKey]
 				assert.False(t, ok)
+			}
+			if tt.expectedEnvNS != nil {
+				require.NotEmpty(t, current.Spec.HeadGroupSpec.Template.Spec.Containers)
+				var foundVal string
+				for _, env := range current.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env {
+					if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+						foundVal = env.Value
+						break
+					}
+				}
+				assert.Equal(t, *tt.expectedEnvNS, foundVal)
+			}
+			if tt.sidecarEnvNS != nil {
+				require.Greater(t, len(current.Spec.HeadGroupSpec.Template.Spec.Containers), 1)
+				var sidecarVal string
+				for _, env := range current.Spec.HeadGroupSpec.Template.Spec.Containers[1].Env {
+					if env.Name == utils.RAY_EXTERNAL_STORAGE_NS {
+						sidecarVal = env.Value
+						break
+					}
+				}
+				assert.Equal(t, *tt.sidecarEnvNS, sidecarVal)
 			}
 			if tt.expectedSuspend != nil {
 				assert.Equal(t, *tt.expectedSuspend, *current.Spec.Suspend)
