@@ -48,7 +48,7 @@ func TestEnterCluster(t *testing.T) {
 				Namespace:   "default",
 				Name:        "cluster-a",
 				SessionName: "session_2026-04-22_10-00-00_000000_1",
-				OwnerKind:   "RayJob",
+				OwnerKind:   "rayjob",
 				OwnerName:   "job-a",
 			},
 			// cluster-b (Multi-session cluster: past session AND live session)
@@ -56,7 +56,7 @@ func TestEnterCluster(t *testing.T) {
 				Namespace:       "default",
 				Name:            "cluster-b",
 				SessionName:     "session_2026-04-22_10-00-00_000000_1",
-				OwnerKind:       "RayService",
+				OwnerKind:       "rayservice",
 				OwnerName:       "svc-b",
 				CreateTimeStamp: 1000, // Older
 			},
@@ -64,7 +64,7 @@ func TestEnterCluster(t *testing.T) {
 				Namespace:       "default",
 				Name:            "cluster-b",
 				SessionName:     "live",
-				OwnerKind:       "RayService",
+				OwnerKind:       "rayservice",
 				OwnerName:       "svc-b",
 				CreateTimeStamp: 2000, // Newer (latest)
 			},
@@ -73,7 +73,7 @@ func TestEnterCluster(t *testing.T) {
 				Namespace:   "default",
 				Name:        "cluster-c",
 				SessionName: "session_2026-04-22_10-00-00_000000_2_live",
-				OwnerKind:   "RayJob",
+				OwnerKind:   "rayjob",
 				OwnerName:   "job-c",
 			},
 			// cluster-d (invalid session format)
@@ -137,7 +137,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter existing single-session cluster with explicit session (Successful Dead Session Loading)", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-a/session_2026-04-22_10-00-00_000000_1", nil)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a/session_2026-04-22_10-00-00_000000_1", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -157,7 +157,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with session that is actually live maps to live sentinel", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-c/session_2026-04-22_10-00-00_000000_2_live", nil)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-c/session_2026-04-22_10-00-00_000000_2_live", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -178,7 +178,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with invalid session name format rejects request", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-d/invalid-session-name", nil)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-d/invalid-session-name", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -187,7 +187,7 @@ func TestEnterCluster(t *testing.T) {
 		}
 	})
 	t.Run("Enter cluster with 'latest' keyword resolves to newest session in the list", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-b/latest", nil)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-b/latest", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -214,7 +214,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with no session parameter defaults to latest", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-b", nil)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-b", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -281,7 +281,7 @@ func TestEnterClusterLatestFromStorage(t *testing.T) {
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-refresh/latest", nil)
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-refresh/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -346,7 +346,7 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-prioritize-live/latest", nil)
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-prioritize-live/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -398,7 +398,7 @@ func TestEnterClusterReturnsNotFoundWhenRemovedFromStorage(t *testing.T) {
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-removed-from-storage/latest", nil)
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-removed-from-storage/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -456,7 +456,7 @@ func TestEnterClusterReturnsErrorOnTransientK8sError(t *testing.T) {
 	container := restful.DefaultContainer
 
 	// Request "latest" when K8s returns transient error
-	req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-transient-err/latest", nil)
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-transient-err/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -464,4 +464,94 @@ func TestEnterClusterReturnsErrorOnTransientK8sError(t *testing.T) {
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("Expected status 500 (StatusInternalServerError), got %d: %s", resp.Code, resp.Body.String())
 	}
+}
+
+func TestEnterClusterRayJobAndRayService(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+
+	mockReader := &mockStorageReader{
+		clusters: []utils.ClusterInfo{
+			{
+				Namespace:       "default",
+				Name:            "rayjob-cluster",
+				SessionName:     "session_2026-04-22_10-00-00_000000_1",
+				CreateTimeStamp: 1000,
+				OwnerKind:       "rayjob",
+				OwnerName:       "my-job",
+			},
+			{
+				Namespace:       "default",
+				Name:            "rayservice-cluster",
+				SessionName:     "session_2026-04-22_10-00-00_000000_2",
+				CreateTimeStamp: 2000,
+				OwnerKind:       "rayservice",
+				OwnerName:       "my-service",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	clientManager := &ClientManager{
+		clients: []client.Client{k8sClient},
+	}
+
+	handler := &ServerHandler{
+		maxClusters:   100,
+		reader:        mockReader,
+		clientManager: clientManager,
+	}
+
+	fp := &fakeProcessor{
+		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
+		},
+	}
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+
+	routerRayClusterSet(handler)
+	container := restful.DefaultContainer
+
+	t.Run("Enter RayJob by owner name without session defaults to latest", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/rayjob/my-job", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+		cookies := resp.Result().Cookies()
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range cookies {
+			cookieMap[cookie.Name] = cookie
+		}
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_1" {
+			t.Errorf("Expected cookie %s to be 'session_2026-04-22_10-00-00_000000_1', got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+		if c, ok := cookieMap[COOKIE_OWNER_KIND_KEY]; !ok || c.Value != "rayjob" {
+			t.Errorf("Expected cookie %s to be 'rayjob', got %v", COOKIE_OWNER_KIND_KEY, c)
+		}
+	})
+
+	t.Run("Enter RayService by owner name with specific session", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/rayservice/my-service/session_2026-04-22_10-00-00_000000_2", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+		cookies := resp.Result().Cookies()
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range cookies {
+			cookieMap[cookie.Name] = cookie
+		}
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_2" {
+			t.Errorf("Expected cookie %s to be 'session_2026-04-22_10-00-00_000000_2', got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+		if c, ok := cookieMap[COOKIE_OWNER_KIND_KEY]; !ok || c.Value != "rayservice" {
+			t.Errorf("Expected cookie %s to be 'rayservice', got %v", COOKIE_OWNER_KIND_KEY, c)
+		}
+	})
 }

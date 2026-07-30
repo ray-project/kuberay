@@ -15,6 +15,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -35,6 +36,8 @@ type EventCollector struct {
 	clusterName        string
 	sessionName        string
 	root               string
+	ownerKind          string
+	ownerName          string
 	currentSessionName string
 	currentNodeID      string
 	events             []Event
@@ -57,7 +60,7 @@ var eventTypesWithJobID = []string{
 	"actorDefinitionEvent",
 }
 
-func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName string) *EventCollector {
+func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName, ownerKind, ownerName string) *EventCollector {
 	collector := &EventCollector{
 		events:             make([]Event, 0),
 		storageWriter:      writer,
@@ -67,6 +70,8 @@ func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID
 		clusterName:        clusterName,
 		clusterNamespace:   clusterNamespace,
 		sessionName:        sessionName,
+		ownerKind:          ownerKind,
+		ownerName:          ownerName,
 		mutex:              sync.Mutex{},
 		flushInterval:      time.Hour, // Default flush interval: 1 hour
 		stopped:            make(chan struct{}),
@@ -381,10 +386,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// Build node event storage path using event's nodeID
-	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
-
-	basePath := path.Join(sessionPath, "node_events", fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
+	// Build node event storage path using event's nodeID and session
+	nodeEventsDir := clusterlogs.NodeEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionNameToUse, nodeIDToUse)
+	basePath := path.Join(nodeEventsDir, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -427,10 +431,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// Build job event storage path using event's nodeID
-	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
-
-	basePath := path.Join(sessionPath, "job_events", jobID, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
+	// Build job event storage path using event's nodeID and session
+	jobEventsDir := clusterlogs.JobEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionNameToUse, nodeIDToUse, jobID)
+	basePath := path.Join(jobEventsDir, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
