@@ -121,7 +121,7 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			},
 		},
 		{
-			name: "mMissing group name",
+			name: "Missing group name",
 			args: []string{},
 			flags: map[string]string{
 				"namespace":   "",
