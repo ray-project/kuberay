@@ -388,6 +388,9 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			for state := range touchedWriters {
 				if err := state.writer.Flush(); err != nil {
 					logrus.Errorf("Failed to flush %s before session rotation: %v", state.path, err)
+					if writeErr == nil {
+						writeErr = fmt.Errorf("flush %s before session rotation: %w", state.path, err)
+					}
 					ec.reconcileDiskAccountingLocked(state)
 				} else {
 					ec.totalDiskUsed.Add(pendingDiskBytes[state])
