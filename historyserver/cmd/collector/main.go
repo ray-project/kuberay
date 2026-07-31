@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,8 +23,6 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-const runtimeClassConfigPath = "/var/collector-config/data"
-
 func main() {
 	role := ""
 	runtimeClassName := ""
@@ -33,10 +32,9 @@ func main() {
 	logBatching := 1000
 	eventsPort := 8080
 	pushInterval := time.Minute
-	runtimeClassConfigPath := "/var/collector-config/data"
 	ownerKind := ""
 	ownerName := ""
-	enableEventCollector := true
+a	enableEventCollector := true
 	enableLogCollector := true
 	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "")
 	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "")
@@ -80,29 +78,23 @@ func main() {
 		endpointPollInterval = parsed
 	}
 
-	sessionDir, err := utils.GetSessionDir()
-	if err != nil {
-		panic("Failed to get session dir: " + err.Error())
-	}
-
-	rayNodeId, err := utils.GetRayNodeID()
-	if err != nil {
-		panic("Failed to get ray node id: " + err.Error())
-	}
-
-	sessionName := path.Base(sessionDir)
-
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			panic(fmt.Sprintf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err))
 		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			panic(fmt.Sprintf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err))
 		}
 	}
+
+	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
+		runtimeClassName = val
+	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
+		runtimeClassName = val
+	}
+	runtimeClassName = strings.ToLower(runtimeClassName)
 
 	registry := collector.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
@@ -110,9 +102,30 @@ func main() {
 		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
+	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
+	if err != nil {
+		panic("Failed to get ray node id via HTTP endpoint: " + err.Error())
+	}
+
+	rayNodeId, err = utils.ConvertBase64ToHex(rayNodeId)
+	if err != nil {
+		panic("Failed to normalize ray node id to hex: " + err.Error())
+	}
+
+	activeSessionDir, err := utils.GetSessionDir()
+	if err != nil {
+		panic("Failed to get active session dir after discovering node id: " + err.Error())
+	}
+
+	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
+		logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+	}
+
+	sessionName := path.Base(activeSessionDir)
+
 	globalConfig := types.RayCollectorConfig{
 		RootDir:             rayRootDir,
-		SessionDir:          sessionDir,
+		SessionDir:          activeSessionDir,
 		RayNodeName:         rayNodeId,
 		Role:                role,
 		RayClusterName:      rayClusterName,
