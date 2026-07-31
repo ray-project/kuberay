@@ -36,7 +36,7 @@ func main() {
 	ownerName := ""
 	enableEventCollector := true
 	enableLogCollector := true
-	runtimeClassConfigPath := "/var/collector-config/data"
+	runtimeClassConfigPath := ""
 
 	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "Enable event collector")
 	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "Enable log collector")
@@ -47,7 +47,7 @@ func main() {
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "/var/collector-config/data", "")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
@@ -96,6 +96,9 @@ func main() {
 		if enabled, err := strconv.ParseBool(val); err == nil {
 			enableLogCollector = enabled
 		}
+	}
+	if val := os.Getenv("RUNTIME_CLASS_CONFIG_PATH"); val != "" {
+		runtimeClassConfigPath = val
 	}
 
 	role = strings.TrimSpace(role)
