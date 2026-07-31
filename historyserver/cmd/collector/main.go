@@ -36,21 +36,76 @@ func main() {
 	ownerName := ""
 a	enableEventCollector := true
 	enableLogCollector := true
-	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "")
-	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "")
-	flag.StringVar(&role, "role", "Worker", "")
+	runtimeClassConfigPath := "/var/collector-config/data"
+
+	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "Enable event collector")
+	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "Enable log collector")
+	flag.StringVar(&role, "role", "Worker", "Role of the collector node: Head or Worker")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "/var/collector-config/data", "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
 
 	flag.Parse()
+
+	if val := os.Getenv("RAY_CLUSTER_NAME"); val != "" {
+		rayClusterName = val
+	}
+	if val := os.Getenv("RAY_CLUSTER_NAMESPACE"); val != "" {
+		rayClusterNamespace = val
+	}
+	if val := os.Getenv("RAY_ROLE"); val != "" {
+		role = val
+	}
+	if val := os.Getenv("OWNER_KIND"); val != "" {
+		ownerKind = val
+	}
+	if val := os.Getenv("OWNER_NAME"); val != "" {
+		ownerName = val
+	}
+	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
+		rayRootDir = val
+	}
+	if val := os.Getenv("EVENTS_PORT"); val != "" {
+		if port, err := strconv.Atoi(val); err == nil {
+			eventsPort = port
+		}
+	}
+	if val := os.Getenv("LOG_BATCHING"); val != "" {
+		if batch, err := strconv.Atoi(val); err == nil {
+			logBatching = batch
+		}
+	}
+	if val := os.Getenv("PUSH_INTERVAL"); val != "" {
+		if interval, err := time.ParseDuration(val); err == nil {
+			pushInterval = interval
+		}
+	}
+	if val := os.Getenv("ENABLE_EVENT_COLLECTOR"); val != "" {
+		if enabled, err := strconv.ParseBool(val); err == nil {
+			enableEventCollector = enabled
+		}
+	}
+	if val := os.Getenv("ENABLE_LOG_COLLECTOR"); val != "" {
+		if enabled, err := strconv.ParseBool(val); err == nil {
+			enableLogCollector = enabled
+		}
+	}
+
+	role = strings.TrimSpace(role)
+	if strings.EqualFold(role, "head") {
+		role = "Head"
+	} else if strings.EqualFold(role, "worker") {
+		role = "Worker"
+	} else {
+		panic("Invalid role: " + role + ", must be Head or Worker")
+	}
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, &enableEventCollector, &enableLogCollector); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
@@ -151,6 +206,7 @@ a	enableEventCollector := true
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	if enableEventCollector {
 		wg.Add(1)
 		// Create and initialize EventCollector
@@ -161,6 +217,7 @@ a	enableEventCollector := true
 			logrus.Info("Event collector shutdown")
 		}()
 	}
+
 	if enableLogCollector {
 		wg.Add(1)
 		go func() {
