@@ -34,7 +34,7 @@ func main() {
 	pushInterval := time.Minute
 	ownerKind := ""
 	ownerName := ""
-a	enableEventCollector := true
+	enableEventCollector := true
 	enableLogCollector := true
 	runtimeClassConfigPath := "/var/collector-config/data"
 
