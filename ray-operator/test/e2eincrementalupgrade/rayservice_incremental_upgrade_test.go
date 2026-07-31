@@ -376,9 +376,9 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 		{Name: "BasicRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerMiddle},
 		{Name: "CancelRollback", Sequence: SeqABAB, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 2}, TriggerStage: TriggerMiddle},
 		{Name: "ThirdSpec", Sequence: SeqABAC, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 2}, TriggerStage: TriggerMiddle},
-		{Name: "UnhealthyPendingCluster", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLateWithCrash},
+		{Name: "UnhealthyPendingCluster", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 10}, TriggerStage: TriggerLateWithCrash},
 		{Name: "EarlyRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerEarly},
-		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate},
+		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 10}, TriggerStage: TriggerLate},
 		{Name: "FastRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
 	}
 
@@ -395,10 +395,12 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 			_, httpRoute, gatewayHost := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
-			// Copy original spec to use to trigger a rollback later.
+			// Copy original spec and active cluster name to use to trigger a rollback later.
 			rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
 			originalSpec := rayService.Spec.DeepCopy()
+			originalActiveClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+			g.Expect(originalActiveClusterName).NotTo(BeEmpty())
 
 			// Create curl pod to test traffic routing through Gateway to RayService
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
@@ -550,6 +552,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 			switch tc.Sequence {
 			case SeqABA:
+				g.Expect(finalClusterName).To(Equal(originalActiveClusterName), "Original active RayCluster should be preserved after rollback")
 				expectedCPU := originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
 				g.Expect(finalCPUReq.Cmp(expectedCPU)).To(Equal(0), "CPU request should match original")
 			case SeqABAB:
@@ -601,7 +604,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 		{Name: "CancelRollback", Sequence: SeqABAB, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 2}, TriggerStage: TriggerMiddle},
 		{Name: "ThirdSpec", Sequence: SeqABAC, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 2}, TriggerStage: TriggerMiddle},
 		{Name: "EarlyRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerEarly},
-		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate},
+		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 10}, TriggerStage: TriggerLate},
 		{Name: "FastRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
 	}
 
@@ -618,8 +621,10 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			// Phase 1: Create RayService with incremental upgrade and wait for it to be ready
 			rayService, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
-			// Save original spec (Spec A)
+			// Save original spec (Spec A) and original active cluster name
 			originalSpec := rayService.Spec.DeepCopy()
+			originalActiveClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+			g.Expect(originalActiveClusterName).NotTo(BeEmpty())
 
 			// Phase 2: Deploy Locust RayCluster and install Locust
 			locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
@@ -783,6 +788,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			switch tc.Sequence {
 			case SeqABA:
+				g.Expect(finalClusterName).To(Equal(originalActiveClusterName), "Original active RayCluster should be preserved after rollback")
 				g.Expect(finalCPUReq).To(Equal(originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]))
 			case SeqABAB:
 				g.Expect(finalCPUReq).To(Equal(resource.MustParse("500m")))
