@@ -2336,7 +2336,7 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 	if targetHash == originalHash {
 		if !isRollbackInProgress {
 			logger.Info("Goal state reverted to original cluster during upgrade. Initiating safe rollback.", "targetHash", targetHash, "originalHash", originalHash)
-			setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state reverted to original cluster, rolling back.")
+			setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "Goal state reverted to original cluster, rolling back.")
 		}
 		return nil
 	}
