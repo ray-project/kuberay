@@ -780,7 +780,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			},
 			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
 		},
-		"should return error if autoscaler v1 is enabled and a worker group has a restartPolicy other than Never or unset": {
+		"should not return error if autoscaler v1 is enabled and a worker group has a restartPolicy other than Never or unset (warning only)": {
 			spec: rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
@@ -800,7 +800,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "restartPolicy for worker group worker-group-2 should be Never or unset when using autoscaler V1",
+			// No error expected; this is now a warning surfaced.
 		},
 		"should not return error if autoscaler v1 is enabled and all worker groups have restartPolicy Never or unset": {
 			spec: rayv1.RayClusterSpec{

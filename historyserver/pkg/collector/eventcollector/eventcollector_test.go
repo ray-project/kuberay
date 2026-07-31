@@ -213,7 +213,7 @@ func TestBuildEventStorageKey_NodeEventsGzip(t *testing.T) {
 		nodeID:      "node-1",
 		createdAt:   ts,
 	})
-	assert.Equal(t, fmt.Sprintf("history/cluster_ns/session_abc/node_events/node-1-2026-05-13-10-%d.jsonl.gz", ts.UnixNano()), key)
+	assert.Equal(t, fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl.gz", ts.UnixNano()), key)
 }
 
 func TestBuildEventStorageKey_JobEventsNoCompression(t *testing.T) {
@@ -225,7 +225,7 @@ func TestBuildEventStorageKey_JobEventsNoCompression(t *testing.T) {
 		nodeID:      "nX",
 		createdAt:   ts,
 	})
-	assert.Equal(t, fmt.Sprintf("history/cluster_ns/session_xyz/job_events/job-7/nX-2026-01-02-03-%d.jsonl", ts.UnixNano()), key)
+	assert.Equal(t, fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_xyz/nX/job_events/job-7/nX-2026-01-02-03-%d.jsonl", ts.UnixNano()), key)
 }
 
 // ---------- openNewActiveFile / rotateFileLocked ----------
@@ -367,7 +367,7 @@ func TestPersistEvents_SessionChangeRotates(t *testing.T) {
 	keys := writer.fileKeys()
 	found := false
 	for _, k := range keys {
-		if strings.Contains(k, "/session_abc/node_events/") && strings.HasSuffix(k, ".jsonl.gz") {
+		if strings.Contains(k, "/session_abc/node-1/node_events/") && strings.HasSuffix(k, ".jsonl.gz") {
 			found = true
 			break
 		}
@@ -448,7 +448,7 @@ func TestProcessRotatedFile_GzipsAndUploadsThenCleansUp(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// Upload happened with gzip payload.
-	expectedKey := fmt.Sprintf("history/cluster_ns/session_abc/node_events/node-1-2026-05-13-10-%d.jsonl.gz", task.createdAt.UnixNano())
+	expectedKey := fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl.gz", task.createdAt.UnixNano())
 	raw, ok := writer.get(expectedKey)
 	require.True(t, ok, "uploaded keys: %v", writer.fileKeys())
 
@@ -480,7 +480,7 @@ func TestProcessRotatedFile_NoCompressionUsesJSONLExtension(t *testing.T) {
 	}
 	ec.processRotatedFile(task)
 
-	expectedKey := fmt.Sprintf("history/cluster_ns/session_abc/node_events/node-1-2026-05-13-10-%d.jsonl", task.createdAt.UnixNano())
+	expectedKey := fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl", task.createdAt.UnixNano())
 	raw, ok := writer.get(expectedKey)
 	require.True(t, ok, "uploaded keys: %v", writer.fileKeys())
 	assert.Equal(t, payload, raw)

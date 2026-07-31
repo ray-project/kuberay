@@ -249,7 +249,7 @@ func main() {
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, eventcollector.Options{
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
 			DataDir:            eventDataDir,
 			RotationInterval:   eventRotationInterval,
 			MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,

@@ -226,6 +226,12 @@ func withUpgradedServeConfig() SupportOption[rayv1ac.RayServiceSpecApplyConfigur
 	}
 }
 
+func withSuspend(suspend bool) SupportOption[rayv1ac.RayServiceSpecApplyConfiguration] {
+	return func(spec *rayv1ac.RayServiceSpecApplyConfiguration) *rayv1ac.RayServiceSpecApplyConfiguration {
+		return spec.WithSuspend(suspend)
+	}
+}
+
 // triggerIncrementalUpgrade updates the RayService to trigger an incremental upgrade:
 //   - RayCluster spec: Set worker CPU request to custom value
 //   - Serve config: Update (price 3->4, factor 5->3)

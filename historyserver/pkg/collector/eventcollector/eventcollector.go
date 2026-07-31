@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -138,6 +139,8 @@ type EventCollector struct {
 	clusterName        string
 	sessionName        string
 	root               string
+	ownerKind          string
+	ownerName          string
 	currentSessionName string
 	currentNodeID      string
 
@@ -162,7 +165,7 @@ type EventCollector struct {
 // NewEventCollector constructs an EventCollector with disk-first storage.
 func NewEventCollector(
 	writer storage.StorageWriter,
-	rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName string,
+	rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName, ownerKind, ownerName string,
 	opts Options,
 ) *EventCollector {
 	if opts.DataDir == "" {
@@ -186,6 +189,8 @@ func NewEventCollector(
 		clusterName:        clusterName,
 		clusterNamespace:   clusterNamespace,
 		sessionName:        sessionName,
+		ownerKind:          ownerKind,
+		ownerName:          ownerName,
 		currentSessionName: sessionName,
 		currentNodeID:      nodeID,
 		stopped:            make(chan struct{}),
@@ -825,18 +830,22 @@ func (ec *EventCollector) processRotatedFileInternal(task rotationTask, retryOnF
 	logrus.Infof("Uploaded %d bytes to %s", task.size, key)
 }
 
-// buildEventStorageKey constructs the remote storage key for a rotated file.
-// Format includes a UnixNano suffix to avoid collisions when multiple files
-// are rotated within the same hour for the same nodeID+category:
+// buildEventStorageKey constructs the remote storage key for a rotated file,
+// using the clusterlogs layout the history server reads (#4918):
 //
-//	Node events: {root}/{clusterName}_{namespace}/{sessionName}/node_events/{nodeID}-{hour}-{nanoTs}.jsonl.gz
-//	Job events:  {root}/{clusterName}_{namespace}/{sessionName}/job_events/{jobID}/{nodeID}-{hour}-{nanoTs}.jsonl.gz
+//	Node events: <prefix>/{sessionName}/{nodeID}/node_events/{nodeID}-{hour}-{nanoTs}.jsonl.gz
+//	Job events:  <prefix>/{sessionName}/{nodeID}/job_events/{jobID}/{nodeID}-{hour}-{nanoTs}.jsonl.gz
+//
+// The UnixNano suffix avoids collisions when multiple files are rotated within
+// the same hour for the same nodeID+category.
 func (ec *EventCollector) buildEventStorageKey(task rotationTask) string {
 	hour := task.createdAt.Truncate(time.Hour).Format("2006-01-02-15")
 	sessionName := task.sessionName
 	if sessionName == "" {
 		sessionName = ec.sessionName
 	}
+	// nodeID is a directory level in the clusterlogs layout, so the fallback
+	// also keeps resumed files (whose name may not parse) out of an empty dir.
 	nodeID := task.nodeID
 	if nodeID == "" {
 		nodeID = ec.nodeID
@@ -851,13 +860,14 @@ func (ec *EventCollector) buildEventStorageKey(task rotationTask) string {
 	}
 
 	fileName := fmt.Sprintf("%s-%s-%d%s", nodeID, hour, task.createdAt.UnixNano(), ext)
-	return path.Join(
-		ec.root,
-		ec.clusterKey(),
-		sessionName,
-		task.category,
-		fileName,
-	)
+
+	var dir string
+	if jobID, ok := strings.CutPrefix(task.category, categoryJobPrefix+"/"); ok {
+		dir = clusterlogs.JobEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionName, nodeID, jobID)
+	} else {
+		dir = clusterlogs.NodeEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionName, nodeID)
+	}
+	return path.Join(dir, fileName)
 }
 
 // diskReconcileLoop periodically reconciles totalDiskUsed with a real

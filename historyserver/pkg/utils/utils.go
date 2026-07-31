@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -46,10 +45,6 @@ func EndpointPathToStorageKey(endpointPath string) string {
 	return "restful__" + strings.ReplaceAll(trimmed, "/", "__")
 }
 
-func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameNamespace, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
-}
-
 const (
 	// connector is the separator for creating flat storage keys.
 	//
@@ -73,10 +68,6 @@ const (
 	// DO NOT CHANGE: Would break existing stored data paths
 	Connector = "_"
 )
-
-func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
-	return fmt.Sprintf("%s%s%s", rayClusterName, Connector, rayClusterNamespace)
-}
 
 // IsSessionDirActive checks if the raylet socket is running. Connection means raylet is active.
 func IsSessionDirActive(sessionDir string) bool {
