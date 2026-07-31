@@ -136,10 +136,11 @@ func TestIsNodeEvent(t *testing.T) {
 }
 
 func TestGetJobID(t *testing.T) {
+	// Payload job IDs arrive base64-encoded and are normalized to hex.
 	evt := map[string]interface{}{
-		"driverJobLifecycleEvent": map[string]interface{}{"jobId": "job-42"},
+		"driverJobLifecycleEvent": map[string]interface{}{"jobId": "AQAAAA=="},
 	}
-	assert.Equal(t, "job-42", getJobID(evt))
+	assert.Equal(t, "01000000", getJobID(evt))
 
 	evt2 := map[string]interface{}{
 		"taskDefinitionEvent": map[string]interface{}{"jobId": 7},

@@ -1093,6 +1093,10 @@ func getJobID(eventData map[string]interface{}) string {
 		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
 				id := fmt.Sprintf("%v", jobID)
+				// Payload job IDs arrive base64-encoded (e.g. "AQAAAA=="). Normalize to hex for safe path validation.
+				if hexID, err := utils.ConvertBase64ToHex(id); err == nil {
+					id = hexID
+				}
 				if !isSafePathComponent(id) {
 					logrus.Warnf("Ignoring unsafe jobId %q; filing event under %s", id, categoryNodeEvents)
 					return ""
