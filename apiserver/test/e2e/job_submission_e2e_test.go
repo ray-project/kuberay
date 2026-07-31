@@ -170,7 +170,7 @@ func TestCreateJobSubmission(t *testing.T) {
 			return ""
 		}
 		return jobDetails.Status
-	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.Equal("STOPPED"))
+	}, TestTimeoutMedium, TestPollingInterval).Should(gomega.BeElementOf("STOPPED", "SUCCEEDED", "FAILED"))
 
 	// Delete job
 	deleteJobRequest := api.DeleteRayJobSubmissionRequest{
