@@ -928,7 +928,16 @@ func (ec *EventCollector) resumePendingFiles() {
 
 	// Second pass: process files, skipping .jsonl when a .jsonl.gz already exists.
 	for basePath, pf := range gzFiles {
-		delete(jsonlFiles, basePath) // skip the .jsonl counterpart
+		// Remove .jsonl when its .gz counterpart already exists.
+		if orphan, ok := jsonlFiles[basePath]; ok {
+			delete(jsonlFiles, basePath)
+			if err := os.Remove(orphan.path); err != nil && !os.IsNotExist(err) {
+				logrus.Warnf("Failed to remove superseded %s: %v", orphan.path, err)
+			} else {
+				ec.totalDiskUsed.Add(-orphan.info.Size())
+				logrus.Infof("Removed %s superseded by its .gz counterpart", orphan.path)
+			}
+		}
 
 		nodeID := nodeIDFromFileName(pf.info.Name())
 		task := rotationTask{
