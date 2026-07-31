@@ -463,7 +463,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 			// Check for overflow: G115
 			if header.Mode < 0 || header.Mode > math.MaxUint32 {
 				fmt.Fprintf(options.ioStreams.Out, "file mode out side of acceptable value %d skipping file\n", header.Mode)
-			} else if err := writeTarFile(localFilePath, os.FileMode(header.Mode), tarReader); err != nil { //nolint:gosec // overflow is guarded by bounds check above
+			} else if err := writeTarFile(localFilePath, os.FileMode(header.Mode), tarReader); err != nil {
 				return err
 			}
 		default:
