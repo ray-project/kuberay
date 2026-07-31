@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,23 @@ var eventTypesWithJobID = []string{
 }
 
 var nodeEventType = []string{"NODE_LIFECYCLE_EVENT", "NODE_DEFINITION_EVENT"}
+
+// safePathComponentRe matches values safe to use as a single path segment.
+// Ray session names look like "session_2026-07-31_10-30-45_123456" and job IDs
+// are hex, so this is permissive enough for real traffic.
+var safePathComponentRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// isSafePathComponent reports whether s can be used as a single path segment
+// in local paths and remote storage keys.
+// Reject "." and ".." explicitly: they pass the regexp but ".." escapes the
+// parent dir and "." gets cleaned away by path.Join, collapsing this session
+// into its parent and mixing it with others.
+func isSafePathComponent(s string) bool {
+	if s == "." || s == ".." {
+		return false
+	}
+	return safePathComponentRe.MatchString(s)
+}
 
 // activeFileState wraps the per-category append target.
 type activeFileState struct {
@@ -299,9 +317,17 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
 			return
 		}
-		if _, ok := eventData["sessionName"].(string); !ok {
+		sessionNameStr, ok := eventData["sessionName"].(string)
+		if !ok {
 			logrus.Errorf("Event sessionName not found or not a string")
 			resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found"))
+			return
+		}
+		// sessionName becomes a directory name and part of the remote storage
+		// key, so reject anything that could escape the collector data dir.
+		if !isSafePathComponent(sessionNameStr) {
+			logrus.Errorf("Event sessionName %q is not a valid path component", sessionNameStr)
+			resp.WriteError(http.StatusBadRequest, fmt.Errorf("invalid sessionName"))
 			return
 		}
 		if _, err := time.Parse(time.RFC3339Nano, eventData["timestamp"].(string)); err != nil {
@@ -445,6 +471,10 @@ func (ec *EventCollector) getOrCreateActiveFileLocked(category, sessionName stri
 // Must be called with writeMu held.
 func (ec *EventCollector) openNewActiveFileLocked(category, sessionName string) (*activeFileState, error) {
 	dir := filepath.Join(ec.dataDir, ec.clusterKey(), sessionName, category)
+	// confirm the join path stayed under dataDir
+	if err := ec.assertInsideDataDir(dir); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
@@ -470,6 +500,18 @@ func (ec *EventCollector) openNewActiveFileLocked(category, sessionName string) 
 	}
 	ec.activeFiles[category] = state
 	return state, nil
+}
+
+// assertInsideDataDir fails if p resolved to somewhere outside ec.dataDir.
+func (ec *EventCollector) assertInsideDataDir(p string) error {
+	rel, err := filepath.Rel(ec.dataDir, p)
+	if err != nil {
+		return fmt.Errorf("resolve %s against data dir %s: %w", p, ec.dataDir, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".." + string(filepath.Separator)) {
+		return fmt.Errorf("path %s escapes data dir %s", p, ec.dataDir)
+	}
+	return nil
 }
 
 // clusterKey returns "{clusterName}_{namespace}" used as dataDir subdirectory.
@@ -994,7 +1036,12 @@ func getJobID(eventData map[string]interface{}) string {
 	for _, eventType := range eventTypesWithJobID {
 		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
-				return fmt.Sprintf("%v", jobID)
+				id := fmt.Sprintf("%v", jobID)
+				if !isSafePathComponent(id) {
+					logrus.Warnf("Ignoring unsafe jobId %q; filing event under %s", id, categoryNodeEvents)
+					return ""
+				}
+				return id
 			}
 		}
 	}
