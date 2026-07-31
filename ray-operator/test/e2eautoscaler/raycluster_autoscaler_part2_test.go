@@ -634,6 +634,9 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 
 			// Verify the Autoscaler's CRD patching behavior while scaling up 10 workers.
+			// We create all 10 actors in a single Python script invocation (--count=10) rather
+			// than asynchronous background bash jobs so that demand reaches 10 immediately
+			// without any partial demand intermediate state.
 			// In Default mode, replicas would jump straight to 10 to meet the demand.
 			// In Conservative mode, the initial batch is capped at max(5, num_running).
 			g.Expect(RateLimitedReplicas(test, rayCluster, 5, func() {
@@ -641,8 +644,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 				LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
-					"bash", "-c",
-					`for i in {0..9}; do python /home/ray/test_scripts/create_detached_actor.py "actor$i" & done; wait`,
+					"python", "/home/ray/test_scripts/create_detached_actor.py", "actor", "--count=10",
 				})
 			})).To(gomega.BeTrue(), "Conservative mode should cap the initial scale-up to 5")
 
