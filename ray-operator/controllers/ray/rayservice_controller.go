@@ -2331,7 +2331,17 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 
 	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-	// Case 1: The goal spec matches the pending cluster's spec.
+	// Case 1: The goal spec matches the original active cluster's spec.
+	// The user reverted the upgrade. We must cancel the upgrade and safely roll back to the active cluster.
+	if targetHash == originalHash {
+		if !isRollbackInProgress {
+			logger.Info("Goal state reverted to original cluster during upgrade. Initiating safe rollback.", "targetHash", targetHash, "originalHash", originalHash)
+			setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state reverted to original cluster, rolling back.")
+		}
+		return nil
+	}
+
+	// Case 2: The goal spec matches the pending cluster's spec.
 	// The upgrade is on track. We should revert any accidental rollback attempt and continue.
 	if targetHash == pendingHash {
 		if isRollbackInProgress {
@@ -2341,14 +2351,11 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 		return nil
 	}
 
-	// Case 2: The goal spec diverges from the pending cluster.
-	// This covers two sub-cases:
-	//   2.1: The user reverted to the original spec (targetHash == originalHash).
-	//        The pending cluster is no longer needed, so we roll back to the active cluster.
-	//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
-	//        The pending cluster doesn't match the new goal either, so we must first roll back
-	//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
-	// In both sub-cases, we must safely route all traffic back to the original cluster before
+	// Case 3: The goal spec diverges from the pending cluster.
+	// The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
+	// The pending cluster doesn't match the new goal either, so we must first roll back
+	// to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
+	// We must safely route all traffic back to the original cluster before
 	// allowing a new cluster to be spun up.
 	if !isRollbackInProgress {
 		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
