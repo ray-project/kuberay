@@ -619,9 +619,11 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			serveConfigV2 := highRPSServeConfigV2
 
 			// Phase 1: Create RayService with incremental upgrade and wait for it to be ready
-			rayService, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+			_, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Save original spec (Spec A) and original active cluster name
+			rayService, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
 			originalSpec := rayService.Spec.DeepCopy()
 			originalActiveClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
 			g.Expect(originalActiveClusterName).NotTo(BeEmpty())
@@ -629,7 +631,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			// Phase 2: Deploy Locust RayCluster and install Locust
 			locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
 			configMapAC := newLocustRunnerConfigMapAC(namespace.Name, Files(test, "locust_runner.py"))
-			_, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
+			_, err = test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			KubectlApplyYAML(test, locustYamlFile, namespace.Name)
