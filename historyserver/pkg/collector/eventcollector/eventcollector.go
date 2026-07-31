@@ -39,6 +39,8 @@ const (
 	bufWriterSize         = 64 * 1024
 	diskPressureWatermark = 0.8
 	rotationQueueSize     = 256
+	// Backoff before retrying a failed or deferred upload.
+	retryBackoff = 5 * time.Second
 
 	categoryNodeEvents = "node_events"
 	categoryJobPrefix  = "job_events"
@@ -263,6 +265,7 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 
 	ec.workersWG.Wait()
+	ec.sweepStrandedTasks()
 }
 
 // PersistEvents is the HTTP handler for POST /v1/events. Events are always
@@ -508,7 +511,7 @@ func (ec *EventCollector) assertInsideDataDir(p string) error {
 	if err != nil {
 		return fmt.Errorf("resolve %s against data dir %s: %w", p, ec.dataDir, err)
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".." + string(filepath.Separator)) {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path %s escapes data dir %s", p, ec.dataDir)
 	}
 	return nil
@@ -597,13 +600,43 @@ func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) 
 	case ec.rotationQueue <- task:
 	default:
 		logrus.Warnf("rotation queue full, scheduling retry for %s", task.jsonlPath)
-		go func(t rotationTask) {
-			time.Sleep(5 * time.Second)
+		ec.retryProcess(task)
+	}
+}
+
+// retryProcess retries a failed or deferred rotation task after a backoff by
+// handing it back to the upload worker. If shutdown starts first, the task
+// gets one final inline attempt instead
+func (ec *EventCollector) retryProcess(task rotationTask) {
+	// Tracked by workersWG so Run's Wait covers the final attempt.
+	ec.workersWG.Go(func() {
+		select {
+		case <-time.After(retryBackoff):
+			// Hand back to the worker; if shutdown interrupts the wait for
+			// queue space, fall back to the final inline attempt.
 			select {
-			case ec.rotationQueue <- t:
+			case ec.rotationQueue <- task:
 			case <-ec.stopped:
+				ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
 			}
-		}(task)
+		case <-ec.stopped:
+			// Shutdown before the backoff elapsed, do final attempt.
+			ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+		}
+	})
+}
+
+// sweepStrandedTasks gives a final attempt to tasks a retry enqueued after the
+// worker's drain had finished. Call only after workersWG.Wait: with every
+// producer gone the queue can only shrink, so the sweep sees everything.
+func (ec *EventCollector) sweepStrandedTasks() {
+	for {
+		select {
+		case task := <-ec.rotationQueue:
+			ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+		default:
+			return
+		}
 	}
 }
 
@@ -664,13 +697,7 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		if blocking {
 			ec.enqueueRotationTask(task, true)
 		} else {
-			go func(t rotationTask) {
-				time.Sleep(5 * time.Second)
-				select {
-				case ec.rotationQueue <- t:
-				case <-ec.stopped:
-				}
-			}(task)
+			ec.retryProcess(task)
 		}
 		return fmt.Errorf("flush failed for %s, queued for delayed upload", state.path)
 	}
@@ -693,11 +720,12 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 func (ec *EventCollector) compressionUploadWorker() {
 	defer ec.workersWG.Done()
 
+	// drain runs during shutdown, so each task gets a single final attempt
 	drain := func() {
 		for {
 			select {
 			case task := <-ec.rotationQueue:
-				ec.processRotatedFile(task)
+				ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
 			default:
 				return
 			}
@@ -716,8 +744,15 @@ func (ec *EventCollector) compressionUploadWorker() {
 }
 
 // processRotatedFile optionally gzips the file, uploads it, then
-// cleans up the local copies.
+// cleans up the local copies. Upload failures are retried with a backoff.
 func (ec *EventCollector) processRotatedFile(task rotationTask) {
+	ec.processRotatedFileInternal(task, true)
+}
+
+// processRotatedFileInternal process rotated files with retry control. With
+// retryOnFailure=false a failed upload is logged and abandoned instead of
+// rescheduled, which is used for the single final attempt during shutdown.
+func (ec *EventCollector) processRotatedFileInternal(task rotationTask, retryOnFailure bool) {
 	uploadPath := task.jsonlPath
 	var compressedPath string
 
@@ -761,16 +796,11 @@ func (ec *EventCollector) processRotatedFile(task rotationTask) {
 				logrus.Warnf("Failed to remove %s after failed upload: %v", compressedPath, err)
 			}
 		}
-		// Re-enqueue for retry instead of waiting for a process restart; a
-		// long-running collector would otherwise never retry and the local
-		// files would pin totalDiskUsed until disk pressure rejects events.
-		go func(t rotationTask) {
-			time.Sleep(5 * time.Second)
-			select {
-			case ec.rotationQueue <- t:
-			case <-ec.stopped:
-			}
-		}(task)
+		if !retryOnFailure {
+			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, task.jsonlPath)
+			return
+		}
+		ec.retryProcess(task)
 		return
 	}
 	f.Close()
@@ -967,20 +997,22 @@ func (ec *EventCollector) resumePendingFiles() {
 		case ec.rotationQueue <- task:
 		default:
 			logrus.Warnf("rotation queue full during resume, scheduling retry for %s", pf.path)
-			go func(t rotationTask) {
-				time.Sleep(5 * time.Second)
-				select {
-				case ec.rotationQueue <- t:
-				case <-ec.stopped:
-				}
-			}(task)
+			ec.retryProcess(task)
 		}
 	}
 }
 
 // uploadOnly uploads a pre-existing compressed file to remote storage and
 // removes it locally. Used during startup resume for .jsonl.gz leftovers.
+// It cannot go through processRotatedFile: the file is already compressed and
+// would be gzipped a second time. Upload failures are retried with a backoff.
 func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
+	ec.uploadOnlyInternal(task, gzPath, true)
+}
+
+// uploadOnlyInternal is uploadOnly with retry control; retryOnFailure=false is
+// the single final attempt during shutdown and must not spawn further retries.
+func (ec *EventCollector) uploadOnlyInternal(task rotationTask, gzPath string, retryOnFailure bool) {
 	key := ec.buildEventStorageKey(task)
 	f, err := os.Open(gzPath)
 	if err != nil {
@@ -993,14 +1025,21 @@ func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
 	if err := ec.storageWriter.WriteFile(key, f); err != nil {
 		f.Close()
 		logrus.Errorf("Failed to resume upload %s to %s: %v", gzPath, key, err)
+		if !retryOnFailure {
+			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, gzPath)
+			return
+		}
 		// Retry after a backoff instead of leaving the file on disk until the
 		// next pod restart, mirroring processRotatedFile. A transient remote
 		// error would otherwise pin totalDiskUsed and trigger 503 backpressure.
+		// On shutdown, make one last synchronous attempt rather than dropping
+		// the task — see retryProcess for why.
 		ec.workersWG.Go(func() {
 			select {
-			case <-time.After(5 * time.Second):
-				ec.uploadOnly(task, gzPath)
+			case <-time.After(retryBackoff):
+				ec.uploadOnlyInternal(task, gzPath, true)
 			case <-ec.stopped:
+				ec.uploadOnlyInternal(task, gzPath, false)
 			}
 		})
 		return
