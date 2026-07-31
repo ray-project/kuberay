@@ -949,7 +949,8 @@ func (ec *EventCollector) resumePendingFiles() {
 			size:        pf.info.Size(),
 			extOverride: ".jsonl.gz",
 		}
-		go ec.uploadOnly(task, pf.path)
+		// Tracked so shutdown waits for these in-flight uploads.
+		ec.workersWG.Go(func() { ec.uploadOnly(task, pf.path) })
 	}
 
 	for _, pf := range jsonlFiles {
@@ -980,9 +981,6 @@ func (ec *EventCollector) resumePendingFiles() {
 // uploadOnly uploads a pre-existing compressed file to remote storage and
 // removes it locally. Used during startup resume for .jsonl.gz leftovers.
 func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
-	ec.workersWG.Add(1)
-	defer ec.workersWG.Done()
-
 	key := ec.buildEventStorageKey(task)
 	f, err := os.Open(gzPath)
 	if err != nil {
@@ -998,13 +996,13 @@ func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
 		// Retry after a backoff instead of leaving the file on disk until the
 		// next pod restart, mirroring processRotatedFile. A transient remote
 		// error would otherwise pin totalDiskUsed and trigger 503 backpressure.
-		go func(t rotationTask, p string) {
+		ec.workersWG.Go(func() {
 			select {
 			case <-time.After(5 * time.Second):
-				ec.uploadOnly(t, p)
+				ec.uploadOnly(task, gzPath)
 			case <-ec.stopped:
 			}
-		}(task, gzPath)
+		})
 		return
 	}
 	f.Close()
