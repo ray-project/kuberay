@@ -150,6 +150,20 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - persistentvolumeclaims
+  - pods/status
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - create
@@ -178,24 +192,13 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods/status
-  - services
+  - secrets
   verbs:
   - create
   - delete
   - get
   - list
-  - patch
   - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - get
-  - list
   - watch
 - apiGroups:
   - ""
@@ -227,6 +230,31 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates/status
+  verbs:
+  - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  verbs:
+  - create
+  - get
+  - list
   - watch
 - apiGroups:
   - coordination.k8s.io

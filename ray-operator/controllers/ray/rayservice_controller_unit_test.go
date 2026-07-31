@@ -2688,6 +2688,9 @@ func TestReconcileRollbackState(t *testing.T) {
 	updatedSpec := baseSpec.DeepCopy()
 	updatedSpec.RayVersion = "2.50.0"
 
+	thirdSpec := baseSpec.DeepCopy()
+	thirdSpec.RayVersion = "2.56.0"
+
 	baseHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(baseSpec)
 	require.NoError(t, err)
 
@@ -2704,32 +2707,51 @@ func TestReconcileRollbackState(t *testing.T) {
 	tests := []struct {
 		name                 string
 		rayServiceSpec       rayv1.RayClusterSpec
+		pendingHashOverride  string
 		isRollbackInProgress bool
 		expectRollbackStatus bool
 	}{
 		{
 			name:                 "Normal RayService upgrade, goal matches pending",
 			rayServiceSpec:       *updatedSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: false,
 			expectRollbackStatus: false,
 		},
 		{
 			name:                 "RayService Spec changed, initiate rollback",
 			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: false,
 			expectRollbackStatus: true,
 		},
 		{
 			name:                 "Rollback in progress, continues rolling back",
 			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: true,
 			expectRollbackStatus: true,
 		},
 		{
 			name:                 "Rollback canceled, user updated spec back to pending",
 			rayServiceSpec:       *updatedSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: true,
 			expectRollbackStatus: false,
+		},
+		{
+			name:                 "Third-spec scenario: Goal updated to third spec mid-upgrade",
+			rayServiceSpec:       *thirdSpec,
+			pendingHashOverride:  updatedHash,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
+		},
+		{
+			name:                 "Fast rollback: Goal matches active, but pending already updated to match active",
+			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  baseHash,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
 		},
 	}
 
@@ -2746,14 +2768,17 @@ func TestReconcileRollbackState(t *testing.T) {
 			}
 
 			if tt.isRollbackInProgress {
-				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "rolling back")
 			}
+
+			testPendingCluster := pendingCluster.DeepCopy()
+			testPendingCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = tt.pendingHashOverride
 
 			reconciler := RayServiceReconciler{
 				Recorder: events.NewFakeRecorder(1),
 			}
 
-			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, pendingCluster)
+			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, testPendingCluster)
 			require.NoError(t, err)
 
 			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
@@ -2961,10 +2986,10 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			}
 
 			if tt.isRollback {
-				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
-				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrade still in progress during rollback")
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "rolling back")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "upgrade still in progress during rollback")
 			} else {
-				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrading")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "upgrading")
 			}
 
 			// Run reconcileServe
@@ -3015,7 +3040,7 @@ func TestRayServiceFinalizer(t *testing.T) {
 			rayService: &rayv1.RayService{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 				Spec: rayv1.RayServiceSpec{
-					ManagedBy: ptr.To("kueue.x-k8s.io/multikueue"),
+					ManagedBy: new("kueue.x-k8s.io/multikueue"),
 				},
 			},
 			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {

@@ -1,5 +1,7 @@
 package e2eincrementalupgrade
 
+const defaultWorkerCPURequest = "2"
+
 // These parameters control capacity scaling and gradual traffic migration during the upgrade.
 type incrementalUpgradeParams struct {
 	Name     string

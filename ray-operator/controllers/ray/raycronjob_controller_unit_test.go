@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	clocktesting "k8s.io/utils/clock/testing"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -272,7 +271,7 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 
 	// Create RayCronJob with suspend=true
 	rayCronJob := rayCronJobTemplate("suspended-cronjob", "default", "*/5 * * * *")
-	rayCronJob.Spec.Suspend = ptr.To(true)
+	rayCronJob.Spec.Suspend = new(true)
 
 	// Create scheme and add types
 	scheme := runtime.NewScheme()

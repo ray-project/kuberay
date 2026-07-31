@@ -201,7 +201,7 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 							WithImage(GetRayImage()).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceCPU:    resource.MustParse(defaultWorkerCPURequest),
 									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
@@ -209,6 +209,50 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								})))))),
 		)
+}
+
+func withWorkerCPURequest(cpuRequest string) SupportOption[rayv1ac.RayServiceSpecApplyConfiguration] {
+	return func(spec *rayv1ac.RayServiceSpecApplyConfiguration) *rayv1ac.RayServiceSpecApplyConfiguration {
+		(*spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests)[corev1.ResourceCPU] = resource.MustParse(cpuRequest)
+		return spec
+	}
+}
+
+func withUpgradedServeConfig() SupportOption[rayv1ac.RayServiceSpecApplyConfiguration] {
+	return func(spec *rayv1ac.RayServiceSpecApplyConfiguration) *rayv1ac.RayServiceSpecApplyConfiguration {
+		serveConfig := strings.ReplaceAll(*spec.ServeConfigV2, "price: 3", "price: 4")
+		serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
+		return spec.WithServeConfigV2(serveConfig)
+	}
+}
+
+func withSuspend(suspend bool) SupportOption[rayv1ac.RayServiceSpecApplyConfiguration] {
+	return func(spec *rayv1ac.RayServiceSpecApplyConfiguration) *rayv1ac.RayServiceSpecApplyConfiguration {
+		return spec.WithSuspend(suspend)
+	}
+}
+
+// triggerIncrementalUpgrade updates the RayService to trigger an incremental upgrade:
+//   - RayCluster spec: Set worker CPU request to custom value
+//   - Serve config: Update (price 3->4, factor 5->3)
+func triggerIncrementalUpgrade(
+	test Test,
+	namespace, rayServiceName string,
+	stepSize, interval, maxSurge *int32,
+	serveConfigV2 serveConfigV2,
+	options ...SupportOption[rayv1ac.RayServiceSpecApplyConfiguration],
+) error {
+	specAC := Apply(
+		incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2),
+		options...,
+	)
+
+	_, err := test.Client().Ray().RayV1().RayServices(namespace).Apply(
+		test.Ctx(),
+		rayv1ac.RayService(rayServiceName, namespace).WithSpec(specAC),
+		TestApplyOptions,
+	)
+	return err
 }
 
 // GetGatewayHost returns the in-cluster DNS name for the Istio-managed
@@ -220,39 +264,6 @@ func GetGatewayHost(gateway *gwv1.Gateway) string {
 		return ""
 	}
 	return fmt.Sprintf("%s-istio.%s.svc.cluster.local", gateway.Name, gateway.Namespace)
-}
-
-// incrementalUpgrade is a wrapper around triggerIncrementalUpgrade that returns a function that can be used with g.Eventually.
-func incrementalUpgrade(test Test, namespace, rayServiceName string) func() error {
-	return func() error {
-		return triggerIncrementalUpgrade(test, namespace, rayServiceName)
-	}
-}
-
-// triggerIncrementalUpgrade updates the RayService to trigger an incremental upgrade:
-//   - RayCluster spec: Set worker CPU request to 500m
-//   - Serve config: Update (price 3->4, factor 5->3)
-func triggerIncrementalUpgrade(test Test, namespace, rayServiceName string) error {
-	rayService, err := GetRayService(test, namespace, rayServiceName)
-	if err != nil {
-		return err
-	}
-
-	// Update the RayCluster spec.
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-
-	// Update the serve config.
-	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
-	serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
-	rayService.Spec.ServeConfigV2 = serveConfig
-
-	_, err = test.Client().Ray().RayV1().RayServices(namespace).Update(
-		test.Ctx(),
-		rayService,
-		metav1.UpdateOptions{},
-	)
-	return err
 }
 
 func GetPendingCapacity(rs *rayv1.RayService) int32 {

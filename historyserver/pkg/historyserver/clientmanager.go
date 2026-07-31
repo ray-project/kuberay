@@ -33,14 +33,14 @@ func (c *ClientManager) Client() client.Client {
 	return c.clients[0]
 }
 
-func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluster, error) {
+func (c *ClientManager) ListRayClusters(ctx context.Context, opts ...client.ListOption) ([]*rayv1.RayCluster, error) {
 	list := []*rayv1.RayCluster{}
-	for _, c := range c.clients {
+	for _, cl := range c.clients {
 		listOfRayCluster := rayv1.RayClusterList{}
-		err := c.List(ctx, &listOfRayCluster)
+		err := cl.List(ctx, &listOfRayCluster, opts...)
 		if err != nil {
 			logrus.Errorf("Failed to list RayClusters: %v", err)
-			continue
+			return nil, err
 		}
 		for _, rayCluster := range listOfRayCluster.Items {
 			list = append(list, &rayCluster)
