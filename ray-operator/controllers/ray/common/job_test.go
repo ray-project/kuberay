@@ -484,7 +484,6 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 	assert.Equal(t, corev1.PullAlways, template.Spec.Containers[0].ImagePullPolicy)
-	assert.Equal(t, "head-sa", template.Spec.ServiceAccountName)
 	assert.Equal(t, "head-secret", template.Spec.ImagePullSecrets[0].Name)
 }
 
@@ -542,7 +541,6 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 
 	// Verify that omitted fields are copied from the Head Pod
 	assert.Equal(t, corev1.PullAlways, template.Spec.Containers[0].ImagePullPolicy)
-	assert.Equal(t, "head-sa", template.Spec.ServiceAccountName)
 	assert.Equal(t, "head-secret", template.Spec.ImagePullSecrets[0].Name)
 }
 

@@ -219,10 +219,9 @@ func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.Ra
 	if rayJobSpec.SubmitterPodTemplate == nil {
 		return corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
-				Containers:         []corev1.Container{defaultContainer},
-				RestartPolicy:      corev1.RestartPolicyNever,
-				ServiceAccountName: rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName,
-				ImagePullSecrets:   rayClusterSpec.HeadGroupSpec.Template.Spec.ImagePullSecrets,
+				Containers:       []corev1.Container{defaultContainer},
+				RestartPolicy:    corev1.RestartPolicyNever,
+				ImagePullSecrets: rayClusterSpec.HeadGroupSpec.Template.Spec.ImagePullSecrets,
 			},
 		}
 	}
@@ -233,11 +232,6 @@ func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.Ra
 
 	// Always enforce RestartPolicy: Never
 	finalTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
-
-	// Fallback to default ServiceAccountName if user omitted it
-	if finalTemplate.Spec.ServiceAccountName == "" {
-		finalTemplate.Spec.ServiceAccountName = rayClusterSpec.HeadGroupSpec.Template.Spec.ServiceAccountName
-	}
 
 	// Fallback to default ImagePullSecrets if user omitted it
 	if len(finalTemplate.Spec.ImagePullSecrets) == 0 {
