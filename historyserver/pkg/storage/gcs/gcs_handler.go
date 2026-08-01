@@ -173,18 +173,18 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	return clusterList
 }
 
-func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (h *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
-		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
+		MatchGlob: "**/" + prefix + "*/**/" + fileName,
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
-		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
+		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, prefix)
 		return nil
 	}
 	if err != nil {
@@ -194,7 +194,7 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
-		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
+		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, prefix)
 		return nil
 	}
 	defer reader.Close()

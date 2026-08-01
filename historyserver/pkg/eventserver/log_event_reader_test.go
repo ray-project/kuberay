@@ -42,8 +42,8 @@ func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string)
 
 func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
 
-func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
-	if cd, ok := m.files[clusterID]; ok {
+func (m *logEventMockReader) GetContent(prefix string, fileName string) io.Reader {
+	if cd, ok := m.files[prefix]; ok {
 		if content, ok := cd[fileName]; ok {
 			return strings.NewReader(content)
 		}

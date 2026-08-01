@@ -181,7 +181,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx := context.TODO()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
@@ -190,7 +190,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		allFiles := r._listFiles(prefix+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fileName) {
