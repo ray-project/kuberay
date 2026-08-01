@@ -171,14 +171,23 @@ type clusterIdentity struct {
 	ClusterName string
 }
 
+// logsPrefix is the node's log directory in storage: every object this collector
+// writes for that node lives under it, and nothing it writes may escape it.
+func (c clusterIdentity) logsPrefix(sessionName, nodeName string) string {
+	return clusterlogs.LogsDir(c.RootDir, c.OwnerKind, c.OwnerName, c.Namespace, c.ClusterName, sessionName, nodeName)
+}
+
 // objectKey returns the storage key for a captured backup. Keys stay flat — one
 // object per captured segment directly beside the node's other logs — because the
 // History Server lists a node's logs non-recursively unless the caller passes a
 // "**" glob, so anything nested under an extra directory would be invisible to the
 // ordinary listing.
+//
+// relDir is the one exception, and it is not the capture's doing: Ray already nests
+// some logs (events/, serve/), and the legacy shutdown upload mirrors that same
+// structure, so a captured segment lands exactly where its uncaptured siblings do.
 func (c clusterIdentity) objectKey(sessionName, nodeName, relDir, originalName, captureID string) string {
-	logsDir := clusterlogs.LogsDir(c.RootDir, c.OwnerKind, c.OwnerName, c.Namespace, c.ClusterName, sessionName, nodeName)
-	return path.Join(logsDir, relDir, captureFileName(originalName, captureID))
+	return path.Join(c.logsPrefix(sessionName, nodeName), relDir, captureFileName(originalName, captureID))
 }
 
 // stagingState is the durable, on-disk record of how far a capture has progressed.

@@ -21,8 +21,8 @@ import (
 const defaultReconcileInterval = 30 * time.Second
 
 // errIntakePaused reports that the staging volume is full. Capture stops adding new
-// data but never deletes what it already holds; acting on this is the backpressure
-// tranche's job.
+// data but never deletes what it already holds. Uploads, promotions and releases keep
+// running, and it is a release — or a probe link that succeeds — that lifts the pause.
 var errIntakePaused = errors.New("staging volume full: rotated log intake paused")
 
 // fsWatcher is the slice of fsnotify the collector uses, so tests can drive events
@@ -59,10 +59,36 @@ type rotatedCollectorConfig struct {
 	SessionName string
 	NodeName    string
 
+	// Cluster is where captures land in object storage. Writer is what puts them
+	// there; a nil Writer leaves the collector capturing and accounting normally with
+	// the upload pipeline switched off, which is how it runs until the wiring tranche
+	// hands it the runtime's storage client.
+	Cluster clusterIdentity
+	Writer  objectWriter
+
+	// HighWaterBytes pauses new intake once the staging volume holds that many bytes,
+	// and LowWaterBytes resumes it once the total falls back to that. Zero
+	// HighWaterBytes disables the watermarks; a filesystem that reports ENOSPC still
+	// pauses intake either way. Defaults belong to the tranche that configures this
+	// from the operator, not here.
+	HighWaterBytes int64
+	LowWaterBytes  int64
+
 	ReconcileInterval time.Duration
 	NewWatcher        func() (fsWatcher, error)
 	NewTicker         func(time.Duration) (<-chan time.Time, func())
 	CaptureIDs        *captureIDGenerator
+
+	// UploadBackoff is the delay before each successive upload retry, with the last
+	// entry repeating. Now and NewTimer are the clock the retry schedule runs on, so
+	// tests can advance time instead of waiting for it.
+	UploadBackoff []time.Duration
+	Now           func() time.Time
+	NewTimer      func(time.Duration) (<-chan time.Time, func())
+
+	// WorkerStopGrace bounds how long Stop waits for an upload the storage interface
+	// gives it no way to cancel.
+	WorkerStopGrace time.Duration
 
 	// Link creates the staging hard link. Production always uses captureLink; tests
 	// replace it to make the race between validating a candidate and pinning it
@@ -85,18 +111,54 @@ type rotatedCollectorConfig struct {
 // One goroutine owns all state. fsnotify events, the reconcile ticker, startup
 // reconstruction and callers' requests all become work performed by that goroutine,
 // so "look up the inode, create the link, register the capture" is indivisible
-// without a single mutex. Nothing here talks to object storage: uploads are slow and
-// must never sit between a rotation and its capture.
+// without a single mutex.
+//
+// Object storage is reached only from the upload worker, never from this goroutine.
+// An upload is slow and, through storage.StorageWriter, uncancelable, so letting one
+// sit between a rotation and its capture would lose exactly the segments this
+// collector exists to keep. The owner decides everything about an upload — when it
+// starts, whether its result still applies, what happens next — but never waits for
+// one.
 type rotatedCollector struct {
 	cfg     rotatedCollectorConfig
 	ix      *captureIndex
 	watcher fsWatcher
+
+	// up, bytes and gate are owned by the same goroutine as ix. Uploading is the one
+	// slow thing the collector does, so it is pushed onto a worker that returns an
+	// immutable result; every decision that result leads to is made here.
+	up    *uploadScheduler
+	bytes *stagedBytes
+	gate  *intakeGate
+
+	// intakePauses and intakeResumes count gate transitions. A wrongly reopened gate
+	// can be closed again before anyone looks at it, so the counts — not the current
+	// flag — are what show intake was reopened at all.
+	intakePauses  int
+	intakeResumes int
 
 	stopCh chan struct{}
 	doneCh chan struct{}
 
 	snapshotReq  chan chan []stagedEntry
 	reconcileReq chan chan struct{}
+	statsReq     chan chan collectorStats
+}
+
+// collectorStats is a consistent view of the collector's own bookkeeping. Like
+// snapshot it is produced by the owner goroutine, because staged bytes, the upload
+// queue and the intake gate are owner-owned and must never be read from outside it.
+type collectorStats struct {
+	StagedBytes       int64
+	Captures          int
+	Pending           int
+	Uploaded          int
+	QueuedUploads     int
+	InFlightUploads   int
+	AwaitingPromotion int
+	IntakePauses      int
+	IntakeResumes     int
+	IntakePaused      bool
 }
 
 func newRotatedCollector(cfg rotatedCollectorConfig) (*rotatedCollector, error) {
@@ -130,14 +192,43 @@ func newRotatedCollector(cfg rotatedCollectorConfig) (*rotatedCollector, error) 
 	if cfg.OnIssue == nil {
 		cfg.OnIssue = func(err error) { logrus.Warnf("Rotated log collector: %v", err) }
 	}
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	if cfg.NewTimer == nil {
+		cfg.NewTimer = func(d time.Duration) (<-chan time.Time, func()) {
+			t := time.NewTimer(d)
+			return t.C, func() { t.Stop() }
+		}
+	}
+	if len(cfg.UploadBackoff) == 0 {
+		cfg.UploadBackoff = defaultUploadBackoff
+	}
+	for i, d := range cfg.UploadBackoff {
+		// A zero or negative delay would make a failing upload due the instant it
+		// failed, turning the retry schedule into a spin against the object store.
+		if d <= 0 {
+			return nil, fmt.Errorf("rotated collector: UploadBackoff[%d] is %s, but every retry delay must be positive", i, d)
+		}
+	}
+	if cfg.WorkerStopGrace <= 0 {
+		cfg.WorkerStopGrace = defaultWorkerStopGrace
+	}
+	if err := validateWatermarks(cfg.HighWaterBytes, cfg.LowWaterBytes); err != nil {
+		return nil, err
+	}
 
 	return &rotatedCollector{
 		cfg:          cfg,
 		ix:           newCaptureIndex(),
+		up:           newUploadScheduler(cfg.Writer, cfg.UploadBackoff),
+		bytes:        newStagedBytes(),
+		gate:         &intakeGate{high: cfg.HighWaterBytes, low: cfg.LowWaterBytes},
 		stopCh:       make(chan struct{}),
 		doneCh:       make(chan struct{}),
 		snapshotReq:  make(chan chan []stagedEntry),
 		reconcileReq: make(chan chan struct{}),
+		statsReq:     make(chan chan collectorStats),
 	}, nil
 }
 
@@ -179,12 +270,36 @@ func (rc *rotatedCollector) Run() error {
 		return err
 	}
 
+	// Settle the gate on what the previous run left staged before the live scan can
+	// add to it. A restart that adopts a volume already over its limit must not then
+	// capture its way further past it.
+	rc.enforceHighWater()
+
 	rc.scanTree()
+
+	// The worker starts only once reconstruction has established what is already
+	// staged, so nothing is uploaded before the collector knows whether a previous
+	// run already sent it.
+	rc.up.start(rc.cfg.StagingRoot)
+	defer rc.up.stop(rc.cfg.WorkerStopGrace, rc.report)
+
+	// Adopt the previous run's work: pending captures are queued, uploaded ones are
+	// never re-sent but are always candidates for release.
+	rc.sweepUploads()
+	rc.sweepReleases()
 
 	tick, stopTicker := rc.cfg.NewTicker(rc.cfg.ReconcileInterval)
 	defer stopTicker()
 
 	for {
+		// Housekeeping runs before any request is served, so a caller that gets a
+		// snapshot is looking at state the scheduler has already acted on. It never
+		// blocks and never performs a storage call. It fails only for a condition
+		// that retrying cannot fix.
+		if err := rc.pump(); err != nil {
+			return err
+		}
+
 		select {
 		case <-rc.stopCh:
 			return nil
@@ -203,20 +318,40 @@ func (rc *rotatedCollector) Run() error {
 			// to look at the tree again immediately rather than wait for the tick.
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
 				rc.report(fmt.Errorf("watcher overflowed, reconciling immediately: %w", err))
-				rc.scanTree()
+				rc.maintain()
 				continue
 			}
 			rc.report(fmt.Errorf("watcher error: %w", err))
 
 		case <-tick:
-			rc.scanTree()
+			rc.maintain()
+
+		// An upload finished. Applying its result is pure bookkeeping: the slow part
+		// already happened on the worker. It stops the collector only when the
+		// worker found the staging volume contradicting the index.
+		case res := <-rc.uploadResults():
+			if err := rc.applyUploadResult(res); err != nil {
+				return err
+			}
+
+		case <-rc.retryTimer():
+			rc.processDue()
 
 		case reply := <-rc.snapshotReq:
 			reply <- rc.ix.entries()
 
+		case reply := <-rc.statsReq:
+			reply <- rc.currentStats()
+
 		case reply := <-rc.reconcileReq:
-			rc.scanTree()
+			rc.maintain()
+			// The caller is answered even when the pump fails, so a reconcileNow in
+			// flight cannot be left waiting on a collector that is shutting down.
+			err := rc.pump()
 			reply <- struct{}{}
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -241,6 +376,43 @@ func (rc *rotatedCollector) snapshot() []stagedEntry {
 	case <-rc.doneCh:
 		return nil
 	}
+}
+
+// stats returns the collector's bookkeeping, computed by the owner goroutine.
+func (rc *rotatedCollector) stats() collectorStats {
+	reply := make(chan collectorStats, 1)
+	select {
+	case rc.statsReq <- reply:
+		return <-reply
+	case <-rc.doneCh:
+		return collectorStats{}
+	}
+}
+
+// currentStats runs on the owner goroutine.
+func (rc *rotatedCollector) currentStats() collectorStats {
+	s := collectorStats{
+		StagedBytes:     rc.bytes.total,
+		Captures:        rc.ix.len(),
+		QueuedUploads:   len(rc.up.queue),
+		InFlightUploads: rc.up.inFlight,
+		IntakePauses:    rc.intakePauses,
+		IntakeResumes:   rc.intakeResumes,
+		IntakePaused:    rc.intakePaused(),
+	}
+	for _, c := range rc.ix.byInode {
+		if c.Entry.State == stateUploaded {
+			s.Uploaded++
+		} else {
+			s.Pending++
+		}
+	}
+	for _, st := range rc.up.states {
+		if st.phase == phaseAwaitingPromotion {
+			s.AwaitingPromotion++
+		}
+	}
+	return s
 }
 
 // reconcileNow runs one full sweep on the owner goroutine and waits for it.
@@ -440,7 +612,24 @@ func (rc *rotatedCollector) inspectFile(path string, fi fs.FileInfo) {
 // For the same reason there is no dedup shortcut before linking: an early return
 // because the source's current inode looks familiar could skip a generation that had
 // just replaced it, and rotation would then delete that generation unseen.
+// Intake is the only thing backpressure stops. Nothing already captured is evicted,
+// and uploads, promotions and releases keep running, which is what eventually brings
+// the total back down. The cost is honest and unavoidable: a backup Ray rotates away
+// while intake is paused is lost, because there is nowhere to pin it. This is a
+// fail-safe against exhausting the volume Ray itself is writing to, not a promise of
+// lossless capture under unbounded pressure.
+// While paused, one capture per maintenance sweep is still allowed through as a
+// capacity probe. Without it a disk-full pause would latch permanently: capture would
+// return before ever attempting a link, so if another process filled the volume and
+// this collector holds nothing it can release, nothing would ever discover that space
+// came back. Using a real eligible backup as the probe means a successful attempt
+// preserves data instead of merely testing the filesystem.
 func (rc *rotatedCollector) capture(path, name string) error {
+	if rc.intakePaused() && !rc.gate.takeProbe() {
+		logrus.Debugf("Rotated log collector: intake is paused, not capturing %s", path)
+		return nil
+	}
+
 	fi, err := os.Lstat(path)
 	if err != nil {
 		if isVanished(err) {
@@ -483,13 +672,32 @@ func (rc *rotatedCollector) capture(path, name string) error {
 			// Skip the segment and keep discovering; v1 has no copy fallback.
 			return fmt.Errorf("cannot capture %s on this deployment: %w", path, err)
 		case errors.Is(err, syscall.ENOSPC):
+			// The volume is full regardless of what the watermarks think the
+			// collector is holding: something else may have filled it. Stop taking
+			// new data until some operation proves there is room again — and discard
+			// any earlier success from this same sweep, because the filesystem has
+			// just contradicted it.
+			//
+			// Only the transition is reported. Every later sweep spends its probe
+			// here while the volume stays full, and repeating the same line once per
+			// sweep would bury the state change that mattered.
+			if !rc.gate.observedFull() {
+				logrus.Debugf("Rotated log collector: staging volume is still full, %s was not captured", path)
+				return nil
+			}
 			return fmt.Errorf("%w: %w", errIntakePaused, err)
 		default:
 			return err
 		}
 	}
 
-	key, err := rc.pinnedInode(staged)
+	// A link that succeeded is proof the volume has room, whoever freed it. That is
+	// what lifts a disk-full pause, and it is the only thing that can: elapsed time
+	// says nothing about a volume another process filled. A later ENOSPC in this same
+	// sweep discards this observation again.
+	rc.gate.observedSpace()
+
+	key, size, err := rc.pinnedInode(staged)
 	if err != nil {
 		return errors.Join(err, discardStagingLink(staged))
 	}
@@ -501,30 +709,47 @@ func (rc *rotatedCollector) capture(path, name string) error {
 	if existing, alreadyCaptured := rc.ix.lookup(key); alreadyCaptured {
 		// Another name for a file we already hold, most often the same segment seen
 		// again after rotation renamed it. Drop the surplus link and keep the
-		// original capture: one inode is one capture, with one object key.
+		// original capture: one inode is one capture, with one object key. The
+		// surplus link was never accounted for, so removing it changes no total.
 		logrus.Debugf("Rotated log collector: %s is already captured as %s", path, existing.Entry.CaptureID)
 		return discardStagingLink(staged)
 	}
 
-	return registerStaged(rc.cfg.StagingRoot, rc.ix, key, entry)
+	if err := registerStaged(rc.cfg.StagingRoot, rc.ix, key, entry); err != nil {
+		return err
+	}
+	// Accounting and scheduling follow registration, never precede it: a capture the
+	// index rejected has had its link removed and must leave no trace behind.
+	rc.bytes.track(key, size)
+	// The limit is enforced here, not on the next trip through the event loop. A
+	// scan registers every backup it finds without returning to that loop, so
+	// deferring this would let the rest of the scan through after the volume was
+	// already over its limit. This capture stands; the next one in the same scan
+	// sees a paused gate and is skipped.
+	rc.enforceHighWater()
+	rc.enqueueUpload(key)
+	return nil
 }
 
-// pinnedInode reads the identity of the file the staging link actually pinned. The
-// link must still be a regular file: if the source turned into a symlink or another
-// non-regular object first, what was linked is not a log segment.
-func (rc *rotatedCollector) pinnedInode(staged string) (inodeKey, error) {
+// pinnedInode reads the identity and size of the file the staging link actually
+// pinned. The link must still be a regular file: if the source turned into a symlink
+// or another non-regular object first, what was linked is not a log segment.
+//
+// The size is read from the same stat, so accounting describes exactly the file that
+// was pinned rather than whatever the source path holds a moment later.
+func (rc *rotatedCollector) pinnedInode(staged string) (inodeKey, int64, error) {
 	fi, err := os.Lstat(staged)
 	if err != nil {
-		return inodeKey{}, fmt.Errorf("stat staged capture %s: %w", staged, err)
+		return inodeKey{}, 0, fmt.Errorf("stat staged capture %s: %w", staged, err)
 	}
 	if !fi.Mode().IsRegular() {
-		return inodeKey{}, fmt.Errorf("staged capture %s is not a regular file (%s)", staged, fi.Mode())
+		return inodeKey{}, 0, fmt.Errorf("staged capture %s is not a regular file (%s)", staged, fi.Mode())
 	}
 	key, _, err := inodeFromFileInfo(fi)
 	if err != nil {
-		return inodeKey{}, fmt.Errorf("read inode of staged capture %s: %w", staged, err)
+		return inodeKey{}, 0, fmt.Errorf("read inode of staged capture %s: %w", staged, err)
 	}
-	return key, nil
+	return key, fi.Size(), nil
 }
 
 // discardStagingLink removes a link the collector created but will not track. An
@@ -556,9 +781,10 @@ func registerStaged(stagingRoot string, ix *captureIndex, key inodeKey, e staged
 // stagedRecord is one staging file found during reconstruction, together with the
 // inode it was holding at that moment.
 type stagedRecord struct {
-	key   inodeKey
 	entry stagedEntry
 	path  string
+	key   inodeKey
+	size  int64
 }
 
 // reconstructStaging rebuilds the index from the staging volume so a restarted
@@ -609,6 +835,9 @@ func (rc *rotatedCollector) reconstructStaging() error {
 				failures = append(failures, fmt.Errorf("restore staged capture %s: %w", r.path, err))
 				continue
 			}
+			// One inode, counted once, whether the previous run left it pending or
+			// uploaded: both states pin the same blocks.
+			rc.bytes.track(r.key, r.size)
 			winners[r.key] = r
 			continue
 		}
@@ -673,7 +902,7 @@ func (rc *rotatedCollector) collectStagedRecords(root string) ([]stagedRecord, e
 		if err != nil {
 			return fmt.Errorf("read inode of staged capture %s: %w", path, err)
 		}
-		records = append(records, stagedRecord{key: key, entry: entry, path: path})
+		records = append(records, stagedRecord{key: key, entry: entry, path: path, size: fi.Size()})
 		return nil
 	})
 	if err != nil {
