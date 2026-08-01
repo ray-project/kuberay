@@ -55,8 +55,8 @@ func (r *MockReader) List() []utils.ClusterInfo {
 }
 
 // GetContent returns content for a specific file
-func (r *MockReader) GetContent(clusterId string, fileName string) io.Reader {
-	if clusterData, ok := r.data[clusterId]; ok {
+func (r *MockReader) GetContent(prefix string, fileName string) io.Reader {
+	if clusterData, ok := r.data[prefix]; ok {
 		if content, ok := clusterData[fileName]; ok {
 			return strings.NewReader(content)
 		}

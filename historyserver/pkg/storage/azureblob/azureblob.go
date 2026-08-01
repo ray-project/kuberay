@@ -196,8 +196,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	fullPath := path.Join(r.RootDir, clusterId, fileName)
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
+	fullPath := path.Join(r.RootDir, prefix, fileName)
 	logrus.Infof("Prepare to get blob %s info ...", fullPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)

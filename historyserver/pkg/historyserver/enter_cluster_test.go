@@ -29,7 +29,7 @@ func (m *mockStorageReader) List() []utils.ClusterInfo {
 	return m.clusters
 }
 
-func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+func (m *mockStorageReader) GetContent(prefix string, fileName string) io.Reader {
 	return strings.NewReader("")
 }
 

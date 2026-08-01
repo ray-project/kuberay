@@ -179,22 +179,22 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 // matchGlob treats "**" as matching across "/", so a bucket shared by more than
 // one root dir could serve a file belonging to a different deployment.
 // An empty root dir keeps the previous unanchored pattern.
-func contentMatchGlob(rootDir string, clusterId string, fileName string) string {
-	return strings.TrimPrefix(path.Join(rootDir, "**", clusterId+"*", "**", fileName), "/")
+func contentMatchGlob(rootDir string, prefix string, fileName string) string {
+	return strings.TrimPrefix(path.Join(rootDir, "**", prefix+"*", "**", fileName), "/")
 }
 
-func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (h *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
-		MatchGlob: contentMatchGlob(h.RootDir, clusterId, fileName),
+		MatchGlob: contentMatchGlob(h.RootDir, prefix, fileName),
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
-		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
+		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, prefix)
 		return nil
 	}
 	if err != nil {
@@ -204,7 +204,7 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
-		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
+		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, prefix)
 		return nil
 	}
 	defer reader.Close()

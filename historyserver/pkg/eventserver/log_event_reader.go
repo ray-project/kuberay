@@ -100,8 +100,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // readEventFile reads and parses a single event_*.log file (JSON Lines format).
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
-func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+func (r *LogEventReader) readEventFile(prefix, filePath string, jobEventMap *types.JobEventMap) error {
+	ioReader := r.reader.GetContent(prefix, filePath)
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}

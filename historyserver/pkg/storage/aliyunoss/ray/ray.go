@@ -181,9 +181,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx := context.TODO()
-	fullPath := path.Join(r.OssRootDir, clusterId, fileName)
+	fullPath := path.Join(r.OssRootDir, prefix, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
 		Bucket: oss.Ptr(r.OssBucket),

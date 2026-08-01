@@ -190,8 +190,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	fullPath := path.Join(r.S3RootDir, clusterId, fileName)
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
+	fullPath := path.Join(r.S3RootDir, prefix, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
 	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
