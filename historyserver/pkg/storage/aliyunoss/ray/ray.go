@@ -122,8 +122,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.OssRootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(prefix string, dir string) []string {
+	fullPrefix := path.Join(r.OssRootDir, prefix, dir)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -133,7 +133,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	// Initial continuation token
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
+	nodes := r._listFiles(fullPrefix, "/", true)
 	sort.Sort(clusters)
 	return nodes
 }
@@ -181,7 +181,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx := context.TODO()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
@@ -190,7 +190,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		allFiles := r._listFiles(prefix+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fileName) {
