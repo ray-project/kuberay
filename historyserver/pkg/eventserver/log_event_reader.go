@@ -53,7 +53,7 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 //
 // Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
-	// Build cluster ID (clusterLogPathPrefix) used by StorageReader
+	// Build storage prefix used by StorageReader
 	clusterLogPathPrefix := clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 
 	// Get or create the JobEventMap for this cluster session

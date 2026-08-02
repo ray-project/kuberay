@@ -22,5 +22,5 @@ type StorageReader interface {
 	//
 	GetContent(prefix string, fileName string) io.Reader
 
-	ListFiles(clusterId string, dir string) []string
+	ListFiles(prefix string, dir string) []string
 }

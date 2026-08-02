@@ -87,11 +87,11 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 // ListFiles will return all files within the directory.
-func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
+func (h *RayLogsHandler) ListFiles(prefix string, directory string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/") + "/"
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, prefix, directory), "/") + "/"
 
 	query := &gstorage.Query{
 		Prefix: pathPrefix,
@@ -194,7 +194,7 @@ func (h *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
-		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, prefix)
+		logrus.Errorf("File %s was not found in bucket for prefix %s", fileName, prefix)
 		return nil
 	}
 	if err != nil {
@@ -204,7 +204,7 @@ func (h *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
-		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, prefix)
+		logrus.Errorf("Failed to create reader for file: %s in prefix: %s", fileName, prefix)
 		return nil
 	}
 	defer reader.Close()

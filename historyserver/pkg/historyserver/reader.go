@@ -265,13 +265,13 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 // listFilesRecursive recursively lists all files under dir,
 // returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
 // It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
-func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
-	entries := s.reader.ListFiles(clusterID, dir)
+func (s *ServerHandler) listFilesRecursive(prefix, dir string) []string {
+	entries := s.reader.ListFiles(prefix, dir)
 	var result []string
 	for _, entry := range entries {
 		if strings.HasSuffix(entry, "/") {
 			subDir := path.Join(dir, entry)
-			subFiles := s.listFilesRecursive(clusterID, subDir)
+			subFiles := s.listFilesRecursive(prefix, subDir)
 			for _, f := range subFiles {
 				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
 			}
