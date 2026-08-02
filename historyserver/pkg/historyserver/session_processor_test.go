@@ -7,6 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -32,6 +33,12 @@ func rayCluster(namespace, name string) *rayv1.RayCluster {
 	}
 }
 
+func suspendedRayCluster(namespace, name string) *rayv1.RayCluster {
+	rc := rayCluster(namespace, name)
+	rc.Spec.Suspend = ptr.To(true)
+	return rc
+}
+
 func TestIsDead(t *testing.T) {
 	const (
 		ns             = "default"
@@ -53,6 +60,11 @@ func TestIsDead(t *testing.T) {
 			name:     "RayCluster CR present -> alive",
 			cr:       rayCluster(ns, name),
 			wantDead: false,
+		},
+		{
+			name:     "RayCluster CR present but suspended -> dead",
+			cr:       suspendedRayCluster(ns, name),
+			wantDead: true,
 		},
 	}
 
