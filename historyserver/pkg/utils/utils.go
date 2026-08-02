@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -27,8 +29,9 @@ const (
 )
 
 var (
-	sessionIDRegex = regexp.MustCompile(SESSION_ID_REGEX)
-	hexRegex       = regexp.MustCompile(HEX_REGEX)
+	sessionIDRegex         = regexp.MustCompile(SESSION_ID_REGEX)
+	hexRegex               = regexp.MustCompile(HEX_REGEX)
+	errDashboardAuthFailed = errors.New("ray dashboard rejected the request: authentication failed")
 )
 
 // EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
@@ -186,7 +189,6 @@ func MoveLeftoverSessionLogs(activeSessionDir, nodeID string) error {
 	return nil
 }
 
-
 type nodeSummaryResp struct {
 	Data struct {
 		Result struct {
@@ -230,11 +232,22 @@ func FetchCurrentNodeID() (string, error) {
 	endpoint := fmt.Sprintf("%s%s/api/v0/nodes?limit=10000", scheme, strings.TrimRight(addr, "/"))
 	client := &http.Client{Timeout: 1 * time.Second}
 
-	resp, err := client.Get(endpoint)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	if err := SetRayAuthHeader(req); err != nil {
+		return "", fmt.Errorf("failed to authenticate request to %s: %w", endpoint, err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if IsAuthFailure(resp.StatusCode) {
+		return "", fmt.Errorf("%w: HTTP status %d from endpoint %s", errDashboardAuthFailed, resp.StatusCode, endpoint)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP status %d from endpoint %s", resp.StatusCode, endpoint)
 	}
@@ -259,9 +272,10 @@ func GetNodeRayIDWithFQIP() (string, error) {
 		if err == nil {
 			return nodeID, nil
 		}
-		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) {
+		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) || errors.Is(err, errDashboardAuthFailed) {
 			return "", err
 		}
+		logrus.Warnf("Attempt %d/12 to discover Ray NodeID failed: %v, retrying in 5s", i+1, err)
 		lastErr = err
 		time.Sleep(5 * time.Second)
 	}
@@ -340,4 +354,29 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+// CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
+func CheckName(s string) string {
+	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
+
+	if len(s) > maxLength {
+		// shorten the name
+		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
+		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
+		s = s[offset:]
+	}
+
+	// cannot start with a numeric value
+	if unicode.IsDigit(rune(s[0])) {
+		s = "r" + s[1:]
+	}
+
+	// cannot start with a punctuation
+	if unicode.IsPunct(rune(s[0])) {
+		fmt.Println(s)
+		s = "r" + s[1:]
+	}
+
+	return s
 }

@@ -76,6 +76,12 @@ func (r *RayLogHandler) fetchAndStoreEndpoint(cfg endpointFetchConfig) {
 			return
 		}
 
+		if err := utils.SetRayAuthHeader(req); err != nil {
+			cancel()
+			logrus.Errorf("Failed to authenticate request for %s: %v", cfg.endpoint, err)
+			return
+		}
+
 		client := r.HttpClient
 		if client == nil {
 			client = http.DefaultClient
@@ -103,6 +109,13 @@ func (r *RayLogHandler) fetchAndStoreEndpoint(cfg endpointFetchConfig) {
 			}
 			retryInterval = nextBackoff(retryInterval, cfg.maxRetryInterval)
 			continue
+		}
+
+		// Unlike a Dashboard that is still starting up, a rejected credential never resolves on
+		// its own. Retrying until shutdown would bury the cause under an endless warning loop.
+		if utils.IsAuthFailure(resp.StatusCode) {
+			logrus.Errorf("%s returned status %d: the collector is not authenticated against the Ray Dashboard, giving up on this endpoint. Check that token auth is configured for the collector container.", cfg.endpoint, resp.StatusCode)
+			return
 		}
 
 		if resp.StatusCode != http.StatusOK {
