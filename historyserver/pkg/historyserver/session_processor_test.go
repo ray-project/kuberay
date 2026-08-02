@@ -7,7 +7,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -33,9 +32,16 @@ func rayCluster(namespace, name string) *rayv1.RayCluster {
 	}
 }
 
-func suspendedRayCluster(namespace, name string) *rayv1.RayCluster {
+func rayClusterWithCondition(namespace, name string, condType rayv1.RayClusterConditionType) *rayv1.RayCluster {
 	rc := rayCluster(namespace, name)
-	rc.Spec.Suspend = ptr.To(true)
+	rc.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(condType),
+			Status:             metav1.ConditionTrue,
+			Reason:             string(condType),
+			LastTransitionTime: metav1.Now(),
+		},
+	}
 	return rc
 }
 
@@ -62,9 +68,14 @@ func TestIsDead(t *testing.T) {
 			wantDead: false,
 		},
 		{
-			name:     "RayCluster CR present but suspended -> dead",
-			cr:       suspendedRayCluster(ns, name),
+			name:     "RayCluster CR present and fully suspended -> dead",
+			cr:       rayClusterWithCondition(ns, name, rayv1.RayClusterSuspended),
 			wantDead: true,
+		},
+		{
+			name:     "RayCluster CR present but still suspending -> alive",
+			cr:       rayClusterWithCondition(ns, name, rayv1.RayClusterSuspending),
+			wantDead: false,
 		},
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -93,7 +94,7 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 	if err != nil {
 		return false, err
 	}
-	if rc.Spec.Suspend != nil && *rc.Spec.Suspend {
+	if meta.IsStatusConditionTrue(rc.Status.Conditions, string(rayv1.RayClusterSuspended)) {
 		return true, nil
 	}
 	return false, nil
