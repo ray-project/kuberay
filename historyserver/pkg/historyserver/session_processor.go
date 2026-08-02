@@ -94,10 +94,16 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 	if err != nil {
 		return false, err
 	}
-	if meta.IsStatusConditionTrue(rc.Status.Conditions, string(rayv1.RayClusterSuspended)) {
+	if isRayClusterSuspended(rc) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// isRayClusterSuspended reports whether the controller has confirmed all Pods
+// belonging to the RayCluster are deleted (spec.suspend=true fully applied).
+func isRayClusterSuspended(rc *rayv1.RayCluster) bool {
+	return meta.IsStatusConditionTrue(rc.Status.Conditions, string(rayv1.RayClusterSuspended))
 }
 
 // isCtxCanceled checks if the error is caused by context cancellation
