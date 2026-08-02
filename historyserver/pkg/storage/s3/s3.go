@@ -128,8 +128,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.S3RootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(prefix string, dir string) []string {
+	fullPrefix := path.Join(r.S3RootDir, prefix, dir)
 
 	defer func() {
 		if recover := recover(); recover != nil {
@@ -138,7 +138,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	}()
 
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
+	nodes := r._listFiles(fullPrefix, "/", true)
 	// Note: clusters is not defined in this scope, removed sorting
 	return nodes
 }

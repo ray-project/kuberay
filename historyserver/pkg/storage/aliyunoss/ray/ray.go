@@ -122,8 +122,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.OssRootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(prefix string, dir string) []string {
+	fullPrefix := path.Join(r.OssRootDir, prefix, dir)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -133,7 +133,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	// Initial continuation token
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
+	nodes := r._listFiles(fullPrefix, "/", true)
 	sort.Sort(clusters)
 	return nodes
 }
