@@ -1,0 +1,78 @@
+# This sample shows how to terminate an idle RayCluster automatically.
+# When `autoscalerOptions.noDriverTimeoutSeconds` is set, the Ray autoscaler v2 tracks whether any
+# user driver is attached. Once no driver has been attached for `noDriverTimeoutSeconds`, the autoscaler
+# sets the `ray.io/no-driver-ttl-expired` annotation on this RayCluster, and the KubeRay operator deletes
+# the RayCluster.
+#
+# Notes:
+# - The feature is only supported by autoscaler v2 and requires `enableInTreeAutoscaling: true`.
+# - Detached actors do NOT count as a driver, so a cluster running only detached actors is still
+#   eligible for termination.
+# - Requires a Ray version that supports no-driver cluster termination (https://github.com/ray-project/ray/pull/63465).
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: ray-cluster-autoscaler-v2-terminate-idle-cluster
+spec:
+  rayVersion: "2.56.0"
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    version: v2
+    upscalingMode: Default
+    idleTimeoutSeconds: 60
+    # Delete the RayCluster after no user driver has been attached for 30 seconds.
+    noDriverTimeoutSeconds: 30
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+  # Ray head pod template
+  headGroupSpec:
+    rayStartParams:
+      # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.
+      num-cpus: "0"
+    # Pod template
+    template:
+      spec:
+        containers:
+        # The Ray head container
+        - name: ray-head
+          image: rayproject/ray:2.56.0
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+  workerGroupSpecs:
+  # the Pod replicas in this group typed worker
+  - replicas: 0
+    minReplicas: 0
+    maxReplicas: 10
+    groupName: small-group
+    rayStartParams: {}
+    # Pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.56.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"
