@@ -625,17 +625,24 @@ func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) 
 	}
 }
 
-// retryProcess retries a failed or deferred rotation task after a backoff by
-// handing it back to the upload worker. If shutdown starts first, the task
-// gets one final inline attempt instead
+// retryProcess re-processes a failed or deferred rotation task after a
+// backoff. Once shutdown begins, new retries are declined while sleeping ones
+// are woken for one final attempt. Tracked by consumerWG so shutdown waits.
 func (ec *EventCollector) retryProcess(task rotationTask) {
+	select {
+	case <-ec.stopProducers:
+		logrus.Errorf("Giving up on retrying %s during shutdown; file left on disk", task.path)
+		return
+	default:
+	}
 	ec.consumerWG.Go(func() {
 		select {
 		case <-time.After(retryBackoff):
-			ec.processRotatedFile(task, true /*retryOnFailure*/)
 		case <-ec.stopProducers:
-			ec.processRotatedFile(task, false /*retryOnFailure*/)
+			// Shutdown cuts the backoff short; the attempt below is the final
+			// one, since a failure re-enters retryProcess and is declined.
 		}
+		ec.processRotatedFile(task)
 	})
 }
 
@@ -713,23 +720,14 @@ func (ec *EventCollector) compressionUploadWorker() {
 	defer ec.consumerWG.Done()
 
 	for task := range ec.rotationQueue {
-		// Once shutdown has begun, stop rescheduling failures: the file stays
-		// on disk for resumePendingFiles after the next start.
-		retryOnFailure := true
-		select {
-		case <-ec.stopProducers:
-			retryOnFailure = false
-		default:
-		}
-		ec.processRotatedFile(task, retryOnFailure)
+		ec.processRotatedFile(task)
 	}
 }
 
 // processRotatedFile optionally gzips the file, uploads it, then cleans up the
-// local copies. With retryOnFailure a failed upload is retried after a backoff;
-// otherwise it is logged and abandoned, which is used for the single final
-// attempt during shutdown.
-func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure bool) {
+// local copies. A failed upload is handed to retryProcess, which retries after
+// a backoff or, during shutdown, abandons the task.
+func (ec *EventCollector) processRotatedFile(task rotationTask) {
 	uploadPath := task.path
 	var compressedPath string
 
@@ -776,10 +774,6 @@ func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure b
 			if err := os.Remove(compressedPath); err != nil && !os.IsNotExist(err) {
 				logrus.Warnf("Failed to remove %s after failed upload: %v", compressedPath, err)
 			}
-		}
-		if !retryOnFailure {
-			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, task.path)
-			return
 		}
 		ec.retryProcess(task)
 		return
