@@ -440,7 +440,7 @@ func TestProcessRotatedFile_GzipsAndUploadsThenCleansUp(t *testing.T) {
 		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
 		size:        int64(len(payload)),
 	}
-	ec.processRotatedFile(task)
+	ec.processRotatedFile(task, true)
 
 	// Local files should be gone.
 	_, err := os.Stat(jsonlPath)
@@ -479,7 +479,7 @@ func TestProcessRotatedFile_NoCompressionUsesJSONLExtension(t *testing.T) {
 		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
 		size:        int64(len(payload)),
 	}
-	ec.processRotatedFile(task)
+	ec.processRotatedFile(task, true)
 
 	expectedKey := fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl", task.createdAt.UnixNano())
 	raw, ok := writer.get(expectedKey)

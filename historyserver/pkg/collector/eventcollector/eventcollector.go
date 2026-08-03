@@ -552,6 +552,8 @@ func (ec *EventCollector) rotationLoop() {
 	}
 }
 
+// checkRotation rotates any active file older than rotationInterval or
+// larger than maxFileSizeBytes.
 func (ec *EventCollector) checkRotation() {
 	ec.writeMu.Lock()
 	defer ec.writeMu.Unlock()
@@ -626,11 +628,11 @@ func (ec *EventCollector) retryProcess(task rotationTask) {
 			select {
 			case ec.rotationQueue <- task:
 			case <-ec.stopped:
-				ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+				ec.processRotatedFile(task, false /*retryOnFailure*/)
 			}
 		case <-ec.stopped:
 			// Shutdown before the backoff elapsed, do final attempt.
-			ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+			ec.processRotatedFile(task, false /*retryOnFailure*/)
 		}
 	})
 }
@@ -642,7 +644,7 @@ func (ec *EventCollector) sweepStrandedTasks() {
 	for {
 		select {
 		case task := <-ec.rotationQueue:
-			ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+			ec.processRotatedFile(task, false /*retryOnFailure*/)
 		default:
 			return
 		}
@@ -686,25 +688,10 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		if err := os.Remove(state.path); err != nil && !os.IsNotExist(err) {
 			logrus.Warnf("Failed to remove empty rotated file %s: %v", state.path, err)
 		}
+		if flushFailed {
+			return fmt.Errorf("flush failed for %s, buffered events lost", state.path)
+		}
 		return nil
-	}
-
-	if flushFailed {
-		logrus.Warnf("Flush failed for %s; scheduling delayed upload of on-disk content (%d bytes)", state.path, diskSize)
-		task := rotationTask{
-			jsonlPath:   state.path,
-			category:    state.category,
-			sessionName: state.sessionName,
-			nodeID:      state.nodeID,
-			createdAt:   state.createdAt,
-			size:        diskSize,
-		}
-		if blocking {
-			ec.enqueueRotationTask(task, true)
-		} else {
-			ec.retryProcess(task)
-		}
-		return fmt.Errorf("flush failed for %s, queued for delayed upload", state.path)
 	}
 
 	task := rotationTask{
@@ -714,6 +701,16 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		nodeID:      state.nodeID,
 		createdAt:   state.createdAt,
 		size:        diskSize,
+	}
+
+	if flushFailed {
+		logrus.Warnf("Flush failed for %s; scheduling delayed upload of on-disk content (%d bytes)", state.path, diskSize)
+		if blocking {
+			ec.enqueueRotationTask(task, true)
+		} else {
+			ec.retryProcess(task)
+		}
+		return fmt.Errorf("flush failed for %s, queued for delayed upload", state.path)
 	}
 
 	ec.enqueueRotationTask(task, blocking)
@@ -730,7 +727,7 @@ func (ec *EventCollector) compressionUploadWorker() {
 		for {
 			select {
 			case task := <-ec.rotationQueue:
-				ec.processRotatedFileInternal(task, false /*retryOnFailure*/)
+				ec.processRotatedFile(task, false /*retryOnFailure*/)
 			default:
 				return
 			}
@@ -740,7 +737,7 @@ func (ec *EventCollector) compressionUploadWorker() {
 	for {
 		select {
 		case task := <-ec.rotationQueue:
-			ec.processRotatedFile(task)
+			ec.processRotatedFile(task, true)
 		case <-ec.stopped:
 			drain()
 			return
@@ -748,16 +745,11 @@ func (ec *EventCollector) compressionUploadWorker() {
 	}
 }
 
-// processRotatedFile optionally gzips the file, uploads it, then
-// cleans up the local copies. Upload failures are retried with a backoff.
-func (ec *EventCollector) processRotatedFile(task rotationTask) {
-	ec.processRotatedFileInternal(task, true)
-}
-
-// processRotatedFileInternal process rotated files with retry control. With
-// retryOnFailure=false a failed upload is logged and abandoned instead of
-// rescheduled, which is used for the single final attempt during shutdown.
-func (ec *EventCollector) processRotatedFileInternal(task rotationTask, retryOnFailure bool) {
+// processRotatedFile optionally gzips the file, uploads it, then cleans up the
+// local copies. With retryOnFailure a failed upload is retried after a backoff;
+// otherwise it is logged and abandoned, which is used for the single final
+// attempt during shutdown.
+func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure bool) {
 	uploadPath := task.jsonlPath
 	var compressedPath string
 
