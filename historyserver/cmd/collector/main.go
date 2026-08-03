@@ -175,8 +175,10 @@ func main() {
 		panic("Failed to get active session dir after discovering node id: " + err.Error())
 	}
 
-	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
-		logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+	if enableLogCollector {
+		if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
+			logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+		}
 	}
 
 	sessionName := path.Base(activeSessionDir)
