@@ -622,6 +622,37 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "local file should be removed after successful upload")
 }
 
+// A crash mid-compression leaves a partial gzip under a .tmp name. Resume
+// must drop it and enqueue the intact .jsonl source.
+func TestResumePendingFiles_DropsPartialGzipKeepsSource(t *testing.T) {
+	ec := newTestCollector(t, newMockWriter(), Options{CompressionEnabled: true})
+
+	dir := filepath.Join(ec.dataDir, ec.clusterKey(), "session_abc", categoryNodeEvents)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
+	payload := []byte(`{"eventId":"a"}` + "\n")
+	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+	// Truncated gzip, the way a crash mid-compression leaves it.
+	tmpPath := jsonlPath + ".gz.tmp"
+	require.NoError(t, os.WriteFile(tmpPath, []byte("\x1f\x8b\x08trunc"), 0o644))
+
+	ec.resumePendingFiles()
+
+	// The partial gzip is gone; the valid source survived and was enqueued.
+	_, err := os.Stat(tmpPath)
+	assert.True(t, os.IsNotExist(err), "partial .tmp gzip should be removed")
+	_, err = os.Stat(jsonlPath)
+	require.NoError(t, err, "valid .jsonl source must survive")
+
+	select {
+	case task := <-ec.rotationQueue:
+		assert.Equal(t, jsonlPath, task.path)
+	default:
+		t.Fatal("expected the .jsonl to be enqueued for upload")
+	}
+}
+
 // ---------- Rotation by size triggers on checkRotation ----------
 
 func TestCheckRotation_SizeTrigger(t *testing.T) {

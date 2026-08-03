@@ -934,6 +934,14 @@ func (ec *EventCollector) resumePendingFiles() {
 
 		name := info.Name()
 		switch {
+		case strings.HasSuffix(name, ".tmp"):
+			// A crash mid-compression leaves a partial gzip under a .tmp name. Drop it here.
+			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+				logrus.Warnf("Failed to remove partial gzip %s: %v", p, err)
+			} else {
+				ec.totalDiskUsed.Add(-info.Size())
+				logrus.Infof("Removed partial gzip %s left by a prior crash", p)
+			}
 		case strings.HasSuffix(name, ".jsonl.gz"):
 			basePath := strings.TrimSuffix(p, ".gz")
 			gzFiles[basePath] = pf
@@ -1044,18 +1052,20 @@ func gzipFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	// Compress into a temp file and atomically rename it into place once it is
+	// fully written and synced. A crash mid-compression can therefore never
+	// leave a truncated file at dst.
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
 
-	// On any failure after creation, remove the partial output so a later
-	// resumePendingFiles run does not prefer a truncated .gz over its valid
-	// .jsonl source and upload corrupt data.
+	// On any failure after creation, remove the partial temp output.
 	cleanup := func(cause error) error {
 		out.Close()
-		if rmErr := os.Remove(dst); rmErr != nil && !os.IsNotExist(rmErr) {
-			logrus.Warnf("Failed to remove partial gzip %s: %v", dst, rmErr)
+		if rmErr := os.Remove(tmp); rmErr != nil && !os.IsNotExist(rmErr) {
+			logrus.Warnf("Failed to remove partial gzip %s: %v", tmp, rmErr)
 		}
 		return cause
 	}
@@ -1071,7 +1081,13 @@ func gzipFile(src, dst string) error {
 	if err := out.Sync(); err != nil {
 		return cleanup(err)
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return cleanup(err)
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		return cleanup(err)
+	}
+	return nil
 }
 
 // dirSize returns the total byte size of files under root.
