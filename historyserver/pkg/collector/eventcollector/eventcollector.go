@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -387,25 +388,15 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		// writing events for the new session.
 		if ec.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
-			// Flush and account for touched writers before rotation closes them;
-			// otherwise the deferred flush becomes a no-op and processRotatedFile
-			// subtracts bytes that were never added, drifting totalDiskUsed negative.
-			for state := range touchedWriters {
-				if err := state.writer.Flush(); err != nil {
-					logrus.Errorf("Failed to flush %s before session rotation: %v", state.path, err)
-					if writeErr == nil {
-						writeErr = fmt.Errorf("flush %s before session rotation: %w", state.path, err)
-					}
-					ec.reconcileDiskAccountingLocked(state)
-				} else {
-					ec.totalDiskUsed.Add(pendingDiskBytes[state])
-					state.accountedSize += pendingDiskBytes[state]
-				}
-				delete(pendingDiskBytes, state)
+			// Rotation flushes and realigns accounting to the real on-disk size,
+			// so the batch-local maps are simply reset; their pending bytes are
+			// settled by the rotation itself.
+			if err := ec.rotateAllFilesLocked(); err != nil && writeErr == nil {
+				writeErr = fmt.Errorf("rotate on session change: %w", err)
 			}
-			ec.rotateAllFilesLocked()
 			ec.currentSessionName = sessionNameStr
 			touchedWriters = make(map[*activeFileState]struct{})
+			pendingDiskBytes = make(map[*activeFileState]int64)
 		}
 
 		category := ec.categorize(eventData)
@@ -580,13 +571,18 @@ func (ec *EventCollector) checkRotation() {
 	}
 }
 
-// rotateAllFilesLocked rotates every active file. Must be called with writeMu held.
-func (ec *EventCollector) rotateAllFilesLocked() {
+// rotateAllFilesLocked rotates every active file and returns the combined
+// errors so PersistEvents can report rotation failures to the client.
+// Must be called with writeMu held.
+func (ec *EventCollector) rotateAllFilesLocked() error {
+	var errs []error
 	for category := range ec.activeFiles {
 		if err := ec.rotateFileLocked(category, false); err != nil {
 			logrus.Errorf("Failed to rotate %s: %v", category, err)
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // rotateAllFilesForShutdown rotates every active file, blocking until each
@@ -673,10 +669,6 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 	if err := state.writer.Flush(); err != nil {
 		logrus.Errorf("Failed to flush %s before rotation: %v", state.path, err)
 		flushFailed = true
-		// Realign accounting with what actually landed before handing the file
-		// off: the cleanup path subtracts the real size, so any gap here drifts
-		// totalDiskUsed negative.
-		ec.reconcileDiskAccountingLocked(state)
 	}
 	if err := state.file.Sync(); err != nil {
 		logrus.Warnf("Failed to sync %s before rotation: %v", state.path, err)
@@ -685,20 +677,20 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 		logrus.Errorf("Failed to close %s before rotation: %v", state.path, err)
 	}
 
-	// Use actual on-disk size — if flush failed, state.size includes bytes
-	// that never made it to disk.
+	// Settle accounting against the actual on-disk size: state.size may include
+	// bytes lost to a failed flush, and the caller may have written bytes not
+	// yet accounted (mid-batch session rotation).
 	diskSize := state.size
 	if info, err := os.Stat(state.path); err == nil {
 		diskSize = info.Size()
 	}
+	ec.totalDiskUsed.Add(diskSize - state.accountedSize)
+	state.accountedSize = diskSize
 
 	if diskSize == 0 {
 		if err := os.Remove(state.path); err != nil && !os.IsNotExist(err) {
 			logrus.Warnf("Failed to remove empty rotated file %s: %v", state.path, err)
 		}
-		// Nothing downstream will subtract for this file, so release whatever was
-		// counted for it here or totalDiskUsed drifts upward.
-		ec.totalDiskUsed.Add(-state.accountedSize)
 		return nil
 	}
 
