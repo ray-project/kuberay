@@ -424,19 +424,24 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		}
 
 		n, err := state.writer.Write(line)
+		if err == nil {
+			var m int
+			m, err = state.writer.WriteString("\n")
+			n += m
+		}
 		if err != nil {
 			logrus.Errorf("Failed to write event to %s: %v", state.path, err)
 			writeErr = err
+			// bufio errors are sticky: evict the wedged writer so the next
+			// request starts a fresh file. Rotate file here to salvage the bytes
+			// already on disk.
+			delete(touchedWriters, state)
+			if rerr := ec.rotateFileLocked(category, false); rerr != nil {
+				logrus.Errorf("Failed to rotate wedged writer for %s: %v", category, rerr)
+			}
 			return
 		}
-		m, err := state.writer.WriteString("\n")
-		if err != nil {
-			logrus.Errorf("Failed to write newline to %s: %v", state.path, err)
-			writeErr = err
-			return
-		}
-		written := int64(n + m)
-		state.size += written
+		state.size += int64(n)
 		touchedWriters[state] = struct{}{}
 	}
 }

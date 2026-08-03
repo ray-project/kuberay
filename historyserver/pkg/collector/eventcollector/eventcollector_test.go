@@ -1,6 +1,7 @@
 package eventcollector
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
@@ -535,6 +536,43 @@ func TestProcessRotatedFile_PrecompressedSkipsGzip(t *testing.T) {
 	decoded, err := io.ReadAll(gr)
 	require.NoError(t, err)
 	assert.Equal(t, string(payload), string(decoded))
+}
+
+// A write failure must not wedge the category: bufio errors are sticky, so
+// the broken writer is evicted (rotated) and the next request gets a fresh
+// file instead of failing until the timed rotation.
+func TestPersistEvents_WriteFailureEvictsWedgedWriter(t *testing.T) {
+	ec := newTestCollector(t, newMockWriter(), Options{})
+
+	// Open an active file, then break it: close the fd and shrink the buffer
+	// so the next write hits the closed fd immediately.
+	state, err := ec.openNewActiveFileLocked(categoryNodeEvents, ec.currentSessionName)
+	require.NoError(t, err)
+	require.NoError(t, state.file.Close())
+	state.writer = bufio.NewWriterSize(state.file, 1)
+
+	event := func(id string) []byte {
+		body, merr := json.Marshal([]map[string]interface{}{{
+			"eventId":     id,
+			"eventType":   "NODE_LIFECYCLE_EVENT",
+			"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
+			"sessionName": ec.currentSessionName,
+		}})
+		require.NoError(t, merr)
+		return body
+	}
+
+	// First request hits the broken writer and fails.
+	rec := callPersistEvents(t, ec, event("e1"))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	// The wedged state must be evicted so it cannot poison later requests.
+	_, stillActive := ec.activeFiles[categoryNodeEvents]
+	assert.False(t, stillActive, "wedged writer should be evicted from activeFiles")
+
+	// Next request opens a fresh file and succeeds immediately.
+	rec = callPersistEvents(t, ec, event("e2"))
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 // A task whose upload failed before shutdown must still reach storage: the
