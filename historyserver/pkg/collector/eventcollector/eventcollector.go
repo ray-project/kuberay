@@ -130,7 +130,10 @@ type rotationTask struct {
 type EventCollector struct {
 	storageWriter storage.StorageWriter
 
-	stopped chan struct{} // closed after graceful shutdown completes
+	// stopProducers tells the queue's sender-side goroutines (rotationLoop,
+	// diskReconcileLoop, retry goroutines) to finish; see shutdown() for the
+	// ordering that makes closing rotationQueue safe.
+	stopProducers chan struct{}
 
 	clusterNamespace   string
 	sessionDir         string
@@ -158,7 +161,8 @@ type EventCollector struct {
 	rotationQueue chan rotationTask
 	totalDiskUsed atomic.Int64
 
-	workersWG sync.WaitGroup
+	producersWG sync.WaitGroup // goroutines that may send to rotationQueue
+	consumerWG  sync.WaitGroup // compressionUploadWorker + its retry goroutines
 }
 
 // NewEventCollector constructs an EventCollector with disk-first storage.
@@ -192,7 +196,7 @@ func NewEventCollector(
 		ownerName:          ownerName,
 		currentSessionName: sessionName,
 		currentNodeID:      nodeID,
-		stopped:            make(chan struct{}),
+		stopProducers:      make(chan struct{}),
 
 		dataDir:            opts.DataDir,
 		rotationInterval:   opts.RotationInterval,
@@ -242,34 +246,45 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
 
-	ec.workersWG.Add(1)
+	ec.producersWG.Add(1)
 	go ec.rotationLoop()
 
-	ec.workersWG.Add(1)
+	ec.consumerWG.Add(1)
 	go ec.compressionUploadWorker()
 
-	ec.workersWG.Add(1)
+	ec.producersWG.Add(1)
 	go ec.diskReconcileLoop()
 
 	<-stop
 	logrus.Info("Received stop signal, draining events to storage")
+	ec.shutdown()
+}
 
-	// Reject new events before rotating so no writes slip in after the final rotation.
+// shutdown drains the whole pipeline following the pattern from
+// go.dev/blog/pipelines: stop every sender first, then close the queue, and
+// let the consumer drain it.
+func (ec *EventCollector) shutdown() {
+	// 1. Reject new events, then wait out in-flight handlers. Registering in
+	// inflightWG before re-checking draining guarantees no handler can create
+	// a fresh active file after the final rotation below.
 	ec.draining.Store(true)
-
-	// Wait for handlers that passed the draining check to finish, so none can
-	// create a fresh active file after the final rotation below.
 	ec.inflightWG.Wait()
 
-	// Rotate remaining active files so the upload worker can drain them. Use
-	// blocking enqueue so a burst of active files larger than the queue is not
-	// dropped: the upload worker is still consuming here (ec.stopped is still
-	// open), so the sends make progress.
+	// 2. Rotate remaining active files. Blocking enqueue: the upload worker is
+	// still consuming, so the sends make progress even when the queue is full.
 	ec.rotateAllFilesForShutdown()
-	close(ec.stopped)
 
-	ec.workersWG.Wait()
-	ec.sweepStrandedTasks()
+	// 3. Stop the remaining producers and wait until every potential sender is
+	// gone; only then is closing the queue safe (a send on a closed channel
+	// panics).
+	close(ec.stopProducers)
+	ec.producersWG.Wait()
+	close(ec.rotationQueue)
+
+	// 4. The worker drains the closed queue, giving each remaining task one
+	// final attempt, and exits. Files whose upload still fails stay on local
+	// disk for resumePendingFiles after the next start.
+	ec.consumerWG.Wait()
 }
 
 // PersistEvents is the HTTP handler for POST /v1/events. Events are always
@@ -528,7 +543,7 @@ func (ec *EventCollector) clusterKey() string {
 // refreshes the node ID. The node ID is polled from the Ray dashboard, so a raylet
 // restart is picked up within nodeIDPollInterval.
 func (ec *EventCollector) rotationLoop() {
-	defer ec.workersWG.Done()
+	defer ec.producersWG.Done()
 	ticker := time.NewTicker(rotationCheckInterval)
 	defer ticker.Stop()
 	nodeIDTicker := time.NewTicker(nodeIDPollInterval)
@@ -544,7 +559,7 @@ func (ec *EventCollector) rotationLoop() {
 					ec.UpdateNodeID(hexID)
 				}
 			}
-		case <-ec.stopped:
+		case <-ec.stopProducers:
 			return
 		}
 	}
@@ -595,14 +610,11 @@ func (ec *EventCollector) rotateAllFilesForShutdown() {
 }
 
 // enqueueRotationTask hands a rotated file to the upload worker. When blocking
-// is true it waits for queue space (or shutdown); otherwise it drops to a
-// delayed-retry goroutine when the queue is full.
+// is true it waits for queue space; otherwise it drops to a delayed-retry
+// goroutine when the queue is full.
 func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) {
 	if blocking {
-		select {
-		case ec.rotationQueue <- task:
-		case <-ec.stopped:
-		}
+		ec.rotationQueue <- task
 		return
 	}
 	select {
@@ -617,36 +629,14 @@ func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) 
 // handing it back to the upload worker. If shutdown starts first, the task
 // gets one final inline attempt instead
 func (ec *EventCollector) retryProcess(task rotationTask) {
-	// Tracked by workersWG so Run's Wait covers the final attempt.
-	ec.workersWG.Go(func() {
+	ec.consumerWG.Go(func() {
 		select {
 		case <-time.After(retryBackoff):
-			// Hand back to the worker; if shutdown interrupts the wait for
-			// queue space, fall back to the final inline attempt.
-			select {
-			case ec.rotationQueue <- task:
-			case <-ec.stopped:
-				ec.processRotatedFile(task, false /*retryOnFailure*/)
-			}
-		case <-ec.stopped:
-			// Shutdown before the backoff elapsed, do final attempt.
+			ec.processRotatedFile(task, true /*retryOnFailure*/)
+		case <-ec.stopProducers:
 			ec.processRotatedFile(task, false /*retryOnFailure*/)
 		}
 	})
-}
-
-// sweepStrandedTasks gives a final attempt to tasks a retry enqueued after the
-// worker's drain had finished. Call only after workersWG.Wait: with every
-// producer gone the queue can only shrink, so the sweep sees everything.
-func (ec *EventCollector) sweepStrandedTasks() {
-	for {
-		select {
-		case task := <-ec.rotationQueue:
-			ec.processRotatedFile(task, false /*retryOnFailure*/)
-		default:
-			return
-		}
-	}
 }
 
 // rotateFileLocked closes the active file for a category and queues it for
@@ -715,31 +705,23 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 	return nil
 }
 
-// compressionUploadWorker drains rotationQueue, optionally compressing
-// rotated files before uploading them to remote storage.
+// compressionUploadWorker consumes rotationQueue, optionally compressing
+// rotated files before uploading them to remote storage. It exits once the
+// queue is closed and drained, which doubles as the shutdown drain: every
+// remaining task gets one final attempt.
 func (ec *EventCollector) compressionUploadWorker() {
-	defer ec.workersWG.Done()
+	defer ec.consumerWG.Done()
 
-	// drain runs during shutdown, so each task gets a single final attempt
-	drain := func() {
-		for {
-			select {
-			case task := <-ec.rotationQueue:
-				ec.processRotatedFile(task, false /*retryOnFailure*/)
-			default:
-				return
-			}
-		}
-	}
-
-	for {
+	for task := range ec.rotationQueue {
+		// Once shutdown has begun, stop rescheduling failures: the file stays
+		// on disk for resumePendingFiles after the next start.
+		retryOnFailure := true
 		select {
-		case task := <-ec.rotationQueue:
-			ec.processRotatedFile(task, true)
-		case <-ec.stopped:
-			drain()
-			return
+		case <-ec.stopProducers:
+			retryOnFailure = false
+		default:
 		}
+		ec.processRotatedFile(task, retryOnFailure)
 	}
 }
 
@@ -867,7 +849,7 @@ func (ec *EventCollector) buildEventStorageKey(task rotationTask) string {
 // diskReconcileLoop periodically reconciles totalDiskUsed with a real
 // directory walk to correct any drift.
 func (ec *EventCollector) diskReconcileLoop() {
-	defer ec.workersWG.Done()
+	defer ec.producersWG.Done()
 	ticker := time.NewTicker(diskReconcileInterval)
 	defer ticker.Stop()
 
@@ -879,7 +861,7 @@ func (ec *EventCollector) diskReconcileLoop() {
 			} else {
 				logrus.Warnf("Failed to reconcile disk usage: %v", err)
 			}
-		case <-ec.stopped:
+		case <-ec.stopProducers:
 			return
 		}
 	}

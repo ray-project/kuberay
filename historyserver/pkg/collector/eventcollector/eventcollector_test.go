@@ -82,6 +82,12 @@ func (m *mockWriter) fileKeys() []string {
 	return keys
 }
 
+func (m *mockWriter) failPending() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.failNext
+}
+
 type assertErr string
 
 func (e assertErr) Error() string { return string(e) }
@@ -115,7 +121,7 @@ func newTestCollector(t *testing.T, writer *mockWriter, opts Options) *EventColl
 		sessionName:        "session_abc",
 		currentSessionName: "session_abc",
 		currentNodeID:      "node-1",
-		stopped:            make(chan struct{}),
+		stopProducers:      make(chan struct{}),
 		dataDir:            opts.DataDir,
 		rotationInterval:   opts.RotationInterval,
 		maxFileSizeBytes:   opts.MaxFileSizeBytes,
@@ -334,12 +340,9 @@ func TestPersistEvents_SessionChangeRotates(t *testing.T) {
 	writer := newMockWriter()
 	ec := newTestCollector(t, writer, Options{CompressionEnabled: true})
 	// Start compression/upload worker so rotation actually lands in storage.
-	ec.workersWG.Add(1)
+	ec.consumerWG.Add(1)
 	go ec.compressionUploadWorker()
-	defer func() {
-		close(ec.stopped)
-		ec.workersWG.Wait()
-	}()
+	defer ec.shutdown()
 
 	first := []map[string]interface{}{{
 		"eventId":     "s1",
@@ -532,6 +535,53 @@ func TestProcessRotatedFile_PrecompressedSkipsGzip(t *testing.T) {
 	decoded, err := io.ReadAll(gr)
 	require.NoError(t, err)
 	assert.Equal(t, string(payload), string(decoded))
+}
+
+// A task whose upload failed before shutdown must still reach storage: the
+// retry goroutine's final attempt is covered by consumerWG, and the queue is
+// only closed after all producers are gone (pipeline shutdown ordering).
+func TestShutdown_DrainsRetriedTasks(t *testing.T) {
+	writer := newMockWriter()
+	ec := newTestCollector(t, writer, Options{})
+
+	dir := filepath.Join(ec.dataDir, ec.clusterKey(), categoryNodeEvents)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
+	payload := []byte(`{"eventId":"a"}` + "\n")
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+
+	// First upload attempt fails, scheduling a backoff retry.
+	writer.failNext = true
+
+	ec.consumerWG.Add(1)
+	go ec.compressionUploadWorker()
+
+	task := rotationTask{
+		path:        jsonlPath,
+		category:    categoryNodeEvents,
+		sessionName: ec.currentSessionName,
+		nodeID:      "node-1",
+		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
+		size:        int64(len(payload)),
+	}
+	ec.rotationQueue <- task
+
+	// Wait until the worker has consumed the injected failure, so the retry
+	// goroutine exists before shutdown begins.
+	require.Eventually(t, func() bool { return !writer.failPending() },
+		2*time.Second, 10*time.Millisecond)
+
+	// Run's real shutdown sequence. Closing stopProducers cuts the retry's
+	// backoff short and triggers its final attempt.
+	ec.shutdown()
+
+	expectedKey := fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl", task.createdAt.UnixNano())
+	raw, ok := writer.get(expectedKey)
+	require.True(t, ok, "retried task never uploaded; keys: %v", writer.fileKeys())
+	assert.Equal(t, payload, raw)
+
+	_, err := os.Stat(jsonlPath)
+	assert.True(t, os.IsNotExist(err), "local file should be removed after successful upload")
 }
 
 // ---------- Rotation by size triggers on checkRotation ----------
