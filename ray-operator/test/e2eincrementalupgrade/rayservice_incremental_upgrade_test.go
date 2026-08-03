@@ -38,7 +38,7 @@ import (
 // 4. Wait for the Gateway object to be ready (Accepted and Programmed conditions are True)
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a Curl pod to test traffic routing through Gateway to RayService and wait for it to be ready
-// 7. Validate RayService is serving traffic by sending requests through Gateway external IP
+// 7. Validate RayService is serving traffic by sending requests through the Gateway in-cluster DNS name
 // 8. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
@@ -70,20 +70,21 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
 			// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
-			rayService, httpRoute, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+			rayService, httpRoute, gatewayHost := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Create curl pod to test traffic routing through Gateway to RayService
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("6"))
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by modifying RayCluster spec and updating serve deployment by changing RayService serve config")
-			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+			g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2,
+				withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -148,7 +149,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 				}, TestTimeoutMedium).Should(Succeed())
 
 				// Behavior 2: Both old and new versions served traffic during the upgrade and no requests are dropped
-				stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+				stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 				response := stdout.String()
 				g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 				if response == "6" {
@@ -209,7 +210,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("8"))
 		})
 	}
@@ -236,7 +237,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a ConfigMap with Locust runner script
 // 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
-// 8. Start Locust in a background goroutine targeting Gateway IP
+// 8. Start Locust in a background goroutine targeting the Gateway in-cluster DNS name
 // 9. Wait for Locust to ramp up and enter the steady state
 // 10. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
@@ -260,7 +261,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			serveConfigV2 := highRPSServeConfigV2
 
 			// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
-			_, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+			_, _, gatewayHost := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Phase 2: Deploy Locust RayCluster and install Locust
 			// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go) if needed.
@@ -287,8 +288,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
-			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
-			locustHost := fmt.Sprintf("http://%s", gatewayIP)
+			// Phase 3: Start Locust in a background goroutine targeting the Gateway in-cluster DNS name
+			locustHost := fmt.Sprintf("http://%s", gatewayHost)
 
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
@@ -320,7 +321,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec")
-			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+			g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2,
+				withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -333,7 +335,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodGet, "/test", "")
+			stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodGet, "/test", "")
 			var resp struct {
 				Status string `json:"status"`
 			}
@@ -359,19 +361,11 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	maxSurge := new(int32(50))
 	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
-	_, httpRoute, _ := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
-
-	// Copy original spec to use to trigger a rollback later.
-	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	originalSpec := rayService.Spec.DeepCopy()
+	rayService, httpRoute, _ := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 	// Trigger an incremental upgrade through a change to the RayCluster spec.
 	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	err := triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("500m"))
 	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
@@ -393,10 +387,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger a rollback by updating the spec back to the original version.
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec = *originalSpec.DeepCopy()
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(defaultWorkerCPURequest))
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Verify that the controller enters the rollback state.
@@ -473,6 +464,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 		{Name: "ThirdSpec", Sequence: SeqABAC, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 2}, TriggerStage: TriggerMiddle},
 		{Name: "EarlyRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerEarly},
 		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate},
+		{Name: "FastRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
 	}
 
 	for _, tc := range rollbackMatrix {
@@ -540,14 +532,8 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Phase 4: Trigger incremental upgrade (A -> B)
 			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
-			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest("500m"))
 			g.Expect(err).NotTo(HaveOccurred())
-			// Create Spec B by modifying CPU request
-			rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-			_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-
-			specB := rayService.Spec.DeepCopy()
 
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -589,15 +575,13 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Phase 5: Trigger rollback (B -> A)
 			LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s (Spec A)", rayService.Namespace, rayService.Name)
-			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+			rs, err := GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
-
 			activeBeforeRollback := int32(0)
-			if rayService.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
-				activeBeforeRollback = *rayService.Status.ActiveServiceStatus.TrafficRoutedPercent
+			if rs.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
+				activeBeforeRollback = *rs.Status.ActiveServiceStatus.TrafficRoutedPercent
 			}
-			rayService.Spec = *originalSpec.DeepCopy()
-			_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+			err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(defaultWorkerCPURequest))
 			g.Expect(err).NotTo(HaveOccurred())
 
 			if tc.TriggerStage != TriggerBeforeTraffic {
@@ -621,19 +605,15 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 					g.Expect(*active).Should(BeNumerically(">", activeBeforeRollback))
 				}, TestTimeoutShort).Should(Succeed())
 
-				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-				g.Expect(err).NotTo(HaveOccurred())
-
+				cpuRequest := "500m" // Spec B
 				switch tc.Sequence {
 				case SeqABAB:
-					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB.DeepCopy()
+					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", namespace.Name, rayServiceName)
 				case SeqABAC:
-					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB.DeepCopy()
-					rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
+					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", namespace.Name, rayServiceName)
+					cpuRequest = "600m" // Spec C
 				}
-				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+				err = triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2, withWorkerCPURequest(cpuRequest))
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 
