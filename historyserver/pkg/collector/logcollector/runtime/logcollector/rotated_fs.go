@@ -67,6 +67,20 @@ func isVanished(err error) bool {
 	return errors.Is(err, fs.ErrNotExist)
 }
 
+// isWatchResourceExhausted reports whether err means the kernel had no room for
+// another watch: inotify reports its per-user watch limit as ENOSPC, and the
+// descriptor limits as EMFILE and ENFILE. All three are about what else the machine is
+// doing rather than about this deployment, so a later attempt can succeed.
+//
+// It is only ever consulted for a watch, never for a capture: ENOSPC from os.Link
+// means the staging volume is full, which is a different condition entirely and is
+// handled by the intake gate.
+func isWatchResourceExhausted(err error) bool {
+	return errors.Is(err, syscall.ENOSPC) ||
+		errors.Is(err, syscall.EMFILE) ||
+		errors.Is(err, syscall.ENFILE)
+}
+
 // isAlreadyStaged reports whether a capture link collided with an existing file.
 //
 // This is not deduplication: every discovery mints a fresh capture ID and so a

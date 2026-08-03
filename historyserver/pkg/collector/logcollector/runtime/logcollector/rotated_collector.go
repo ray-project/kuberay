@@ -100,6 +100,12 @@ type rotatedCollectorConfig struct {
 	// already covered while reconstruction is in progress.
 	BeforeReconstruct func()
 
+	// OnReady runs on the owner goroutine once every startup step has succeeded and
+	// the loop is about to begin. It is how the runtime tells a collector that is
+	// genuinely protecting its tree from one that merely got as far as being
+	// constructed. It must not block.
+	OnReady func()
+
 	// OnIssue receives problems that must not stop discovery: a segment lost to a
 	// rotation race, an unsupported filesystem, a corrupt staging record.
 	OnIssue func(error)
@@ -239,6 +245,13 @@ func (rc *rotatedCollector) Run() error {
 
 	w, err := rc.cfg.NewWatcher()
 	if err != nil {
+		// Same boundary, same reasoning as the watch installation below: the kernel
+		// refusing another inotify instance or descriptor is about what else the
+		// machine is doing, and it clears. Anything else about constructing a watcher
+		// is a property of the deployment and is left durable.
+		if isWatchResourceExhausted(err) {
+			return retryableRotated(err)
+		}
 		return err
 	}
 	rc.watcher = w
@@ -260,7 +273,20 @@ func (rc *rotatedCollector) Run() error {
 	// full scan capture, and only then are the events that queued in the watcher
 	// channel since step one processed.
 	if err := rc.installWatchesRecursive(rc.cfg.LogsDir); err != nil {
-		return fmt.Errorf("rotated log collector cannot watch the whole logs tree: %w", err)
+		err = fmt.Errorf("rotated log collector cannot watch the whole logs tree: %w", err)
+		// Watch installation is the one startup step whose failure can be about the
+		// moment rather than the deployment, and it is the only place that can say so:
+		// the logs tree disappearing here is a session that ended mid-startup, and an
+		// exhausted inotify or descriptor limit clears when whatever consumed it
+		// releases it. Both are worth another attempt on a later tick. A permission the
+		// collector does not have is not, and is left durable by omission.
+		//
+		// Nothing later in Run is marked: from here on, an error means the staging
+		// volume and the index disagree, and retrying that is a restart loop.
+		if isVanished(err) || isWatchResourceExhausted(err) {
+			return retryableRotated(err)
+		}
+		return err
 	}
 
 	if rc.cfg.BeforeReconstruct != nil {
@@ -290,6 +316,15 @@ func (rc *rotatedCollector) Run() error {
 
 	tick, stopTicker := rc.cfg.NewTicker(rc.cfg.ReconcileInterval)
 	defer stopTicker()
+
+	// Startup is complete and nothing above it can fail any more: the watcher exists,
+	// the whole tree is watched, staging has been reconstructed, the live scan has run,
+	// the uploader is up and the previous run's work has been rescheduled. Only from
+	// here is the collector actually protecting anything, which is why this — and not
+	// the moment it was constructed — is what tells the supervisor it recovered.
+	if rc.cfg.OnReady != nil {
+		rc.cfg.OnReady()
+	}
 
 	for {
 		// Housekeeping runs before any request is served, so a caller that gets a
