@@ -113,18 +113,16 @@ type activeFileState struct {
 	createdAt     time.Time
 }
 
-// rotationTask describes a rotated JSONL file ready for upload.
+// rotationTask describes a local event file ready for upload.
 type rotationTask struct {
-	jsonlPath   string
+	// path is the local file awaiting upload, can be a freshly rotated .jsonl or a
+	// .jsonl.gz leftover re-enqueued by resumePendingFiles after a restart.
+	path        string
 	category    string
 	sessionName string
 	nodeID      string
 	createdAt   time.Time
 	size        int64
-	// extOverride, when non-empty, forces the remote key extension instead of
-	// deriving it from ec.compressionEnabled. Used during resume to preserve the
-	// original file type.
-	extOverride string
 }
 
 // EventCollector persists events to local disk as JSONL and asynchronously
@@ -610,7 +608,7 @@ func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) 
 	select {
 	case ec.rotationQueue <- task:
 	default:
-		logrus.Warnf("rotation queue full, scheduling retry for %s", task.jsonlPath)
+		logrus.Warnf("rotation queue full, scheduling retry for %s", task.path)
 		ec.retryProcess(task)
 	}
 }
@@ -695,7 +693,7 @@ func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error
 	}
 
 	task := rotationTask{
-		jsonlPath:   state.path,
+		path:        state.path,
 		category:    state.category,
 		sessionName: state.sessionName,
 		nodeID:      state.nodeID,
@@ -750,13 +748,17 @@ func (ec *EventCollector) compressionUploadWorker() {
 // otherwise it is logged and abandoned, which is used for the single final
 // attempt during shutdown.
 func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure bool) {
-	uploadPath := task.jsonlPath
+	uploadPath := task.path
 	var compressedPath string
 
-	if ec.compressionEnabled {
-		gzPath := task.jsonlPath + ".gz"
-		if err := gzipFile(task.jsonlPath, gzPath); err != nil {
-			logrus.Errorf("Failed to compress %s: %v", task.jsonlPath, err)
+	// Resumed .jsonl.gz leftovers are already compressed; gzipping them again
+	// would double-compress the payload and make it undecodable downstream.
+	alreadyCompressed := strings.HasSuffix(task.path, ".gz")
+
+	if ec.compressionEnabled && !alreadyCompressed {
+		gzPath := task.path + ".gz"
+		if err := gzipFile(task.path, gzPath); err != nil {
+			logrus.Errorf("Failed to compress %s: %v", task.path, err)
 			// Leave the .jsonl file for retry on next restart.
 			return
 		}
@@ -794,7 +796,7 @@ func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure b
 			}
 		}
 		if !retryOnFailure {
-			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, task.jsonlPath)
+			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, task.path)
 			return
 		}
 		ec.retryProcess(task)
@@ -803,11 +805,11 @@ func (ec *EventCollector) processRotatedFile(task rotationTask, retryOnFailure b
 	f.Close()
 
 	// Clean up local files (decrement accounting best-effort).
-	if info, err := os.Stat(task.jsonlPath); err == nil {
+	if info, err := os.Stat(task.path); err == nil {
 		ec.totalDiskUsed.Add(-info.Size())
 	}
-	if err := os.Remove(task.jsonlPath); err != nil && !os.IsNotExist(err) {
-		logrus.Warnf("Failed to remove %s after upload: %v", task.jsonlPath, err)
+	if err := os.Remove(task.path); err != nil && !os.IsNotExist(err) {
+		logrus.Warnf("Failed to remove %s after upload: %v", task.path, err)
 	}
 
 	if compressedPath != "" {
@@ -843,12 +845,12 @@ func (ec *EventCollector) buildEventStorageKey(task rotationTask) string {
 		nodeID = ec.nodeID
 	}
 
-	ext := task.extOverride
-	if ext == "" {
-		ext = ".jsonl"
-		if ec.compressionEnabled {
-			ext = ".jsonl.gz"
-		}
+	// The extension must describe the bytes actually uploaded: an already
+	// compressed leftover (resumed .jsonl.gz) stays gzip regardless of the
+	// current compression flag, which may have changed since the prior run.
+	ext := ".jsonl"
+	if ec.compressionEnabled || strings.HasSuffix(task.path, ".gz") {
+		ext = ".jsonl.gz"
 	}
 
 	fileName := fmt.Sprintf("%s-%s-%d%s", nodeID, hour, task.createdAt.UnixNano(), ext)
@@ -900,6 +902,7 @@ func (ec *EventCollector) initDiskUsage() {
 //
 // Directory layout: {clusterKey}/{sessionName}/{category}/{file}
 func (ec *EventCollector) resumePendingFiles() {
+	// {dataDir}/{cluster_name}_{cluster_namespace}
 	clusterRoot := filepath.Join(ec.dataDir, ec.clusterKey())
 	entries, err := os.Stat(clusterRoot)
 	if err != nil || !entries.IsDir() {
@@ -926,21 +929,22 @@ func (ec *EventCollector) resumePendingFiles() {
 		if err != nil {
 			return nil
 		}
-		parts := strings.Split(filepath.ToSlash(rel), "/")
-		if len(parts) < 3 {
-			return nil
-		}
 
-		sessionName := parts[0]
-		var category string
-		switch parts[1] {
-		case categoryNodeEvents:
-			category = categoryNodeEvents
-		case categoryJobPrefix:
-			if len(parts) < 4 {
-				return nil
-			}
-			category = path.Join(categoryJobPrefix, parts[2])
+		// Recover session/category from the directory levels, reversing the
+		// layout openNewActiveFileLocked writes (nodeID/createdAt are parsed
+		// from the file name later):
+		//
+		//	node events: {sessionName}/node_events/{file}
+		//	job events:  {sessionName}/job_events/{jobID}/{file}
+		//
+		// Anything not matching either shape exactly is not ours; skip it.
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		var sessionName, category string
+		switch {
+		case len(parts) == 3 && parts[1] == categoryNodeEvents:
+			sessionName, category = parts[0], categoryNodeEvents
+		case len(parts) == 4 && parts[1] == categoryJobPrefix:
+			sessionName, category = parts[0], path.Join(categoryJobPrefix, parts[2])
 		default:
 			return nil
 		}
@@ -973,22 +977,7 @@ func (ec *EventCollector) resumePendingFiles() {
 
 		nodeID := nodeIDFromFileName(pf.info.Name())
 		task := rotationTask{
-			jsonlPath:   pf.path,
-			category:    pf.category,
-			sessionName: pf.session,
-			nodeID:      nodeID,
-			createdAt:   createdAtFromFileName(pf.info.Name(), pf.info.ModTime()),
-			size:        pf.info.Size(),
-			extOverride: ".jsonl.gz",
-		}
-		// Tracked so shutdown waits for these in-flight uploads.
-		ec.workersWG.Go(func() { ec.uploadOnly(task, pf.path) })
-	}
-
-	for _, pf := range jsonlFiles {
-		nodeID := nodeIDFromFileName(pf.info.Name())
-		task := rotationTask{
-			jsonlPath:   pf.path,
+			path:        pf.path,
 			category:    pf.category,
 			sessionName: pf.session,
 			nodeID:      nodeID,
@@ -1002,58 +991,24 @@ func (ec *EventCollector) resumePendingFiles() {
 			ec.retryProcess(task)
 		}
 	}
-}
 
-// uploadOnly uploads a pre-existing compressed file to remote storage and
-// removes it locally. Used during startup resume for .jsonl.gz leftovers.
-// It cannot go through processRotatedFile: the file is already compressed and
-// would be gzipped a second time. Upload failures are retried with a backoff.
-func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
-	ec.uploadOnlyInternal(task, gzPath, true)
-}
-
-// uploadOnlyInternal is uploadOnly with retry control; retryOnFailure=false is
-// the single final attempt during shutdown and must not spawn further retries.
-func (ec *EventCollector) uploadOnlyInternal(task rotationTask, gzPath string, retryOnFailure bool) {
-	key := ec.buildEventStorageKey(task)
-	f, err := os.Open(gzPath)
-	if err != nil {
-		logrus.Errorf("Failed to open %s for resume upload: %v", gzPath, err)
-		return
-	}
-	if err := ec.storageWriter.CreateDirectory(path.Dir(key)); err != nil {
-		logrus.Warnf("Failed to create remote directory %s: %v", path.Dir(key), err)
-	}
-	if err := ec.storageWriter.WriteFile(key, f); err != nil {
-		f.Close()
-		logrus.Errorf("Failed to resume upload %s to %s: %v", gzPath, key, err)
-		if !retryOnFailure {
-			logrus.Errorf("Giving up on %s during shutdown; file left at %s", key, gzPath)
-			return
+	for _, pf := range jsonlFiles {
+		nodeID := nodeIDFromFileName(pf.info.Name())
+		task := rotationTask{
+			path:        pf.path,
+			category:    pf.category,
+			sessionName: pf.session,
+			nodeID:      nodeID,
+			createdAt:   createdAtFromFileName(pf.info.Name(), pf.info.ModTime()),
+			size:        pf.info.Size(),
 		}
-		// Retry after a backoff instead of leaving the file on disk until the
-		// next pod restart, mirroring processRotatedFile. A transient remote
-		// error would otherwise pin totalDiskUsed and trigger 503 backpressure.
-		// On shutdown, make one last synchronous attempt rather than dropping
-		// the task — see retryProcess for why.
-		ec.workersWG.Go(func() {
-			select {
-			case <-time.After(retryBackoff):
-				ec.uploadOnlyInternal(task, gzPath, true)
-			case <-ec.stopped:
-				ec.uploadOnlyInternal(task, gzPath, false)
-			}
-		})
-		return
+		select {
+		case ec.rotationQueue <- task:
+		default:
+			logrus.Warnf("rotation queue full during resume, scheduling retry for %s", pf.path)
+			ec.retryProcess(task)
+		}
 	}
-	f.Close()
-	if info, err := os.Stat(gzPath); err == nil {
-		ec.totalDiskUsed.Add(-info.Size())
-	}
-	if err := os.Remove(gzPath); err != nil && !os.IsNotExist(err) {
-		logrus.Warnf("Failed to remove %s after resume upload: %v", gzPath, err)
-	}
-	logrus.Infof("Resumed upload to %s", key)
 }
 
 // underDiskPressure reports whether new events should be rejected.

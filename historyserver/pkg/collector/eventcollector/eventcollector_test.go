@@ -433,7 +433,7 @@ func TestProcessRotatedFile_GzipsAndUploadsThenCleansUp(t *testing.T) {
 	ec.totalDiskUsed.Store(int64(len(payload)))
 
 	task := rotationTask{
-		jsonlPath:   jsonlPath,
+		path:        jsonlPath,
 		category:    categoryNodeEvents,
 		sessionName: ec.currentSessionName,
 		nodeID:      "node-1",
@@ -472,7 +472,7 @@ func TestProcessRotatedFile_NoCompressionUsesJSONLExtension(t *testing.T) {
 	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
 
 	task := rotationTask{
-		jsonlPath:   jsonlPath,
+		path:        jsonlPath,
 		category:    categoryNodeEvents,
 		sessionName: ec.currentSessionName,
 		nodeID:      "node-1",
@@ -485,6 +485,53 @@ func TestProcessRotatedFile_NoCompressionUsesJSONLExtension(t *testing.T) {
 	raw, ok := writer.get(expectedKey)
 	require.True(t, ok, "uploaded keys: %v", writer.fileKeys())
 	assert.Equal(t, payload, raw)
+}
+
+// A resumed .jsonl.gz leftover must be uploaded as-is: gzipping it a second
+// time would make the object undecodable for the history server.
+func TestProcessRotatedFile_PrecompressedSkipsGzip(t *testing.T) {
+	writer := newMockWriter()
+	ec := newTestCollector(t, writer, Options{CompressionEnabled: true})
+
+	dir := filepath.Join(ec.dataDir, ec.clusterKey(), categoryNodeEvents)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	payload := []byte(`{"eventId":"a"}` + "\n")
+
+	// Write a real gzip file, as a crashed prior run would have left behind.
+	gzPath := filepath.Join(dir, "node-1_123.jsonl.gz")
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	_, err := gw.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, gw.Close())
+	require.NoError(t, os.WriteFile(gzPath, buf.Bytes(), 0o644))
+
+	task := rotationTask{
+		path:        gzPath,
+		category:    categoryNodeEvents,
+		sessionName: ec.currentSessionName,
+		nodeID:      "node-1",
+		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
+		size:        int64(buf.Len()),
+	}
+	ec.processRotatedFile(task, true)
+
+	// Local file should be gone, and no double-compressed artifact left behind.
+	_, err = os.Stat(gzPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(gzPath + ".gz")
+	assert.True(t, os.IsNotExist(err))
+
+	// Uploaded bytes must gunzip back to the original payload in one pass.
+	expectedKey := fmt.Sprintf("history/cluster-history/raycluster/ns/cluster/session_abc/node-1/node_events/node-1-2026-05-13-10-%d.jsonl.gz", task.createdAt.UnixNano())
+	raw, ok := writer.get(expectedKey)
+	require.True(t, ok, "uploaded keys: %v", writer.fileKeys())
+	gr, err := gzip.NewReader(bytes.NewReader(raw))
+	require.NoError(t, err)
+	defer gr.Close()
+	decoded, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	assert.Equal(t, string(payload), string(decoded))
 }
 
 // ---------- Rotation by size triggers on checkRotation ----------
@@ -512,7 +559,7 @@ func TestCheckRotation_SizeTrigger(t *testing.T) {
 	// A rotation task must be queued.
 	select {
 	case task := <-ec.rotationQueue:
-		assert.Equal(t, state.path, task.jsonlPath)
+		assert.Equal(t, state.path, task.path)
 	default:
 		t.Fatal("expected rotation task to be enqueued")
 	}
