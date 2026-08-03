@@ -349,6 +349,8 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	ec.writeMu.Lock()
 	defer ec.writeMu.Unlock()
 
+	// Track files written in this batch so the deferred flush only touches
+	// them, not every open writer in ec.activeFiles.
 	touchedWriters := make(map[*activeFileState]struct{})
 	pendingDiskBytes := make(map[*activeFileState]int64)
 	var writeErr error
@@ -380,6 +382,9 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	for _, eventData := range eventDatas {
 		sessionNameStr := eventData["sessionName"].(string)
 
+		// Active files are keyed by category only, so on a session change the old
+		// session's files must be rotated (closed + enqueued for upload) before
+		// writing events for the new session.
 		if ec.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
 			// Flush and account for touched writers before rotation closes them;
@@ -479,6 +484,11 @@ func (ec *EventCollector) getOrCreateActiveFileLocked(category, sessionName stri
 }
 
 // openNewActiveFileLocked opens a fresh JSONL file for the given category.
+// The resulting path looks like:
+//
+//	{dataDir}/{clusterName}_{namespace}/{sessionName}/{category}/{nodeID}_{unixNano}.jsonl
+//
+// e.g. /data/raycluster-sample_default/session_2026-08-03_10-00-00_123_1/job_events/01000000/abc123_1754200000000000000.jsonl
 // Must be called with writeMu held.
 func (ec *EventCollector) openNewActiveFileLocked(category, sessionName string) (*activeFileState, error) {
 	dir := filepath.Join(ec.dataDir, ec.clusterKey(), sessionName, category)
