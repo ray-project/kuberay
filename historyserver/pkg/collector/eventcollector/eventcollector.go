@@ -353,7 +353,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	// Track files written in this batch so the deferred flush only touches
 	// them, not every open writer in ec.activeFiles.
 	touchedWriters := make(map[*activeFileState]struct{})
-	pendingDiskBytes := make(map[*activeFileState]int64)
 	var writeErr error
 
 	// Best-effort flush on any exit path so on-disk state stays consistent
@@ -365,13 +364,10 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 				if writeErr == nil {
 					writeErr = fmt.Errorf("flush %s: %w", state.path, err)
 				}
-				// Flush is partial on error: bytes before the failure point reached disk.
-				// Reconcile so accounting matches what actually landed.
-				ec.reconcileDiskAccountingLocked(state)
-			} else {
-				ec.totalDiskUsed.Add(pendingDiskBytes[state])
-				state.accountedSize += pendingDiskBytes[state]
 			}
+			// Flush may be partial on error; either way the real on-disk size is
+			// authoritative, so settle accounting against it.
+			ec.reconcileDiskAccountingLocked(state)
 		}
 		if writeErr != nil {
 			resp.WriteError(http.StatusInternalServerError, writeErr)
@@ -388,15 +384,14 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		// writing events for the new session.
 		if ec.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
-			// Rotation flushes and realigns accounting to the real on-disk size,
-			// so the batch-local maps are simply reset; their pending bytes are
-			// settled by the rotation itself.
+			// Rotation already flushed and settled the old session's files, so
+			// drop them from touchedWriters — the deferred flush must not touch
+			// their closed writers.
 			if err := ec.rotateAllFilesLocked(); err != nil && writeErr == nil {
 				writeErr = fmt.Errorf("rotate on session change: %w", err)
 			}
 			ec.currentSessionName = sessionNameStr
 			touchedWriters = make(map[*activeFileState]struct{})
-			pendingDiskBytes = make(map[*activeFileState]int64)
 		}
 
 		category := ec.categorize(eventData)
@@ -429,7 +424,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		}
 		written := int64(n + m)
 		state.size += written
-		pendingDiskBytes[state] += written
 		touchedWriters[state] = struct{}{}
 	}
 }
@@ -448,9 +442,10 @@ func (ec *EventCollector) categorize(eventData map[string]interface{}) string {
 	return categoryNodeEvents
 }
 
-// reconcileDiskAccountingLocked realigns a file's accountedSize with its real
-// on-disk size after a partial flush, so cleanup subtracts what was really
-// written instead of what we thought we wrote. Must be called with writeMu held.
+// reconcileDiskAccountingLocked settles a file's accounting (totalDiskUsed,
+// accountedSize, size) against its real on-disk size, so cleanup subtracts
+// what was really written instead of what we thought we wrote.
+// Must be called with writeMu held.
 func (ec *EventCollector) reconcileDiskAccountingLocked(state *activeFileState) {
 	info, err := os.Stat(state.path)
 	if err != nil {
