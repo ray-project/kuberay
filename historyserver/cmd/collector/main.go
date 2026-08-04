@@ -110,7 +110,7 @@ func main() {
 		panic("Invalid role: " + role + ", must be Head or Worker")
 	}
 
-	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, &enableEventCollector, &enableLogCollector); err != nil {
+	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, enableEventCollector, enableLogCollector); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
 	}
 
@@ -244,8 +244,8 @@ func main() {
 	logrus.Info("Graceful shutdown complete")
 }
 
-func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector *bool) error {
-	if !*enableEventCollector && !*enableLogCollector {
+func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector bool) error {
+	if !enableEventCollector && !enableLogCollector {
 		return fmt.Errorf("at least one of --enable-event-collector or --enable-log-collector must be enabled")
 	}
 	*rayClusterName = strings.TrimSpace(*rayClusterName)
