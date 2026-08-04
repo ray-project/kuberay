@@ -24,9 +24,18 @@ type ServerHandler struct {
 	httpClient    *http.Client
 
 	useKubernetesProxy bool
+	useAuthTokenMode   bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, sessionLoader *SessionLoader, useKubernetesProxy bool) (*ServerHandler, error) {
+func NewServerHandler(
+	c *types.RayHistoryServerConfig,
+	dashboardDir string,
+	reader storage.StorageReader,
+	clientManager *ClientManager,
+	sessionLoader *SessionLoader,
+	useKubernetesProxy bool,
+	useAuthTokenMode bool,
+) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
@@ -36,6 +45,8 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 		dashboardDir: dashboardDir,
 		// TODO: make this configurable
 		maxClusters: 100,
+
+		useAuthTokenMode: useAuthTokenMode,
 	}
 
 	if len(clientManager.configs) > 0 {
