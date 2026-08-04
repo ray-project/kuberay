@@ -741,20 +741,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
 	}
 
-	// Exactly one Gateway source must be specified: either KubeRay creates a
-	// Gateway from gatewayClassName, or it attaches to a pre-existing Gateway via
-	// existingGatewayRef (for controllers that only reconcile a specific shared
-	// Gateway, e.g. Contour's static gateway.gatewayRef mode).
-	if options.ExistingGatewayRef != nil {
-		if options.GatewayClassName != "" {
-			return fmt.Errorf("gatewayClassName must not be set when existingGatewayRef is specified")
-		}
-		if options.ExistingGatewayRef.Name == "" || options.ExistingGatewayRef.Namespace == "" {
-			return fmt.Errorf("existingGatewayRef requires both name and namespace")
-		}
-	} else if options.GatewayClassName == "" {
-		return fmt.Errorf("either gatewayClassName or existingGatewayRef is required for NewClusterWithIncrementalUpgrade")
-	}
+	// The Gateway source (exactly one of gatewayClassName / gatewayRef) is
+	// enforced at admission by the CEL rule on ClusterUpgradeOptions, and
+	// GatewayRef's name/namespace are required by the CRD schema, so no controller-
+	// side check is needed here.
 
 	return nil
 }

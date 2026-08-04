@@ -113,8 +113,8 @@ _Appears in:_
 | `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
 | `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.<br />StepSizePercent must be less than or equal to MaxSurgePercent. |  |  |
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
-| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Ignored when ExistingGatewayRef is set. |  |  |
-| `existingGatewayRef` _[GatewayRef](#gatewayref)_ | ExistingGatewayRef, when set, attaches the RayService's HTTPRoute to a<br />pre-existing Gateway instead of creating a per-RayService Gateway. Use this<br />when the cluster's Gateway controller only reconciles a specific shared<br />Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-<br />created Gateways are never programmed). When set, KubeRay skips Gateway<br />creation and only manages the HTTPRoute's backend weights on the referenced<br />Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace. |  |  |
+| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Mutually exclusive with GatewayRef: set exactly one. |  |  |
+| `gatewayRef` _[GatewayReference](#gatewayreference)_ | GatewayRef, when set, attaches the RayService's HTTPRoute to a<br />pre-existing Gateway instead of creating a per-RayService Gateway. Use this<br />when the cluster's Gateway controller only reconciles a specific shared<br />Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-<br />created Gateways are never programmed). When set, KubeRay skips Gateway<br />creation and only manages the HTTPRoute's backend weights on the referenced<br />Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace.<br />Mutually exclusive with GatewayClassName: set exactly one. |  |  |
 
 
 #### CollectorOptions
@@ -264,11 +264,14 @@ _Appears in:_
 | `Retain` | RetainGCSStorageDeletionPolicy keeps the operator-managed PVC (and its data)<br />after the owning RayCluster is deleted: the operator omits the ownerReference<br />so the PVC outlives the cluster. Recover the GCS state by pointing a new<br />cluster's ClaimName at the retained PVC.<br /> |
 
 
-#### GatewayRef
+#### GatewayReference
 
 
 
-GatewayRef references an existing Gateway resource.
+GatewayReference references an existing Gateway resource. The controller only manages
+the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
+let the RayService pin its HTTPRoute to a specific listener on a shared Gateway
+that KubeRay does not otherwise configure.
 
 
 
@@ -277,8 +280,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `name` _string_ | Name of the existing Gateway. |  |  |
-| `namespace` _string_ | Namespace of the existing Gateway. |  |  |
+| `name` _string_ | Name of the existing Gateway. Must be a valid Gateway resource name<br />(an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
+| `namespace` _string_ | Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.<br />Must be a valid namespace name (an RFC 1123 label). |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
+| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners. |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
+| `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
 
 
 #### GcsEmbeddedStorage

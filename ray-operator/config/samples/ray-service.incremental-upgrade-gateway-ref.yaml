@@ -1,5 +1,5 @@
 # NewClusterWithIncrementalUpgrade that attaches to a PRE-EXISTING (shared) Gateway
-# via clusterUpgradeOptions.existingGatewayRef, instead of having KubeRay create a
+# via clusterUpgradeOptions.gatewayRef, instead of having KubeRay create a
 # per-RayService Gateway from gatewayClassName.
 #
 # Use this when the cluster's Gateway controller only reconciles one specific,
@@ -8,7 +8,7 @@
 # gke-l7-* classes) -- where KubeRay-created Gateways would never be programmed and
 # the incremental traffic shift would never start.
 #
-# When existingGatewayRef is set:
+# When gatewayRef is set:
 #   - KubeRay does NOT create a Gateway; it only manages the HTTPRoute's backend
 #     weights on the referenced Gateway.
 #   - gatewayClassName must be omitted (the two are mutually exclusive).
@@ -37,15 +37,20 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: rayservice-incremental-upgrade-existing-gateway
+  name: rayservice-incremental-upgrade-gateway-ref
 spec:
   upgradeStrategy:
     type: NewClusterWithIncrementalUpgrade
     clusterUpgradeOptions:
       # Attach to an existing shared Gateway instead of creating one.
-      existingGatewayRef:
+      gatewayRef:
         name: shared-gateway
+        # namespace defaults to this RayService's namespace when omitted.
         namespace: gateway
+        # Optional: pin the HTTPRoute to a specific listener on the shared Gateway.
+        # Omit to attach to every listener that accepts the route.
+        sectionName: http
+        port: 80
       stepSizePercent: 10
       intervalSeconds: 30
       maxSurgePercent: 10

@@ -509,13 +509,13 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// Always target the per-RayService Gateway KubeRay owns ("{name}-gateway" in
 		// the RayService namespace), never RayServiceGatewayNamespacedName — the
-		// latter now resolves to the shared Gateway when ExistingGatewayRef is set,
+		// latter now resolves to the shared Gateway when GatewayRef is set,
 		// and deleting that would tear down ingress for every other RayService on it.
 		//
 		// Targeting the owned name explicitly also cleans up an orphan left behind by
-		// switching a RayService from gatewayClassName to existingGatewayRef: the old
+		// switching a RayService from gatewayClassName to gatewayRef: the old
 		// "{name}-gateway" is still deleted here, while a service that only ever used
-		// existingGatewayRef simply has no such Gateway (Get returns NotFound).
+		// gatewayRef simply has no such Gateway (Get returns NotFound).
 		ownedGatewayName := types.NamespacedName{
 			Name:      fmt.Sprintf("%s-gateway", rayServiceInstance.Name),
 			Namespace: rayServiceInstance.Namespace,
@@ -906,13 +906,6 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		return nil, errstd.New("Missing RayService ClusterUpgradeOptions during upgrade.")
 	}
 
-	// When attaching to a pre-existing (shared) Gateway, KubeRay does not own or
-	// create a Gateway — only the HTTPRoute is managed. Returning nil here makes
-	// reconcileGateway skip creation (see its desiredGateway == nil guard).
-	if options.ExistingGatewayRef != nil {
-		return nil, nil
-	}
-
 	gatewayName := rayServiceInstance.Name + "-gateway"
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
@@ -940,6 +933,23 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceInstance *rayv1.RayService) error {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
+
+	// When a pre-existing (shared) Gateway is referenced, KubeRay does not own or
+	// create a Gateway — it only manages the HTTPRoute. Verify the referenced
+	// Gateway exists; if it is missing, record an event and return so the HTTPRoute
+	// is not attached to a non-existent Gateway.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
+		gatewayName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
+		if err := r.Get(ctx, gatewayName, &gwv1.Gateway{}); err != nil {
+			if errors.IsNotFound(err) {
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToGetGateway), string(utils.GetAction),
+					"Referenced Gateway %s/%s not found for RayService %s/%s", gatewayName.Namespace, gatewayName.Name, rayServiceInstance.Namespace, rayServiceInstance.Name)
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
 
 	// Construct desired Gateway object for RayService
 	desiredGateway, err := r.createGateway(rayServiceInstance)
@@ -1100,7 +1110,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// Serve services live in the RayService's namespace. This equals the Gateway's
 	// namespace in the default (KubeRay-created) case, but differs when attaching to
-	// a shared Gateway in another namespace (ExistingGatewayRef), so reference the
+	// a shared Gateway in another namespace (GatewayRef), so reference the
 	// RayService namespace explicitly for the backends.
 	backendRefs := []gwv1.HTTPBackendRef{
 		{
@@ -1134,18 +1144,29 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	// The HTTPRoute lives in the RayService's namespace (so the RayService owner
 	// reference and GC work), while its ParentRef below targets the Gateway —
-	// which may be in a different namespace when using ExistingGatewayRef.
+	// which may be in a different namespace when using GatewayRef.
 	httpRouteName := rayServiceInstance.Name + "-httproute"
+	parentRef := gwv1.ParentReference{
+		Name:      gwv1.ObjectName(gatewayInstance.Name),
+		Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+	}
+	// When attaching to a shared Gateway, an optional SectionName/Port pins the
+	// HTTPRoute to a specific listener on that Gateway (KubeRay does not otherwise
+	// configure the shared Gateway's listeners). For a KubeRay-created Gateway both
+	// are unset, so the route attaches to its single listener as before.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
+		if opts.GatewayRef.SectionName != "" {
+			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
+		}
+		if opts.GatewayRef.Port != nil {
+			parentRef.Port = new(gwv1.PortNumber(*opts.GatewayRef.Port))
+		}
+	}
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: rayServiceInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
-				ParentRefs: []gwv1.ParentReference{
-					{
-						Name:      gwv1.ObjectName(gatewayInstance.Name),
-						Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
-					},
-				},
+				ParentRefs: []gwv1.ParentReference{parentRef},
 			},
 			Rules: []gwv1.HTTPRouteRule{
 				{
