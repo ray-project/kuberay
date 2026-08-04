@@ -6,6 +6,12 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
+  # Uncomment to make the Dashboard reject unauthenticated requests, which the collector
+  # sidecars below must survive (ray-project/kuberay#5056). The operator rejects
+  # `authOptions.mode: token` unless `rayVersion` is set and is at least 2.52.0.
+  # rayVersion: "2.52.0"
+  # authOptions:
+  #   mode: token
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
@@ -84,6 +90,17 @@ spec:
           # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
           - name: RAY_COLLECTOR_POLL_INTERVAL
             value: "30s"
+          # Ray token auth (optional): uncomment when the RayCluster sets
+          # `spec.authOptions.mode: token` (which also requires `spec.rayVersion`, unset here).
+          # Without the token the collector gets 401 from the Dashboard during NodeID discovery.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: ${RAY_CLUSTER}  # defaults to the RayCluster name
+          #       key: auth_token
+          # For `spec.authOptions.enableK8sTokenAuth` (Ray 2.55.0+) set
+          # RAY_ENABLE_K8S_TOKEN_AUTH="true" instead, plus a projected ServiceAccount token
+          # volume at /var/run/secrets/ray.io/serviceaccount.
           command:
           - collector
           - --role=Head
@@ -158,6 +175,13 @@ spec:
             value: *rayTmpRoot
           - name: GCS_BUCKET
             value: "${GCS_BUCKET}"
+          # Ray token auth (optional): workers query the Dashboard through FQ_RAY_IP for their
+          # Ray NodeID, so they need the same token as the head collector.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: ${RAY_CLUSTER}  # defaults to the RayCluster name
+          #       key: auth_token
           command:
           - collector
           - --role=Worker
