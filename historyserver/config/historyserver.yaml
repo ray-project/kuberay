@@ -50,7 +50,7 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
-        image: historyserver:v0.1.0
+        image: quay.io/kuberay/historyserver:nightly
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
