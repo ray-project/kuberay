@@ -282,7 +282,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the existing Gateway. Must be a valid Gateway resource name<br />(an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
 | `namespace` _string_ | Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.<br />Must be a valid namespace name (an RFC 1123 label). |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
-| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners. |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
+| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners.<br />Must be a valid Gateway API SectionName (an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
 | `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
 
 

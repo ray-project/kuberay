@@ -19,6 +19,7 @@ type GatewayReferenceApplyConfiguration struct {
 	// SectionName is the name of a listener on the referenced Gateway to attach the
 	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
 	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
+	// Must be a valid Gateway API SectionName (an RFC 1123 subdomain).
 	SectionName *string `json:"sectionName,omitempty"`
 	// Port is the network port of the referenced Gateway's listener to attach the
 	// HTTPRoute to. When both SectionName and Port are set, the selected listener
