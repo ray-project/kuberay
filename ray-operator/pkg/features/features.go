@@ -64,6 +64,36 @@ const (
 	// when autoscaler V2 is active, allowing users to set any RestartPolicy they prefer.
 	// The validation that enforces RestartPolicy=Never when using autoscaler V2 is also skipped.
 	AutoscalerFlexibleRestartPolicy featuregate.Feature = "AutoscalerFlexibleRestartPolicy"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkPolicy).
+	RayClusterNetworkPolicy featuregate.Feature = "RayClusterNetworkPolicy"
+
+	// owner: @jhasm
+	// rep: https://github.com/ray-project/enhancements/pull/65
+	// alpha: v1.7
+	//
+	// Enables the embedded RocksDB storage backend for GCS fault tolerance
+	// (GcsFaultToleranceOptions.Backend: rocksdb). Mirrors the alpha status of the
+	// corresponding Ray Core feature (ray-project/ray#63657).
+	GCSFaultToleranceEmbeddedStorage featuregate.Feature = "GCSFaultToleranceEmbeddedStorage"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables mTLS (spec.tlsOptions) for RayClusters via cert-manager.
+	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
+
+	// owner: @chiayi @Future-Outlier
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables RayCluster history server collector sidecar injection (spec.historyServerOptions).
+	RayClusterHistoryServer featuregate.Feature = "RayClusterHistoryServer"
 )
 
 func init() {
@@ -71,13 +101,17 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:      {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:            {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:            {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade:    {Default: false, PreRelease: featuregate.Alpha},
-	RayCronJob:                      {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:         {Default: false, PreRelease: featuregate.Alpha},
-	AutoscalerFlexibleRestartPolicy: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:       {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:             {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:             {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:     {Default: false, PreRelease: featuregate.Alpha},
+	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
+	AutoscalerFlexibleRestartPolicy:  {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
+	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

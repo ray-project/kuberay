@@ -642,6 +642,83 @@ func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
 	}
 }
 
+func TestConfigureGCSFaultToleranceEmbedded(t *testing.T) {
+	emptyPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Env: []corev1.EnvVar{}},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		options       *rayv1.GcsFaultToleranceOptions
+		wantClaimName string
+		wantSubPath   string
+	}{
+		{
+			name:          "operator-managed PVC",
+			options:       &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			wantClaimName: "test-cluster-gcs-pvc",
+		},
+		{
+			name: "claimName resolves to user PVC",
+			options: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{ClaimName: "my-pvc"},
+			},
+			wantClaimName: "my-pvc",
+		},
+		{
+			name: "subPath is wired onto the mount",
+			options: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{SubPath: "clusters/foo"},
+			},
+			wantClaimName: "test-cluster-gcs-pvc",
+			wantSubPath:   "clusters/foo",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", UID: "test-uid"},
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: test.options,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template:       *emptyPodTemplate.DeepCopy(),
+					},
+				},
+			}
+
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			configureGCSFaultTolerance(podTemplate, cluster, rayv1.HeadNode)
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
+
+			// The RocksDB backend env vars are set.
+			assert.Equal(t, utils.GCSStorageRocksDBValue, getEnvVar(container, utils.RAY_GCS_STORAGE).Value)
+			assert.Equal(t, utils.GCSStorageMountPath, getEnvVar(container, utils.RAY_GCS_STORAGE_PATH).Value)
+
+			// No Redis env vars leak onto the embedded path.
+			assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
+			assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+
+			// The volume + mount are wired to the resolved claim name.
+			require.Len(t, container.VolumeMounts, 1)
+			assert.Equal(t, utils.GCSStorageVolumeName, container.VolumeMounts[0].Name)
+			assert.Equal(t, utils.GCSStorageMountPath, container.VolumeMounts[0].MountPath)
+			assert.Equal(t, test.wantSubPath, container.VolumeMounts[0].SubPath)
+
+			require.Len(t, podTemplate.Spec.Volumes, 1)
+			require.NotNil(t, podTemplate.Spec.Volumes[0].PersistentVolumeClaim)
+			assert.Equal(t, test.wantClaimName, podTemplate.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
+		})
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()
@@ -1573,13 +1650,20 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
 	clusterAutoscalingV1 := instance.DeepCopy()
 	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
-
-	// clusterAutoscalingV2 has autoscaler V2 enabled: RestartPolicy should be set to Never.
+	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV1),
+	}
+	// v1 with a RestartPolicy already set by the user — should not be overridden.
+	clusterAutoscalingV1WithRestartPolicy := clusterAutoscalingV1.DeepCopy()
+	clusterAutoscalingV1WithRestartPolicy.Spec.WorkerGroupSpecs[0].Template.Spec.RestartPolicy = corev1.RestartPolicyAlways
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
+	// Autoscaling enabled but no version set — v2 is the default.
+	clusterAutoscalingVersionNotSet := instance.DeepCopy()
+	clusterAutoscalingVersionNotSet.Spec.EnableInTreeAutoscaling = new(true)
 
 	ctx := context.Background()
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + utils.FormatInt32(0))
@@ -1599,9 +1683,13 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			cluster:               *clusterNoAutoscaling,
 			expectedRestartPolicy: "",
 		},
-		"Pod template with autoscaling v1 enabled should have the correct autoscaler v1 fields": {
+		"Pod template with autoscaling v1 enabled and no RestartPolicy set should not set RestartPolicy": {
 			cluster:               *clusterAutoscalingV1,
 			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v1 enabled and RestartPolicy already set should not override it": {
+			cluster:               *clusterAutoscalingV1WithRestartPolicy,
+			expectedRestartPolicy: corev1.RestartPolicyAlways,
 		},
 		"Pod template with autoscaling v2 enabled should set RestartPolicy to Never": {
 			cluster:               *clusterAutoscalingV2,
@@ -1618,6 +1706,10 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			flexibleRestartPolicyEnabled: true,
 			// RestartPolicy is set to Always in the worker template and should be kept as-is.
 			expectedRestartPolicy: corev1.RestartPolicyAlways,
+		},
+		"Pod template with autoscaling enabled and version not set should not set RestartPolicy": {
+			cluster:               *clusterAutoscalingVersionNotSet,
+			expectedRestartPolicy: "",
 		},
 	}
 
@@ -2618,4 +2710,328 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 			assert.Equal(t, tc.expectedRayStartParams, rayStartParams)
 		})
 	}
+}
+
+func TestConfigureTLS_Disabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	// TLSOptions is nil by default => TLS disabled.
+	ctx := context.Background()
+
+	podName := "test-head"
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+
+	// No TLS volume should be added.
+	for _, vol := range podTemplate.Spec.Volumes {
+		assert.NotEqual(t, utils.RayTLSVolumeName, vol.Name)
+	}
+	// No TLS env vars should be added.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	assert.Nil(t, getEnvVar(rayContainer, utils.RAY_USE_TLS))
+}
+
+func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+	ctx := context.Background()
+
+	podName := "test-head"
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+
+	// Auto-generate mode mounts the cert-manager head secret.
+	var tlsVolume *corev1.Volume
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			tlsVolume = &podTemplate.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsVolume, "TLS volume should be added")
+	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode)
+	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
+
+	// Verify TLS env vars on Ray container.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+
+	// Verify TLS volume mount on Ray container.
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
+	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
+
+	// wait-for-tls-ip-san must be the first init container on head pods (auto-generate only).
+	require.NotEmpty(t, podTemplate.Spec.InitContainers, "head pod should have init containers when TLS is enabled")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container")
+	waitInit := podTemplate.Spec.InitContainers[0]
+	// Must have access to the TLS cert.
+	hasTLSMount := false
+	for _, vm := range waitInit.VolumeMounts {
+		if vm.Name == utils.RayTLSVolumeName {
+			hasTLSMount = true
+			break
+		}
+	}
+	assert.True(t, hasTLSMount, "wait-for-tls-ip-san should mount the TLS volume")
+	// Must receive POD_IP from the downward API.
+	hasPodIPEnv := false
+	for _, e := range waitInit.Env {
+		if e.Name == "POD_IP" && e.ValueFrom != nil &&
+			e.ValueFrom.FieldRef != nil && e.ValueFrom.FieldRef.FieldPath == "status.podIP" {
+			hasPodIPEnv = true
+			break
+		}
+	}
+	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
+}
+
+func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+	ctx := context.Background()
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplate := DefaultWorkerPodTemplate(ctx, *cluster, worker, "test-worker", fqdnRayIP, "6379", "", 0, 0)
+
+	// Auto-generate mode mounts the cert-manager worker secret.
+	var tlsVolume *corev1.Volume
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			tlsVolume = &podTemplate.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsVolume, "TLS volume should be added")
+	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode)
+	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
+
+	// Verify TLS env vars on Ray container.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+	// Verify TLS volume mount on Ray container.
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
+	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
+
+	// wait-for-tls-ip-san must be the first init container on worker pods. GCS connects back
+	// to each worker's raylet using the worker's pod IP; if the cert doesn't yet list that IP
+	// the TLS handshake fails and GCS marks the worker dead, causing the RayJob to fail.
+	require.NotEmpty(t, podTemplate.Spec.InitContainers, "worker pod should have init containers")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container on worker pods")
+
+	// wait-gcs-ready should exist and have TLS config.
+	var gcsReadyContainer *corev1.Container
+	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name == "wait-gcs-ready" {
+			gcsReadyContainer = &podTemplate.Spec.InitContainers[i]
+			break
+		}
+	}
+	require.NotNil(t, gcsReadyContainer, "worker pod should have wait-gcs-ready init container")
+	assert.NotNil(t, getEnvVar(*gcsReadyContainer, utils.RAY_USE_TLS), "wait-gcs-ready should have RAY_USE_TLS")
+}
+
+func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	ctx := context.Background()
+
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "test-head", "6379")
+
+	// Find the autoscaler container.
+	var autoscalerContainer *corev1.Container
+	for i, c := range podTemplate.Spec.Containers {
+		if c.Name == "autoscaler" {
+			autoscalerContainer = &podTemplate.Spec.Containers[i]
+			break
+		}
+	}
+	require.NotNil(t, autoscalerContainer, "autoscaler container should exist when autoscaling is enabled")
+
+	// Verify TLS env vars on autoscaler container.
+	env := getEnvVar(*autoscalerContainer, utils.RAY_USE_TLS)
+	assert.NotNil(t, env, "autoscaler container should have RAY_USE_TLS")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+
+	// Verify TLS volume mount on autoscaler container.
+	var tlsMount *corev1.VolumeMount
+	for i := range autoscalerContainer.VolumeMounts {
+		if autoscalerContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &autoscalerContainer.VolumeMounts[i]
+			break
+		}
+	}
+	assert.NotNil(t, tlsMount, "autoscaler container should have TLS volume mount")
+}
+
+func TestSetContainerTLSConfig(t *testing.T) {
+	container := &corev1.Container{Name: "test"}
+	SetContainerTLSConfig(container)
+
+	assert.Len(t, container.Env, 4, "should add 4 TLS env vars")
+	assert.Equal(t, utils.RAY_USE_TLS, container.Env[0].Name)
+	assert.Equal(t, "1", container.Env[0].Value)
+	assert.Equal(t, utils.RAY_TLS_SERVER_CERT, container.Env[1].Name)
+	assert.Equal(t, utils.RAY_TLS_SERVER_KEY, container.Env[2].Name)
+	assert.Equal(t, utils.RAY_TLS_CA_CERT, container.Env[3].Name)
+
+	require.Len(t, container.VolumeMounts, 1, "should add 1 TLS volume mount")
+	assert.Equal(t, utils.RayTLSVolumeName, container.VolumeMounts[0].Name)
+	assert.Equal(t, utils.RayTLSCertMountPath, container.VolumeMounts[0].MountPath)
+	assert.True(t, container.VolumeMounts[0].ReadOnly)
+}
+
+func TestBuildCollectorContainerAndPodInjection(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+	ctx := context.Background()
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRDLabelKey:    "RayJob",
+				utils.RayOriginatedFromCRNameLabelKey: "test-rayjob",
+			},
+		},
+		Spec: rayv1.RayClusterSpec{
+			HistoryServerOptions: &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{
+					Image: new("quay.io/kuberay/collector:latest"),
+					Env: []corev1.EnvVar{
+						{Name: "STORAGE_BACKEND", Value: "GCS"},
+						{Name: "GCS_BUCKET", Value: "my-bucket"},
+					},
+				},
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "ray-head", Image: "rayproject/ray:latest"},
+						},
+					},
+				},
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:      "worker-group",
+					RayStartParams: map[string]string{},
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-worker", Image: "rayproject/ray:latest"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fqdnRayIP := "test-cluster-head-svc.default.svc.cluster.local"
+	container := BuildCollectorContainer(cluster.Spec.HistoryServerOptions.CollectorOptions, rayv1.HeadNode, cluster.Name, cluster.Namespace, fqdnRayIP, cluster.Labels)
+	assert.Equal(t, utils.CollectorContainerName, container.Name)
+	assert.Equal(t, "quay.io/kuberay/collector:latest", container.Image)
+	eventsPortEnv, ok := utils.EnvVarByName(utils.EVENTS_PORT, container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "8084", eventsPortEnv.Value)
+	assert.True(t, utils.EnvVarExists("POD_IP", container.Env))
+	assert.True(t, utils.EnvVarExists("FQ_RAY_IP", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_CLUSTER_NAME", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_CLUSTER_NAMESPACE", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_ROLE", container.Env))
+	ownerKindEnv, ok := utils.EnvVarByName("OWNER_KIND", container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "RayJob", ownerKindEnv.Value)
+	ownerNameEnv, ok := utils.EnvVarByName("OWNER_NAME", container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "test-rayjob", ownerNameEnv.Value)
+	assert.True(t, utils.EnvVarExists("STORAGE_BACKEND", container.Env))
+	assert.True(t, utils.EnvVarExists("GCS_BUCKET", container.Env))
+	dashboardAddrEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8265", dashboardAddrEnv.Value)
+
+	// Test DefaultHeadPodTemplate injection and BuildPod volume mounting
+	headPodTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "pod-head", "6379")
+	assert.Len(t, headPodTemplate.Spec.Containers, 2)
+	assert.Equal(t, utils.CollectorContainerName, headPodTemplate.Spec.Containers[1].Name)
+
+	headPod := BuildPod(ctx, headPodTemplate, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.RayJobCRD, fqdnRayIP, nil, "")
+	assert.True(t, utils.VolumeExists(RayLogVolumeName, headPod.Spec.Volumes))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, headPod.Spec.Containers[utils.RayContainerIndex].VolumeMounts))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, headPod.Spec.Containers[1].VolumeMounts))
+	assert.True(t, utils.EnvVarExists(utils.RAY_DASHBOARD_ADDRESS, headPod.Spec.Containers[1].Env))
+	eventEnableEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_RAY_EVENT, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", eventEnableEnv.Value)
+	coreWorkerEventEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", coreWorkerEventEnv.Value)
+	eventExportEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8084/v1/events", eventExportEnv.Value)
+	eventTypesEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, eventTypesEnv.Value)
+	eventTypesV2Env, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, eventTypesV2Env.Value)
+
+	// Test DefaultWorkerPodTemplate injection and BuildPod volume mounting
+	workerPodTemplate := DefaultWorkerPodTemplate(ctx, *cluster, cluster.Spec.WorkerGroupSpecs[0], "pod-worker", fqdnRayIP, "6379", "group-1", 0, 0)
+	assert.Len(t, workerPodTemplate.Spec.Containers, 2)
+	assert.Equal(t, utils.CollectorContainerName, workerPodTemplate.Spec.Containers[1].Name)
+
+	workerPod := BuildPod(ctx, workerPodTemplate, rayv1.WorkerNode, cluster.Spec.WorkerGroupSpecs[0].RayStartParams, "6379", false, utils.RayJobCRD, fqdnRayIP, nil, "")
+	assert.True(t, utils.VolumeExists(RayLogVolumeName, workerPod.Spec.Volumes))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, workerPod.Spec.Containers[utils.RayContainerIndex].VolumeMounts))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, workerPod.Spec.Containers[1].VolumeMounts))
+	assert.False(t, utils.EnvVarExists(utils.RAY_DASHBOARD_ADDRESS, workerPod.Spec.Containers[1].Env))
+	workerEventEnableEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_RAY_EVENT, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", workerEventEnableEnv.Value)
+	workerCoreWorkerEventEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", workerCoreWorkerEventEnv.Value)
+	workerEventExportEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8084/v1/events", workerEventExportEnv.Value)
+	workerEventTypesEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, workerEventTypesEnv.Value)
+	workerEventTypesV2Env, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, workerEventTypesV2Env.Value)
 }
