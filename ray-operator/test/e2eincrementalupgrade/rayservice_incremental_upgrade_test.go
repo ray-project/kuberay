@@ -693,7 +693,7 @@ func TestRayServiceIncrementalUpgradeWithGatewayRef(t *testing.T) {
 
 	// Behavior 1: KubeRay must NOT create a per-RayService Gateway.
 	perServiceGatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
-	Consistently(func(gg Gomega) {
+	g.Consistently(func(gg Gomega) {
 		_, err := GetGateway(test, namespace.Name, perServiceGatewayName)
 		gg.Expect(errors.IsNotFound(err)).To(BeTrue(), "KubeRay must not create a per-RayService Gateway when gatewayRef is set; got err=%v", err)
 	}, TestTimeoutShort).Should(Succeed())
@@ -763,7 +763,7 @@ func TestRayServiceIncrementalUpgradeWithGatewayRef(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// The shared Gateway is not owned by KubeRay and must survive the suspend.
-	Consistently(func(gg Gomega) {
+	g.Consistently(func(gg Gomega) {
 		_, err := GetGateway(test, namespace.Name, sharedGatewayName)
 		gg.Expect(err).NotTo(HaveOccurred(), "shared Gateway %s must NOT be deleted on suspend", sharedGatewayName)
 	}, TestTimeoutShort).Should(Succeed())
