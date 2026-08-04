@@ -46,7 +46,7 @@ spec:
           - name: historyserver
             mountPath: *rayTmpRoot
         - name: collector
-          image: collector:v0.1.0
+          image: quay.io/kuberay/collector:nightly
           imagePullPolicy: IfNotPresent
           env:
           - name: RAY_CLUSTER_NAME
@@ -141,7 +141,7 @@ spec:
           - name: historyserver
             mountPath: *rayTmpRoot
         - name: collector
-          image: collector:v0.1.0
+          image: quay.io/kuberay/collector:nightly
           imagePullPolicy: IfNotPresent
           env:
           - name: RAY_CLUSTER_NAME

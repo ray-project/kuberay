@@ -54,7 +54,7 @@ spec:
             value: "s3"
           - name: RAY_ROOT_DIR
             value: "log"
-        image: historyserver:v0.1.0
+        image: quay.io/kuberay/historyserver:nightly
         imagePullPolicy: IfNotPresent
         # Enable proxying to live RayClusters with token authentication enabled.
         # The history server reads the auth Secret and forwards requests with the
