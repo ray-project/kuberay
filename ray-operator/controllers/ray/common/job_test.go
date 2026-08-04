@@ -537,5 +537,5 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 
 	// Verify that custom SubmitterPodTemplate is returned as-is without merging/overriding from Head Pod
 	assert.Equal(t, corev1.PullPolicy(""), template.Spec.Containers[0].ImagePullPolicy)
-	assert.Equal(t, 0, len(template.Spec.ImagePullSecrets))
+	assert.Empty(t, template.Spec.ImagePullSecrets)
 }
