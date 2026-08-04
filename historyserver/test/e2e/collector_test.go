@@ -32,6 +32,22 @@ type rayEvent struct {
 	EventType string `json:"eventType"`
 }
 
+// decodeJSONLEvents decodes an event JSONL file the collector uploaded, one
+// JSON object per line.
+func decodeJSONLEvents(r io.Reader) ([]rayEvent, error) {
+	var events []rayEvent
+	dec := json.NewDecoder(r)
+	for {
+		var evt rayEvent
+		if err := dec.Decode(&evt); err == io.EOF {
+			return events, nil
+		} else if err != nil {
+			return nil, err
+		}
+		events = append(events, evt)
+	}
+}
+
 func TestCollector(t *testing.T) {
 	// Share a single S3 client among subtests.
 	s3Client := EnsureS3Client(t)
@@ -569,7 +585,6 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 			return nil, err
 		}
 
-		var fileEvents []rayEvent
 		var reader io.Reader = content.Body
 		var gzReader *gzip.Reader
 		if strings.HasSuffix(fileKey, ".gz") {
@@ -582,7 +597,7 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 			reader = gzReader
 		}
 
-		decodeErr := json.NewDecoder(reader).Decode(&fileEvents)
+		fileEvents, decodeErr := decodeJSONLEvents(reader)
 		if gzReader != nil {
 			gzReader.Close()
 		}
