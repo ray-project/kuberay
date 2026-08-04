@@ -3,7 +3,6 @@ package e2e
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -273,7 +272,6 @@ func loadRayEventsFromAzureBlob(containerClient *container.Client, prefix string
 				return nil, fmt.Errorf("failed to download blob %s: %w", *blob.Name, err)
 			}
 
-			var fileEvents []rayEvent
 			var reader io.Reader = downloadResp.Body
 			var gzReader *gzip.Reader
 			if strings.HasSuffix(*blob.Name, ".gz") {
@@ -286,7 +284,7 @@ func loadRayEventsFromAzureBlob(containerClient *container.Client, prefix string
 				reader = gzReader
 			}
 
-			decodeErr := json.NewDecoder(reader).Decode(&fileEvents)
+			fileEvents, decodeErr := decodeJSONLEvents(reader)
 			if gzReader != nil {
 				gzReader.Close()
 			}
