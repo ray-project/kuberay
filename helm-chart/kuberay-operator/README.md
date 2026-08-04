@@ -185,6 +185,10 @@ spec:
 | featureGates[4].enabled | bool | `false` |  |
 | featureGates[5].name | string | `"RayClusterMTLS"` |  |
 | featureGates[5].enabled | bool | `false` |  |
+| featureGates[6].name | string | `"RayClusterNetworkPolicy"` |  |
+| featureGates[6].enabled | bool | `false` |  |
+| featureGates[7].name | string | `"RayClusterHistoryServer"` |  |
+| featureGates[7].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

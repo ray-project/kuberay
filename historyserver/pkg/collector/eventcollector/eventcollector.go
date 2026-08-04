@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -35,6 +35,8 @@ type EventCollector struct {
 	clusterName        string
 	sessionName        string
 	root               string
+	ownerKind          string
+	ownerName          string
 	currentSessionName string
 	currentNodeID      string
 	events             []Event
@@ -57,7 +59,7 @@ var eventTypesWithJobID = []string{
 	"actorDefinitionEvent",
 }
 
-func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName string) *EventCollector {
+func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName, ownerKind, ownerName string) *EventCollector {
 	collector := &EventCollector{
 		events:             make([]Event, 0),
 		storageWriter:      writer,
@@ -67,6 +69,8 @@ func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID
 		clusterName:        clusterName,
 		clusterNamespace:   clusterNamespace,
 		sessionName:        sessionName,
+		ownerKind:          ownerKind,
+		ownerName:          ownerName,
 		mutex:              sync.Mutex{},
 		flushInterval:      time.Hour, // Default flush interval: 1 hour
 		stopped:            make(chan struct{}),
@@ -245,9 +249,14 @@ func (ec *EventCollector) flushEvents() {
 
 // flushEventsInternal performs the actual event flush
 func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
+	type jobHourKey struct {
+		jobID   string
+		hourKey string
+	}
+
 	// Group events by hour and type
-	nodeEventsByHour := make(map[string][]Event) // Node-related events
-	jobEventsByHour := make(map[string][]Event)  // Job-related events
+	nodeEventsByHour := make(map[string][]Event)    // Node-related events
+	jobEventsByHour := make(map[jobHourKey][]Event) // Job-related events
 
 	// Categorize events
 	for _, event := range eventsToFlush {
@@ -258,9 +267,8 @@ func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
 			// Node-related events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
 		} else if jobID := getJobID(event.Data); jobID != "" {
-			// Job-related events, use jobID-hour as key
-			jobKey := fmt.Sprintf("%s-%s", jobID, hourKey)
-			jobEventsByHour[jobKey] = append(jobEventsByHour[jobKey], event)
+			key := jobHourKey{jobID: jobID, hourKey: hourKey}
+			jobEventsByHour[key] = append(jobEventsByHour[key], event)
 		} else {
 			// Default to node events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
@@ -283,24 +291,14 @@ func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
 	}
 
 	// Upload job-related events
-	for jobHour, events := range jobEventsByHour {
+	for jk, events := range jobEventsByHour {
 		wg.Add(1)
-		go func(jobHourKey string, hourEvents []Event) {
+		go func(groupKey jobHourKey, hourEvents []Event) {
 			defer wg.Done()
-			// Split jobID and hourKey
-			parts := strings.SplitN(jobHourKey, "-", 4) // Date format has 3 dashes, so use 4 parts
-			if len(parts) < 4 {
-				errChan <- fmt.Errorf("invalid job hour key: %s", jobHourKey)
-				return
-			}
-
-			jobID := parts[0]
-			hourKey := strings.Join(parts[1:], "-") // Rejoin time parts as hourKey
-
-			if err := ec.flushJobEventsForHour(jobID, hourKey, hourEvents); err != nil {
+			if err := ec.flushJobEventsForHour(groupKey.jobID, groupKey.hourKey, hourEvents); err != nil {
 				errChan <- err
 			}
-		}(jobHour, events)
+		}(jk, events)
 	}
 
 	wg.Wait()
@@ -312,10 +310,14 @@ func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
 	}
 
 	totalEvents := len(eventsToFlush)
+	jobEventsCount := 0
+	for _, events := range jobEventsByHour {
+		jobEventsCount += len(events)
+	}
 	logrus.Infof("Successfully flushed %d events to storage (%d node events, %d job events)",
 		totalEvents,
 		countEventsInMap(nodeEventsByHour),
-		countEventsInMap(jobEventsByHour))
+		jobEventsCount)
 }
 
 // countEventsInMap counts total events in map
@@ -381,10 +383,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// Build node event storage path using event's nodeID
-	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
-
-	basePath := path.Join(sessionPath, "node_events", fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
+	// Build node event storage path using event's nodeID and session
+	nodeEventsDir := clusterlogs.NodeEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionNameToUse, nodeIDToUse)
+	basePath := path.Join(nodeEventsDir, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -427,10 +428,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// Build job event storage path using event's nodeID
-	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
-
-	basePath := path.Join(sessionPath, "job_events", jobID, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
+	// Build job event storage path using event's nodeID and session
+	jobEventsDir := clusterlogs.JobEventsDir(ec.root, ec.ownerKind, ec.ownerName, ec.clusterNamespace, ec.clusterName, sessionNameToUse, nodeIDToUse, jobID)
+	basePath := path.Join(jobEventsDir, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)

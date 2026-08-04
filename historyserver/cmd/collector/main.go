@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -64,6 +65,24 @@ func main() {
 	if val := os.Getenv("OWNER_NAME"); val != "" {
 		ownerName = val
 	}
+	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
+		rayRootDir = val
+	}
+	if val := os.Getenv("EVENTS_PORT"); val != "" {
+		if port, err := strconv.Atoi(val); err == nil {
+			eventsPort = port
+		}
+	}
+	if val := os.Getenv("LOG_BATCHING"); val != "" {
+		if batch, err := strconv.Atoi(val); err == nil {
+			logBatching = batch
+		}
+	}
+	if val := os.Getenv("PUSH_INTERVAL"); val != "" {
+		if interval, err := time.ParseDuration(val); err == nil {
+			pushInterval = interval
+		}
+	}
 	role = strings.TrimSpace(role)
 	// Check incase users manually set role env var
 	if strings.EqualFold(role, "head") {
@@ -71,7 +90,7 @@ func main() {
 	} else if strings.EqualFold(role, "worker") {
 		role = "Worker"
 	} else {
-		panic("Invalid role: " + role + ", must be Head or Worker")
+		logrus.Fatalf("Invalid role: %s, must be Head or Worker", role)
 	}
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
@@ -92,10 +111,10 @@ func main() {
 	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
 		parsed, parseErr := time.ParseDuration(intervalStr)
 		if parseErr != nil {
-			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+			logrus.Fatalf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: %v", parseErr)
 		}
 		if parsed <= 0 {
-			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
+			logrus.Fatalf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s", intervalStr)
 		}
 		endpointPollInterval = parsed
 	}
@@ -104,10 +123,10 @@ func main() {
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			panic(fmt.Sprintf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 
@@ -121,22 +140,22 @@ func main() {
 	registry := collector.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		logrus.Fatalf("Not supported runtime class name: %s for role: %s.", runtimeClassName, role)
 	}
 
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
 	if err != nil {
-		panic("Failed to get ray node id via HTTP endpoint: " + err.Error())
+		logrus.Fatalf("Failed to get ray node id via HTTP endpoint: %v", err)
 	}
 
 	rayNodeId, err = utils.ConvertBase64ToHex(rayNodeId)
 	if err != nil {
-		panic("Failed to normalize ray node id to hex: " + err.Error())
+		logrus.Fatalf("Failed to normalize ray node id to hex: %v", err)
 	}
 
 	activeSessionDir, err := utils.GetSessionDir()
 	if err != nil {
-		panic("Failed to get active session dir after discovering node id: " + err.Error())
+		logrus.Fatalf("Failed to get active session dir after discovering node id: %v", err)
 	}
 
 	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
@@ -165,7 +184,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
+		logrus.Fatalf("Failed to create writer for runtime class name: %s for role: %s, err: %v", runtimeClassName, role, err)
 	}
 
 	var wg sync.WaitGroup
@@ -178,7 +197,7 @@ func main() {
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName)
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")
 	}()

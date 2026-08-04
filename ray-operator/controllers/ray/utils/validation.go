@@ -145,6 +145,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -232,13 +235,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			}
 		}
 
-		if IsAutoscalingV1Enabled(spec) {
-			for _, workerGroup := range spec.WorkerGroupSpecs {
-				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V1", workerGroup.GroupName)
-				}
-			}
-		}
 	}
 
 	// Validate AutoscalerOptions.IdleTimeoutSeconds (works with both v1 and v2 autoscaler)
@@ -410,6 +406,37 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 		}
 		if mode == rayv1.NetworkPolicyDenyAllIngress && len(np.Worker.EgressRules) > 0 {
 			return fmt.Errorf("networkPolicy.worker.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+		}
+	}
+
+	// Validate per-worker-group rules against mode, and that each entry references
+	// an existing worker group.
+	//
+	// Group names are embedded in NetworkPolicy object names ({cluster}-workers-{group}),
+	// so they must be valid DNS1123 labels when NetworkPolicy is enabled. This is only
+	// enforced here to avoid breaking existing clusters that don't use NetworkPolicy.
+	//
+	// TODO(machichima): consider validating group name format for all clusters under
+	// ValidateRayClusterSpec. Note this is a breaking change: uppercase group names
+	// currently work because pod names are lowercased in PodName().
+	groupNames := make(map[string]struct{}, len(spec.WorkerGroupSpecs))
+	for i := range spec.WorkerGroupSpecs {
+		groupName := spec.WorkerGroupSpecs[i].GroupName
+		if errs := validation.IsDNS1123Label(groupName); len(errs) > 0 {
+			return fmt.Errorf("worker group name %q must be a valid DNS1123 label when networkPolicy is enabled (it is embedded in the NetworkPolicy name): %v", groupName, errs)
+		}
+		groupNames[groupName] = struct{}{}
+	}
+	for i := range np.WorkerGroups {
+		wg := &np.WorkerGroups[i]
+		if mode == rayv1.NetworkPolicyDenyAllEgress && len(wg.IngressRules) > 0 {
+			return fmt.Errorf("networkPolicy.workerGroups[%q].ingressRules cannot be set when mode is %q (ingress is not restricted)", wg.GroupName, mode)
+		}
+		if mode == rayv1.NetworkPolicyDenyAllIngress && len(wg.EgressRules) > 0 {
+			return fmt.Errorf("networkPolicy.workerGroups[%q].egressRules cannot be set when mode is %q (egress is not restricted)", wg.GroupName, mode)
+		}
+		if _, ok := groupNames[wg.GroupName]; !ok {
+			return fmt.Errorf("networkPolicy.workerGroups[%q] does not match any group name in workerGroupSpecs", wg.GroupName)
 		}
 	}
 
@@ -1080,4 +1107,36 @@ func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
 	}
 
 	return nil
+}
+
+// validateWorkerGroupPriority validates that the priority field is only allowed when Autoscaler V2 is enabled
+func validateWorkerGroupPriority(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	priority := workerGroup.Priority
+	if priority == nil || *priority == 0 {
+		return nil
+	}
+
+	// The priority field was added in Ray 2.56.0.
+	if spec.RayVersion == "" {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion was not specified. Ray version 2.56.0 or later is required", workerGroup.GroupName)
+	}
+	rayVersion, err := version.ParseGeneric(spec.RayVersion)
+	if err != nil {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion format is invalid: %s, %w", workerGroup.GroupName, spec.RayVersion, err)
+	}
+	minVersion := version.MustParseGeneric("2.56.0")
+	if rayVersion.LessThan(minVersion) {
+		return fmt.Errorf("worker group %s: priority is set, but minimum Ray version is 2.56.0, got %s", workerGroup.GroupName, spec.RayVersion)
+	}
+
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("worker group %s: priority is set to %d, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled", workerGroup.GroupName, *priority)
 }

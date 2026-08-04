@@ -159,6 +159,10 @@ featureGates:
   enabled: false
 - name: RayClusterMTLS
   enabled: false
+- name: RayClusterNetworkPolicy
+  enabled: false
+- name: RayClusterHistoryServer
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:

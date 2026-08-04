@@ -41,7 +41,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	// Trigger an incremental upgrade so both active and pending RayClusters
 	// exist when Spec.Suspend kicks in.
 	LogWithTimestamp(test.T(), "Triggering incremental upgrade so both active and pending clusters exist before suspend")
-	g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed())
+	g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2,
+		withWorkerCPURequest("500m"), withUpgradedServeConfig())).To(Succeed())
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -60,11 +61,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true while incremental upgrade is in progress")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.Suspend = true
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2,
+		withWorkerCPURequest("500m"), withUpgradedServeConfig(), withSuspend(true))).To(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for the Suspended condition to be True")
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
@@ -92,11 +90,8 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=false; the controller must recreate Gateway, HTTPRoute, RayCluster, and Services")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.Suspend = false
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(triggerIncrementalUpgrade(test, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2,
+		withWorkerCPURequest("500m"), withUpgradedServeConfig(), withSuspend(false))).To(Succeed())
 
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
