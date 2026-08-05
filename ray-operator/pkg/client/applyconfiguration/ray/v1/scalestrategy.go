@@ -9,6 +9,13 @@ package v1
 type ScaleStrategyApplyConfiguration struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+	// ScaleGate contains a list of scaling gates blocking this worker group from
+	// scaling up. When Kueue encounters a quota-exceeded error for this worker
+	// group, it appends "kueue.k8s.io/quota-exceeded" to ScaleGate. The Autoscaler
+	// initiates fallback behavior whenever ScaleGate is non-empty. KubeRay defines
+	// this field but does not read or write it, and preserves its value across
+	// reconciles.
+	ScaleGate []string `json:"scaleGate,omitempty"`
 }
 
 // ScaleStrategyApplyConfiguration constructs a declarative configuration of the ScaleStrategy type for use with
@@ -23,6 +30,16 @@ func ScaleStrategy() *ScaleStrategyApplyConfiguration {
 func (b *ScaleStrategyApplyConfiguration) WithWorkersToDelete(values ...string) *ScaleStrategyApplyConfiguration {
 	for i := range values {
 		b.WorkersToDelete = append(b.WorkersToDelete, values[i])
+	}
+	return b
+}
+
+// WithScaleGate adds the given value to the ScaleGate field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the ScaleGate field.
+func (b *ScaleStrategyApplyConfiguration) WithScaleGate(values ...string) *ScaleStrategyApplyConfiguration {
+	for i := range values {
+		b.ScaleGate = append(b.ScaleGate, values[i])
 	}
 	return b
 }
