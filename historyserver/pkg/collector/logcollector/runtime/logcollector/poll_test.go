@@ -356,6 +356,43 @@ func TestPeriodicPollingStopsOnShutdownSignal(t *testing.T) {
 	g.Eventually(done).Should(BeClosed())
 }
 
+// TestPeriodicPollingCancelsInFlightRequestOnShutdown verifies the stop signal aborts a
+// cycle mid-request: Run joins this goroutine before the final poll, so a blocked request
+// must neither stall shutdown nor store anything after being canceled.
+func TestPeriodicPollingCancelsInFlightRequestOnShutdown(t *testing.T) {
+	g := NewWithT(t)
+
+	tmpRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", tmpRoot)
+	g.Expect(os.MkdirAll(filepath.Join(tmpRoot, "session_1"), 0o755)).To(Succeed())
+	g.Expect(os.Symlink(filepath.Join(tmpRoot, "session_1"), filepath.Join(tmpRoot, "session_latest"))).To(Succeed())
+
+	var entered sync.Once
+	enteredCh := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered.Do(func() { close(enteredCh) })
+		<-release
+	}))
+	t.Cleanup(srv.Close)
+
+	handler, writer := newPollTestHandler(t, srv.URL)
+	handler.EndpointPollInterval = time.Hour
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		handler.PollAdditionalEndpointsPeriodically(stop)
+		close(done)
+	}()
+
+	g.Eventually(enteredCh).Should(BeClosed())
+	close(stop)
+	g.Eventually(done, "5s").Should(BeClosed())
+	g.Expect(writtenKeys(writer)).To(BeEmpty())
+}
+
 // TestPollAllEndpointsStopsWhenContextExpires verifies the shutdown budget bounds the whole pass.
 func TestPollAllEndpointsStopsWhenContextExpires(t *testing.T) {
 	g := NewWithT(t)

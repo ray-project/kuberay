@@ -442,75 +442,59 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 	DeleteS3Bucket(test, g, s3Client)
 }
 
-// testCollectorStoresPlacementGroups verifies that the Head collector periodically polls
-// /api/v0/placement_groups from the Ray Dashboard and stores the result in S3.
-//
-// The placement_groups endpoint is one of the collector's built-in polled endpoints
-// (see staticPolledEndpoints in poll.go), polled by PollAdditionalEndpointsPeriodically.
-//
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Submit a RayJob that creates a detached placement group (so the PG persists after the job)
-// 3. Get the sessionID from the head pod to build the expected S3 key
-// 4. Wait for the placement groups file to appear in S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups
-// 5. Read the file and verify it contains valid JSON with a non-empty placement_groups list
-// 6. Delete S3 bucket to ensure test isolation
+// testCollectorStoresPlacementGroups verifies the collector stores the placement_groups
+// snapshot, then replays it through the history server after the RayCluster is deleted.
+// The RayJob creates a detached placement group so the PG outlives the job itself.
 func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	// Submit a RayJob that creates a detached placement group named "test_pg".
-	// The detached lifetime ensures the PG persists after the job exits, so the
-	// collector captures non-empty data when polling /api/v0/placement_groups.
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	// The collector stores the endpoint with query params (matching the built-in
-	// placementGroupsEndpoint constant in the collector's poll.go).
+	// Matches placementGroupsEndpoint in the collector's poll.go, query params included.
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
 	pgKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
-
-	var pgBody []byte
 	g.Eventually(func(gg Gomega) {
-		result, err := s3Client.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer result.Body.Close()
-
-		body, err := io.ReadAll(result.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(body).NotTo(BeEmpty(), "Placement groups file should not be empty")
-
-		// Verify it is valid JSON with a non-empty placement groups list.
-		var response map[string]interface{}
-		err = json.Unmarshal(body, &response)
-		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
-
-		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
-		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
-		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
-		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
-		data, ok := response["data"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
-		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
-		resultObj, ok := data["result"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
-		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
-
-		pgList, ok := resultObj["result"].([]interface{})
-		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
-		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
-
-		pgBody = body
+		assertPlacementGroupsNonEmpty(gg, readS3Object(gg, s3Client, pgKey))
 	}, TestTimeoutMedium).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Placement groups data stored successfully: %s", string(pgBody))
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
+		utils.RayClusterKind, rayCluster.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	LogWithTimestamp(test.T(), "Replaying /api/v0/placement_groups through the history server")
+	g.Eventually(func(gg Gomega) {
+		assertPlacementGroupsNonEmpty(gg, getHistoryServerJSON(gg, client,
+			historyServerURL+"/api/v0/placement_groups?detail=1&limit=10000"))
+	}, TestTimeoutShort).Should(Succeed())
 
 	DeleteS3Bucket(test, g, s3Client)
+}
+
+// assertPlacementGroupsNonEmpty requires at least one PG in the State API envelope
+// {"result": true, "data": {"result": {"result": [...]}}}; the RayJob creates a detached one.
+func assertPlacementGroupsNonEmpty(g Gomega, body []byte) {
+	var response struct {
+		Result bool `json:"result"`
+		Data   struct {
+			Result struct {
+				Result []json.RawMessage `json:"result"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed(), "placement groups response should be valid JSON")
+	g.Expect(response.Result).To(BeTrue(), "state API result field should be true")
+	g.Expect(response.Data.Result.Result).NotTo(BeEmpty(), "placement groups list should not be empty")
 }
 
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
@@ -698,8 +682,8 @@ func listFetchedEndpoints(g Gomega, s3Client *s3.S3, clusterPrefix, storageKeyPr
 	return keys
 }
 
-// enterClusterForOwner sets the session cookie for a RayJob/RayService-owned cluster:
-// enter_cluster takes the owner's name and resolves the generated cluster name itself.
+// enterClusterForOwner sets the session cookie via enter_cluster, which takes the owner's
+// name and resolves the generated cluster name itself; a plain RayCluster is its own owner.
 func enterClusterForOwner(test Test, g *WithT, client *http.Client, historyServerURL, namespace, ownerKind, ownerName, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s/%s", historyServerURL, namespace, ownerKind, ownerName, session)
 	LogWithTimestamp(test.T(), "Setting cluster context: %s", enterURL)

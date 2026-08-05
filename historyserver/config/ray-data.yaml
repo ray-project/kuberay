@@ -10,7 +10,13 @@ spec:
   entrypoint: |
     python -c "
     import ray
+    from ray.util.placement_group import placement_group
     ray.init()
+
+    # Detached so the PG outlives the job and shows beside Ray Data on the job page.
+    pg = placement_group([{'CPU': 0.1}], lifetime='detached', name='demo_pg')
+    ray.get(pg.ready())
+    print(f'Placement group created: {pg.bundle_specs}')
 
     # materialize() is required: an unexecuted Dataset produces no stats.
     ds = ray.data.range(100).map_batches(lambda batch: batch).materialize()

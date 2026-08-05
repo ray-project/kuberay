@@ -82,11 +82,16 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	go r.PollActiveSessionChanges()
+	var periodicPollDone chan struct{}
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
 		go r.FetchAndStoreTimezone()
-		go r.PollAdditionalEndpointsPeriodically(stop)
+		periodicPollDone = make(chan struct{})
+		go func() {
+			defer close(periodicPollDone)
+			r.PollAdditionalEndpointsPeriodically(stop)
+		}()
 	}
 
 	<-stop
@@ -95,6 +100,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// Endpoint data dies with the dashboard; log files stay on disk, so poll concurrently.
 	var wg sync.WaitGroup
 	if r.IsHead {
+		// Join the periodic poller first so a half-finished cycle cannot outlive the final poll.
+		<-periodicPollDone
 		wg.Go(r.processAdditionalEndpoints)
 	}
 	r.processSessionLatestLogs()

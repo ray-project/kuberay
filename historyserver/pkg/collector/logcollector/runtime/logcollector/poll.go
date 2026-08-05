@@ -90,8 +90,20 @@ func newDatasetPollState() *datasetPollState {
 // RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer; each cycle overwrites the previous one.
 // It stops on the shutdown signal, not ShutdownChan: ShutdownChan closes only after the
 // final shutdown poll, and a tick in between could overwrite that final snapshot.
+// Run joins this goroutine before that final poll, so the ctx cancels at stop to keep a
+// blocked resolve or in-flight cycle from stalling shutdown.
 func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}) {
-	sessionName, err := r.resolveSessionName()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-stop:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	sessionName, err := waitForSessionName(ctx)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for endpoint polling: %v", err)
 		return
@@ -99,7 +111,7 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}
 	logrus.Infof("Starting endpoint polling (interval=%v, endpoints=%v)", r.EndpointPollInterval, r.polledEndpoints())
 
 	state := newDatasetPollState()
-	r.pollAllEndpoints(context.Background(), sessionName, state, false)
+	r.pollAllEndpoints(ctx, sessionName, state, false)
 
 	ticker := time.NewTicker(r.EndpointPollInterval)
 	defer ticker.Stop()
@@ -110,7 +122,24 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}
 			logrus.Info("Shutdown signaled, stopping endpoint polling")
 			return
 		case <-ticker.C:
-			sessionName, state = r.pollCycle(context.Background(), sessionName, state)
+			sessionName, state = r.pollCycle(ctx, sessionName, state)
+		}
+	}
+}
+
+// waitForSessionName resolves session_latest, retrying until ctx is canceled:
+// at startup the symlink appears only once Ray has bootstrapped.
+func waitForSessionName(ctx context.Context) (string, error) {
+	for {
+		name, err := currentSessionName()
+		if err == nil {
+			return name, nil
+		}
+		logrus.Warnf("session_latest symlink not ready: %v, retrying in %v", err, defaultRetryInterval)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(defaultRetryInterval):
 		}
 	}
 }
