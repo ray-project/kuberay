@@ -55,7 +55,7 @@ spec:
         # catch-all and collide with other HTTPRoutes. Omit hostnames to match all
         # hosts; pathPrefix defaults to "/".
         hostnames:
-          - rayservice.example.com
+        - rayservice.example.com
         pathPrefix: /fruit
       stepSizePercent: 10
       intervalSeconds: 30

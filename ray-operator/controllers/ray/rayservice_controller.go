@@ -1174,7 +1174,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
 		}
 		if opts.GatewayRef.Port != nil {
-			parentRef.Port = new(gwv1.PortNumber(*opts.GatewayRef.Port))
+			parentRef.Port = new(*opts.GatewayRef.Port)
 		}
 		if opts.GatewayRef.PathPrefix != "" {
 			pathPrefix = opts.GatewayRef.PathPrefix

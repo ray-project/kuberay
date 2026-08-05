@@ -600,9 +600,9 @@ var _ = Context("RayService env tests", func() {
 		}
 		baseOpts := func() *rayv1.ClusterUpgradeOptions {
 			return &rayv1.ClusterUpgradeOptions{
-				MaxSurgePercent: ptr.To(int32(100)),
-				StepSizePercent: ptr.To(int32(10)),
-				IntervalSeconds: ptr.To(int32(30)),
+				MaxSurgePercent: new(int32(100)),
+				StepSizePercent: new(int32(10)),
+				IntervalSeconds: new(int32(30)),
 			}
 		}
 
