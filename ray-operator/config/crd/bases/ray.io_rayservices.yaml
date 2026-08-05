@@ -9439,7 +9439,8 @@ spec:
                     x-kubernetes-validations:
                     - message: Exactly one of gatewayClassName or gatewayRef must
                         be specified
-                      rule: has(self.gatewayRef) != has(self.gatewayClassName)
+                      rule: has(self.gatewayRef) != (has(self.gatewayClassName) &&
+                        size(self.gatewayClassName) != 0)
                   type:
                     type: string
                 type: object

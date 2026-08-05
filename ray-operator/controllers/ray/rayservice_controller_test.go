@@ -638,5 +638,23 @@ var _ = Context("RayService env tests", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Exactly one of gatewayClassName or gatewayRef must be specified"))
 		})
+
+		It("rejects an explicit empty gatewayClassName with no gatewayRef", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = "" // present but empty must count as "not set"
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-empty-class", namespace, serveAppName), opts)
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Exactly one of gatewayClassName or gatewayRef must be specified"))
+		})
+
+		It("accepts gatewayRef with an explicit empty gatewayClassName", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = ""
+			opts.GatewayRef = &rayv1.GatewayReference{Name: "shared-gateway"}
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-ref-empty-class", namespace, serveAppName), opts)
+			Expect(k8sClient.Create(ctx, rayService)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, rayService)).To(Succeed())
+		})
 	})
 })

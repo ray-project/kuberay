@@ -61,7 +61,7 @@ var DeploymentStatusEnum = struct {
 }
 
 // These options are currently only supported for the IncrementalUpgrade type.
-// +kubebuilder:validation:XValidation:rule="has(self.gatewayRef) != has(self.gatewayClassName)",message="Exactly one of gatewayClassName or gatewayRef must be specified"
+// +kubebuilder:validation:XValidation:rule="has(self.gatewayRef) != (has(self.gatewayClassName) && size(self.gatewayClassName) != 0)",message="Exactly one of gatewayClassName or gatewayRef must be specified"
 type ClusterUpgradeOptions struct {
 	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
 	// Defaults to 100%.
