@@ -9400,6 +9400,13 @@ spec:
                         type: string
                       gatewayRef:
                         properties:
+                          hostnames:
+                            items:
+                              maxLength: 253
+                              pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                              type: string
+                            maxItems: 16
+                            type: array
                           name:
                             maxLength: 253
                             minLength: 1
@@ -9408,6 +9415,10 @@ spec:
                           namespace:
                             maxLength: 63
                             pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          pathPrefix:
+                            maxLength: 1024
+                            pattern: ^/
                             type: string
                           port:
                             format: int32

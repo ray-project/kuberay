@@ -270,8 +270,9 @@ _Appears in:_
 
 GatewayReference references an existing Gateway resource. The controller only manages
 the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
-let the RayService pin its HTTPRoute to a specific listener on a shared Gateway
-that KubeRay does not otherwise configure.
+pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
+so it does not act as a catch-all that collides with other HTTPRoutes on a shared
+Gateway that KubeRay does not otherwise configure.
 
 
 
@@ -284,6 +285,8 @@ _Appears in:_
 | `namespace` _string_ | Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.<br />Must be a valid namespace name (an RFC 1123 label). |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
 | `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners.<br />Must be a valid Gateway API SectionName (an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
 | `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
+| `hostnames` _string array_ | Hostnames scope the RayService's HTTPRoute to the given hostnames on the<br />referenced Gateway. On a shared Gateway this prevents the route from acting as<br />a catch-all and colliding with other HTTPRoutes. When omitted, the route<br />matches all hostnames the Gateway's listener accepts (the previous behavior).<br />Each hostname must be a valid RFC 1123 hostname (a wildcard label like<br />"*.example.com" is allowed). |  | MaxItems: 16 <br />items:MaxLength: 253 <br />items:Pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$ <br /> |
+| `pathPrefix` _string_ | PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced<br />Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it<br />does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"<br />(match all paths, the previous behavior) when omitted. |  | MaxLength: 1024 <br />Pattern: `^/` <br /> |
 
 
 #### GcsEmbeddedStorage

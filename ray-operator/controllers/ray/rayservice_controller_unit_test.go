@@ -1795,13 +1795,19 @@ func TestCreateHTTPRoute(t *testing.T) {
 				assert.Equal(t, "test-rayservice-httproute", route.Name)
 				assert.Equal(t, "test-ns", route.Namespace)
 
-				// Default (KubeRay-created) Gateway: ParentRef pins no listener.
+				// Default (KubeRay-created) Gateway: ParentRef pins no listener, the
+				// route matches all hosts and the "/" catch-all path (prior behavior).
 				require.Len(t, route.Spec.ParentRefs, 1)
 				assert.Nil(t, route.Spec.ParentRefs[0].SectionName)
 				assert.Nil(t, route.Spec.ParentRefs[0].Port)
+				assert.Empty(t, route.Spec.Hostnames)
 
 				require.Len(t, route.Spec.Rules, 1)
 				rule := route.Spec.Rules[0]
+				require.Len(t, rule.Matches, 1)
+				require.NotNil(t, rule.Matches[0].Path)
+				require.NotNil(t, rule.Matches[0].Path.Value)
+				assert.Equal(t, "/", *rule.Matches[0].Path.Value)
 
 				require.GreaterOrEqual(t, len(rule.BackendRefs), 1)
 				assert.Equal(t, gwv1.ObjectName(activeServeService.Name), rule.BackendRefs[0].BackendRef.Name)
@@ -1847,6 +1853,8 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 						Namespace:   sharedGateway.Namespace,
 						SectionName: "http",
 						Port:        new(int32(80)),
+						Hostnames:   []string{"rayservice.example.com"},
+						PathPrefix:  "/rayservice",
 					},
 				},
 			},
@@ -1893,8 +1901,16 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 	require.NotNil(t, parentRef.Port)
 	assert.Equal(t, gwv1.PortNumber(80), *parentRef.Port)
 
-	// Backend service references use the RayService namespace, not the Gateway's.
+	// Route is scoped to the requested hostnames and path prefix so it does not
+	// act as a catch-all on the shared Gateway.
+	assert.Equal(t, []gwv1.Hostname{"rayservice.example.com"}, route.Spec.Hostnames)
 	require.Len(t, route.Spec.Rules, 1)
+	require.Len(t, route.Spec.Rules[0].Matches, 1)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, "/rayservice", *route.Spec.Rules[0].Matches[0].Path.Value)
+
+	// Backend service references use the RayService namespace, not the Gateway's.
 	require.GreaterOrEqual(t, len(route.Spec.Rules[0].BackendRefs), 1)
 	backend := route.Spec.Rules[0].BackendRefs[0].BackendRef
 	assert.Equal(t, gwv1.ObjectName(activeServeService.Name), backend.Name)

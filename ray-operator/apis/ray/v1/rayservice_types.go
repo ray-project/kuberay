@@ -90,8 +90,9 @@ type ClusterUpgradeOptions struct {
 
 // GatewayReference references an existing Gateway resource. The controller only manages
 // the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
-// let the RayService pin its HTTPRoute to a specific listener on a shared Gateway
-// that KubeRay does not otherwise configure.
+// pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
+// so it does not act as a catch-all that collides with other HTTPRoutes on a shared
+// Gateway that KubeRay does not otherwise configure.
 type GatewayReference struct {
 	// Name of the existing Gateway. Must be a valid Gateway resource name
 	// (an RFC 1123 subdomain).
@@ -121,6 +122,25 @@ type GatewayReference struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port *int32 `json:"port,omitempty"`
+	// Hostnames scope the RayService's HTTPRoute to the given hostnames on the
+	// referenced Gateway. On a shared Gateway this prevents the route from acting as
+	// a catch-all and colliding with other HTTPRoutes. When omitted, the route
+	// matches all hostnames the Gateway's listener accepts (the previous behavior).
+	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
+	// "*.example.com" is allowed).
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Hostnames []string `json:"hostnames,omitempty"`
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced
+	// Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it
+	// does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"
+	// (match all paths, the previous behavior) when omitted.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:Pattern=`^/`
+	PathPrefix string `json:"pathPrefix,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

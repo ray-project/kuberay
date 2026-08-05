@@ -1159,10 +1159,16 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		Name:      gwv1.ObjectName(gatewayInstance.Name),
 		Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
 	}
-	// When attaching to a shared Gateway, an optional SectionName/Port pins the
-	// HTTPRoute to a specific listener on that Gateway (KubeRay does not otherwise
-	// configure the shared Gateway's listeners). For a KubeRay-created Gateway both
-	// are unset, so the route attaches to its single listener as before.
+
+	// Default routing: a "/" PathPrefix match and no hostnames (matches every host
+	// the listener accepts) — the original behavior for a KubeRay-created Gateway.
+	pathPrefix := "/"
+	var hostnames []gwv1.Hostname
+
+	// When attaching to a shared Gateway, GatewayRef options refine the route so it
+	// does not act as a catch-all that collides with other HTTPRoutes: SectionName/
+	// Port pin the listener, and Hostnames/PathPrefix scope which traffic it claims.
+	// For a KubeRay-created Gateway GatewayRef is nil, so the defaults above apply.
 	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
 		if opts.GatewayRef.SectionName != "" {
 			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
@@ -1170,20 +1176,28 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		if opts.GatewayRef.Port != nil {
 			parentRef.Port = new(gwv1.PortNumber(*opts.GatewayRef.Port))
 		}
+		if opts.GatewayRef.PathPrefix != "" {
+			pathPrefix = opts.GatewayRef.PathPrefix
+		}
+		for _, h := range opts.GatewayRef.Hostnames {
+			hostnames = append(hostnames, gwv1.Hostname(h))
+		}
 	}
+
 	desiredHTTPRoute := &gwv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: rayServiceInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
 				ParentRefs: []gwv1.ParentReference{parentRef},
 			},
+			Hostnames: hostnames,
 			Rules: []gwv1.HTTPRouteRule{
 				{
 					Matches: []gwv1.HTTPRouteMatch{
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: new("/"),
+								Value: new(pathPrefix),
 							},
 						},
 					},

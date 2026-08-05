@@ -7,8 +7,9 @@ package v1
 //
 // GatewayReference references an existing Gateway resource. The controller only manages
 // the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
-// let the RayService pin its HTTPRoute to a specific listener on a shared Gateway
-// that KubeRay does not otherwise configure.
+// pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
+// so it does not act as a catch-all that collides with other HTTPRoutes on a shared
+// Gateway that KubeRay does not otherwise configure.
 type GatewayReferenceApplyConfiguration struct {
 	// Name of the existing Gateway. Must be a valid Gateway resource name
 	// (an RFC 1123 subdomain).
@@ -25,6 +26,18 @@ type GatewayReferenceApplyConfiguration struct {
 	// HTTPRoute to. When both SectionName and Port are set, the selected listener
 	// must match both. When omitted, listener selection is not constrained by port.
 	Port *int32 `json:"port,omitempty"`
+	// Hostnames scope the RayService's HTTPRoute to the given hostnames on the
+	// referenced Gateway. On a shared Gateway this prevents the route from acting as
+	// a catch-all and colliding with other HTTPRoutes. When omitted, the route
+	// matches all hostnames the Gateway's listener accepts (the previous behavior).
+	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
+	// "*.example.com" is allowed).
+	Hostnames []string `json:"hostnames,omitempty"`
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced
+	// Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it
+	// does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"
+	// (match all paths, the previous behavior) when omitted.
+	PathPrefix *string `json:"pathPrefix,omitempty"`
 }
 
 // GatewayReferenceApplyConfiguration constructs a declarative configuration of the GatewayReference type for use with
@@ -62,5 +75,23 @@ func (b *GatewayReferenceApplyConfiguration) WithSectionName(value string) *Gate
 // If called multiple times, the Port field is set to the value of the last call.
 func (b *GatewayReferenceApplyConfiguration) WithPort(value int32) *GatewayReferenceApplyConfiguration {
 	b.Port = &value
+	return b
+}
+
+// WithHostnames adds the given value to the Hostnames field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Hostnames field.
+func (b *GatewayReferenceApplyConfiguration) WithHostnames(values ...string) *GatewayReferenceApplyConfiguration {
+	for i := range values {
+		b.Hostnames = append(b.Hostnames, values[i])
+	}
+	return b
+}
+
+// WithPathPrefix sets the PathPrefix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PathPrefix field is set to the value of the last call.
+func (b *GatewayReferenceApplyConfiguration) WithPathPrefix(value string) *GatewayReferenceApplyConfiguration {
+	b.PathPrefix = &value
 	return b
 }
