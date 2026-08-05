@@ -1,0 +1,126 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-ray-data
+spec:
+  # Self-contained: this RayJob brings up its own cluster instead of attaching to an
+  # existing one via clusterSelector, so it also exercises the collector's shutdown path.
+  shutdownAfterJobFinishes: true
+  # Keeps the cluster alive long enough for at least one polling cycle after the job
+  # succeeds. Without it the cluster is deleted immediately and the datasets would only
+  # be captured by the collector's best-effort final poll during shutdown.
+  ttlSecondsAfterFinished: 30
+  entrypoint: |
+    python -c "
+    import ray
+    ray.init()
+
+    # materialize() is required: an unexecuted Dataset produces no stats, so
+    # /api/data/datasets/{job_id} would stay empty.
+    ds = ray.data.range(100).map_batches(lambda batch: batch).materialize()
+    print(f'Dataset rows: {ds.count()}')
+    "
+  rayClusterSpec:
+    # Head-only on purpose: worker collectors need the head Service FQDN in FQ_RAY_IP,
+    # which cannot be written here because KubeRay generates the cluster name.
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: 0.0.0.0
+      serviceType: ClusterIP
+      template:
+        spec:
+          containers:
+          - env:
+            - name: RAY_TMP_ROOT
+              value: &rayTmpRoot /tmp/ray
+            - name: RAY_enable_ray_event
+              value: "true"
+            - name: RAY_enable_core_worker_ray_event_to_aggregator
+              value: "true"
+            - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+              value: "http://localhost:8084/v1/events"
+              # in ray 2.52.0, we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+              # in ray 2.53.0 (noy yet done). we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+            - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+              value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
+                      TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
+                      ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+            image: rayproject/ray:2.52.0
+            imagePullPolicy: IfNotPresent
+            name: ray-head
+            securityContext:
+              allowPrivilegeEscalation: true
+              privileged: true
+            resources:
+              limits:
+                cpu: "5"
+                memory: 10G
+              requests:
+                cpu: "50m"
+                memory: 1G
+            volumeMounts:
+            - name: historyserver
+              mountPath: *rayTmpRoot
+          - name: collector
+            image: collector:v0.1.0
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # KubeRay generates the cluster name, so these are read back from the labels
+            # it stamps on the pod rather than hardcoded.
+            - name: RAY_CLUSTER_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ray.io/cluster']
+            - name: RAY_CLUSTER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Hardcoded, unlike the cluster name: KubeRay puts ray.io/originated-from-*
+            # on the RayCluster but not on the pod, so the downward API cannot read them.
+            # Must match metadata.name above.
+            - name: OWNER_KIND
+              value: "RayJob"
+            - name: OWNER_NAME
+              value: "rayjob-ray-data"
+            # Only used to look up this pod's Ray NodeID, and the dashboard is in this
+            # same pod. A worker collector would need the head Service FQDN instead.
+            - name: FQ_RAY_IP
+              value: "localhost"
+            - name: RAY_TMP_ROOT
+              value: *rayTmpRoot
+            # Shorter than the 30s default so a full cycle fits inside
+            # ttlSecondsAfterFinished above.
+            - name: RAY_COLLECTOR_POLL_INTERVAL
+              value: "5s"
+            - name: S3DISABLE_SSL
+              value: "true"
+            - name: AWS_ACCESS_KEY_ID
+              value: minioadmin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: minioadmin
+            - name: AWS_SESSION_TOKEN
+              value: ""
+            - name: S3_BUCKET
+              value: "ray-historyserver"
+            - name: S3_ENDPOINT
+              value: "minio-service.minio-dev:9000"
+            - name: S3_REGION
+              value: "test"
+            - name: S3FORCE_PATH_STYLE
+              value: "true"
+            command:
+            - collector
+            - --role=Head
+            - --runtime-class-name=s3
+            - --ray-root-dir=log
+            - --events-port=8084
+            volumeMounts:
+            - name: historyserver
+              mountPath: *rayTmpRoot
+          volumes:
+          - name: historyserver
+            emptyDir: {}

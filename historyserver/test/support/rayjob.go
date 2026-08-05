@@ -11,6 +11,9 @@ import (
 
 const (
 	rayJobManifestPath = "../../config/rayjob.yaml"
+	// rayDataManifestPath is self-contained: it brings up its own cluster, so the
+	// cluster name is only known from the RayJob status afterwards.
+	rayDataManifestPath = "../../config/ray-data.yaml"
 )
 
 // ApplyRayJobAndWaitForCompletion applies a Ray job to the existing Ray cluster and waits for it to complete successfully.
@@ -32,6 +35,31 @@ func ApplyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Name
 			WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)),
 		))
 	LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
+
+	return rayJob
+}
+
+// ApplyRayDataJobAndWaitForCompletion applies the self-contained Ray Data RayJob and
+// waits for it to succeed. The returned RayJob carries Status.RayClusterName, which is
+// the only way to learn the cluster name KubeRay generated.
+func ApplyRayDataJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayJob {
+	rayJobFromYaml := DeserializeRayJobYAML(test, rayDataManifestPath)
+	rayJobFromYaml.Namespace = namespace.Name
+
+	rayJob, err := test.Client().Ray().RayV1().
+		RayJobs(namespace.Name).
+		Create(test.Ctx(), rayJobFromYaml, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+	rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(rayJob.Status.RayClusterName).NotTo(BeEmpty())
+	LogWithTimestamp(test.T(), "RayJob %s/%s succeeded on cluster %s", rayJob.Namespace, rayJob.Name, rayJob.Status.RayClusterName)
 
 	return rayJob
 }

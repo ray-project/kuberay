@@ -24,6 +24,7 @@ type RayCollectorConfig struct {
 	PushInterval        time.Duration
 	DashboardAddress    string
 
+	// AdditionalEndpoints are polled on top of the collector's built-in set.
 	AdditionalEndpoints  []string
 	EndpointPollInterval time.Duration
 

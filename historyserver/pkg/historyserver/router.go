@@ -1121,8 +1121,9 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	clusterLogPathPrefix := s.getClusterLogPathPrefix(req)
 
 	// Use the full request URI (path + query) for storage key lookup.
-	// The collector stores keys using the full endpoint URL from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS,
-	// which may include query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000").
+	// The collector stores keys using the full endpoint URI it polls (see the
+	// collector's poll.go), which may include query params (e.g.,
+	// "/api/v0/placement_groups?detail=1&limit=10000").
 	// RequestURI() includes query params when present, and equals URL.Path when absent.
 	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
@@ -1173,6 +1174,14 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 		})
 		return data
 	default:
+		// The collector stores nothing for a job that never used Ray Data, so replay
+		// must synthesize what a live dashboard returns instead of 404ing.
+		if strings.HasPrefix(trimmed, "/api/data/datasets/") {
+			data, _ := json.Marshal(map[string]interface{}{
+				"datasets": []interface{}{},
+			})
+			return data
+		}
 		return nil
 	}
 }

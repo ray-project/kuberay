@@ -91,13 +91,18 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
-	r.processSessionLatestLogs()
-	// Perform one final poll of additional endpoints before shutting down.
-	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
-	// uses ShutdownChan to cancel in-flight HTTP requests.
+
+	// The final endpoint poll races the Ray head's own shutdown: once the dashboard is
+	// gone the data is unrecoverable, while log files stay on local disk. Run it
+	// concurrently so it never queues behind a slow log upload.
+	var wg sync.WaitGroup
 	if r.IsHead {
-		r.processAdditionalEndpoints()
+		wg.Go(r.processAdditionalEndpoints)
 	}
+	r.processSessionLatestLogs()
+	wg.Wait()
+
+	// Only now, because pollSingleEndpoint uses ShutdownChan to cancel in-flight requests.
 	close(r.ShutdownChan)
 
 	return nil

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -143,6 +144,8 @@ func main() {
 		}
 	}
 
+	// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is optional: the head collector always
+	// polls its built-in endpoints, and anything listed here is polled on top.
 	var additionalEndpoints []string
 	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
 		for _, ep := range strings.Split(epStr, ",") {
@@ -153,16 +156,20 @@ func main() {
 		}
 	}
 
+	// An unusable poll interval falls back to the default instead of exiting: the
+	// collector is a sidecar in the Ray head pod, so crash-looping on a bad
+	// observability knob would take the head out of its Service endpoints.
 	endpointPollInterval := 30 * time.Second
-	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
-		parsed, parseErr := time.ParseDuration(intervalStr)
-		if parseErr != nil {
-			logrus.Fatalf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: %v", parseErr)
+	if v := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); v != "" {
+		parsed, err := time.ParseDuration(v)
+		if err == nil && parsed <= 0 {
+			err = errors.New("must be positive")
 		}
-		if parsed <= 0 {
-			logrus.Fatalf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s", intervalStr)
+		if err != nil {
+			logrus.Warnf("Invalid RAY_COLLECTOR_POLL_INTERVAL=%s (%v), using default %s", v, err, endpointPollInterval)
+		} else {
+			endpointPollInterval = parsed
 		}
-		endpointPollInterval = parsed
 	}
 
 	jsonData := make(map[string]interface{})
@@ -210,6 +217,14 @@ func main() {
 
 	sessionName := path.Base(activeSessionDir)
 
+	// The collector always runs as a sidecar in the Ray head pod, so the dashboard is
+	// reachable on localhost at Ray's default port. Only the head collector uses this.
+	// Override it when the dashboard listens on a non-default port.
+	dashboardAddress := "http://localhost:8265"
+	if v := os.Getenv("RAY_DASHBOARD_ADDRESS"); v != "" {
+		dashboardAddress = v
+	}
+
 	globalConfig := types.RayCollectorConfig{
 		RootDir:             rayRootDir,
 		SessionDir:          activeSessionDir,
@@ -219,7 +234,7 @@ func main() {
 		RayClusterNamespace: rayClusterNamespace,
 		PushInterval:        pushInterval,
 		LogBatching:         logBatching,
-		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
+		DashboardAddress:    dashboardAddress,
 		OwnerKind:           ownerKind,
 		OwnerName:           ownerName,
 
