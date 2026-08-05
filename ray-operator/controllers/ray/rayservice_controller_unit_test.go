@@ -2634,7 +2634,7 @@ func TestHandleSuspendResumeResetsReadyToInitializing(t *testing.T) {
 	r := &RayServiceReconciler{
 		Client:   fakeClient,
 		Scheme:   scheme.Scheme,
-		Recorder: events.NewFakeRecorder(10),
+		Recorder: &events.FakeRecorder{},
 	}
 
 	_, err := r.handleSuspend(ctx, rs)
