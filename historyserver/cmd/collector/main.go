@@ -25,7 +25,7 @@ import (
 
 func main() {
 	role := ""
-	runtimeClassName := ""
+	storageBackend := ""
 	rayClusterName := ""
 	rayClusterNamespace := ""
 	rayRootDir := ""
@@ -34,7 +34,7 @@ func main() {
 	pushInterval := time.Minute
 	ownerKind := ""
 	ownerName := ""
-	runtimeClassConfigPath := "/var/collector-config/data"
+	storageBackendConfigPath := "/var/collector-config/data"
 
 	// Event collector disk-first storage flags.
 	eventDataDir := "/tmp/ray/event-data"
@@ -44,13 +44,13 @@ func main() {
 	eventCompressionEnabled := false
 
 	flag.StringVar(&role, "role", "Worker", "")
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
+	flag.StringVar(&storageBackend, "storage-backend", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "") //"/var/collector-config/data"
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
@@ -166,27 +166,25 @@ func main() {
 	}
 
 	jsonData := make(map[string]interface{})
-	if runtimeClassConfigPath != "" {
-		data, err := os.ReadFile(runtimeClassConfigPath)
+	if storageBackendConfigPath != "" {
+		data, err := os.ReadFile(storageBackendConfigPath)
 		if err != nil {
-			logrus.Fatalf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to read storage backend config from %s: %v", storageBackendConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			logrus.Fatalf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to parse storage backend config from %s: %v", storageBackendConfigPath, err)
 		}
 	}
 
 	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
-		runtimeClassName = val
-	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
-		runtimeClassName = val
+		storageBackend = val
 	}
-	runtimeClassName = strings.ToLower(runtimeClassName)
+	storageBackend = strings.ToLower(storageBackend)
 
 	registry := collector.GetWriterRegistry()
-	factory, ok := registry[runtimeClassName]
+	factory, ok := registry[storageBackend]
 	if !ok {
-		logrus.Fatalf("Not supported runtime class name: %s for role: %s.", runtimeClassName, role)
+		logrus.Fatalf("Not supported storage backend: %s for role: %s.", storageBackend, role)
 	}
 
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
@@ -236,7 +234,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		logrus.Fatalf("Failed to create writer for runtime class name: %s for role: %s, err: %v", runtimeClassName, role, err)
+		logrus.Fatalf("Failed to create writer for storage backend: %s for role: %s, err: %v", storageBackend, role, err)
 	}
 
 	var wg sync.WaitGroup

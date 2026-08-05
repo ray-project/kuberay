@@ -29,10 +29,10 @@ The History Server supports multiple storage backends:
 
 | Backend | Description | Configuration |
 |---------|-------------|---------------|
-| S3/MinIO | AWS S3 or MinIO-compatible storage | Use `--runtime-class-name=s3` |
-| Azure Blob Storage | Microsoft Azure Blob Storage | Use `--runtime-class-name=azureblob` |
-| Aliyun OSS | Alibaba Cloud Object Storage Service | Use `--runtime-class-name=aliyunoss` |
-| Local test | For local testing and development | Use `--runtime-class-name=localtest` |
+| S3/MinIO | AWS S3 or MinIO-compatible storage | Use `--storage-backend=s3` |
+| Azure Blob Storage | Microsoft Azure Blob Storage | Use `--storage-backend=azureblob` |
+| Aliyun OSS | Alibaba Cloud Object Storage Service | Use `--storage-backend=aliyunoss` |
+| Local test | For local testing and development | Use `--storage-backend=localtest` |
 
 ## Running locally
 

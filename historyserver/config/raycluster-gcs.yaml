@@ -87,7 +87,7 @@ spec:
           command:
           - collector
           - --role=Head
-          - --runtime-class-name=gcs
+          - --storage-backend=gcs
           - --ray-cluster-name=${RAY_CLUSTER}
           - --ray-root-dir=log
           - --events-port=8084
@@ -161,7 +161,7 @@ spec:
           command:
           - collector
           - --role=Worker
-          - --runtime-class-name=gcs
+          - --storage-backend=gcs
           - --ray-cluster-name=${RAY_CLUSTER}
           - --ray-root-dir=log
           - --events-port=8084
