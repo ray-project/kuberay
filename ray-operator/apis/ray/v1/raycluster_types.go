@@ -489,6 +489,18 @@ type WorkerGroupSpec struct {
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+	// ScaleGate blocks this worker group from scaling up while non-empty; the
+	// Autoscaler then initiates fallback behavior. Kueue appends
+	// "kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves
+	// this field across reconciles but never reads or writes it.
+	//
+	// Several controllers may gate the same group, so each gate is domain-prefixed
+	// with its owner and a controller must add or remove only its own gates via
+	// Server-Side Apply under a distinct field manager. Replacing the list
+	// wholesale, or using read-modify-write Update, drops other owners' gates.
+	// +optional
+	// +listType=set
+	ScaleGate []string `json:"scaleGate,omitempty"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.

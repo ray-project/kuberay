@@ -780,6 +780,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _string array_ | ScaleGate blocks this worker group from scaling up while non-empty; the<br />Autoscaler then initiates fallback behavior. Kueue appends<br />"kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves<br />this field across reconciles but never reads or writes it.<br />Several controllers may gate the same group, so each gate is domain-prefixed<br />with its owner and a controller must add or remove only its own gates via<br />Server-Side Apply under a distinct field manager. Replacing the list<br />wholesale, or using read-modify-write Update, drops other owners' gates. |  |  |
 
 
 #### SubmitterConfig

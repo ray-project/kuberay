@@ -5457,6 +5457,11 @@ spec:
                               type: object
                             scaleStrategy:
                               properties:
+                                scaleGate:
+                                  items:
+                                    type: string
+                                  type: array
+                                  x-kubernetes-list-type: set
                                 workersToDelete:
                                   items:
                                     type: string
