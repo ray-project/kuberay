@@ -28,10 +28,8 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
-            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
-                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
-                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+            value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -49,13 +47,17 @@ spec:
           - name: historyserver
             mountPath: *rayTmpRoot
         - name: collector
-          image: quay.io/kuberay/collector:nightly
+          image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
           - name: RAY_CLUSTER_NAME
             valueFrom:
               fieldRef:
                 fieldPath: metadata.labels['ray.io/cluster']
+          - name: RAY_CLUSTER_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           - name: POD_IP
             valueFrom:
               fieldRef:
@@ -75,6 +77,8 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
+          command:
+          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -108,10 +112,8 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
-            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
-                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
-                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+            value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-worker
@@ -129,13 +131,17 @@ spec:
           - name: historyserver
             mountPath: *rayTmpRoot
         - name: collector
-          image: quay.io/kuberay/collector:nightly
+          image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
           - name: RAY_CLUSTER_NAME
             valueFrom:
               fieldRef:
                 fieldPath: metadata.labels['ray.io/cluster']
+          - name: RAY_CLUSTER_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           - name: POD_IP
             valueFrom:
               fieldRef:
@@ -155,6 +161,8 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
+          command:
+          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
