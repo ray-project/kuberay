@@ -156,34 +156,52 @@ func (r *RayClusterMTLSController) ensureSecretOwnedByCertificate(ctx context.Co
 	return r.Update(ctx, secret)
 }
 
+// reconcileIssuer creates an issuer with the given configuration if it does not exist.
+// Issuer specs are static once created, so no update is needed.
+func (r *RayClusterMTLSController) reconcileIssuer(
+	ctx context.Context,
+	instance *rayv1.RayCluster,
+	issuerName string,
+	component string,
+	issuerConfig certmanagerv1.IssuerConfig,
+) error {
+	existing := &certmanagerv1.Issuer{}
+	err := r.Get(ctx, client.ObjectKey{Name: issuerName, Namespace: instance.Namespace}, existing)
+	if err == nil {
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	issuer := &certmanagerv1.Issuer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      issuerName,
+			Namespace: instance.Namespace,
+			Labels:    tlsResourceLabels(instance.Name, component),
+		},
+		Spec: certmanagerv1.IssuerSpec{
+			IssuerConfig: issuerConfig,
+		},
+	}
+	if err := controllerutil.SetControllerReference(instance, issuer, r.Scheme); err != nil {
+		return err
+	}
+	return r.Create(ctx, issuer)
+}
+
 // reconcileSelfSignedIssuer creates the self-signed issuer used to bootstrap the CA if it does not exist.
 // The issuer spec is static once created so no update is needed.
 func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
-	issuerName := utils.GetSelfSignedIssuerName(instance.Name)
-	existing := &certmanagerv1.Issuer{}
-	err := r.Get(ctx, client.ObjectKey{Name: issuerName, Namespace: instance.Namespace}, existing)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		issuer := &certmanagerv1.Issuer{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      issuerName,
-				Namespace: instance.Namespace,
-				Labels:    tlsResourceLabels(instance.Name, "selfsigned-issuer"),
-			},
-			Spec: certmanagerv1.IssuerSpec{
-				IssuerConfig: certmanagerv1.IssuerConfig{
-					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
-				},
-			},
-		}
-		if err := controllerutil.SetControllerReference(instance, issuer, r.Scheme); err != nil {
-			return err
-		}
-		return r.Create(ctx, issuer)
-	}
-	return nil
+	return r.reconcileIssuer(
+		ctx,
+		instance,
+		utils.GetSelfSignedIssuerName(instance.Name),
+		"selfsigned-issuer",
+		certmanagerv1.IssuerConfig{
+			SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+		},
+	)
 }
 
 // reconcileCACertificate creates the root CA certificate signed by the self-signed issuer if it does not exist.
@@ -241,33 +259,17 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 // reconcileCAIssuer creates the issuer backed by the generated CA certificate's secret if it does not exist.
 // The issuer spec is static once created (keyed on RayCluster UID) so no update is needed.
 func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
-	issuerName := utils.GetCAIssuerName(instance.Name)
-	existing := &certmanagerv1.Issuer{}
-	err := r.Get(ctx, client.ObjectKey{Name: issuerName, Namespace: instance.Namespace}, existing)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		issuer := &certmanagerv1.Issuer{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      issuerName,
-				Namespace: instance.Namespace,
-				Labels:    tlsResourceLabels(instance.Name, "ca-issuer"),
+	return r.reconcileIssuer(
+		ctx,
+		instance,
+		utils.GetCAIssuerName(instance.Name),
+		"ca-issuer",
+		certmanagerv1.IssuerConfig{
+			CA: &certmanagerv1.CAIssuer{
+				SecretName: utils.GetCASecretName(instance.Name, instance.UID),
 			},
-			Spec: certmanagerv1.IssuerSpec{
-				IssuerConfig: certmanagerv1.IssuerConfig{
-					CA: &certmanagerv1.CAIssuer{
-						SecretName: utils.GetCASecretName(instance.Name, instance.UID),
-					},
-				},
-			},
-		}
-		if err := controllerutil.SetControllerReference(instance, issuer, r.Scheme); err != nil {
-			return err
-		}
-		return r.Create(ctx, issuer)
-	}
-	return nil
+		},
+	)
 }
 
 // reconcileHeadCertificate creates or updates the head node leaf certificate.

@@ -241,6 +241,66 @@ func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 	assert.Len(t, certList.Items, 3, "should have 3 certificates: CA + head + worker")
 }
 
+func TestMTLSController_ReconcileIssuer(t *testing.T) {
+	cluster := newMTLSTestCluster("issuer-test")
+	tests := []struct {
+		name             string
+		reconcile        func(*RayClusterMTLSController, context.Context, *rayv1.RayCluster) error
+		issuerName       string
+		component        string
+		wantIssuerConfig certmanagerv1.IssuerConfig
+	}{
+		{
+			name:       "self-signed issuer",
+			reconcile:  (*RayClusterMTLSController).reconcileSelfSignedIssuer,
+			issuerName: utils.GetSelfSignedIssuerName(cluster.Name),
+			component:  "selfsigned-issuer",
+			wantIssuerConfig: certmanagerv1.IssuerConfig{
+				SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+			},
+		},
+		{
+			name:       "CA issuer",
+			reconcile:  (*RayClusterMTLSController).reconcileCAIssuer,
+			issuerName: utils.GetCAIssuerName(cluster.Name),
+			component:  "ca-issuer",
+			wantIssuerConfig: certmanagerv1.IssuerConfig{
+				CA: &certmanagerv1.CAIssuer{
+					SecretName: utils.GetCASecretName(cluster.Name, cluster.UID),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newMTLSController(t)
+			ctx := context.Background()
+
+			require.NoError(t, tt.reconcile(r, ctx, cluster))
+			require.NoError(t, tt.reconcile(r, ctx, cluster))
+
+			issuer := &certmanagerv1.Issuer{}
+			require.NoError(t, r.Get(ctx, types.NamespacedName{
+				Name:      tt.issuerName,
+				Namespace: cluster.Namespace,
+			}, issuer))
+			assert.Equal(t, tt.wantIssuerConfig, issuer.Spec.IssuerConfig)
+			assert.Equal(t, tt.component, issuer.Labels["app.kubernetes.io/component"])
+			assert.Equal(t, cluster.Name, issuer.Labels[utils.RayClusterLabelKey])
+
+			controllerRef := metav1.GetControllerOf(issuer)
+			require.NotNil(t, controllerRef)
+			assert.Equal(t, cluster.Name, controllerRef.Name)
+			assert.Equal(t, cluster.UID, controllerRef.UID)
+
+			issuerList := &certmanagerv1.IssuerList{}
+			require.NoError(t, r.List(ctx, issuerList, client.InNamespace(cluster.Namespace)))
+			assert.Len(t, issuerList.Items, 1)
+		})
+	}
+}
+
 func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
