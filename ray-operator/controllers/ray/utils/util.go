@@ -658,6 +658,9 @@ func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		// External controllers like Kueue may set ScaleGate to signal quota exhaustion,
+		// which should not trigger a new RayCluster preparation.
+		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.ScaleGate = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Tolerations = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.SchedulingGates = nil
 	}

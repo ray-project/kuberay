@@ -5351,6 +5351,10 @@ spec:
                           type: object
                         scaleStrategy:
                           properties:
+                            scaleGate:
+                              items:
+                                type: string
+                              type: array
                             workersToDelete:
                               items:
                                 type: string
