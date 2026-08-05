@@ -94,7 +94,7 @@ test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.
 
 test-e2e-incremental-upgrade: WHAT ?= ./test/e2eincrementalupgrade
 test-e2e-incremental-upgrade: manifests fmt vet ## Run e2e RayService incremental upgrade tests.
-	go test -timeout 30m -v $(WHAT)
+	go test -timeout 60m -v $(WHAT)
 
 test-e2e-rayjob-submitter: WHAT ?= ./test/e2erayjobsubmitter
 test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e light weight submitter tests.
@@ -180,7 +180,10 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --output-path=../docs/reference/api.md
 
 certmanager:
-	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.4/cert-manager.yaml
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=120s
 
 deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
 	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}

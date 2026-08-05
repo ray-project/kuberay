@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -23,6 +24,7 @@ func main() {
 	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
+	useAuthTokenMode := false
 	qps := historyserver.DefaultKubeAPIQPS
 	burst := historyserver.DefaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
@@ -34,6 +36,7 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.BoolVar(&useAuthTokenMode, "use-auth-token-mode", false, "Enable Ray dashboard token authentication mode (requires x-ray-authorization header)")
 	flag.Float64Var(&qps, "kube-api-qps", historyserver.DefaultKubeAPIQPS, "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "kube-api-burst", historyserver.DefaultKubeAPIBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
@@ -41,9 +44,16 @@ func main() {
 	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
 	flag.Parse()
 
-	if runtimeClassName == "" {
-		logrus.Fatal("--runtime-class-name is required")
+	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
+		runtimeClassName = val
+	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
+		runtimeClassName = val
 	}
+	if runtimeClassName == "" {
+		logrus.Fatal("--runtime-class-name, STORAGE_BACKEND, or RUNTIME_CLASS_NAME environment variable is required")
+	}
+	runtimeClassName = strings.ToLower(runtimeClassName)
+
 	if qps <= 0 {
 		logrus.Fatalf("--kube-api-qps must be > 0, got %v", qps)
 	}
@@ -111,7 +121,7 @@ func main() {
 		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy, useAuthTokenMode)
 	if err != nil {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
