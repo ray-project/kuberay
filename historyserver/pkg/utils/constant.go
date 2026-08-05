@@ -14,16 +14,6 @@ const (
 	RayServiceKind = "rayservice"
 	RayClusterKind = "raycluster"
 
-	RayTokenMountPath                 = "/var/run/secrets/ray.io/serviceaccount"
-	RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR = "RAY_ENABLE_K8S_TOKEN_AUTH"
-	RAY_AUTH_TOKEN_ENV_VAR            = "RAY_AUTH_TOKEN"
-	RAY_AUTH_MODE_ENV_VAR             = "RAY_AUTH_MODE"
-
-	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
-	RayAuthModeToken          = "token"
-	RayAuthHeader             = "x-ray-authorization"
-	RayK8sTokenPath           = RayTokenMountPath + "/token"
-
 	// RayContainerIndex is the index of the Ray container in the head pod template.
 	RayContainerIndex = 0
 	// DashboardPortName is the name the ray-operator gives the dashboard port.
