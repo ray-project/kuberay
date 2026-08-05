@@ -38,6 +38,13 @@ func main() {
 	enableLogCollector := true
 	runtimeClassConfigPath := ""
 
+	// Event collector disk-first storage flags.
+	eventDataDir := "/tmp/ray/event-data"
+	eventRotationInterval := 5 * time.Minute
+	eventMaxFileSizeMB := 100
+	eventMaxDiskMB := 200
+	eventCompressionEnabled := false
+
 	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "Enable event collector")
 	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "Enable log collector")
 	flag.StringVar(&role, "role", "Worker", "Role of the collector node: Head or Worker")
@@ -51,6 +58,12 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
+
+	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
+	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
+	flag.IntVar(&eventMaxFileSizeMB, "event-max-file-size-mb", eventMaxFileSizeMB, "Size threshold (MB) to rotate active JSONL file")
+	flag.IntVar(&eventMaxDiskMB, "event-max-disk-mb", eventMaxDiskMB, "Max total disk usage (MB) before 503 backpressure")
+	flag.BoolVar(&eventCompressionEnabled, "event-compression-enabled", eventCompressionEnabled, "Enable gzip compression when uploading rotated JSONL files to remote storage (false uploads plain JSONL)")
 
 	flag.Parse()
 
@@ -107,11 +120,44 @@ func main() {
 	} else if strings.EqualFold(role, "worker") {
 		role = "Worker"
 	} else {
-		panic("Invalid role: " + role + ", must be Head or Worker")
+		logrus.Fatalf("Invalid role: %s, must be Head or Worker", role)
 	}
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, enableEventCollector, enableLogCollector); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
+	}
+
+	// Override event collector settings from environment variables if present.
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_DATA_DIR"); v != "" {
+		eventDataDir = v
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_ROTATION_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			eventRotationInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_ROTATION_INTERVAL=%s, using default %s", v, eventRotationInterval)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_MAX_FILE_SIZE_MB"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			eventMaxFileSizeMB = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_MAX_FILE_SIZE_MB=%s, using default %d", v, eventMaxFileSizeMB)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_MAX_DISK_MB"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			eventMaxDiskMB = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_MAX_DISK_MB=%s, using default %d", v, eventMaxDiskMB)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_COMPRESSION_ENABLED"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			eventCompressionEnabled = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_COMPRESSION_ENABLED=%s, using default %v", v, eventCompressionEnabled)
+		}
 	}
 
 	var additionalEndpoints []string
@@ -128,10 +174,10 @@ func main() {
 	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
 		parsed, parseErr := time.ParseDuration(intervalStr)
 		if parseErr != nil {
-			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+			logrus.Fatalf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: %v", parseErr)
 		}
 		if parsed <= 0 {
-			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
+			logrus.Fatalf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s", intervalStr)
 		}
 		endpointPollInterval = parsed
 	}
@@ -140,10 +186,10 @@ func main() {
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			panic(fmt.Sprintf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err))
+			logrus.Fatalf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 
@@ -157,22 +203,22 @@ func main() {
 	registry := collector.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		logrus.Fatalf("Not supported runtime class name: %s for role: %s.", runtimeClassName, role)
 	}
 
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
 	if err != nil {
-		panic("Failed to get ray node id via HTTP endpoint: " + err.Error())
+		logrus.Fatalf("Failed to get ray node id via HTTP endpoint: %v", err)
 	}
 
 	rayNodeId, err = utils.ConvertBase64ToHex(rayNodeId)
 	if err != nil {
-		panic("Failed to normalize ray node id to hex: " + err.Error())
+		logrus.Fatalf("Failed to normalize ray node id to hex: %v", err)
 	}
 
 	activeSessionDir, err := utils.GetSessionDir()
 	if err != nil {
-		panic("Failed to get active session dir after discovering node id: " + err.Error())
+		logrus.Fatalf("Failed to get active session dir after discovering node id: %v", err)
 	}
 
 	if enableLogCollector {
@@ -198,12 +244,18 @@ func main() {
 
 		AdditionalEndpoints:  additionalEndpoints,
 		EndpointPollInterval: endpointPollInterval,
+
+		EventDataDir:            eventDataDir,
+		EventRotationInterval:   eventRotationInterval,
+		EventMaxFileSizeMB:      eventMaxFileSizeMB,
+		EventMaxDiskMB:          eventMaxDiskMB,
+		EventCompressionEnabled: eventCompressionEnabled,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
+		logrus.Fatalf("Failed to create writer for runtime class name: %s for role: %s, err: %v", runtimeClassName, role, err)
 	}
 
 	var wg sync.WaitGroup
@@ -217,7 +269,13 @@ func main() {
 		// Create and initialize EventCollector
 		go func() {
 			defer wg.Done()
-			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName)
+			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
+				DataDir:            eventDataDir,
+				RotationInterval:   eventRotationInterval,
+				MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
+				MaxDiskBytes:       int64(eventMaxDiskMB) * 1024 * 1024,
+				CompressionEnabled: eventCompressionEnabled,
+			})
 			eventCollector.Run(stop, eventsPort)
 			logrus.Info("Event collector shutdown")
 		}()

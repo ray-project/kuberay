@@ -6,6 +6,10 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
+  # Enable Ray token authentication. Requires Ray 2.52.0+
+  # rayVersion: "2.52.0"
+  # authOptions:
+  #   mode: token
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
