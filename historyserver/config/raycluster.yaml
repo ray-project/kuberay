@@ -6,9 +6,7 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
-  # Uncomment to make the Dashboard reject unauthenticated requests, which the collector
-  # sidecars below must survive (ray-project/kuberay#5056). The operator rejects
-  # `authOptions.mode: token` unless `rayVersion` is set and is at least 2.52.0.
+  # Enable Ray token authentication. Requires Ray 2.52.0+
   # rayVersion: "2.52.0"
   # authOptions:
   #   mode: token

@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -356,6 +357,15 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 	return t, nil
 }
 
+// IsAuthEnabled returns whether Ray auth is enabled.
+func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
+}
+
+func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
+	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
+}
+
 // CheckName makes sure the name does not start with a numeric value and the total length is < 63 char
 func CheckName(s string) string {
 	maxLength := 50 // 63 - (max(8,6) + 5 ) // 6 to 8 char are consumed at the end with "-head-" or -worker- + 5 generated.
@@ -363,7 +373,7 @@ func CheckName(s string) string {
 	if len(s) > maxLength {
 		// shorten the name
 		offset := int(math.Abs(float64(maxLength) - float64(len(s))))
-		fmt.Printf("pod name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
+		logrus.Debugf("Name is too long: len = %v, we will shorten it by offset = %v", len(s), offset)
 		s = s[offset:]
 	}
 
@@ -374,7 +384,7 @@ func CheckName(s string) string {
 
 	// cannot start with a punctuation
 	if unicode.IsPunct(rune(s[0])) {
-		fmt.Println(s)
+		logrus.Debugf("Name starts with a punctuation: %s, we will prefix it with 'r'", s)
 		s = "r" + s[1:]
 	}
 

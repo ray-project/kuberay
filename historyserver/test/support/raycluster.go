@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -25,7 +24,7 @@ const (
 // adding the specified environment variables to the head pod.
 func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1.Namespace, envs map[string]string) *rayv1.RayCluster {
 	return applyRayClusterWithCollector(test, g, namespace, func(rayCluster *rayv1.RayCluster) {
-		headContainer := &rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[rayutils.RayContainerIndex]
+		headContainer := &rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
 		if len(headContainer.Env) == 0 {
 			headContainer.Env = []corev1.EnvVar{}
 		}
@@ -48,7 +47,7 @@ func ApplyRayClusterWithCollectorTokenAuth(test Test, g *WithT, namespace *corev
 		rayCluster.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeToken}
 
 		// reconcileAuthSecret generates this Secret when authOptions.secretName is unset.
-		secretName := rayutils.CheckName(rayCluster.Name)
+		secretName := utils.CheckName(rayCluster.Name)
 		injectCollectorAuthToken(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, secretName)
 		for wg := range rayCluster.Spec.WorkerGroupSpecs {
 			injectCollectorAuthToken(rayCluster.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, secretName)

@@ -144,8 +144,6 @@ export S3DISABLE_SSL=true
   --use-kubernetes-proxy=true
 ```
 
----
-
 ## API Endpoints
 
 ### Health Check

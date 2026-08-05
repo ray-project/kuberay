@@ -18,16 +18,14 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/emicklei/go-restful/v3"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -39,6 +37,7 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
+	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
 )
 
 // handleMissingSnapshot responds 503 when the session snapshot is not in the cache.
@@ -443,10 +442,37 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 
 	// Copy headers from original request to proxy request.
 	for key, values := range req.Request.Header {
-		if strings.ToLower(key) != "host" {
-			for _, value := range values {
-				// Use Add() to preserve multiple values for the same header key.
-				proxyReq.Header.Add(key, value)
+		if strings.EqualFold(key, "host") {
+			continue
+		}
+		// In auth-token mode, drop the client-supplied x-ray-authorization so it cannot bypass
+		// the server-managed token injected below.
+		if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+			continue
+		}
+		// Authorization has to be dropped in two cases. In auth-token mode, Ray only falls back to
+		// x-ray-authorization when Authorization is absent, so a forwarded value would win over the
+		// injected token. On the Kubernetes proxy path the header is addressed to the API server
+		// instead of Ray, and client-go's transport skips injecting the service account token when
+		// Authorization is already set, so forwarding it would make the proxied request fail
+		// authentication.
+		if (s.useAuthTokenMode || s.useKubernetesProxy) && strings.EqualFold(key, "authorization") {
+			continue
+		}
+		for _, value := range values {
+			// Use Add() to preserve multiple values for the same header key.
+			proxyReq.Header.Add(key, value)
+		}
+	}
+
+	// Add auth token header if auth token mode is enabled
+	if s.useAuthTokenMode {
+		// Get the auth token from request attribute (set by CookieHandle filter). An empty token means
+		// auth is disabled on the target cluster (the only case GetAuthTokenForRayCluster returns one),
+		// so no header is needed; auth-enabled clusters without a token fail before reaching here.
+		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
+			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
+				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}
@@ -1970,12 +1996,31 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, err := s.clientManager.GetSvcInfo(clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
 		}
 		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
+
+		// If auth token mode is enabled, fetch the auth token for this cluster
+		if s.useAuthTokenMode {
+			authToken, err := s.clientManager.GetAuthTokenForRayCluster(req.Request.Context(), clusterNamespace.Value, clusterName.Value)
+			if err != nil {
+				logrus.Errorf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
+				resp.WriteErrorString(
+					http.StatusInternalServerError,
+					fmt.Sprintf(
+						"failed to get auth token for cluster %s/%s: %v",
+						clusterNamespace.Value,
+						clusterName.Value,
+						err,
+					),
+				)
+				return
+			}
+			req.SetAttribute(ATTRIBUTE_AUTH_TOKEN, authToken)
+		}
 	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
@@ -1986,21 +2031,46 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
-	if len(clis) == 0 {
+// fetchSvcInfo retrieves the RayCluster and derives the head service routing info.
+func (c *ClientManager) fetchSvcInfo(name, namespace string) (ServiceInfo, error) {
+	if len(c.clients) == 0 {
 		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
-	cli := clis[0]
-	rc := rayv1.RayCluster{}
-	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
+
+	rc, err := c.GetRayCluster(context.Background(), namespace, name)
 	if err != nil {
-		return ServiceInfo{}, errors.New("RayCluster not found")
+		return ServiceInfo{}, err
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
 		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
+
+	return ServiceInfo{
+		ServiceName: svcName,
+		Namespace:   namespace,
+		Port:        getDashboardPort(&rc.Spec),
+	}, nil
+}
+
+// getDashboardPort resolves the dashboard port the ray-operator assigns to the head service,
+// which mirrors the dashboard port declared on the head container.
+//
+// Only the dashboard port is resolved here, because that is the only port the history server
+// proxies to. If other head service ports (e.g. client, serve, metrics) are needed later, copy
+// the relevant port-resolution code from the ray-operator into this package rather than
+// importing it, so the history server stays independent of the operator's internal packages:
+// https://github.com/ray-project/kuberay/blob/11de28835b73585091190b9b08c0d8bd5b84f779/ray-operator/controllers/ray/common/service.go#L402-L444
+func getDashboardPort(spec *rayv1.RayClusterSpec) int {
+	containers := spec.HeadGroupSpec.Template.Spec.Containers
+	if len(containers) > utils.RayContainerIndex {
+		for _, p := range containers[utils.RayContainerIndex].Ports {
+			if p.Name == utils.DashboardPortName {
+				return int(p.ContainerPort)
+			}
+		}
+	}
+	return utils.DefaultDashboardPort
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
