@@ -766,6 +766,24 @@ _Appears in:_
 | `value` _string_ |  |  |  |
 
 
+#### ScaleGate
+
+
+
+ScaleGate blocks a worker group from scaling up. It follows the shape of
+PodSchedulingGate: Name identifies the owner and is the merge key, so a gate is
+added and removed by exactly one controller.
+
+
+
+_Appears in:_
+- [ScaleStrategy](#scalestrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name uniquely identifies this gate and its owner. It must be a<br />domain-prefixed path such as "kueue.k8s.io/quota-exceeded". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
+
+
 #### ScaleStrategy
 
 
@@ -780,6 +798,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate blocks this worker group from scaling up while non-empty; the<br />Autoscaler then initiates fallback behavior. Kueue appends a gate named<br />"kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves<br />this field across reconciles but never reads or writes it.<br />Several controllers may gate the same group, so each gate is keyed by a<br />domain-prefixed name and a controller must add or remove only its own gates<br />via Server-Side Apply under a distinct field manager. Replacing the list<br />wholesale, or using read-modify-write Update, drops other owners' gates. |  |  |
 
 
 #### SubmitterConfig

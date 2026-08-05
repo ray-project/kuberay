@@ -5490,6 +5490,21 @@ spec:
                       type: object
                     scaleStrategy:
                       properties:
+                        scaleGate:
+                          items:
+                            properties:
+                              name:
+                                maxLength: 316
+                                minLength: 1
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
                         workersToDelete:
                           items:
                             type: string
