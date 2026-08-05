@@ -177,6 +177,7 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --config=./hack/config.yaml \
     --source-path=./apis/ray \
     --renderer=markdown \
+    --templates-dir=./hack/api-docs-templates \
     --output-path=../docs/reference/api.md
 
 certmanager:
