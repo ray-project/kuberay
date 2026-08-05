@@ -156,9 +156,8 @@ func main() {
 		}
 	}
 
-	// An unusable poll interval falls back to the default instead of exiting: the
-	// collector is a sidecar in the Ray head pod, so crash-looping on a bad
-	// observability knob would take the head out of its Service endpoints.
+	// Fall back instead of exiting: crash-looping this sidecar would take the head pod
+	// out of its Service endpoints.
 	endpointPollInterval := 30 * time.Second
 	if v := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); v != "" {
 		parsed, err := time.ParseDuration(v)
@@ -217,9 +216,7 @@ func main() {
 
 	sessionName := path.Base(activeSessionDir)
 
-	// The collector always runs as a sidecar in the Ray head pod, so the dashboard is
-	// reachable on localhost at Ray's default port. Only the head collector uses this.
-	// Override it when the dashboard listens on a non-default port.
+	// The head collector shares a pod with the dashboard; override for non-default ports.
 	dashboardAddress := "http://localhost:8265"
 	if v := os.Getenv("RAY_DASHBOARD_ADDRESS"); v != "" {
 		dashboardAddress = v

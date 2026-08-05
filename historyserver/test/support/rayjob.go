@@ -11,8 +11,7 @@ import (
 
 const (
 	rayJobManifestPath = "../../config/rayjob.yaml"
-	// rayDataManifestPath is self-contained: it brings up its own cluster, so the
-	// cluster name is only known from the RayJob status afterwards.
+	// Self-contained; the generated cluster name is only known from the RayJob status.
 	rayDataManifestPath = "../../config/ray-data.yaml"
 )
 
@@ -39,9 +38,8 @@ func ApplyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Name
 	return rayJob
 }
 
-// ApplyRayDataJobAndWaitForCompletion applies the self-contained Ray Data RayJob and
-// waits for it to succeed. The returned RayJob carries Status.RayClusterName, which is
-// the only way to learn the cluster name KubeRay generated.
+// ApplyRayDataJobAndWaitForCompletion applies the Ray Data RayJob and waits for success;
+// the returned Status.RayClusterName is the only way to learn the generated cluster name.
 func ApplyRayDataJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayJob {
 	rayJobFromYaml := DeserializeRayJobYAML(test, rayDataManifestPath)
 	rayJobFromYaml.Namespace = namespace.Name

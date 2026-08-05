@@ -86,15 +86,13 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
 		go r.FetchAndStoreTimezone()
-		go r.PollAdditionalEndpointsPeriodically()
+		go r.PollAdditionalEndpointsPeriodically(stop)
 	}
 
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
 
-	// The final endpoint poll races the Ray head's own shutdown: once the dashboard is
-	// gone the data is unrecoverable, while log files stay on local disk. Run it
-	// concurrently so it never queues behind a slow log upload.
+	// Endpoint data dies with the dashboard; log files stay on disk, so poll concurrently.
 	var wg sync.WaitGroup
 	if r.IsHead {
 		wg.Go(r.processAdditionalEndpoints)
@@ -102,7 +100,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	r.processSessionLatestLogs()
 	wg.Wait()
 
-	// Only now, because pollSingleEndpoint uses ShutdownChan to cancel in-flight requests.
+	// Only now: pollSingleEndpoint uses ShutdownChan to cancel in-flight requests.
 	close(r.ShutdownChan)
 
 	return nil

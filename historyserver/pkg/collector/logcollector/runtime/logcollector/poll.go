@@ -17,36 +17,24 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// These are polled periodically, unlike the one-shot startup endpoints in
-// startup_endpoints.go. Each string must match the frontend's request URI, query
-// string included: the history server derives the storage key from that URI, so a
-// mismatch silently makes the stored object unreachable.
+// Each string must match the frontend's request URI, query string included: the
+// storage key is derived from it, so a mismatch makes the stored object unreachable.
 const (
-	// Paths mirror the Ray Dashboard frontend: serve.ts, placementGroup.ts, data.ts.
 	serveApplicationsEndpoint = "/api/serve/applications/"
-
-	// detail=1 adds the bundle and stats fields PlacementGroupTable needs;
-	// limit=10000 matches the frontend default.
-	placementGroupsEndpoint = "/api/v0/placement_groups?detail=1&limit=10000"
-
-	// Only used to discover job IDs. Its response is not stored: the history
-	// server rebuilds the job list from Ray events.
+	placementGroupsEndpoint   = "/api/v0/placement_groups?detail=1&limit=10000"
+	// Only used to discover job IDs; its response is not stored.
 	jobsEndpoint = "/api/jobs/"
-
-	// Requested per job, where job_id is the Ray core job ID in hex (e.g.
-	// "01000000"), not the submission ID.
+	// Per job, where job_id is the hex core job ID (e.g. "01000000"), not the submission ID.
 	dataDatasetsEndpointPrefix = "/api/data/datasets/"
 )
 
-// dataDatasetsEndpointPrefix is absent here: it needs a job ID, so pollDataDatasets
-// handles it.
+// dataDatasetsEndpointPrefix needs a job ID, so pollDataDatasets handles it.
 var staticPolledEndpoints = []string{
 	serveApplicationsEndpoint,
 	placementGroupsEndpoint,
 }
 
-// polledEndpoints deduplicates so that listing a built-in endpoint in
-// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS does not fetch and store it twice per cycle.
+// polledEndpoints merges the built-in and configured endpoints, deduplicated.
 func (r *RayLogHandler) polledEndpoints() []string {
 	endpoints := make([]string, 0, len(staticPolledEndpoints)+len(r.AdditionalEndpoints))
 	seen := make(map[string]struct{}, cap(endpoints))
@@ -62,8 +50,7 @@ func (r *RayLogHandler) polledEndpoints() []string {
 	return endpoints
 }
 
-// terminalJobStatuses are the /api/jobs/ statuses a job never leaves, so its Ray
-// Data datasets only need to be stored once.
+// Statuses a job never leaves, so its datasets only need to be stored once.
 // Ref: https://github.com/ray-project/ray/blob/ray-2.54.1/python/ray/dashboard/modules/job/common.py#L38-L50
 var terminalJobStatuses = map[string]bool{
 	"SUCCEEDED": true,
@@ -71,8 +58,7 @@ var terminalJobStatuses = map[string]bool{
 	"STOPPED":   true,
 }
 
-// pollOutcome distinguishes "nothing worth storing" from "could not store", which
-// decides whether a terminal job is worth polling again.
+// pollOutcome distinguishes "nothing worth storing" from "could not store".
 type pollOutcome int
 
 const (
@@ -81,16 +67,13 @@ const (
 	pollSkippedEmpty
 )
 
-// A job's stats can appear slightly after it reports terminal, so giving up on the
-// first empty response would lose them permanently.
+// Stats can appear slightly after a job reports terminal, so one empty response is not final.
 const terminalEmptyPollsBeforeGivingUp = 2
 
-// The final poll shares the pod's termination grace period (30s by default) with the
-// log upload, so it gives up rather than risking a SIGKILL partway through.
+// The final poll shares the pod's termination grace period, so it gives up rather than overrun it.
 const shutdownPollBudget = 10 * time.Second
 
-// datasetPollState remembers across cycles which jobs no longer need their datasets
-// fetched. The polling loop owns it exclusively, so it needs no lock.
+// datasetPollState tracks jobs whose datasets no longer need fetching. Owned by one goroutine; no lock.
 type datasetPollState struct {
 	done      map[string]struct{}
 	emptyRuns map[string]int
@@ -103,13 +86,11 @@ func newDatasetPollState() *datasetPollState {
 	}
 }
 
-// PollAdditionalEndpointsPeriodically fetches the built-in endpoints, plus anything
-// from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer until shutdown. Each response
-// is stored at {ClusterDir}/{sessionName}/fetched_endpoints/{storageKey}, and each
-// cycle overwrites the previous one.
-func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
-	// Blocking resolve is fine here but not in the loop below: on startup there is
-	// nothing to poll until session_latest exists.
+// PollAdditionalEndpointsPeriodically fetches the built-in endpoints, plus anything from
+// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer; each cycle overwrites the previous one.
+// It stops on the shutdown signal, not ShutdownChan: ShutdownChan closes only after the
+// final shutdown poll, and a tick in between could overwrite that final snapshot.
+func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}) {
 	sessionName, err := r.resolveSessionName()
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for endpoint polling: %v", err)
@@ -118,16 +99,14 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
 	logrus.Infof("Starting endpoint polling (interval=%v, endpoints=%v)", r.EndpointPollInterval, r.polledEndpoints())
 
 	state := newDatasetPollState()
-
-	// Perform an initial poll immediately on startup.
-	r.pollAllEndpoints(context.Background(), sessionName, state)
+	r.pollAllEndpoints(context.Background(), sessionName, state, false)
 
 	ticker := time.NewTicker(r.EndpointPollInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.ShutdownChan:
+		case <-stop:
 			logrus.Info("Shutdown signaled, stopping endpoint polling")
 			return
 		case <-ticker.C:
@@ -136,12 +115,8 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
 	}
 }
 
-// pollCycle runs one polling pass, re-resolving the session first.
-//
-// The Ray head container can restart on its own (an OOMKill restarts that container, not
-// the pod), which starts a new session while this sidecar keeps running. Job IDs restart
-// with it, so a stale state would both write into the dead session's directory and skip
-// the new session's jobs as already captured.
+// pollCycle runs one polling pass, re-resolving the session first: the Ray head container
+// can restart alone, starting a new session (and new job IDs) while this sidecar lives on.
 func (r *RayLogHandler) pollCycle(ctx context.Context, sessionName string, state *datasetPollState) (string, *datasetPollState) {
 	switch current, err := currentSessionName(); {
 	case err != nil:
@@ -151,12 +126,11 @@ func (r *RayLogHandler) pollCycle(ctx context.Context, sessionName string, state
 		sessionName, state = current, newDatasetPollState()
 	}
 
-	r.pollAllEndpoints(ctx, sessionName, state)
+	r.pollAllEndpoints(ctx, sessionName, state, false)
 	return sessionName, state
 }
 
-// currentSessionName resolves session_latest without retrying, for callers that must not
-// block: the polling loop and the shutdown path.
+// currentSessionName resolves session_latest without retrying, for callers that must not block.
 func currentSessionName() (string, error) {
 	sessionRealDir, err := filepath.EvalSymlinks(utils.GetRaySessionLatestPath())
 	if err != nil {
@@ -165,13 +139,7 @@ func currentSessionName() (string, error) {
 	return filepath.Base(sessionRealDir), nil
 }
 
-// processAdditionalEndpoints performs a final poll of all polled endpoints
-// before shutdown. This mirrors processSessionLatestLogs as a shutdown cleanup step.
-//
-// Unlike PollAdditionalEndpointsPeriodically, this does NOT retry session name
-// resolution because it runs during shutdown — if session_latest is gone (e.g.,
-// Ray head already exited), retrying would hang forever since ShutdownChan has
-// not been closed yet.
+// processAdditionalEndpoints performs one final poll before shutdown.
 func (r *RayLogHandler) processAdditionalEndpoints() {
 	logrus.Info("Processing polled endpoints before shutdown")
 
@@ -181,33 +149,30 @@ func (r *RayLogHandler) processAdditionalEndpoints() {
 		return
 	}
 
-	// One budget for the whole pass, not per request: the endpoints are fetched
-	// serially, so per-request timeouts would add up past the grace period.
+	// One budget for the whole pass: serial per-request timeouts would add up past the grace period.
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownPollBudget)
 	defer cancel()
 
-	// Fresh state, so this final pass re-captures every job rather than trusting
-	// what the polling loop already stored.
-	r.pollAllEndpoints(ctx, sessionName, newDatasetPollState())
+	// Fresh state, so this final pass re-captures every job.
+	r.pollAllEndpoints(ctx, sessionName, newDatasetPollState(), true)
 	logrus.Info("Finished processing polled endpoints")
 }
 
-func (r *RayLogHandler) pollAllEndpoints(ctx context.Context, sessionName string, state *datasetPollState) {
+// finalPoll marks the shutdown pass, where an empty Serve response is distrusted.
+func (r *RayLogHandler) pollAllEndpoints(ctx context.Context, sessionName string, state *datasetPollState, finalPoll bool) {
 	for _, endpoint := range r.polledEndpoints() {
 		if ctx.Err() != nil {
 			logrus.Warnf("Stopped polling before %s: %v", endpoint, ctx.Err())
 			return
 		}
-		r.pollSingleEndpoint(ctx, endpoint, sessionName)
+		r.pollSingleEndpoint(ctx, endpoint, sessionName, finalPoll)
 	}
-	r.pollDataDatasets(ctx, sessionName, state)
+	r.pollDataDatasets(ctx, sessionName, state, finalPoll)
 }
 
 // pollDataDatasets stores one datasets object per job discovered via jobsEndpoint.
-// Terminal jobs are dropped from future cycles once settled: without that the
-// per-cycle cost would grow with the cluster's total job count forever, and each
-// datasets request also makes the dashboard query Prometheus.
-func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string, state *datasetPollState) {
+// Settled terminal jobs are skipped so the per-cycle cost does not grow with job count.
+func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string, state *datasetPollState, finalPoll bool) {
 	body, err := r.fetchEndpoint(ctx, jobsEndpoint)
 	if err != nil {
 		logrus.Warnf("Failed to fetch %s for dataset polling: %v", jobsEndpoint, err)
@@ -224,7 +189,6 @@ func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string
 	}
 
 	for i, job := range jobs {
-		// Bail out rather than letting every remaining job log its own failure.
 		if ctx.Err() != nil {
 			logrus.Warnf("Stopped dataset polling after %d/%d jobs: %v", i, len(jobs), ctx.Err())
 			return
@@ -237,7 +201,7 @@ func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string
 			continue
 		}
 
-		outcome := r.pollSingleEndpoint(ctx, dataDatasetsEndpointPrefix+job.JobID, sessionName)
+		outcome := r.pollSingleEndpoint(ctx, dataDatasetsEndpointPrefix+job.JobID, sessionName, finalPoll)
 		if !terminalJobStatuses[job.Status] {
 			continue
 		}
@@ -250,19 +214,19 @@ func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string
 				state.done[job.JobID] = struct{}{}
 			}
 		case pollFailed:
-			// Retry next cycle so a transient dashboard error does not lose datasets.
+			// Retried next cycle.
 		}
 	}
 }
 
-func (r *RayLogHandler) pollSingleEndpoint(ctx context.Context, endpoint, sessionName string) pollOutcome {
+func (r *RayLogHandler) pollSingleEndpoint(ctx context.Context, endpoint, sessionName string, finalPoll bool) pollOutcome {
 	body, err := r.fetchEndpoint(ctx, endpoint)
 	if err != nil {
 		logrus.Warnf("Failed to poll endpoint %s: %v", endpoint, err)
 		return pollFailed
 	}
 
-	if isEmptyPayload(endpoint, body) {
+	if isEmptyPayload(endpoint, body, finalPoll) {
 		logrus.Debugf("Skipping %s: nothing to store", endpoint)
 		return pollSkippedEmpty
 	}
@@ -279,24 +243,20 @@ func (r *RayLogHandler) pollSingleEndpoint(ctx context.Context, endpoint, sessio
 }
 
 // isEmptyPayload reports whether a response carries nothing worth storing.
-//
-// Overwriting a converged snapshot with an empty one is worse than not writing at all: a
-// Ray head that is shutting down answers 200 with an empty body, and on replay that is
-// indistinguishable from a cluster that never used the feature. The history server
-// already synthesizes empty responses for these paths, so skipping the write costs
-// nothing.
-func isEmptyPayload(endpoint string, body []byte) bool {
+// Datasets: empty can mean stats-actor eviction, so it never overwrites a snapshot.
+// Serve: empty from a healthy cluster is the live truth and is stored, but on the final
+// shutdown poll it usually means the Serve controller died before the dashboard.
+func isEmptyPayload(endpoint string, body []byte, finalPoll bool) bool {
 	switch {
 	case strings.HasPrefix(endpoint, dataDatasetsEndpointPrefix):
 		return !hasDatasets(body)
-	case endpoint == serveApplicationsEndpoint:
+	case finalPoll && endpoint == serveApplicationsEndpoint:
 		return !hasServeApplications(body)
 	default:
 		return false
 	}
 }
 
-// hasServeApplications reports whether a Serve response lists at least one application.
 // Unparsable bodies count as non-empty so unexpected shapes are stored, not dropped.
 func hasServeApplications(body []byte) bool {
 	var resp struct {
@@ -308,7 +268,6 @@ func hasServeApplications(body []byte) bool {
 	return len(resp.Applications) > 0
 }
 
-// hasDatasets reports whether a datasets response carries at least one dataset.
 // Unparsable bodies count as non-empty so unexpected shapes are stored, not dropped.
 func hasDatasets(body []byte) bool {
 	var resp struct {
@@ -320,8 +279,7 @@ func hasDatasets(body []byte) bool {
 	return len(resp.Datasets) > 0
 }
 
-// fetchEndpoint performs a single GET against the Ray Dashboard and returns the
-// response body. In-flight requests are canceled on shutdown.
+// fetchEndpoint GETs one dashboard endpoint; in-flight requests are canceled on shutdown.
 func (r *RayLogHandler) fetchEndpoint(parent context.Context, endpoint string) ([]byte, error) {
 	url := r.DashboardAddress + endpoint
 

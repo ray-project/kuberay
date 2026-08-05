@@ -1174,8 +1174,7 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 		})
 		return data
 	default:
-		// The collector stores nothing for a job that never used Ray Data, so replay
-		// must synthesize what a live dashboard returns instead of 404ing.
+		// Nothing is stored for a job that never used Ray Data; match the live dashboard.
 		if strings.HasPrefix(trimmed, "/api/data/datasets/") {
 			data, _ := json.Marshal(map[string]interface{}{
 				"datasets": []interface{}{},

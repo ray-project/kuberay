@@ -675,11 +675,8 @@ func readS3Object(g Gomega, s3Client *s3.S3, key string) []byte {
 	return body
 }
 
-// listFetchedEndpoints returns the keys of polled-endpoint objects whose storage key
-// starts with storageKeyPrefix, anywhere under clusterPrefix.
-//
-// Listing beats constructing the key: the session name sits between the two and would
-// otherwise have to be read from the head pod, which these fixtures delete on their own.
+// listFetchedEndpoints lists polled-endpoint objects by storage-key prefix. Listing beats
+// constructing the key: the session name would have to come from an already-deleted head pod.
 func listFetchedEndpoints(g Gomega, s3Client *s3.S3, clusterPrefix, storageKeyPrefix string) []string {
 	marker := "/" + utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME + "/"
 
@@ -701,10 +698,8 @@ func listFetchedEndpoints(g Gomega, s3Client *s3.S3, clusterPrefix, storageKeyPr
 	return keys
 }
 
-// enterClusterForOwner points the client's session cookie at a cluster owned by a RayJob
-// or RayService. setClusterContext cannot be reused: it hardcodes the raycluster kind,
-// and for the other two kinds enter_cluster takes the owner's name and resolves the
-// generated cluster name itself.
+// enterClusterForOwner sets the session cookie for a RayJob/RayService-owned cluster:
+// enter_cluster takes the owner's name and resolves the generated cluster name itself.
 func enterClusterForOwner(test Test, g *WithT, client *http.Client, historyServerURL, namespace, ownerKind, ownerName, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s/%s", historyServerURL, namespace, ownerKind, ownerName, session)
 	LogWithTimestamp(test.T(), "Setting cluster context: %s", enterURL)
@@ -730,24 +725,10 @@ func getHistoryServerJSON(g Gomega, client *http.Client, url string) []byte {
 	return body
 }
 
-// testCollectorStoresServeApplications verifies that the Head collector polls
-// /api/serve/applications/ and stores a snapshot in which the Serve app has actually
-// converged, not merely one that parses.
-//
-// Waiting for the object to exist is not a sufficient assertion: the collector writes
-// every cycle, so it will happily store a valid response taken while the app is still
-// DEPLOYING. The assertion therefore requires application status RUNNING and deployment
-// status HEALTHY inside the stored bytes.
-//
-// A RayService is used rather than a RayJob because Serve outlives the driver: the app
-// must still be reported once nothing is actively submitting work.
-//
-// The second half replays the dead cluster through the history server. Storing and
-// serving both derive the storage key with EndpointPathToStorageKey but from different
-// inputs — a constant in the collector, the live request URI in the server — so only a
-// round trip proves the two agree. A mismatch would not even surface as an error:
-// emptyResponseForEndpoint answers /api/serve/applications with {"applications": {}} and
-// HTTP 200, which the frontend renders as "Serve not started".
+// testCollectorStoresServeApplications verifies the collector stores a converged Serve
+// snapshot, then replays it through the history server after the RayService is deleted.
+// The round trip matters: collector and server derive the storage key from different
+// inputs, and a mismatch surfaces as a valid-but-empty 200, not an error.
 func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayService := ApplyRayServiceAndWaitForRunning(test, g, namespace)
 	clusterName := rayService.Status.ActiveServiceStatus.RayClusterName
@@ -782,9 +763,8 @@ func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1
 	DeleteS3Bucket(test, g, s3Client)
 }
 
-// assertServeAppConverged requires the snapshot to show the app actually running, not
-// merely to parse: the collector writes every cycle, so a response captured mid-deploy
-// is still valid JSON, and the history server's empty fallback is valid JSON too.
+// assertServeAppConverged requires RUNNING/HEALTHY: a mid-deploy snapshot and the empty
+// fallback are both valid JSON.
 func assertServeAppConverged(g Gomega, body []byte) {
 	var response struct {
 		Applications map[string]struct {
@@ -805,17 +785,9 @@ func assertServeAppConverged(g Gomega, body []byte) {
 	g.Expect(deployment.Status).To(Equal("HEALTHY"), "NoOp replica should be healthy")
 }
 
-// testCollectorStoresDataDatasets verifies that the Head collector discovers jobs via
-// /api/jobs/ and stores /api/data/datasets/{job_id} for the job that used Ray Data.
-//
-// The job ID is assigned by Ray, so the object is located by prefix rather than guessed.
-// Expecting exactly one object doubles as coverage for the empty-response rule: the
-// dashboard and agent register their own jobs, and jobs without datasets must not be
-// stored at all.
-//
-// The fixture sets shutdownAfterJobFinishes, so this also covers a cluster that tears
-// itself down: the stored objects have to survive the cluster that produced them, and
-// the history server then has to serve them back for the URI the frontend requests.
+// testCollectorStoresDataDatasets verifies per-job Ray Data snapshots: exactly one object
+// (jobs without datasets are never stored), surviving a self-shutdown cluster, and served
+// back by the history server for the URI the frontend requests.
 func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayJob := ApplyRayDataJobAndWaitForCompletion(test, g, namespace)
 	clusterName := rayJob.Status.RayClusterName
@@ -863,8 +835,7 @@ func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Name
 	DeleteS3Bucket(test, g, s3Client)
 }
 
-// assertDatasetsNonEmpty requires real Ray Data stats: an empty response is never
-// stored, so an empty one coming back means the object was not found.
+// assertDatasetsNonEmpty requires real stats: empty coming back means the object was missing.
 func assertDatasetsNonEmpty(g Gomega, body []byte) {
 	var response struct {
 		Datasets []json.RawMessage `json:"datasets"`

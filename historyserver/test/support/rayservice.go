@@ -10,13 +10,10 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-// rayServiceManifestPath is self-contained: it brings up its own cluster, so the
-// cluster name is only known from the RayService status afterwards.
+// Self-contained; the generated cluster name is only known from the RayService status.
 const rayServiceManifestPath = "../../config/rayservice.yaml"
 
-// ApplyRayServiceAndWaitForRunning applies the RayService and waits until Serve reports
-// it Running. The returned RayService carries Status.ActiveServiceStatus.RayClusterName,
-// which is the only way to learn the cluster name KubeRay generated.
+// ApplyRayServiceAndWaitForRunning applies the RayService and waits until it is Running.
 func ApplyRayServiceAndWaitForRunning(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayService {
 	rayServiceFromYaml := DeserializeRayServiceYAML(test, rayServiceManifestPath)
 	rayServiceFromYaml.Namespace = namespace.Name
@@ -40,8 +37,7 @@ func ApplyRayServiceAndWaitForRunning(test Test, g *WithT, namespace *corev1.Nam
 	return rayService
 }
 
-// DeleteRayServiceAndWait deletes a RayService and waits until its RayCluster is gone,
-// which is what turns the session from live into a replayable one.
+// DeleteRayServiceAndWait deletes a RayService and waits until its RayCluster is gone.
 func DeleteRayServiceAndWait(test Test, g *WithT, namespace, name, clusterName string) {
 	err := test.Client().Ray().RayV1().RayServices(namespace).Delete(test.Ctx(), name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())

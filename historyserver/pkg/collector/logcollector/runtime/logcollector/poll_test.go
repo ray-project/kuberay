@@ -11,14 +11,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// fakeDashboard stands in for the Ray Dashboard, recording every path requested
-// so tests can assert which endpoints the collector polled.
+// fakeDashboard stands in for the Ray Dashboard, recording every requested path.
 type fakeDashboard struct {
 	mu       sync.Mutex
 	requests []string
@@ -93,9 +93,7 @@ func writtenKeys(writer *MockStorageWriter) []string {
 	return keys
 }
 
-// TestPollDataDatasetsFansOutPerJob verifies that job IDs are discovered from
-// /api/jobs/, that blank IDs are skipped, and that each job with datasets gets
-// its own storage object keyed by the frontend's request URI.
+// TestPollDataDatasetsFansOutPerJob verifies per-job fan-out from /api/jobs/, skipping blank IDs.
 func TestPollDataDatasetsFansOutPerJob(t *testing.T) {
 	g := NewWithT(t)
 
@@ -113,7 +111,7 @@ func TestPollDataDatasetsFansOutPerJob(t *testing.T) {
 	srv := dash.start(t)
 	handler, writer := newPollTestHandler(t, srv.URL)
 
-	handler.pollDataDatasets(context.Background(), "session_1", newDatasetPollState())
+	handler.pollDataDatasets(context.Background(), "session_1", newDatasetPollState(), false)
 
 	// The blank job_id is skipped.
 	g.Expect(dash.requestsFor(dataDatasetsEndpointPrefix)).To(ConsistOf(
@@ -126,10 +124,8 @@ func TestPollDataDatasetsFansOutPerJob(t *testing.T) {
 	}))
 }
 
-// TestPollDataDatasetsSkipsEmptyResponse verifies that a job reporting no Ray
-// Data datasets does not get an object written. Most jobs never use Ray Data,
-// and storing the empty response would also let a stats-actor eviction replace
-// datasets that were captured earlier.
+// TestPollDataDatasetsSkipsEmptyResponse verifies an empty datasets response is never written,
+// so a stats-actor eviction cannot replace datasets captured earlier.
 func TestPollDataDatasetsSkipsEmptyResponse(t *testing.T) {
 	g := NewWithT(t)
 
@@ -141,15 +137,14 @@ func TestPollDataDatasetsSkipsEmptyResponse(t *testing.T) {
 	srv := dash.start(t)
 	handler, writer := newPollTestHandler(t, srv.URL)
 
-	handler.pollDataDatasets(context.Background(), "session_1", newDatasetPollState())
+	handler.pollDataDatasets(context.Background(), "session_1", newDatasetPollState(), false)
 
 	g.Expect(dash.requestsFor(dataDatasetsEndpointPrefix)).To(HaveLen(1))
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
-// TestPollDataDatasetsStopsPollingTerminalJobs verifies that a terminal job is
-// fetched once and then skipped, so the per-cycle cost does not grow with the
-// cluster's total job count, while a running job keeps being refreshed.
+// TestPollDataDatasetsStopsPollingTerminalJobs verifies a terminal job is fetched once
+// while a running job keeps being refreshed.
 func TestPollDataDatasetsStopsPollingTerminalJobs(t *testing.T) {
 	g := NewWithT(t)
 
@@ -167,9 +162,9 @@ func TestPollDataDatasetsStopsPollingTerminalJobs(t *testing.T) {
 	handler, _ := newPollTestHandler(t, srv.URL)
 
 	state := newDatasetPollState()
-	handler.pollDataDatasets(context.Background(), "session_1", state)
-	handler.pollDataDatasets(context.Background(), "session_1", state)
-	handler.pollDataDatasets(context.Background(), "session_1", state)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 
 	g.Expect(state.done).To(HaveKey("01000000"))
 	g.Expect(state.done).NotTo(HaveKey("02000000"))
@@ -178,9 +173,8 @@ func TestPollDataDatasetsStopsPollingTerminalJobs(t *testing.T) {
 	g.Expect(dash.requestsFor("/api/data/datasets/02000000")).To(HaveLen(3))
 }
 
-// TestPollDataDatasetsRetriesFailedTerminalJob verifies that a terminal job
-// whose fetch failed is retried on the next cycle rather than being marked
-// captured, so a transient dashboard error does not lose its datasets.
+// TestPollDataDatasetsRetriesFailedTerminalJob verifies a failed fetch is retried, so a
+// transient dashboard error does not lose a terminal job's datasets.
 func TestPollDataDatasetsRetriesFailedTerminalJob(t *testing.T) {
 	g := NewWithT(t)
 
@@ -206,20 +200,19 @@ func TestPollDataDatasetsRetriesFailedTerminalJob(t *testing.T) {
 	handler, writer := newPollTestHandler(t, srv.URL)
 
 	state := newDatasetPollState()
-	handler.pollDataDatasets(context.Background(), "session_1", state)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	g.Expect(state.done).To(BeEmpty())
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 
-	handler.pollDataDatasets(context.Background(), "session_1", state)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	g.Expect(state.done).To(HaveKey("01000000"))
 	g.Expect(writtenKeys(writer)).To(Equal([]string{
 		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__01000000",
 	}))
 }
 
-// TestPollDataDatasetsRetriesTerminalJobWithLateStats verifies a terminal job whose
-// first datasets response is empty is polled again, because Ray Data registers its
-// stats slightly after the job reports SUCCEEDED.
+// TestPollDataDatasetsRetriesTerminalJobWithLateStats verifies an empty first response is
+// polled again, because Ray Data registers stats slightly after the job reports SUCCEEDED.
 func TestPollDataDatasetsRetriesTerminalJobWithLateStats(t *testing.T) {
 	g := NewWithT(t)
 
@@ -245,19 +238,18 @@ func TestPollDataDatasetsRetriesTerminalJobWithLateStats(t *testing.T) {
 	handler, writer := newPollTestHandler(t, srv.URL)
 
 	state := newDatasetPollState()
-	handler.pollDataDatasets(context.Background(), "session_1", state)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	g.Expect(state.done).To(BeEmpty())
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 
-	handler.pollDataDatasets(context.Background(), "session_1", state)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	g.Expect(state.done).To(HaveKey("01000000"))
 	g.Expect(writtenKeys(writer)).To(Equal([]string{
 		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__01000000",
 	}))
 }
 
-// TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob verifies the retry above is
-// bounded, so jobs that never touch Ray Data stop costing a request every cycle.
+// TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob verifies the retry is bounded.
 func TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob(t *testing.T) {
 	g := NewWithT(t)
 
@@ -271,7 +263,7 @@ func TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob(t *testing.T) {
 
 	state := newDatasetPollState()
 	for i := 0; i < 4; i++ {
-		handler.pollDataDatasets(context.Background(), "session_1", state)
+		handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	}
 
 	g.Expect(state.done).To(HaveKey("01000000"))
@@ -279,9 +271,8 @@ func TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob(t *testing.T) {
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
-// TestPollAllEndpointsStoresStaticEndpoints verifies the built-in static
-// endpoints are polled with the exact URIs the dashboard frontend requests, so
-// the storage keys match what the history server looks up on replay.
+// TestPollAllEndpointsStoresStaticEndpoints verifies the built-in endpoints are stored under
+// the exact URIs the frontend requests.
 func TestPollAllEndpointsStoresStaticEndpoints(t *testing.T) {
 	g := NewWithT(t)
 
@@ -289,7 +280,7 @@ func TestPollAllEndpointsStoresStaticEndpoints(t *testing.T) {
 	srv := dash.start(t)
 	handler, writer := newPollTestHandler(t, srv.URL)
 
-	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState())
+	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), false)
 
 	g.Expect(dash.requestsFor("/api/serve/applications/")).To(HaveLen(1))
 	g.Expect(dash.requestsFor("/api/v0/placement_groups?detail=1&limit=10000")).To(HaveLen(1))
@@ -299,10 +290,8 @@ func TestPollAllEndpointsStoresStaticEndpoints(t *testing.T) {
 	}))
 }
 
-// TestPollCycleFollowsSessionChange verifies that a Ray head restart, which starts a new
-// session without restarting this sidecar, moves polling to the new session and resets
-// the dataset state. Job IDs restart with the session, so a stale state would write into
-// the dead session's directory and skip the new session's jobs as already captured.
+// TestPollCycleFollowsSessionChange verifies a Ray head restart moves polling to the new
+// session and resets state, since job IDs restart with the session.
 func TestPollCycleFollowsSessionChange(t *testing.T) {
 	g := NewWithT(t)
 
@@ -340,9 +329,34 @@ func TestPollCycleFollowsSessionChange(t *testing.T) {
 	))
 }
 
-// TestPollAllEndpointsStopsWhenContextExpires verifies the shutdown budget bounds the
-// whole pass. Without it, an unresponsive dashboard would cost one request timeout per
-// endpoint and per job on the way out, overrunning the pod's grace period.
+// TestPeriodicPollingStopsOnShutdownSignal verifies the loop exits on the shutdown signal,
+// not ShutdownChan, so no tick can overwrite the final shutdown snapshot.
+func TestPeriodicPollingStopsOnShutdownSignal(t *testing.T) {
+	g := NewWithT(t)
+
+	tmpRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", tmpRoot)
+	g.Expect(os.MkdirAll(filepath.Join(tmpRoot, "session_1"), 0o755)).To(Succeed())
+	g.Expect(os.Symlink(filepath.Join(tmpRoot, "session_1"), filepath.Join(tmpRoot, "session_latest"))).To(Succeed())
+
+	dash := &fakeDashboard{jobs: `[]`}
+	srv := dash.start(t)
+	handler, _ := newPollTestHandler(t, srv.URL)
+	handler.EndpointPollInterval = time.Hour
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		handler.PollAdditionalEndpointsPeriodically(stop)
+		close(done)
+	}()
+
+	// ShutdownChan stays open; the stop signal alone must end the loop.
+	close(stop)
+	g.Eventually(done).Should(BeClosed())
+}
+
+// TestPollAllEndpointsStopsWhenContextExpires verifies the shutdown budget bounds the whole pass.
 func TestPollAllEndpointsStopsWhenContextExpires(t *testing.T) {
 	g := NewWithT(t)
 
@@ -353,15 +367,14 @@ func TestPollAllEndpointsStopsWhenContextExpires(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	handler.pollAllEndpoints(ctx, "session_1", newDatasetPollState())
+	handler.pollAllEndpoints(ctx, "session_1", newDatasetPollState(), false)
 
 	g.Expect(dash.requestsFor("/")).To(BeEmpty())
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
-// TestPolledEndpointsAppendsConfiguredOnes verifies RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-// adds to the built-in set rather than replacing it, and that repeating a
-// built-in endpoint does not make it fetched twice per cycle.
+// TestPolledEndpointsAppendsConfiguredOnes verifies RAY_COLLECTOR_ADDITIONAL_ENDPOINTS adds
+// to the built-in set, deduplicated.
 func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	g := NewWithT(t)
 
@@ -386,8 +399,7 @@ func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	}))
 }
 
-// TestPollAllEndpointsStoresConfiguredEndpoint verifies a configured endpoint is
-// actually fetched and stored alongside the built-in ones.
+// TestPollAllEndpointsStoresConfiguredEndpoint verifies a configured endpoint is stored too.
 func TestPollAllEndpointsStoresConfiguredEndpoint(t *testing.T) {
 	g := NewWithT(t)
 
@@ -396,7 +408,7 @@ func TestPollAllEndpointsStoresConfiguredEndpoint(t *testing.T) {
 	handler, writer := newPollTestHandler(t, srv.URL)
 	handler.AdditionalEndpoints = []string{"/nodes?view=summary"}
 
-	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState())
+	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), false)
 
 	g.Expect(dash.requestsFor("/nodes?view=summary")).To(HaveLen(1))
 	g.Expect(writtenKeys(writer)).To(ContainElement(
@@ -404,15 +416,13 @@ func TestPollAllEndpointsStoresConfiguredEndpoint(t *testing.T) {
 	g.Expect(writtenKeys(writer)).To(HaveLen(3))
 }
 
-// TestPollAllEndpointsKeepsConvergedServeSnapshot verifies an empty Serve response never
-// replaces a converged one. A Ray head that is shutting down still answers 200 with no
-// applications, and the shutdown pass writes to the same storage key, so without this the
-// last thing written before deletion would wipe the snapshot the replay depends on.
-func TestPollAllEndpointsKeepsConvergedServeSnapshot(t *testing.T) {
+// TestServeSnapshotFollowsLiveButSurvivesShutdown verifies a periodic poll mirrors the live
+// cluster (empty included) while the final shutdown poll cannot erase a converged snapshot.
+func TestServeSnapshotFollowsLiveButSurvivesShutdown(t *testing.T) {
 	g := NewWithT(t)
 
 	var mu sync.Mutex
-	converged := true
+	serveBody := `{"applications": {"app": {"status": "RUNNING"}}}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == jobsEndpoint {
 			_, _ = w.Write([]byte(`[]`))
@@ -420,37 +430,37 @@ func TestPollAllEndpointsKeepsConvergedServeSnapshot(t *testing.T) {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		if converged {
-			_, _ = w.Write([]byte(`{"applications": {"app": {"status": "RUNNING"}}}`))
-			return
-		}
-		_, _ = w.Write([]byte(`{"applications": {}}`))
+		_, _ = w.Write([]byte(serveBody))
 	}))
 	t.Cleanup(srv.Close)
 
 	handler, writer := newPollTestHandler(t, srv.URL)
 	serveKey := "cluster-dir/session_1/fetched_endpoints/" +
 		utils.EndpointPathToStorageKey(serveApplicationsEndpoint)
+	storedServe := func() string {
+		writer.mu.Lock()
+		defer writer.mu.Unlock()
+		return writer.writtenFiles[serveKey]
+	}
+	setServeBody := func(body string) {
+		mu.Lock()
+		defer mu.Unlock()
+		serveBody = body
+	}
 
-	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState())
-	writer.mu.Lock()
-	stored := writer.writtenFiles[serveKey]
-	writer.mu.Unlock()
-	g.Expect(stored).To(ContainSubstring("RUNNING"))
+	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), false)
+	g.Expect(storedServe()).To(ContainSubstring("RUNNING"))
 
-	// The Serve controller stops before the dashboard does, so the next poll sees nothing.
-	mu.Lock()
-	converged = false
-	mu.Unlock()
-	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState())
+	// A final poll must not erase the converged snapshot with a dying dashboard's answer.
+	setServeBody(`{"applications": {}}`)
+	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), true)
+	g.Expect(storedServe()).To(ContainSubstring("RUNNING"))
 
-	writer.mu.Lock()
-	defer writer.mu.Unlock()
-	g.Expect(writer.writtenFiles[serveKey]).To(Equal(stored), "the converged snapshot must survive")
+	// A periodic poll mirrors the live cluster, empty included.
+	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), false)
+	g.Expect(storedServe()).To(Equal(`{"applications": {}}`))
 }
 
-// TestHasServeApplications covers the guard that decides whether a Serve response is
-// worth storing, including the deliberate choice to store unparsable bodies.
 func TestHasServeApplications(t *testing.T) {
 	g := NewWithT(t)
 
@@ -461,19 +471,19 @@ func TestHasServeApplications(t *testing.T) {
 	g.Expect(hasServeApplications([]byte(`not json`))).To(BeTrue())
 }
 
-// TestIsEmptyPayloadOnlyGuardsKnownEndpoints verifies the guard never suppresses an
-// endpoint it does not understand, which would silently stop storing it.
+// TestIsEmptyPayloadOnlyGuardsKnownEndpoints verifies the guard never suppresses endpoints it
+// does not understand.
 func TestIsEmptyPayloadOnlyGuardsKnownEndpoints(t *testing.T) {
 	g := NewWithT(t)
 
-	g.Expect(isEmptyPayload(serveApplicationsEndpoint, []byte(`{"applications": {}}`))).To(BeTrue())
-	g.Expect(isEmptyPayload(dataDatasetsEndpointPrefix+"01000000", []byte(`{"datasets": []}`))).To(BeTrue())
-	g.Expect(isEmptyPayload(placementGroupsEndpoint, []byte(`{}`))).To(BeFalse())
-	g.Expect(isEmptyPayload("/nodes?view=summary", []byte(`{}`))).To(BeFalse())
+	// Serve is guarded only on the final shutdown poll; datasets always.
+	g.Expect(isEmptyPayload(serveApplicationsEndpoint, []byte(`{"applications": {}}`), true)).To(BeTrue())
+	g.Expect(isEmptyPayload(serveApplicationsEndpoint, []byte(`{"applications": {}}`), false)).To(BeFalse())
+	g.Expect(isEmptyPayload(dataDatasetsEndpointPrefix+"01000000", []byte(`{"datasets": []}`), false)).To(BeTrue())
+	g.Expect(isEmptyPayload(placementGroupsEndpoint, []byte(`{}`), true)).To(BeFalse())
+	g.Expect(isEmptyPayload("/nodes?view=summary", []byte(`{}`), true)).To(BeFalse())
 }
 
-// TestHasDatasets covers the guard that decides whether a datasets response is
-// worth storing, including the deliberate choice to store unparsable bodies.
 func TestHasDatasets(t *testing.T) {
 	g := NewWithT(t)
 
@@ -484,8 +494,7 @@ func TestHasDatasets(t *testing.T) {
 	g.Expect(hasDatasets([]byte(`not json`))).To(BeTrue())
 }
 
-// TestTerminalJobStatusesMatchRay guards the status strings against drift from
-// Ray's JobStatus enum, which is what /api/jobs/ serializes.
+// TestTerminalJobStatusesMatchRay guards against drift from Ray's JobStatus enum.
 func TestTerminalJobStatusesMatchRay(t *testing.T) {
 	g := NewWithT(t)
 
@@ -497,8 +506,7 @@ func TestTerminalJobStatusesMatchRay(t *testing.T) {
 	}
 }
 
-// TestFakeDashboardJobsShapeMatchesRay documents the /api/jobs/ fields the
-// collector depends on, so a Ray-side rename shows up as a decode failure here.
+// TestFakeDashboardJobsShapeMatchesRay documents the /api/jobs/ fields the collector depends on.
 func TestFakeDashboardJobsShapeMatchesRay(t *testing.T) {
 	g := NewWithT(t)
 

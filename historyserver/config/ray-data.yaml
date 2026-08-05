@@ -3,26 +3,21 @@ kind: RayJob
 metadata:
   name: rayjob-ray-data
 spec:
-  # Self-contained: this RayJob brings up its own cluster instead of attaching to an
-  # existing one via clusterSelector, so it also exercises the collector's shutdown path.
+  # Self-contained: brings up its own cluster; also exercises the collector's shutdown path.
   shutdownAfterJobFinishes: true
-  # Keeps the cluster alive long enough for at least one polling cycle after the job
-  # succeeds. Without it the cluster is deleted immediately and the datasets would only
-  # be captured by the collector's best-effort final poll during shutdown.
+  # Long enough for one polling cycle after the job succeeds.
   ttlSecondsAfterFinished: 30
   entrypoint: |
     python -c "
     import ray
     ray.init()
 
-    # materialize() is required: an unexecuted Dataset produces no stats, so
-    # /api/data/datasets/{job_id} would stay empty.
+    # materialize() is required: an unexecuted Dataset produces no stats.
     ds = ray.data.range(100).map_batches(lambda batch: batch).materialize()
     print(f'Dataset rows: {ds.count()}')
     "
   rayClusterSpec:
-    # Head-only on purpose: worker collectors need the head Service FQDN in FQ_RAY_IP,
-    # which cannot be written here because KubeRay generates the cluster name.
+    # Head-only: worker collectors would need the generated head Service FQDN in FQ_RAY_IP.
     headGroupSpec:
       rayStartParams:
         dashboard-host: 0.0.0.0
@@ -69,8 +64,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            # KubeRay generates the cluster name, so these are read back from the labels
-            # it stamps on the pod rather than hardcoded.
+            # KubeRay generates the cluster name; read it back from the pod label.
             - name: RAY_CLUSTER_NAME
               valueFrom:
                 fieldRef:
@@ -79,21 +73,17 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            # Hardcoded, unlike the cluster name: KubeRay puts ray.io/originated-from-*
-            # on the RayCluster but not on the pod, so the downward API cannot read them.
-            # Must match metadata.name above.
+            # ray.io/originated-from-* labels are on the RayCluster, not the pod; must match metadata.name.
             - name: OWNER_KIND
               value: "RayJob"
             - name: OWNER_NAME
               value: "rayjob-ray-data"
-            # Only used to look up this pod's Ray NodeID, and the dashboard is in this
-            # same pod. A worker collector would need the head Service FQDN instead.
+            # Only used to look up this pod's Ray NodeID; the dashboard is in this pod.
             - name: FQ_RAY_IP
               value: "localhost"
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
-            # Shorter than the 30s default so a full cycle fits inside
-            # ttlSecondsAfterFinished above.
+            # Shorter than the 30s default so a cycle fits inside ttlSecondsAfterFinished.
             - name: RAY_COLLECTOR_POLL_INTERVAL
               value: "5s"
             - name: S3DISABLE_SSL
