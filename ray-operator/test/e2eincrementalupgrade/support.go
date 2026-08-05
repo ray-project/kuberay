@@ -109,6 +109,9 @@ func bootstrapIncrementalRayService(
 	gatewayHost = GetGatewayHost(gateway)
 	g.Expect(gatewayHost).NotTo(BeEmpty())
 
+	rayService, err = GetRayService(test, namespace, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+
 	return
 }
 
