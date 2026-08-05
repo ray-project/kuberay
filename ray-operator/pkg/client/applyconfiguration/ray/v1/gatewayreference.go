@@ -10,6 +10,10 @@ package v1
 // pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
 // so it does not act as a catch-all that collides with other HTTPRoutes on a shared
 // Gateway that KubeRay does not otherwise configure.
+//
+// The referenced Gateway must already exist and must allow HTTPRoutes from the
+// RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
+// updates, or deletes the referenced Gateway.
 type GatewayReferenceApplyConfiguration struct {
 	// Name of the existing Gateway. Must be a valid Gateway resource name
 	// (an RFC 1123 subdomain).
