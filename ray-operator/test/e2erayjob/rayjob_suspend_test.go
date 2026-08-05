@@ -72,7 +72,7 @@ func TestRayJobSuspend(t *testing.T) {
 			LabelSelector("job-name="+rayJob.Name)), TestTimeoutMedium).
 			Should(BeEmpty())
 
-		// Assert all Services owned by the RayCluster (head Service, serve Service) have been deleted.
+		// Assert all Services owned by the RayCluster have been deleted.
 		g.Eventually(func(gg Gomega) {
 			svcList, err := test.Client().Core().CoreV1().Services(namespace.Name).List(test.Ctx(), metav1.ListOptions{
 				LabelSelector: utils.RayClusterLabelKey + "=" + clusterName,
