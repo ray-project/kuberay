@@ -189,6 +189,10 @@ spec:
 | featureGates[6].enabled | bool | `false` |  |
 | featureGates[7].name | string | `"RayClusterHistoryServer"` |  |
 | featureGates[7].enabled | bool | `false` |  |
+| eventForwarder.enabled | bool | `false` | Whether KubeRay operator should forward Kubernetes Node events to Ray custom resources. |
+| eventForwarder.sources | list | `[]` | Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources. |
+| eventForwarder.reasons | list | `[]` | Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons. |
+| eventForwarder.types | list | `[]` | Only forward Node events with these types. Valid values are "Warning" and "Normal". The operator refuses to start on any other value. Empty defaults to "Warning" only. |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

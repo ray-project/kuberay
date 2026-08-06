@@ -132,6 +132,16 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- end }}
 {{- end }}
 
+{{- /* Create the name of the event forwarder cluster role to use. */ -}}
+{{- define "kuberay-operator.eventForwarderClusterRole.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-event-forwarder
+{{- end -}}
+
+{{- /* Create the name of the event forwarder cluster role binding to use. */ -}}
+{{- define "kuberay-operator.eventForwarderClusterRoleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-event-forwarder
+{{- end -}}
+
 {{- /* Create the name of the leader election role to use. */ -}}
 {{- define "kuberay-operator.leaderElectionRole.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-leader-election
@@ -147,6 +157,14 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - ""
   resources:
