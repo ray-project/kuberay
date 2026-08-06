@@ -36,6 +36,8 @@ spec:
               value: "http://localhost:8084/v1/events"
             - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
               value: "ALL"
+            - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+              value: "ALL"
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             securityContext:
@@ -55,8 +57,8 @@ spec:
             - name: code-sample
               mountPath: /home/ray/samples
           - name: collector
-            image: collector:v0.1.0
-            imagePullPolicy: IfNotPresent
+            image: quay.io/kuberay/collector:nightly
+            imagePullPolicy: Always
             env:
             - name: RAY_CLUSTER_NAME
               valueFrom:
@@ -100,9 +102,13 @@ spec:
             - name: RAY_ROLE
               value: "Head"
             - name: OWNER_KIND
-              value: "RayJob"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ray.io/originated-from-crd']
             - name: OWNER_NAME
-              value: "rayjob-historyserver-gcs"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR
@@ -150,6 +156,8 @@ spec:
               value: "http://localhost:8084/v1/events"
             - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
               value: "ALL"
+            - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+              value: "ALL"
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             name: ray-worker
@@ -167,8 +175,8 @@ spec:
             - name: historyserver
               mountPath: *rayTmpRoot
           - name: collector
-            image: collector:v0.1.0
-            imagePullPolicy: IfNotPresent
+            image: quay.io/kuberay/collector:nightly
+            imagePullPolicy: Always
             env:
             - name: RAY_CLUSTER_NAME
               valueFrom:
@@ -191,9 +199,13 @@ spec:
             - name: RAY_ROLE
               value: "Worker"
             - name: OWNER_KIND
-              value: "RayJob"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ray.io/originated-from-crd']
             - name: OWNER_NAME
-              value: "rayjob-historyserver-gcs"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR
