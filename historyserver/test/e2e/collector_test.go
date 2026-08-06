@@ -443,8 +443,8 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 }
 
 // testCollectorStoresPlacementGroups verifies the collector stores the placement_groups
-// snapshot, then replays it through the history server after the RayCluster is deleted.
-// The RayJob creates a detached placement group so the PG outlives the job itself.
+// snapshot; the RayJob creates a detached placement group so the PG outlives the job.
+// The history-server replay of this endpoint is covered by testDeadClusterPlacementGroups.
 func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
@@ -460,23 +460,6 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 	g.Eventually(func(gg Gomega) {
 		assertPlacementGroupsNonEmpty(gg, readS3Object(gg, s3Client, pgKey))
 	}, TestTimeoutMedium).Should(Succeed())
-
-	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
-
-	ApplyHistoryServer(test, g, namespace, "")
-	historyServerURL := GetHistoryServerURL(test, g, namespace)
-	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
-	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
-
-	client := CreateHTTPClientWithCookieJar(g)
-	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
-		utils.RayClusterKind, rayCluster.Name, rayCluster.Name, clusterInfo.SessionName)
-
-	LogWithTimestamp(test.T(), "Replaying /api/v0/placement_groups through the history server")
-	g.Eventually(func(gg Gomega) {
-		assertPlacementGroupsNonEmpty(gg, getHistoryServerJSON(gg, client,
-			historyServerURL+"/api/v0/placement_groups?detail=1&limit=10000"))
-	}, TestTimeoutShort).Should(Succeed())
 
 	DeleteS3Bucket(test, g, s3Client)
 }

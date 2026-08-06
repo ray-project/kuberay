@@ -73,6 +73,10 @@ const terminalEmptyPollsBeforeGivingUp = 2
 // The final poll shares the pod's termination grace period, so it gives up rather than overrun it.
 const shutdownPollBudget = 10 * time.Second
 
+// Caps the shutdown join on the periodic poller: a storage write in flight is not
+// cancelable, and waiting it out could eat the grace period the final poll needs.
+const periodicPollJoinTimeout = 5 * time.Second
+
 // datasetPollState tracks jobs whose datasets no longer need fetching. Owned by one goroutine; no lock.
 type datasetPollState struct {
 	done      map[string]struct{}
@@ -258,6 +262,11 @@ func (r *RayLogHandler) pollSingleEndpoint(ctx context.Context, endpoint, sessio
 	if isEmptyPayload(endpoint, body, finalPoll) {
 		logrus.Debugf("Skipping %s: nothing to store", endpoint)
 		return pollSkippedEmpty
+	}
+
+	// A canceled ctx means shutdown started: the final poll owns the store from here.
+	if ctx.Err() != nil {
+		return pollFailed
 	}
 
 	storageKey := utils.EndpointPathToStorageKey(endpoint)

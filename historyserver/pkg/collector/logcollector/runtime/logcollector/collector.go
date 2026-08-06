@@ -101,7 +101,11 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	var wg sync.WaitGroup
 	if r.IsHead {
 		// Join the periodic poller first so a half-finished cycle cannot outlive the final poll.
-		<-periodicPollDone
+		select {
+		case <-periodicPollDone:
+		case <-time.After(periodicPollJoinTimeout):
+			logrus.Warn("Periodic endpoint poller still busy, starting the final poll anyway")
+		}
 		wg.Go(r.processAdditionalEndpoints)
 	}
 	r.processSessionLatestLogs()
