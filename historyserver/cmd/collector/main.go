@@ -34,7 +34,9 @@ func main() {
 	pushInterval := time.Minute
 	ownerKind := ""
 	ownerName := ""
-	runtimeClassConfigPath := "/var/collector-config/data"
+	enableEventCollector := true
+	enableLogCollector := true
+	runtimeClassConfigPath := ""
 
 	// Event collector disk-first storage flags.
 	eventDataDir := "/tmp/ray/event-data"
@@ -43,14 +45,16 @@ func main() {
 	eventMaxDiskMB := 200
 	eventCompressionEnabled := false
 
-	flag.StringVar(&role, "role", "Worker", "")
+	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "Enable event collector")
+	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "Enable log collector")
+	flag.StringVar(&role, "role", "Worker", "Role of the collector node: Head or Worker")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
@@ -96,8 +100,21 @@ func main() {
 			pushInterval = interval
 		}
 	}
+	if val := os.Getenv("ENABLE_EVENT_COLLECTOR"); val != "" {
+		if enabled, err := strconv.ParseBool(val); err == nil {
+			enableEventCollector = enabled
+		}
+	}
+	if val := os.Getenv("ENABLE_LOG_COLLECTOR"); val != "" {
+		if enabled, err := strconv.ParseBool(val); err == nil {
+			enableLogCollector = enabled
+		}
+	}
+	if val := os.Getenv("RUNTIME_CLASS_CONFIG_PATH"); val != "" {
+		runtimeClassConfigPath = val
+	}
+
 	role = strings.TrimSpace(role)
-	// Check incase users manually set role env var
 	if strings.EqualFold(role, "head") {
 		role = "Head"
 	} else if strings.EqualFold(role, "worker") {
@@ -106,7 +123,7 @@ func main() {
 		logrus.Fatalf("Invalid role: %s, must be Head or Worker", role)
 	}
 
-	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
+	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, enableEventCollector, enableLogCollector); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
 	}
 
@@ -204,8 +221,10 @@ func main() {
 		logrus.Fatalf("Failed to get active session dir after discovering node id: %v", err)
 	}
 
-	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
-		logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+	if enableLogCollector {
+		if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
+			logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+		}
 	}
 
 	sessionName := path.Base(activeSessionDir)
@@ -245,28 +264,32 @@ func main() {
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	wg.Add(1)
-	// Create and initialize EventCollector
-	go func() {
-		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
-			DataDir:            eventDataDir,
-			RotationInterval:   eventRotationInterval,
-			MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
-			MaxDiskBytes:       int64(eventMaxDiskMB) * 1024 * 1024,
-			CompressionEnabled: eventCompressionEnabled,
-		})
-		eventCollector.Run(stop, eventsPort)
-		logrus.Info("Event collector shutdown")
-	}()
+	if enableEventCollector {
+		wg.Add(1)
+		// Create and initialize EventCollector
+		go func() {
+			defer wg.Done()
+			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
+				DataDir:            eventDataDir,
+				RotationInterval:   eventRotationInterval,
+				MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
+				MaxDiskBytes:       int64(eventMaxDiskMB) * 1024 * 1024,
+				CompressionEnabled: eventCompressionEnabled,
+			})
+			eventCollector.Run(stop, eventsPort)
+			logrus.Info("Event collector shutdown")
+		}()
+	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logCollector := runtime.NewCollector(&globalConfig, writer)
-		logCollector.Run(stop)
-		logrus.Info("Log collector shutdown")
-	}()
+	if enableLogCollector {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			logCollector := runtime.NewCollector(&globalConfig, writer)
+			logCollector.Run(stop)
+			logrus.Info("Log collector shutdown")
+		}()
+	}
 
 	<-sigChan
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
@@ -279,7 +302,10 @@ func main() {
 	logrus.Info("Graceful shutdown complete")
 }
 
-func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string) error {
+func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector bool) error {
+	if !enableEventCollector && !enableLogCollector {
+		return fmt.Errorf("at least one of --enable-event-collector or --enable-log-collector must be enabled")
+	}
 	*rayClusterName = strings.TrimSpace(*rayClusterName)
 	*rayClusterNamespace = strings.TrimSpace(*rayClusterNamespace)
 
