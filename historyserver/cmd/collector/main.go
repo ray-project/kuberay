@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -177,14 +176,10 @@ func main() {
 	// out of its Service endpoints.
 	endpointPollInterval := 30 * time.Second
 	if v := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); v != "" {
-		parsed, err := time.ParseDuration(v)
-		if err == nil && parsed <= 0 {
-			err = errors.New("must be positive")
-		}
-		if err != nil {
-			logrus.Warnf("Invalid RAY_COLLECTOR_POLL_INTERVAL=%s (%v), using default %s", v, err, endpointPollInterval)
-		} else {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
 			endpointPollInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_POLL_INTERVAL=%s, using default %s", v, endpointPollInterval)
 		}
 	}
 

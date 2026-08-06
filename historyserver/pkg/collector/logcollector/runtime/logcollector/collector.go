@@ -87,6 +87,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
 		go r.FetchAndStoreTimezone()
+		// Driven by stop rather than ShutdownChan, which closes only after the final
+		// poll below: a tick in between would overwrite that final snapshot.
 		periodicPollDone = make(chan struct{})
 		go func() {
 			defer close(periodicPollDone)

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,16 +37,15 @@ var staticPolledEndpoints = []string{
 
 // polledEndpoints merges the built-in and configured endpoints, deduplicated.
 func (r *RayLogHandler) polledEndpoints() []string {
-	endpoints := make([]string, 0, len(staticPolledEndpoints)+len(r.AdditionalEndpoints))
-	seen := make(map[string]struct{}, cap(endpoints))
-	for _, list := range [][]string{staticPolledEndpoints, r.AdditionalEndpoints} {
-		for _, endpoint := range list {
-			if _, ok := seen[endpoint]; ok {
-				continue
-			}
-			seen[endpoint] = struct{}{}
-			endpoints = append(endpoints, endpoint)
+	all := slices.Concat(staticPolledEndpoints, r.AdditionalEndpoints)
+	endpoints := make([]string, 0, len(all))
+	seen := make(map[string]struct{}, len(all))
+	for _, endpoint := range all {
+		if _, ok := seen[endpoint]; ok {
+			continue
 		}
+		seen[endpoint] = struct{}{}
+		endpoints = append(endpoints, endpoint)
 	}
 	return endpoints
 }
@@ -92,10 +92,7 @@ func newDatasetPollState() *datasetPollState {
 
 // PollAdditionalEndpointsPeriodically fetches the built-in endpoints, plus anything from
 // RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer; each cycle overwrites the previous one.
-// It stops on the shutdown signal, not ShutdownChan: ShutdownChan closes only after the
-// final shutdown poll, and a tick in between could overwrite that final snapshot.
-// Run joins this goroutine before that final poll, so the ctx cancels at stop to keep a
-// blocked resolve or in-flight cycle from stalling shutdown.
+// It stops when stop closes and cancels any blocked resolve or in-flight request at that point.
 func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -191,7 +188,9 @@ func (r *RayLogHandler) processAdditionalEndpoints() {
 	logrus.Info("Finished processing polled endpoints")
 }
 
-// finalPoll marks the shutdown pass, where an empty Serve response is distrusted.
+// pollAllEndpoints fetches the polled endpoints plus per-job dataset endpoints and stores
+// their responses, stopping early once ctx is canceled.
+// finalPoll marks the shutdown pass, which distrusts empty Serve responses (see isEmptyPayload).
 func (r *RayLogHandler) pollAllEndpoints(ctx context.Context, sessionName string, state *datasetPollState, finalPoll bool) {
 	for _, endpoint := range r.polledEndpoints() {
 		if ctx.Err() != nil {
