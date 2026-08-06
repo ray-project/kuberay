@@ -58,10 +58,8 @@ func main() {
 		rayRootDir = val
 	}
 
-	if rayRootDir == "" {
-		if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
-			rayRootDir = val
-		}
+	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
+		rayRootDir = val
 	}
 
 	if qps <= 0 {
