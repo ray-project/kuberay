@@ -63,7 +63,7 @@ spec:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: RAY_ROLE
@@ -77,8 +77,6 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
-          command:
-          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -147,7 +145,7 @@ spec:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: RAY_ROLE
@@ -161,8 +159,6 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
-          command:
-          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot

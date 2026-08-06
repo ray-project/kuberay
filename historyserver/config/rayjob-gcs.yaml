@@ -62,12 +62,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['ray.io/cluster']
+            - name: RAY_CLUSTER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
             - name: FQ_RAY_IP
-              value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+              value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
             - name: GCS_BUCKET
@@ -174,22 +178,22 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['ray.io/cluster']
+            - name: RAY_CLUSTER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
             - name: FQ_RAY_IP
-              value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+              value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
             - name: GCS_BUCKET
               value: "${GCS_BUCKET}"
             - name: RAY_ROLE
               value: "Worker"
-            - name: RAY_CLUSTER_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
             - name: OWNER_KIND
               value: "RayJob"
             - name: OWNER_NAME

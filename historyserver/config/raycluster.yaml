@@ -67,7 +67,7 @@ spec:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
@@ -113,8 +113,6 @@ spec:
             value: "s3"
           - name: RAY_ROOT_DIR
             value: "log"
-          command:
-          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -183,7 +181,7 @@ spec:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: $(RAY_CLUSTER_NAME)-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: AWS_ACCESS_KEY_ID
@@ -208,8 +206,6 @@ spec:
             value: "s3"
           - name: RAY_ROOT_DIR
             value: "log"
-          command:
-          - collector
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot

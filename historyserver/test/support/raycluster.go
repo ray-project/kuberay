@@ -64,12 +64,6 @@ func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, 
 	fqdnRayIP := fmt.Sprintf("%s-head-svc.%s.svc.cluster.local", rayClusterName, rayClusterNamespace)
 	for i := range containers {
 		if containers[i].Name == "collector" {
-			if len(containers[i].Command) > 0 {
-				containers[i].Command = append(
-					containers[i].Command,
-					fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
-				)
-			}
 			if containers[i].Env == nil {
 				containers[i].Env = []corev1.EnvVar{}
 			}
