@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -21,7 +21,7 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
-	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[rayutils.RayContainerIndex]
+	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
 	if len(headContainer.Env) == 0 {
 		headContainer.Env = []corev1.EnvVar{}
 	}
@@ -35,11 +35,11 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	}
 
 	// Inject namespace name as the ray-cluster-namespace for head group collector
-	injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+	injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 
 	// Inject namespace name as the ray-cluster-namespace for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
-		injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+		injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
 	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
@@ -59,16 +59,43 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
-// injectCollectorRayClusterNamespace injects the ray-cluster-namespace argument into all collector containers.
-func injectCollectorRayClusterNamespace(containers []corev1.Container, rayClusterNamespace string) {
+// injectCollectorRayClusterNamespaceAndEnvVar injects the ray-cluster-namespace argument and required environment variables (POD_IP, FQ_RAY_IP) into all collector containers.
+func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, rayClusterName string, rayClusterNamespace string) {
+	fqdnRayIP := fmt.Sprintf("%s-head-svc.%s.svc.cluster.local", rayClusterName, rayClusterNamespace)
 	for i := range containers {
 		if containers[i].Name == "collector" {
 			containers[i].Command = append(
 				containers[i].Command,
 				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
 			)
+			if containers[i].Env == nil {
+				containers[i].Env = []corev1.EnvVar{}
+			}
+			setOrAppendEnv(&containers[i], "POD_IP", "", &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "status.podIP",
+				},
+			})
+			setOrAppendEnv(&containers[i], "FQ_RAY_IP", fqdnRayIP, nil)
 		}
 	}
+}
+
+// setOrAppendEnv updates an environment variable in-place if it already exists (e.g., from static YAML manifests)
+// or appends a new entry if missing. This prevents duplicate environment variable entries in the pod spec.
+func setOrAppendEnv(container *corev1.Container, name string, val string, valFrom *corev1.EnvVarSource) {
+	for i := range container.Env {
+		if container.Env[i].Name == name {
+			container.Env[i].Value = val
+			container.Env[i].ValueFrom = valFrom
+			return
+		}
+	}
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name:      name,
+		Value:     val,
+		ValueFrom: valFrom,
+	})
 }
 
 // GetSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -95,39 +122,14 @@ fi`
 	return sessionID
 }
 
-// GetNodeIDFromHeadPod retrieves the nodeID from the Ray head pod by reading /tmp/ray/raylet_node_id.
-func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
-if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
-  cat "${ray_tmp_root}/raylet_node_id"
-else
-  echo "raylet_node_id not found"
-  exit 1
-fi`
-	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
-
-	nodeID := strings.TrimSpace(output.String())
-	LogWithTimestamp(test.T(), "Retrieved nodeID: %s", nodeID)
-	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
-
-	return nodeID
-}
-
-// GetNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by reading /tmp/ray/raylet_node_id.
+// GetNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by extracting
+// the --node_id argument from the active raylet process command line.
 func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) string {
 	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
-if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
-  cat "${ray_tmp_root}/raylet_node_id"
-else
-  echo "raylet_node_id not found"
-  exit 1
-fi`
+	// Extract node_id from raylet process arguments as history server retrieves node_id programmatically via HTTP API.
+	getNodeIDCmd := `ps -ef | grep raylet | grep -v grep | sed -n 's/.*--node_id=\([^ ]*\).*/\1/p'`
 	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.

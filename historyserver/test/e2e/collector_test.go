@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -28,6 +30,22 @@ import (
 type rayEvent struct {
 	EventID   string `json:"eventId"`
 	EventType string `json:"eventType"`
+}
+
+// decodeJSONLEvents decodes an event JSONL file the collector uploaded, one
+// JSON object per line.
+func decodeJSONLEvents(r io.Reader) ([]rayEvent, error) {
+	var events []rayEvent
+	dec := json.NewDecoder(r)
+	for {
+		var evt rayEvent
+		if err := dec.Decode(&evt); err == io.EOF {
+			return events, nil
+		} else if err != nil {
+			return nil, err
+		}
+		events = append(events, evt)
+	}
 }
 
 func TestCollector(t *testing.T) {
@@ -88,10 +106,9 @@ func TestCollector(t *testing.T) {
 //   - job_events: Trigger EventCollector.flushEvents, which calls ec.flushJobEventsForHour to process in-memory job events
 //
 // 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
-//   - {S3BucketName}/log/{clusterName}_{clusterNamespace}/{sessionID}/logs/...
-//   - {S3BucketName}/log/{clusterName}_{clusterNamespace}/{sessionID}/node_events/...
-//   - {S3BucketName}/log/{clusterName}_{clusterNamespace}/{sessionID}/job_events/AgAAAA==/...
-//   - {S3BucketName}/log/{clusterName}_{clusterNamespace}/{sessionID}/job_events/AQAAAA==/...
+//   - {S3BucketName}/log/cluster-history/raycluster/{clusterNamespace}/{clusterName}/{sessionID}/{nodeID}/logs/...
+//   - {S3BucketName}/log/cluster-history/raycluster/{clusterNamespace}/{clusterName}/{sessionID}/{nodeID}/node_events/...
+//   - {S3BucketName}/log/cluster-history/raycluster/{clusterNamespace}/{clusterName}/{sessionID}/{nodeID}/job_events/...
 //
 // For detailed verification logic, please refer to verifyS3SessionDirs.
 //
@@ -103,11 +120,10 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Define variables for constructing S3 object prefix.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID))
 
 	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
 	err := test.Client().Ray().RayV1().
@@ -150,11 +166,10 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Submit a Ray job to the existing cluster.
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID))
 
 	// NOTE: We use `kill 1` to simulate Kubernetes OOMKilled behavior.
 	// Before Kubernetes 1.28 (cgroups v1), if one process in a multi-process container exceeded its memory limit,
@@ -197,8 +212,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, dummySessionID))
 
 	// Inject "leftover" logs BEFORE killing collector.
 	// This ensures files exist when collector restarts and performs its initial scan.
@@ -243,7 +257,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	LogWithTimestamp(test.T(), "Verifying file2.log was uploaded to S3 (idempotency check)")
 	g.Eventually(func(gg Gomega) {
 		// List all objects under the session logs prefix
-		logsPrefix := sessionPrefix + "logs/"
+		logsPrefix := sessionPrefix
 		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 			Bucket: aws.String(S3BucketName),
 			Prefix: aws.String(logsPrefix),
@@ -324,10 +338,10 @@ func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayClu
 func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
-	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	metaKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
@@ -379,10 +393,10 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
-	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	timezoneKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
 
@@ -439,11 +453,11 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 	// collector captures non-empty data when polling /api/v0/placement_groups.
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	// The collector stores the endpoint with query params (as configured in RAY_COLLECTOR_ADDITIONAL_ENDPOINTS).
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
-	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	pgKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
@@ -501,8 +515,8 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 // NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
 func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, headNodeID string, workerNodeID string) {
 	// Verify file contents in logs/ directory.
-	headLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, headNodeID)
-	workerLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, workerNodeID)
+	headLogDirPrefix := fmt.Sprintf("%s%s/logs", sessionPrefix, headNodeID)
+	workerLogDirPrefix := fmt.Sprintf("%s%s/logs", sessionPrefix, workerNodeID)
 
 	LogWithTimestamp(test.T(), "Verifying raylet.out, gcs_server.out, and monitor.out exist in head log directory %s", headLogDirPrefix)
 	for _, fileName := range []string{"raylet.out", "gcs_server.out", "monitor.out"} {
@@ -515,31 +529,10 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	// Verify event type coverage in node_events/ and job_events/ directories.
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
 	g.Eventually(func(gg Gomega) {
-		uploadedEvents := []rayEvent{}
-
-		// Load events from node_events directory.
-		nodeEventsPrefix := sessionPrefix + "node_events/"
-		nodeEvents, err := loadRayEventsFromS3(s3Client, S3BucketName, nodeEventsPrefix)
+		events, err := loadRayEventsFromS3(s3Client, S3BucketName, sessionPrefix)
 		gg.Expect(err).NotTo(HaveOccurred())
-		uploadedEvents = append(uploadedEvents, nodeEvents...)
-		LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
 
-		// Dynamically discover and load events from job_events directories.
-		jobEventsPrefix := sessionPrefix + "job_events/"
-		jobDirs, err := ListS3Directories(s3Client, S3BucketName, jobEventsPrefix)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(jobDirs).NotTo(BeEmpty())
-		LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
-
-		for _, jobDir := range jobDirs {
-			jobDirPrefix := jobEventsPrefix + jobDir + "/"
-			jobEvents, err := loadRayEventsFromS3(s3Client, S3BucketName, jobDirPrefix)
-			gg.Expect(err).NotTo(HaveOccurred())
-			uploadedEvents = append(uploadedEvents, jobEvents...)
-			LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
-		}
-
-		assertAllEventTypesCovered(test, gg, uploadedEvents)
+		assertAllEventTypesCovered(test, gg, events)
 	}, TestTimeoutMedium).Should(Succeed())
 }
 
@@ -579,7 +572,7 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 
 	for _, obj := range objects.Contents {
 		fileKey := aws.StringValue(obj.Key)
-		if strings.HasSuffix(fileKey, "/") {
+		if strings.HasSuffix(fileKey, "/") || (!strings.Contains(fileKey, "/node_events/") && !strings.Contains(fileKey, "/job_events/")) {
 			continue
 		}
 
@@ -592,12 +585,27 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 			return nil, err
 		}
 
-		var fileEvents []rayEvent
-		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
-			content.Body.Close()
-			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, err)
+		var reader io.Reader = content.Body
+		var gzReader *gzip.Reader
+		if strings.HasSuffix(fileKey, ".gz") {
+			var err error
+			gzReader, err = gzip.NewReader(content.Body)
+			if err != nil {
+				content.Body.Close()
+				return nil, fmt.Errorf("failed to create gzip reader for %s: %w", fileKey, err)
+			}
+			reader = gzReader
+		}
+
+		fileEvents, decodeErr := decodeJSONLEvents(reader)
+		if gzReader != nil {
+			gzReader.Close()
 		}
 		content.Body.Close()
+
+		if decodeErr != nil {
+			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, decodeErr)
+		}
 
 		events = append(events, fileEvents...)
 	}

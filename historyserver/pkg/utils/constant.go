@@ -13,6 +13,15 @@ const (
 	RayJobKind     = "rayjob"
 	RayServiceKind = "rayservice"
 	RayClusterKind = "raycluster"
+
+	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
+
+	// RayContainerIndex is the index of the Ray container in the head pod template.
+	RayContainerIndex = 0
+	// DashboardPortName is the name the ray-operator gives the dashboard port.
+	DashboardPortName = "dashboard"
+	// DefaultDashboardPort is used when the head container does not declare a dashboard port.
+	DefaultDashboardPort = 8265
 )
 
 func GetTmpRayRoot() string {
@@ -32,8 +41,4 @@ func GetRayPersistCompletePath() string {
 
 func GetRaySessionLatestPath() string {
 	return filepath.Join(GetTmpRayRoot(), "session_latest")
-}
-
-func GetRayNodeIDPath() string {
-	return filepath.Join(GetTmpRayRoot(), "raylet_node_id")
 }

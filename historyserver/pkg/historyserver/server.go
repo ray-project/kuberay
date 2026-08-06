@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/transport"
 )
@@ -23,27 +20,33 @@ type ServerHandler struct {
 
 	reader        storage.StorageReader
 	clientManager *ClientManager
-	eventHandler  *eventserver.EventHandler
 	sessionLoader *SessionLoader
 	httpClient    *http.Client
 
 	useKubernetesProxy bool
-
-	mu          sync.RWMutex
-	clustersMap map[utils.ClusterKey][]utils.ClusterInfo
+	useAuthTokenMode   bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, sessionLoader *SessionLoader, useKubernetesProxy bool) (*ServerHandler, error) {
+func NewServerHandler(
+	c *types.RayHistoryServerConfig,
+	dashboardDir string,
+	reader storage.StorageReader,
+	clientManager *ClientManager,
+	sessionLoader *SessionLoader,
+	useKubernetesProxy bool,
+	useAuthTokenMode bool,
+) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
-		eventHandler:  eventHandler,
 		sessionLoader: sessionLoader,
 
 		rootDir:      c.RootDir,
 		dashboardDir: dashboardDir,
 		// TODO: make this configurable
 		maxClusters: 100,
+
+		useAuthTokenMode: useAuthTokenMode,
 	}
 
 	if len(clientManager.configs) > 0 {

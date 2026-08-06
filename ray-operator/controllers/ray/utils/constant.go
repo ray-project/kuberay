@@ -144,6 +144,8 @@ const (
 	REDIS_USERNAME                          = "REDIS_USERNAME"
 	RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE     = "RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE"
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
+	RAY_GCS_STORAGE                         = "RAY_gcs_storage"
+	RAY_GCS_STORAGE_PATH                    = "RAY_gcs_storage_path"
 	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"
@@ -155,6 +157,26 @@ const (
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
 	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
 	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
+
+	// TLS-related environment variables for Ray. See: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication
+	RAY_USE_TLS         = "RAY_USE_TLS"
+	RAY_TLS_SERVER_CERT = "RAY_TLS_SERVER_CERT"
+	RAY_TLS_SERVER_KEY  = "RAY_TLS_SERVER_KEY"
+	RAY_TLS_CA_CERT     = "RAY_TLS_CA_CERT"
+
+	// TLS volume and mount path constants for certificate mounting into Ray pods.
+	RayTLSVolumeName    = "ray-tls"
+	RayTLSCertMountPath = "/etc/ray/tls"
+
+	// cert-manager resource naming prefixes for auto-generated PKI resources.
+	RaySelfSignedIssuerPrefix = "ray-selfsigned-issuer"
+	RayCACertificatePrefix    = "ray-ca-certificate"
+	RayCAIssuerPrefix         = "ray-ca-issuer"
+	RayHeadCertPrefix         = "ray-head-cert"
+	RayWorkerCertPrefix       = "ray-worker-cert"
+	RayHeadSecretPrefix       = "ray-head-secret"
+	RayWorkerSecretPrefix     = "ray-worker-secret" //nolint:gosec // G101 -- secret name prefix, not a credential
+	RayCASecretPrefix         = "ca-secret"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -180,6 +202,45 @@ const (
 	RayTokenVolumeName = "ray-token" // #nosec G101
 	// RayTokenMountPath is the mount path for the projected volume for Kubernetes token authentication.
 	RayTokenMountPath = "/var/run/secrets/ray.io/serviceaccount" // #nosec G101
+
+	// GCSStorageVolumeName is the name of the volume backing the embedded RocksDB GCS store.
+	GCSStorageVolumeName = "gcs-storage"
+	// GCSStorageMountPath is the mount path of the embedded RocksDB GCS store on the head Pod.
+	GCSStorageMountPath = "/data/gcs"
+	// GCSStorageRocksDBValue is the value of the RAY_gcs_storage env var selecting the embedded backend.
+	GCSStorageRocksDBValue = "rocksdb"
+	// GCSStoragePVCSuffix is appended to the RayCluster name for the operator-managed PVC.
+	GCSStoragePVCSuffix = "-gcs-pvc"
+	// GCSStorageDefaultSize is the default size of the operator-managed GCS storage PVC.
+	GCSStorageDefaultSize = "1Gi"
+
+	// Environment variables for History Server collector.
+	POD_IP                                                                       = "POD_IP"
+	RAY_ROLE                                                                     = "RAY_ROLE"
+	OWNER_KIND                                                                   = "OWNER_KIND"
+	OWNER_NAME                                                                   = "OWNER_NAME"
+	EVENTS_PORT                                                                  = "EVENTS_PORT"
+	RAY_ROOT_DIR                                                                 = "RAY_ROOT_DIR"
+	LOG_BATCHING                                                                 = "LOG_BATCHING"
+	PUSH_INTERVAL                                                                = "PUSH_INTERVAL"
+	STORAGE_BACKEND                                                              = "STORAGE_BACKEND"
+	GCS_BUCKET                                                                   = "GCS_BUCKET"
+	S3_BUCKET                                                                    = "S3_BUCKET"
+	S3_ENDPOINT                                                                  = "S3_ENDPOINT"
+	S3_REGION                                                                    = "S3_REGION"
+	AZURE_STORAGE_CONTAINER                                                      = "AZURE_STORAGE_CONTAINER"
+	AZURE_STORAGE_CONNECTION_STRING                                              = "AZURE_STORAGE_CONNECTION_STRING"
+	AZURE_STORAGE_ACCOUNT_URL                                                    = "AZURE_STORAGE_ACCOUNT_URL"
+	AZURE_STORAGE_AUTH_MODE                                                      = "AZURE_STORAGE_AUTH_MODE"
+	ALIYUN_BUCKET                                                                = "OSS_BUCKET"
+	ALIYUN_ENDPOINT                                                              = "OSS_ENDPOINT"
+	ALIYUN_REGION                                                                = "OSS_REGION"
+	RAY_ENABLE_RAY_EVENT                                                         = "RAY_enable_ray_event"
+	RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR                               = "RAY_enable_core_worker_ray_event_to_aggregator"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR                            = "RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES                         = "RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES = "RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES"
+	DEFAULT_RAY_EXPOSABLE_EVENT_TYPES                                            = "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
@@ -222,6 +283,11 @@ const (
 	// `ray job submit` process in the Kubernetes Job submitter from exiting.
 	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
 	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
+
+	// If job status checks keep failing for longer than
+	/// RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, KubeRay will transition the RayJob's JobDeploymentStatus to Failed.
+	RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS         = "RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS"
+	DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS = 300
 
 	// This environment variable for the KubeRay operator determines whether to enable
 	// a login shell by passing the -l option to the container command /bin/bash.
@@ -282,13 +348,15 @@ const (
 
 	// Finalizers for RayService
 	RayServiceFinalizer = "ray.io/rayservice-finalizer"
-
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
 	RayNodeSubmitterGroupLabelValue = "submittergroup"
 
 	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
 	SubmitterContainerName = "ray-job-submitter"
+
+	// CollectorContainerName is the default name of the history server collector container.
+	CollectorContainerName = "ray-history-collector"
 
 	// KUBERAY_VERSION is the build version of KubeRay.
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable
@@ -439,6 +507,8 @@ const (
 	// Ingress event list
 	CreatedIngress        K8sEventType = "CreatedIngress"
 	FailedToCreateIngress K8sEventType = "FailedToCreateIngress"
+	UpdatedIngress        K8sEventType = "UpdatedIngress"
+	FailedToUpdateIngress K8sEventType = "FailedToUpdateIngress"
 
 	// Route event list
 	CreatedRoute        K8sEventType = "CreatedRoute"
@@ -453,6 +523,8 @@ const (
 	// ServiceAccount event list
 	CreatedServiceAccount            K8sEventType = "CreatedServiceAccount"
 	FailedToCreateServiceAccount     K8sEventType = "FailedToCreateServiceAccount"
+	CreatedPVC                       K8sEventType = "CreatedPVC"
+	FailedToCreatePVC                K8sEventType = "FailedToCreatePVC"
 	AutoscalerServiceAccountNotFound K8sEventType = "AutoscalerServiceAccountNotFound"
 
 	// Role event list
@@ -462,4 +534,33 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
+	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
+	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
+
+	// mTLS event list
+	MTLSPKIReady                K8sEventType = "MTLSPKIReady"
+	MTLSCertsNotReady           K8sEventType = "MTLSCertsNotReady"
+	MTLSFailedToReconcile       K8sEventType = "MTLSFailedToReconcile"
+	MTLSCertificatesUpdated     K8sEventType = "MTLSCertificatesUpdated"
+	MTLSCertificateExpiringSoon K8sEventType = "MTLSCertificateExpiringSoon"
+)
+
+// K8sEventAction describes what action the controller took when recording an event.
+type K8sEventAction string
+
+const (
+	CreateAction    K8sEventAction = "Create"
+	DeleteAction    K8sEventAction = "Delete"
+	UpdateAction    K8sEventAction = "Update"
+	ValidateAction  K8sEventAction = "Validate"
+	ReconcileAction K8sEventAction = "Reconcile"
+	CleanupAction   K8sEventAction = "Cleanup"
+	SuspendAction   K8sEventAction = "Suspend"
 )
