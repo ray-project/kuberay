@@ -35,6 +35,9 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	// +optional
 	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	// GcsReadyOptions specifies optional configuration for the GCS-readiness init container (wait-gcs-ready).
+	// +optional
+	GcsReadyOptions *GcsReadyOptions `json:"gcsReadyOptions,omitempty"`
 	// +optional
 	HeadServiceAnnotations map[string]string `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
@@ -541,6 +544,14 @@ type AutoscalerOptions struct {
 	// Optional to overwrite the default args of the autoscaler container.
 	// +optional
 	Args []string `json:"args,omitempty"`
+}
+
+// GcsReadyOptions specifies optional configuration for the GCS-readiness init container (wait-gcs-ready).
+type GcsReadyOptions struct {
+	// Resources overrides the resource requests and limits of the wait-gcs-ready init container.
+	// Default values: 200m CPU request and limit. 256Mi memory request and limit.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative

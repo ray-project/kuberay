@@ -24,8 +24,10 @@ type RayClusterSpecApplyConfiguration struct {
 	// The field is immutable.
 	ManagedBy *string `json:"managedBy,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions      *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations map[string]string                    `json:"headServiceAnnotations,omitempty"`
+	AutoscalerOptions *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
+	// GcsReadyOptions specifies optional configuration for the GCS-readiness init container (wait-gcs-ready).
+	GcsReadyOptions        *GcsReadyOptionsApplyConfiguration `json:"gcsReadyOptions,omitempty"`
+	HeadServiceAnnotations map[string]string                  `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
@@ -95,6 +97,14 @@ func (b *RayClusterSpecApplyConfiguration) WithManagedBy(value string) *RayClust
 // If called multiple times, the AutoscalerOptions field is set to the value of the last call.
 func (b *RayClusterSpecApplyConfiguration) WithAutoscalerOptions(value *AutoscalerOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
 	b.AutoscalerOptions = value
+	return b
+}
+
+// WithGcsReadyOptions sets the GcsReadyOptions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the GcsReadyOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithGcsReadyOptions(value *GcsReadyOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.GcsReadyOptions = value
 	return b
 }
 
