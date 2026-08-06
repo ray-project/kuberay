@@ -562,22 +562,19 @@ func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 	g := NewWithT(t)
 	namespace := test.NewTestNamespace()
 
-	// Scripts used to create and terminate detached actors, which is how the test drives
-	// the autoscaler.
+	// Scripts for creating and terminating detached actors to trigger autoscaling
 	scriptsAC := NewConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
 	scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(t, "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
 
 	clusterName := "tls-autoscaler-scaleup"
-	// The head advertises 0 CPUs so detached actors can only be scheduled on worker pods,
-	// which forces the autoscaler to add workers.
 	specAC := rayv1ac.RayClusterSpec().
 		WithRayVersion(GetRayVersion()).
 		WithEnableInTreeAutoscaling(true).
 		WithTLSOptions(rayv1ac.TLSOptions().WithEnabled(true)).
 		WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-			WithRayStartParams(map[string]string{"num-cpus": "0", "dashboard-host": "0.0.0.0"}).
+			WithRayStartParams(map[string]string{"num-cpus": "0"}).
 			WithTemplate(HeadPodTemplateApplyConfiguration())).
 		WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 			WithReplicas(0).
@@ -594,7 +591,7 @@ func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(t, "Created mTLS RayCluster %s/%s with autoscaler enabled", rayCluster.Namespace, rayCluster.Name)
 
-	// The cluster starts with no worker pods at all.
+	// Wait for RayCluster to become ready and verify there is no worker replica.
 	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 	g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).
@@ -609,8 +606,7 @@ func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 	for i, actorName := range []string{"actor1", "actor2"} {
 		expectedReplicas := int32(i + 1)
 
-		ExecPodCmd(test, headPod, rayContainerName,
-			[]string{"python", "/home/ray/test_scripts/create_detached_actor.py", actorName})
+		ExecPodCmd(test, headPod, rayContainerName, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", actorName, "--num-cpus=1"})
 
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(expectedReplicas)))
