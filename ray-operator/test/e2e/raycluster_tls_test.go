@@ -107,7 +107,6 @@ func verifyNoTLSVolume(g Gomega, pod *corev1.Pod) {
 
 func TestRayClusterTLSAutoGenerate(t *testing.T) {
 	test := With(t)
-	g := NewWithT(t)
 
 	if !certManagerAvailable(test) {
 		t.Skip("cert-manager CRDs not found; skipping TLS auto-generate e2e test")
@@ -118,6 +117,7 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 
 	test.T().Run("RayCluster with auto-generated mTLS certificates", func(t *testing.T) {
 		t.Parallel()
+		g := NewWithT(t)
 
 		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
 			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
