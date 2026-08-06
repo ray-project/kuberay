@@ -24,3 +24,5 @@ featureGates:
     enabled: true
   - name: RayClusterMTLS
     enabled: true
+  - name: RayClusterNetworkPolicy
+    enabled: true
