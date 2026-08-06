@@ -1097,6 +1097,215 @@ func TestReconcileHeadService(t *testing.T) {
 	require.Error(t, err, "Reconciler should report an error when there are two head services")
 }
 
+// newHeadServiceReconciler returns a reconciler backed by a fake client that already knows about
+// the given RayCluster.
+func newHeadServiceReconciler(cluster *rayv1.RayCluster) *RayClusterReconciler {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+	return &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+}
+
+// getHeadService returns the one head service the operator owns for the given cluster.
+func getHeadService(ctx context.Context, t *testing.T, c client.Client, cluster *rayv1.RayCluster) *corev1.Service {
+	t.Helper()
+	services := corev1.ServiceList{}
+	require.NoError(t, c.List(ctx, &services, common.RayClusterHeadServiceListOptions(cluster)...))
+	require.Len(t, services.Items, 1, "expected exactly one head service")
+	return &services.Items[0]
+}
+
+// TestReconcileHeadServiceSelectorDrift covers https://github.com/ray-project/kuberay/issues/2564.
+// The head service selector takes the value of app.kubernetes.io/name from the head Pod template,
+// so renaming that label leaves the selector pointing at the old value and the head Pod stops
+// being reachable through the service.
+func TestReconcileHeadServiceSelectorDrift(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels = map[string]string{
+		utils.KubernetesApplicationNameLabelKey: "ray-converters-2",
+	}
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	require.Equal(t, "ray-converters-2", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey])
+
+	// A label some other tool (Helm, Argo CD, a mesh injector) adds to the service after creation.
+	// The operator owns the keys it stamps, not the whole label map, so this one has to survive.
+	svc.Labels["argocd.argoproj.io/instance"] = "converters"
+	require.NoError(t, r.Update(ctx, svc))
+
+	// The user renames the head Pod label, so the head Pod now carries ray-converters-3.
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[utils.KubernetesApplicationNameLabelKey] = "ray-converters-3"
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "ray-converters-3", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey],
+		"head service selector should follow the head Pod label")
+	assert.Equal(t, "ray-converters-3", svc.Labels[utils.KubernetesApplicationNameLabelKey],
+		"head service labels should follow the head Pod label")
+	assert.Equal(t, "converters", svc.Labels["argocd.argoproj.io/instance"],
+		"labels the operator does not own should be left alone")
+
+	// The three labels the operator uses to find the service again must not move, otherwise the
+	// next reconcile creates a duplicate.
+	assert.Equal(t, cluster.Name, svc.Spec.Selector[utils.RayClusterLabelKey])
+	assert.Equal(t, string(rayv1.HeadNode), svc.Spec.Selector[utils.RayNodeTypeLabelKey])
+	assert.Equal(t, utils.CheckLabel(utils.GenerateIdentifier(cluster.Name, rayv1.HeadNode)), svc.Spec.Selector[utils.RayIDLabelKey])
+
+	// Reconciling an in-sync service should not write to the API server.
+	resourceVersion := svc.ResourceVersion
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, resourceVersion, svc.ResourceVersion, "reconcile should be a no-op once the head service matches")
+}
+
+// TestReconcileHeadServiceOverriddenCreatedByLabel checks the sibling of the bug above. Both
+// app.kubernetes.io labels in the head service selector can be overridden on the head Pod
+// template (see labelPod), so both have to be read from it, not just app.kubernetes.io/name.
+func TestReconcileHeadServiceOverriddenCreatedByLabel(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels = map[string]string{
+		utils.KubernetesCreatedByLabelKey: "my-platform",
+	}
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "my-platform", svc.Spec.Selector[utils.KubernetesCreatedByLabelKey],
+		"selector should use the head Pod value of app.kubernetes.io/created-by")
+	assert.Equal(t, utils.ApplicationName, svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey],
+		"labels the user did not override keep their default value")
+}
+
+// TestReconcileHeadServiceIgnoresProtectedLabelOverrides guards the identity labels. labelPod
+// refuses to take ray.io/cluster, ray.io/node-type and ray.io/group from the user template, so a
+// user setting them must not be able to steer the head service selector away from the head Pod.
+func TestReconcileHeadServiceIgnoresProtectedLabelOverrides(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels = map[string]string{
+		utils.RayClusterLabelKey:  "some-other-cluster",
+		utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+	}
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, cluster.Name, svc.Spec.Selector[utils.RayClusterLabelKey])
+	assert.Equal(t, string(rayv1.HeadNode), svc.Spec.Selector[utils.RayNodeTypeLabelKey])
+}
+
+// TestReconcileHeadServiceSelectorDriftWithCustomHeadService repeats the drift case for a cluster
+// that ships its own HeadGroupSpec.HeadService.
+func TestReconcileHeadServiceSelectorDriftWithCustomHeadService(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels = map[string]string{
+		utils.KubernetesApplicationNameLabelKey: "ray-converters-2",
+	}
+	cluster.Spec.HeadGroupSpec.HeadService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "custom-head-svc",
+			Labels: map[string]string{"my-team": "converters"},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+		},
+	}
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	require.Equal(t, "ray-converters-2", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey])
+	require.Equal(t, "converters", svc.Labels["my-team"])
+
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[utils.KubernetesApplicationNameLabelKey] = "ray-converters-3"
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "ray-converters-3", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey])
+	assert.Equal(t, "ray-converters-3", svc.Labels[utils.KubernetesApplicationNameLabelKey])
+	assert.Equal(t, "converters", svc.Labels["my-team"], "labels from the user provided HeadService should survive")
+	assert.Equal(t, "custom-head-svc", svc.Name, "the update should not rename the service")
+}
+
+// TestReconcileHeadServiceReplacesHandEditedSelector pins the asymmetry between the selector and
+// the labels. The selector is replaced whole, so a key someone added by hand goes away, while
+// labels are merged and keep keys the operator never wrote.
+func TestReconcileHeadServiceReplacesHandEditedSelector(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	svc.Spec.Selector["hand-edited"] = "yes"
+	svc.Labels["hand-edited"] = "yes"
+	require.NoError(t, r.Update(ctx, svc))
+
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.NotContains(t, svc.Spec.Selector, "hand-edited",
+		"the operator owns the whole selector, so an extra key is removed")
+	assert.Equal(t, "yes", svc.Labels["hand-edited"],
+		"labels are merged, so a key the operator never wrote is kept")
+}
+
+// TestReconcileHeadServiceLeavesUnmanagedSpecAlone pins the scope of the update: the selector is
+// operator owned, the rest of the service spec is not touched by drift reconciliation.
+func TestReconcileHeadServiceLeavesUnmanagedSpecAlone(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels = map[string]string{
+		utils.KubernetesApplicationNameLabelKey: "ray-converters-2",
+	}
+
+	r := newHeadServiceReconciler(cluster)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	svc.Spec.ClusterIP = "10.0.0.42"
+	svc.Annotations = map[string]string{"service.beta.kubernetes.io/aws-load-balancer-type": "nlb"}
+	require.NoError(t, r.Update(ctx, svc))
+
+	cluster.Spec.HeadGroupSpec.Template.ObjectMeta.Labels[utils.KubernetesApplicationNameLabelKey] = "ray-converters-3"
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "ray-converters-3", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey])
+	assert.Equal(t, "10.0.0.42", svc.Spec.ClusterIP, "ClusterIP is immutable and should never be rewritten")
+	assert.Equal(t, "nlb", svc.Annotations["service.beta.kubernetes.io/aws-load-balancer-type"],
+		"annotations outside HeadServiceAnnotations should be left alone")
+}
+
 func TestReconcileHeadlessService(t *testing.T) {
 	setupTest(t)
 
