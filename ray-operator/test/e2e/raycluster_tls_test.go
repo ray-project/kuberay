@@ -543,15 +543,14 @@ func workerCertificateIPs(test Test, namespace, clusterName string) ([]string, e
 	return ips, err
 }
 
-// TestRayClusterTLSAutoscalerScaleUp verifies that worker pods added by the
-// in-tree autoscaler on an mTLS-enabled RayCluster are configured for mTLS and
-// actually join the Ray cluster.
+// TestRayClusterTLSAutoscalerScaleUp verifies that the autoscaler and the mTLS controller
+// work together: worker pods added by the autoscaler are covered by the worker certificate
+// IP SANs, and their IPs are dropped again after a scale-down.
 //
-// The existing "mTLS with autoscaler enabled" case only asserts that the autoscaler
-// sidecar has TLS environment variables; it never triggers a scale-up. This test
-// drives a real scale-up so it can catch regressions where a new worker pod starts
-// but never joins GCS, for example because its pod IP is missing from the IP SANs of
-// the worker certificate.
+// The existing "mTLS with autoscaler enabled" case pins the worker group to
+// replicas = minReplicas = maxReplicas = 1, so it never triggers a scale-up. Worker pods
+// only reach Running after wait-for-tls-ip-san and wait-gcs-ready succeed, so asserting
+// readiness also covers the mTLS handshake.
 func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 	test := With(t)
 
@@ -643,18 +642,15 @@ func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 		LogWithTimestamp(t, "Worker certificate IP SANs cover all %d worker pod(s)", expectedReplicas)
 	}
 
-	// The scaled-up workers must actually join the Ray cluster over mTLS. The head
-	// advertises 0 CPUs and every worker advertises 1 CPU, so the total CPU capacity
-	// equals the number of workers that successfully connected to GCS.
-	g.Eventually(func(gg Gomega) {
-		stdout, _ := ExecPodCmd(test, headPod, rayContainerName, []string{
-			"python", "-c",
-			"import ray; ray.init(); print('TOTAL_CPU=' + str(int(ray.cluster_resources().get('CPU', 0))))",
-		}, true)
-		gg.Expect(stdout.String()).To(ContainSubstring("TOTAL_CPU=2"),
-			"both autoscaled worker pods should have joined the Ray cluster")
-	}, TestTimeoutLong).Should(Succeed())
-	LogWithTimestamp(t, "Both autoscaled worker pods joined the mTLS Ray cluster")
+	// Record the worker pod IPs before scaling down so the test can verify they are
+	// removed from the worker certificate afterwards.
+	scaledUpWorkerPods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	scaledUpWorkerIPs := make([]string, 0, len(scaledUpWorkerPods))
+	for i := range scaledUpWorkerPods {
+		scaledUpWorkerIPs = append(scaledUpWorkerIPs, scaledUpWorkerPods[i].Status.PodIP)
+	}
+	g.Expect(scaledUpWorkerIPs).To(HaveLen(2), "both worker pod IPs should be recorded before scale-down")
 
 	// Terminating the actors releases the CPUs and the autoscaler scales back down.
 	for _, actorName := range []string{"actor1", "actor2"} {
@@ -664,4 +660,16 @@ func TestRayClusterTLSAutoscalerScaleUp(t *testing.T) {
 	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 		Should(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
 	LogWithTimestamp(t, "Autoscaler scaled the worker group back down to 0 replicas")
+
+	// The worker certificate must drop the IP SANs of the removed worker pods.
+	g.Eventually(func(gg Gomega) {
+		certIPs, err := workerCertificateIPs(test, namespace.Name, clusterName)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		for _, podIP := range scaledUpWorkerIPs {
+			gg.Expect(certIPs).NotTo(ContainElement(podIP),
+				"worker certificate IP SANs should no longer contain the IP %s of the removed worker pod", podIP)
+		}
+	}, TestTimeoutLong).Should(Succeed())
+	LogWithTimestamp(t, "Worker certificate IP SANs no longer contain the removed worker pod IPs")
 }
