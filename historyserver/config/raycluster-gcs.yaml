@@ -31,8 +31,6 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
-          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
-            value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-head
@@ -127,8 +125,6 @@ spec:
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            value: "ALL"
-          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
