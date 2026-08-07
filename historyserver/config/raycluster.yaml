@@ -103,19 +103,13 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
-          # Ray token auth (optional): uncomment when the RayCluster sets
-          # `spec.authOptions.mode: token` (which also requires `spec.rayVersion`, commented out
-          # above). Without the token the collector gets 401 from the Dashboard during NodeID
-          # discovery and crash-loops. The operator generates this Secret from the RayCluster name
-          # when `authOptions.secretName` is unset.
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN
           #   valueFrom:
           #     secretKeyRef:
           #       name: raycluster-historyserver  # defaults to the RayCluster name
           #       key: auth_token
-          # For `spec.authOptions.enableK8sTokenAuth` (Ray 2.55.0+) set
-          # RAY_ENABLE_K8S_TOKEN_AUTH="true" instead, plus a projected ServiceAccount token
-          # volume at /var/run/secrets/ray.io/serviceaccount.
           command:
           - collector
           - --role=Head
@@ -206,8 +200,8 @@ spec:
             value: "true"
           - name: S3DISABLE_SSL
             value: "true"
-          # Ray token auth (optional): workers query the Dashboard through FQ_RAY_IP for their
-          # Ray NodeID, so they need the same token as the head collector.
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN
           #   valueFrom:
           #     secretKeyRef:
