@@ -114,7 +114,7 @@ const highRPSServeConfigV2 serveConfigV2 = `applications:
         autoscaling_config:
           min_replicas: 1
           max_replicas: 2
-          target_ongoing_requests: 10
+          target_ongoing_requests: 2
           upscale_delay_s: 0.5
         ray_actor_options:
           num_cpus: 2
