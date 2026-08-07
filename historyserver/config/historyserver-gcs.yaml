@@ -40,8 +40,6 @@ spec:
             value: "${GCS_BUCKET}"
           - name: STORAGE_BACKEND
             value: "gcs"
-          - name: RAY_ROOT_DIR
-            value: "storage-root"
         image: ${HISTORY_SERVER_IMAGE}
         imagePullPolicy: IfNotPresent
         ports:
