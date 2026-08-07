@@ -92,9 +92,7 @@ spec:
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
+              value: "rayjob-historyserver-gcs"
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: EVENTS_PORT
@@ -178,9 +176,7 @@ spec:
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
+              value: "rayjob-historyserver-gcs"
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: EVENTS_PORT
