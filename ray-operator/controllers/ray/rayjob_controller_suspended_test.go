@@ -596,4 +596,129 @@ var _ = Context("RayJob with suspend operation", func() {
 				"Expected JobDeploymentStatus to remain Suspending when StopJob fails")
 		})
 	})
+
+	Describe("When a clusterSelector RayJob is in Retrying state", Ordered, func() {
+		var reconciler *RayJobReconciler
+		var rayJob *rayv1.RayJob
+		var rayCluster *rayv1.RayCluster
+		var stopJobCalled bool
+		namespace := "default"
+		clusterName := "existing-cluster"
+
+		BeforeAll(func() {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+			_ = batchv1.AddToScheme(newScheme)
+
+			rayCluster = &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Image: "rayproject/ray"}},
+							},
+						},
+					},
+				},
+			}
+
+			rayJob = rayJobTemplate("test-clusterselector-retry", namespace)
+			rayJob.Spec.ClusterSelector = map[string]string{
+				utils.RayJobClusterSelectorKey: clusterName,
+			}
+			rayJob.Spec.RayClusterSpec = nil
+			rayJob.Spec.ShutdownAfterJobFinishes = true
+			rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+			rayJob.Status = rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+				JobStatus:           rayv1.JobStatusFailed,
+				RayClusterName:      clusterName,
+				DashboardURL:        "http://existing-cluster-head-svc:8265",
+				JobId:               "test-job-id",
+				Message:             "job failed",
+				Reason:              rayv1.AppFailed,
+				RayJobStatusInfo: rayv1.RayJobStatusInfo{
+					StartTime: &metav1.Time{Time: time.Now().Add(-time.Minute)},
+				},
+			}
+
+			stopJobCalled = false
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob, rayCluster).
+				WithStatusSubresource(rayJob).
+				Build()
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler = &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+				dashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
+					stopJobCalled = true
+					return &utils.FakeRayDashboardClient{}, nil
+				},
+			}
+		})
+
+		It("should reconcile without error", func() {
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		})
+
+		It("should have called the dashboard client to stop the job", func() {
+			Expect(stopJobCalled).To(BeTrue(), "Expected dashboardClientFunc to be called for StopJob during retry")
+		})
+
+		It("should transition to New with JobStatus New", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusNew))
+			Expect(updatedRayJob.Status.JobStatus).To(Equal(rayv1.JobStatusNew))
+		})
+
+		It("should clear JobId, Message, Reason, and RayJobStatusInfo", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobId).To(BeEmpty())
+			Expect(updatedRayJob.Status.Message).To(BeEmpty())
+			Expect(updatedRayJob.Status.Reason).To(BeEmpty())
+			Expect(updatedRayJob.Status.RayJobStatusInfo).To(Equal(rayv1.RayJobStatusInfo{}))
+		})
+
+		It("should preserve RayClusterName and DashboardURL", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.RayClusterName).To(Equal(clusterName))
+			Expect(updatedRayJob.Status.DashboardURL).To(Equal("http://existing-cluster-head-svc:8265"))
+		})
+	})
 })
