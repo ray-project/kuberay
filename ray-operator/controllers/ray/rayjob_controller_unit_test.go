@@ -1405,3 +1405,175 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T)
 		})
 	}
 }
+
+// TestCheckSubmitterAndUpdateStatusIfNeeded_K8sJobMode covers a submitter Kubernetes Job failing
+// underneath a job that is still running: an infrastructure-killed submitter exhausts its backoff
+// and fails the Job, but the driver runs on the cluster and carries on (#2314).
+func TestCheckSubmitterAndUpdateStatusIfNeeded_SidecarMode(t *testing.T) {
+	newRayJob := func(jobStatus rayv1.JobStatus) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{Name: "rayjob-sample", Namespace: "default"},
+			Spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{},
+			},
+			Status: rayv1.RayJobStatus{JobStatus: jobStatus, RayClusterName: "raycluster-sample"},
+		}
+	}
+
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "raycluster-sample", Namespace: "default"},
+	}
+
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "head-pod",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  "raycluster-sample",
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+		Status: corev1.PodStatus{
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name: utils.SubmitterContainerName,
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+					ExitCode:   1,
+					Reason:     "Error",
+					FinishedAt: metav1.NewTime(time.Now()),
+				}},
+			}},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		jobStatus  rayv1.JobStatus
+		wantReason rayv1.JobFailedReason
+		wantUpdate bool
+	}{
+		{
+			// Same rule as K8sJobMode: a sidecar that exits non-zero while the job is
+			// running is not evidence about the job, so the timeout decides it instead.
+			name:      "job running is left to the submitter-finished timeout",
+			jobStatus: rayv1.JobStatusRunning,
+		},
+		{
+			name:       "job never observed is a genuine submission failure",
+			jobStatus:  rayv1.JobStatusNew,
+			wantUpdate: true,
+			wantReason: rayv1.SubmissionFailed,
+		},
+		{
+			name:       "job already failed keeps the application failure reason",
+			jobStatus:  rayv1.JobStatusFailed,
+			wantUpdate: true,
+			wantReason: rayv1.AppFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			require.NoError(t, rayv1.AddToScheme(newScheme))
+			require.NoError(t, corev1.AddToScheme(newScheme))
+			require.NoError(t, batchv1.AddToScheme(newScheme))
+
+			rayJob := newRayJob(tc.jobStatus)
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+				WithRuntimeObjects(rayJob, rayCluster, headPod).Build()
+			r := &RayJobReconciler{Client: fakeClient, Scheme: newScheme}
+
+			shouldUpdate, _, err := r.checkSubmitterAndUpdateStatusIfNeeded(context.Background(), rayJob)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantUpdate, shouldUpdate)
+			if !tc.wantUpdate {
+				assert.Equal(t, tc.jobStatus, rayJob.Status.JobStatus)
+				assert.Empty(t, rayJob.Status.JobDeploymentStatus)
+				assert.Empty(t, rayJob.Status.Reason)
+				return
+			}
+			assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+			assert.Equal(t, tc.wantReason, rayJob.Status.Reason)
+		})
+	}
+}
+
+func TestCheckSubmitterAndUpdateStatusIfNeeded_K8sJobMode(t *testing.T) {
+	failedAt := metav1.NewTime(time.Now())
+
+	newRayJob := func(jobStatus rayv1.JobStatus) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{Name: "rayjob-sample", Namespace: "default"},
+			Spec:       rayv1.RayJobSpec{SubmissionMode: rayv1.K8sJobMode},
+			Status:     rayv1.RayJobStatus{JobStatus: jobStatus, RayClusterName: "raycluster-sample"},
+		}
+	}
+
+	failedSubmitterJob := func(rayJob *rayv1.RayJob) *batchv1.Job {
+		return &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: rayJob.Name, Namespace: rayJob.Namespace},
+			Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:               batchv1.JobFailed,
+				Status:             corev1.ConditionTrue,
+				Reason:             "BackoffLimitExceeded",
+				Message:            "Job has reached the specified backoff limit",
+				LastTransitionTime: failedAt,
+			}}},
+		}
+	}
+
+	tests := []struct {
+		name       string
+		jobStatus  rayv1.JobStatus
+		wantReason rayv1.JobFailedReason
+		wantUpdate bool
+	}{
+		{
+			// The submission plainly succeeded, so SubmissionFailed would be wrong. The
+			// submitter-finished timeout decides this one on live cluster state instead.
+			name:      "job running is left to the submitter-finished timeout",
+			jobStatus: rayv1.JobStatusRunning,
+		},
+		{
+			name:       "job never observed is a genuine submission failure",
+			jobStatus:  rayv1.JobStatusNew,
+			wantUpdate: true,
+			wantReason: rayv1.SubmissionFailed,
+		},
+		{
+			name:       "job already failed keeps the application failure reason",
+			jobStatus:  rayv1.JobStatusFailed,
+			wantUpdate: true,
+			wantReason: rayv1.AppFailed,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			require.NoError(t, rayv1.AddToScheme(newScheme))
+			require.NoError(t, corev1.AddToScheme(newScheme))
+			require.NoError(t, batchv1.AddToScheme(newScheme))
+
+			rayJob := newRayJob(tc.jobStatus)
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+				WithRuntimeObjects(rayJob, failedSubmitterJob(rayJob)).Build()
+			r := &RayJobReconciler{Client: fakeClient, Scheme: newScheme}
+
+			shouldUpdate, finishedAt, err := r.checkSubmitterAndUpdateStatusIfNeeded(context.Background(), rayJob)
+			require.NoError(t, err)
+			// A failed submitter Job is terminal, so the timeout path always gets a reference point.
+			assert.NotNil(t, finishedAt)
+			assert.Equal(t, tc.wantUpdate, shouldUpdate)
+			if !tc.wantUpdate {
+				assert.Equal(t, tc.jobStatus, rayJob.Status.JobStatus)
+				assert.Empty(t, rayJob.Status.JobDeploymentStatus)
+				assert.Empty(t, rayJob.Status.Reason)
+				return
+			}
+			assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+			assert.Equal(t, tc.wantReason, rayJob.Status.Reason)
+		})
+	}
+}

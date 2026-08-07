@@ -1060,6 +1060,16 @@ func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob)
 	return true
 }
 
+// rayJobIsRunning reports whether the Ray job has been observed running.
+//
+// A submitter that dies while the job is running proves the submission itself succeeded, so failing
+// the RayJob with SubmissionFailed would be doubly wrong: it discards a job that is still going
+// (#2314) and reports a submission failure that did not happen. Leave those to the submitter-finished
+// timeout, which decides on live cluster state once the grace period elapses.
+func rayJobIsRunning(rayJob *rayv1.RayJob) bool {
+	return rayJob.Status.JobStatus == rayv1.JobStatusRunning
+}
+
 func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) (shouldUpdate bool, finishedAt *time.Time, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
@@ -1098,6 +1108,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		// so a terminated container is transient — not a permanent failure.
 		if !features.Enabled(features.SidecarSubmitterRestart) {
 			shouldUpdate, submitterContainerStatus = checkSidecarContainerStatus(headPod)
+			shouldUpdate = shouldUpdate && !rayJobIsRunning(rayJob)
 			if shouldUpdate {
 				logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
 					"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
@@ -1119,6 +1130,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 				submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
 			}
 			shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
+			shouldUpdate = shouldUpdate && !rayJobIsRunning(rayJob)
 			if shouldUpdate {
 				logger.Info("The submitter sidecar container has exceeded the max restart count. Attempting to transition the status to `Failed`.",
 					"Submitter sidecar container", submitterContainerStatus.Name,
@@ -1150,6 +1162,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		}
 
 		shouldUpdate, condition = checkK8sJobStatus(job)
+		shouldUpdate = shouldUpdate && !rayJobIsRunning(rayJob)
 		if shouldUpdate {
 			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.",
 				"Submitter K8s Job", job.Name, "Reason", condition.Reason, "Message", condition.Message)
