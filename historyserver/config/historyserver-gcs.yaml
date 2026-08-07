@@ -41,7 +41,7 @@ spec:
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
-        - --runtime-class-name=gcs
+        - --storage-backend=gcs
         - --ray-root-dir=log
         ports:
         - containerPort: 8080

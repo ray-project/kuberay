@@ -54,7 +54,7 @@ spec:
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
-        - --runtime-class-name=s3
+        - --storage-backend=s3
         - --ray-root-dir=log
         # Enable proxying to live RayClusters with token authentication enabled.
         # The history server reads the auth Secret and forwards requests with the
