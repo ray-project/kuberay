@@ -625,7 +625,11 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	// TODO (kevin85421): KubeRay has already exposed the entire head service (#1040) to users.
 	// We may consider deprecating this field when we bump the CRD version.
 	maps.Copy(annotations, instance.Spec.HeadServiceAnnotations)
-	headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, headServiceSelectorOverrides(instance), annotations)
+	selectorOverrides, err := r.headServiceSelectorOverrides(ctx, instance)
+	if err != nil {
+		return err
+	}
+	headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, selectorOverrides, annotations)
 	if err != nil {
 		return err
 	}
@@ -647,19 +651,40 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	return r.createService(ctx, headSvc, instance)
 }
 
-// headServiceSelectorOverrides returns the head Pod template labels that are allowed to change the
-// head service selector. Only the two app.kubernetes.io keys qualify: BuildServiceForHeadPod keys
-// the selector off HeadServiceLabels, and of those, ray.io/cluster and ray.io/node-type are refused
-// by labelPod, while ray.io/identifier is what the operator uses to find this service again.
-func headServiceSelectorOverrides(instance *rayv1.RayCluster) map[string]string {
-	headPodLabels := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels
+// headServiceSelectorOverrides returns the labels that are allowed to change the head service
+// selector. Only the two app.kubernetes.io keys qualify: BuildServiceForHeadPod keys the selector
+// off HeadServiceLabels, and of those, ray.io/cluster and ray.io/node-type are refused by labelPod,
+// while ray.io/identifier is what the operator uses to find this service again.
+//
+// The values are read from the head Pod that is running right now, not from the head Pod template.
+// KubeRay never relabels a running Pod, and the default upgrade strategy does not recreate one, so a
+// selector built from an edited template would stop matching the Pod that is currently serving
+// traffic. Once that Pod restarts it comes back carrying the template labels, and the selector
+// follows it, which is the case issue #2564 reports. A Pod that is terminating is skipped because
+// its replacement will come back with the template labels. Before any head Pod exists there is
+// nothing to select yet, so the template is the only source available.
+func (r *RayClusterReconciler) headServiceSelectorOverrides(ctx context.Context, instance *rayv1.RayCluster) (map[string]string, error) {
+	sourceLabels := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels
+
+	headPods := corev1.PodList{}
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		return nil, err
+	}
+	for _, headPod := range headPods.Items {
+		if headPod.DeletionTimestamp != nil {
+			continue
+		}
+		sourceLabels = headPod.Labels
+		break
+	}
+
 	overrides := make(map[string]string, 2)
 	for _, key := range []string{utils.KubernetesApplicationNameLabelKey, utils.KubernetesCreatedByLabelKey} {
-		if val, ok := headPodLabels[key]; ok {
+		if val, ok := sourceLabels[key]; ok {
 			overrides[key] = val
 		}
 	}
-	return overrides
+	return overrides, nil
 }
 
 // updateHeadService keeps the parts of an existing head service that the operator owns in sync with
