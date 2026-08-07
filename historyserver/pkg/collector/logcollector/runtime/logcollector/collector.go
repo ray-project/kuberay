@@ -1374,10 +1374,20 @@ func (r *RayLogHandler) PollActiveSessionChanges() {
 	// The first observation is not deferred by a tick. A session that changed between
 	// the handler being configured and this goroutine starting has logs to relocate
 	// now, which is what the startup block here has always done.
+	//
+	// The fallback is startupDir, not the raw SessionDir it was derived from, so that it
+	// is the same string st.dir holds. advanceSession compares the two directly, and the
+	// raw value is routinely a second spelling of the resolved one — utils.GetSessionDir
+	// falls back to os.Readlink, which resolves only the session_latest link and leaves
+	// any symlinked component above it in place. Passing that spelling here would look
+	// like a session change and relocate the logs of the session that is still running.
+	// Nothing is lost by declining to act: SessionDir names the session this poller
+	// started with, so it can never be evidence of a new one, and the first tick that
+	// resolves session_latest observes any real change.
 	currentActiveDir, err := filepath.EvalSymlinks(symlinkPath)
 	if err != nil || currentActiveDir == "" {
-		logrus.Warnf("PollActiveSessionChanges: failed to resolve initial session_latest target: %v. Falling back to startup SessionDir %s", err, r.SessionDir)
-		currentActiveDir = r.SessionDir
+		logrus.Warnf("PollActiveSessionChanges: failed to resolve initial session_latest target: %v. Falling back to startup session directory %s", err, startupDir)
+		currentActiveDir = startupDir
 	}
 	r.advanceSession(&st, currentActiveDir)
 

@@ -3003,3 +3003,93 @@ func TestPollActiveSessionChangesReplacesTheRotatedCollector(t *testing.T) {
 		t.Error("the poller let two collectors overlap")
 	}
 }
+
+// 35h. A transient session_latest resolution failure at startup must not be mistaken for
+// a session change.
+//
+// The poller seeds its transition state with the *resolved* form of the configured
+// SessionDir, because every later observation is a resolved symlink target and the two
+// have to be comparable. The fallback taken when session_latest cannot be resolved has to
+// use that same resolved value. Falling back to the raw configured path makes two
+// spellings of one directory look like two directories, and advanceSession compares them
+// by string: the live session is then queued for relocation into prev-logs, its verified
+// node identity is cleared, and the collector is left running over a logs tree that has
+// been moved out from under it.
+//
+// The two spellings are not hypothetical. utils.GetSessionDir falls back to os.Readlink
+// when EvalSymlinks fails, and that path resolves only the session_latest link itself, so
+// any symlinked component above it — a symlinked RAY_TMP_ROOT, or macOS putting /private
+// in front of /var — survives into the configured value.
+func TestPollActiveSessionChangesFallbackKeepsTheResolvedSessionPath(t *testing.T) {
+	h := newRuntimeHarness(t)
+	h.start()
+	h.write(testSessionA, "raylet.out", "active")
+
+	// A second spelling of the temp root, so the configured SessionDir and its resolved
+	// form differ while naming one directory.
+	alias := filepath.Join(filepath.Dir(h.root), "alias-"+filepath.Base(h.root))
+	if err := os.Symlink(h.root, alias); err != nil {
+		t.Fatalf("create root alias symlink: %v", err)
+	}
+	aliasSessionDir := filepath.Join(alias, testSessionA)
+	resolved, err := filepath.EvalSymlinks(aliasSessionDir)
+	if err != nil {
+		t.Fatalf("resolve %s: %v", aliasSessionDir, err)
+	}
+	if resolved == aliasSessionDir {
+		t.Skipf("this filesystem does not produce two spellings for %s", aliasSessionDir)
+	}
+	h.handler.SessionDir = aliasSessionDir
+
+	// session_latest cannot be resolved, which is what sends the poller down its
+	// fallback. A dangling symlink is what Ray leaves behind mid-restart.
+	latest := utils.GetRaySessionLatestPath()
+	if err := os.Remove(latest); err != nil {
+		t.Fatalf("remove session_latest: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(h.root, "session_does_not_exist"), latest); err != nil {
+		t.Fatalf("point session_latest at a missing target: %v", err)
+	}
+
+	relocating := make(chan struct{}, 4)
+	h.handler.beforeRelocation = func() {
+		select {
+		case relocating <- struct{}{}:
+		default:
+		}
+	}
+
+	liveLogs := h.logsDir(testSessionA)
+	go h.handler.PollActiveSessionChanges()
+	t.Cleanup(func() { close(h.handler.ShutdownChan) })
+
+	// The observation has happened once node discovery has been consulted; relocation,
+	// if the poller decided to do any, follows synchronously in the same call.
+	eventually(t, "the poller's first observation", func() bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.nodeCalls >= 1
+	})
+	select {
+	case <-relocating:
+		t.Fatal("the poller treated the unresolved fallback path as a session change and began relocating the live session")
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	if _, err := os.Stat(liveLogs); err != nil {
+		t.Fatalf("the live session's logs directory was moved: %v", err)
+	}
+	if entries, err := os.ReadDir(utils.GetRayPrevLogsPath()); err == nil && len(entries) > 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("prev-logs holds %v, want nothing: the active session was relocated", names)
+	}
+	if got := strings.TrimSpace(h.handler.GetRayNodeName()); got != testNodeID {
+		t.Errorf("node identity = %q, want %q unchanged: no session change occurred", got, testNodeID)
+	}
+	if key, ok := h.handler.rotatedCollection().activeKey(); !ok || key != (rotatedKey{session: testSessionA, node: testNodeID}) {
+		t.Errorf("collector identity = %+v (present=%v), want the session it started with", key, ok)
+	}
+}
