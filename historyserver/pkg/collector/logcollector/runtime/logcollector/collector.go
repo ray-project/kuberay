@@ -31,17 +31,15 @@ const defaultSessionPollInterval = 5 * time.Second
 
 // transitionGate decides whether a session transition may run.
 //
-// Shutting rotated collection down is not enough on its own. The session poller lives
-// until ShutdownChan closes, which is deliberately after the final legacy walk — the
-// endpoint poller needs it that way — so without this gate a tick landing during
-// shutdown could still rediscover a node ID, change the handler's identity, retire a
-// collector, or relocate the live tree out from under processSessionLatestLogs while
-// it walks it. Freezing the supervisor stops none of those: they are the handler's
-// side effects, not the collector's.
+// The session poller outlives the start of shutdown: ShutdownChan cannot close until
+// after the final endpoint poll, which is after the final legacy walk. Without this
+// gate a tick landing in that window could rediscover a node ID, retire a collector,
+// or relocate the live tree out from under processSessionLatestLogs while it walks it.
+// Freezing the supervisor does not prevent any of those, because they are the
+// handler's side effects rather than the collector's.
 //
-// Its mutex is a leaf. It is held only to inspect and update the two counters, never
-// across a transition, a supervisor call or a filesystem operation, so it cannot
-// participate in any lock ordering.
+// Its mutex is a leaf: held only to inspect and update the two counters, never across
+// a transition, a supervisor call or a filesystem operation.
 type transitionGate struct {
 	cond    *sync.Cond
 	mu      sync.Mutex
@@ -72,20 +70,18 @@ func (g *transitionGate) leave() {
 
 // close refuses every future transition and waits for the ones already admitted.
 //
-// The wait has no timeout, and that is deliberate. Every step an admitted transition
-// can still be inside is itself bounded: the node-ID query is an HTTP call with a
-// one-second client timeout, the handover is bounded by the collector's drain budget
-// plus the upload worker's stop grace, and the relocation is a rename. Returning early
-// would not stop any of them — there is nothing to cancel — it would only let shutdown
-// run the rotated retirement and the legacy walk *concurrently* with a transition that
-// is still free to change the node identity those steps write under, move the tree the
-// walk is reading, or take the supervisor's lifecycle lock that the retirement needs.
+// The wait has no timeout because there is nothing to cancel: every step an admitted
+// transition can still be inside terminates on its own. The node-ID query is an HTTP
+// call with a one-second client timeout and the relocation is a rename. The handover
+// is the longest step — stopRun reconciles the outgoing collector once before draining
+// it, and that reconciliation is a synchronous walk of the logs tree, so it is bounded
+// by the size of that tree rather than by the drain budget; the drain budget and the
+// upload worker's stop grace bound everything after it.
 //
-// Session-transition completion and object-store upload cancellation are separate
-// concerns and must not be conflated. storage.StorageWriter.WriteFile takes no
-// context, so an upload genuinely cannot be waited on; that is what the rotated drain
-// budget bounds, inside the retirement that happens after this returns. A transition,
-// by contrast, is entirely local work that always finishes.
+// Returning early would not shorten any of those. It would only let shutdown run the
+// rotated retirement and the legacy walk concurrently with a transition still free to
+// change the node identity they write under, move the tree the walk is reading, or
+// take the supervisor's lifecycle lock the retirement needs.
 func (g *transitionGate) close() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -562,27 +558,20 @@ func (r *RayLogHandler) retireRotatedCollectionUnless(sessionDir string) {
 	sup.retireUnless(session)
 }
 
-// currentNodeID rediscovers this pod's Ray node ID, normalized to hex.
+// currentNodeID rediscovers this pod's Ray node ID, normalized to hex. The query is a
+// live HTTP call with its own one-second timeout, and it fails routinely in the seconds
+// after a session restart.
 //
-// What it actually asks is "which ALIVE node does the dashboard currently report for
-// this pod's IP?" — see utils.FetchCurrentNodeID. Note what that is not: it takes no
-// session directory and returns nothing that ties the answer to one. This repository
-// has no API that resolves a node ID from a session, and no stated contract that a new
-// Ray session must report a different node ID, so two things follow and neither is
-// papered over here:
+// utils.FetchCurrentNodeID asks "which ALIVE node does the dashboard report for this
+// pod's IP?". It takes no session, so the answer is the freshest identity available
+// rather than proof of which session it belongs to: a session change seen on the
+// filesystem can precede the dashboard dropping the outgoing node, and the outgoing ID
+// is then accepted for the new session. That is deliberate — refusing an unchanged ID
+// would stop rotated collection entirely on a deployment where node IDs legitimately
+// persist, which is worse than a mislabeled changeover window.
 //
-//   - The answer is the freshest identity available, not proof of which session it
-//     belongs to. A session change observed on the filesystem can be seen before the
-//     dashboard stops reporting the outgoing node, in which case the outgoing node ID
-//     is accepted for the new session. That is deliberate: refusing an unchanged ID
-//     would mean a deployment where node IDs legitimately persist could never start
-//     rotated collection at all, which is a worse failure than a mislabeled changeover
-//     window. It is recorded as a maintainer decision rather than settled here.
-//   - It is the only identity the runtime has, so a failure to reach the dashboard is
-//     a reason to wait rather than to guess: callers must treat "not now" as "not now".
-//
-// The query is a live HTTP call with its own one-second timeout, so it is bounded but
-// not free, and it fails routinely in the seconds after a session restart.
+// Because it is the only identity the runtime has, callers must treat a failure as
+// "not now" and wait rather than substitute a guess.
 func (r *RayLogHandler) currentNodeID() (string, bool) {
 	if r.discoverNodeID != nil {
 		return r.discoverNodeID()

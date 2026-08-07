@@ -1043,6 +1043,33 @@ func (u *upHarness) segment(t *testing.T, name string, size int) {
 	u.sendEvent(t, u.writeLog(t, name, strings.Repeat("x", size)))
 }
 
+// hasCapturedName reports whether any uploaded object key is a capture of originalName,
+// whose key carries a capture ID the test cannot predict.
+func hasCapturedName(uploaded map[string]bool, originalName string) bool {
+	for name := range uploaded {
+		if got, _, ok := parseCaptureFileName(name); ok && got == originalName {
+			return true
+		}
+	}
+	return false
+}
+
+// rolledOffSegment captures a rotation backup and then takes Ray's own link away, which
+// is what Ray does when the segment falls off the end of its backup ring.
+//
+// Until that happens the capture shares Ray's blocks and retains nothing, so this is
+// the only way a test can put real pressure on the intake watermark. The reconcile is
+// what re-reads the link count: nothing touches the staging path when Ray unlinks its
+// own name, so no event announces it.
+func (u *upHarness) rolledOffSegment(t *testing.T, name string, size int) {
+	t.Helper()
+	u.segment(t, name, size)
+	if err := os.Remove(filepath.Join(u.logsDir, name)); err != nil {
+		t.Fatalf("remove Ray's link to %s: %v", name, err)
+	}
+	u.rc.reconcileNow()
+}
+
 // 19. Reaching the high-water mark pauses intake.
 // 20. Uploads and releases keep running while intake is paused.
 // 21. Nothing already staged is evicted at high water.
@@ -1059,16 +1086,19 @@ func TestBackpressurePausesIntakeWithoutEviction(t *testing.T) {
 	release := u.writer.blockWrites()
 
 	u.writeLog(t, "raylet.out", "active")
-	u.segment(t, "raylet.out.1", 120)
-	u.segment(t, "raylet.out.2", 120)
+	// Ray has rolled both of these off its backup ring, so the collector is now the
+	// only thing keeping their blocks allocated. That — not the logical size — is what
+	// the watermark measures.
+	u.rolledOffSegment(t, "raylet.out.1", 120)
+	u.rolledOffSegment(t, "raylet.out.2", 120)
 
-	// 19: 240 staged bytes is past the high-water mark of 200.
+	// 19: 240 retained bytes is past the high-water mark of 200.
 	s := u.rc.stats()
 	if !s.IntakePaused {
-		t.Fatalf("stats = %+v, want intake paused at 240 staged bytes", s)
+		t.Fatalf("stats = %+v, want intake paused at 240 retained bytes", s)
 	}
-	if s.Captures != 2 || s.Pending != 2 || s.StagedBytes != 240 {
-		t.Fatalf("stats = %+v, want 2 pending captures totalling 240 bytes", s)
+	if s.Captures != 2 || s.Pending != 2 || s.StagedBytes != 240 || s.RetainedBytes != 240 {
+		t.Fatalf("stats = %+v, want 2 pending captures totalling 240 bytes, all retained", s)
 	}
 	if len(u.issues.matching("intake paused")) != 1 {
 		t.Errorf("the pause was reported %d time(s), want exactly 1: %v",
@@ -1098,26 +1128,31 @@ func TestBackpressurePausesIntakeWithoutEviction(t *testing.T) {
 		t.Errorf("stats = %+v after sustained pressure, want both captures still held", s)
 	}
 
-	// 20: the uploader is unaffected by the gate.
+	// 20: the uploader is unaffected by the gate — it is working on a capture right now,
+	// with intake shut, and finishing that work is what relieves the pressure.
+	if s := u.rc.stats(); s.InFlightUploads != 1 || !s.IntakePaused {
+		t.Errorf("stats = %+v, want an upload in flight while intake stays paused", s)
+	}
 	release()
-	u.waitForUploaded(t, 2)
-	if got := u.writer.attemptCount(); got != 2 {
-		t.Errorf("%d uploads while intake was paused, want 2", got)
-	}
 
-	// 22 + 23: Ray drops its links, the sweep releases both captures, staged bytes
-	// fall to zero, and the resume rescans the tree in the same pass — so the
-	// backup that was skipped while paused is captured with no further event.
-	for _, n := range []string{"raylet.out.1", "raylet.out.2"} {
-		if err := os.Remove(filepath.Join(u.logsDir, n)); err != nil {
-			t.Fatalf("remove Ray's link to %s: %v", n, err)
-		}
-	}
-	u.fireTick(t)
+	// 22 + 23: each capture that reaches storage is released — the collector holds the
+	// only link, so unlinking actually frees the blocks — retained bytes fall to the
+	// low-water mark, and the resume rescans the tree in the same pass, so the backup
+	// skipped while paused is captured with no further event.
+	u.waitFor(t, "intake to resume", func() bool { return !u.rc.stats().IntakePaused })
 
 	s = u.rc.stats()
-	if s.IntakePaused {
-		t.Fatalf("stats = %+v, want intake resumed once staged bytes fell to the low-water mark", s)
+	if s.RetainedBytes != 0 {
+		t.Errorf("stats = %+v, want every retained capture released once uploaded", s)
+	}
+	uploaded := map[string]bool{}
+	for _, c := range u.writer.attempts() {
+		uploaded[path.Base(c.key)] = true
+	}
+	for _, want := range []string{"raylet.out.1", "raylet.out.2"} {
+		if !hasCapturedName(uploaded, want) {
+			t.Errorf("%s never reached storage while intake was paused: %v", want, uploaded)
+		}
 	}
 	names := map[string]bool{}
 	for _, e := range u.rc.snapshot() {
@@ -1144,13 +1179,23 @@ func TestHighWaterStopsCaptureWithinOneScan(t *testing.T) {
 	u := startUploading(t, dir, func(cfg *rotatedCollectorConfig) {
 		cfg.HighWaterBytes = 200
 		cfg.LowWaterBytes = 100
+		// Ray rolls each segment off its ring the instant it is captured, so every
+		// capture is retained the moment it is made. Without that the scan could not
+		// breach the limit at all: a capture Ray still has a link to shares Ray's
+		// blocks and retains nothing.
+		cfg.Link = func(src, dst string) error {
+			if err := captureLink(src, dst); err != nil {
+				return err
+			}
+			return os.Remove(src)
+		}
 	})
 
 	s := u.rc.stats()
 	if !s.IntakePaused {
 		t.Fatalf("stats = %+v, want intake paused", s)
 	}
-	if s.Captures != 2 || s.StagedBytes != 200 {
+	if s.Captures != 2 || s.StagedBytes != 200 || s.RetainedBytes != 200 {
 		t.Fatalf("stats = %+v, want the scan stopped at the two captures that reach the limit", s)
 	}
 
@@ -1183,26 +1228,29 @@ func TestHighWaterStopsCaptureWithinOneScan(t *testing.T) {
 	// same pass reconciles — picking up the backups that were skipped earlier. Those
 	// are another 200 bytes, so the limit engages again, which is the loop working
 	// exactly as intended rather than a failure.
-	u.waitForUploaded(t, 2)
-	for _, n := range []string{"raylet.out.1", "raylet.out.2"} {
-		if err := os.Remove(filepath.Join(logsDir, n)); err != nil {
-			t.Fatalf("remove Ray's link to %s: %v", n, err)
+	// Ray's links are already gone — the Link hook above dropped them at capture time —
+	// so uploading is all that stands between these captures and release. Each release
+	// frees real blocks, retained bytes fall to the low-water mark, intake resumes and
+	// the same pass reconciles, which is what finally picks up the skipped backups.
+	// They breach the limit again on the way through, and that loop is the design
+	// working rather than a failure, so what is asserted is the outcome: everything
+	// reaches storage and nothing is left retained.
+	uploaded := map[string]bool{}
+	u.waitFor(t, "the skipped backups to be captured and uploaded", func() bool {
+		u.fireTick(t)
+		for _, c := range u.writer.attempts() {
+			uploaded[path.Base(c.key)] = true
+		}
+		return hasCapturedName(uploaded, "raylet.out.3") && hasCapturedName(uploaded, "raylet.out.4")
+	})
+
+	for _, want := range []string{"raylet.out.1", "raylet.out.2"} {
+		if !hasCapturedName(uploaded, want) {
+			t.Errorf("%s never reached storage: %v", want, uploaded)
 		}
 	}
-	u.fireTick(t)
-
-	resumed := map[string]bool{}
-	for _, e := range u.rc.snapshot() {
-		resumed[e.OriginalName] = true
-	}
-	if !resumed["raylet.out.3"] || !resumed["raylet.out.4"] {
-		t.Errorf("resuming did not reconcile the skipped backups: %v", resumed)
-	}
-	if resumed["raylet.out.1"] || resumed["raylet.out.2"] {
-		t.Errorf("the released captures are still tracked: %v", resumed)
-	}
-	if s := u.rc.stats(); s.StagedBytes != 200 {
-		t.Errorf("stats = %+v, want the two newly captured backups accounted for", s)
+	if s := u.rc.stats(); s.RetainedBytes != 0 || s.IntakePaused {
+		t.Errorf("stats = %+v, want everything drained and intake open once the tree is exhausted", s)
 	}
 }
 
@@ -1214,8 +1262,13 @@ func TestStartupPausesBeforeScanningWhenReconstructionIsAboveHighWater(t *testin
 	stagingRoot := filepath.Join(dir, "rotated-staging")
 	writeFile(t, filepath.Join(logsDir, "raylet.out"), "active")
 
-	// The previous run left 250 staged bytes behind.
+	// The previous run left 250 staged bytes behind, and Ray has since rolled that
+	// segment off its backup ring, so the staging link is the only thing keeping those
+	// blocks allocated — which is what makes them count against the limit.
 	reconstructed, _ := stageManually(t, logsDir, stagingRoot, "raylet.out.5", strings.Repeat("r", 250), false)
+	if err := os.Remove(filepath.Join(logsDir, "raylet.out.5")); err != nil {
+		t.Fatalf("remove Ray's link to raylet.out.5: %v", err)
+	}
 	// ...and an eligible backup is sitting in the live tree.
 	writeFile(t, filepath.Join(logsDir, "raylet.out.1"), strings.Repeat("x", 10))
 
@@ -1501,7 +1554,9 @@ func TestCapacityProbeDoesNotBypassTheWatermark(t *testing.T) {
 	defer release()
 
 	u.writeLog(t, "raylet.out", "active")
-	u.segment(t, "raylet.out.1", 150)
+	// Ray has rolled this one off, so the collector alone retains its 150 bytes and the
+	// watermark engages.
+	u.rolledOffSegment(t, "raylet.out.1", 150)
 	if s := u.rc.stats(); !s.IntakePaused || s.Captures != 1 {
 		t.Fatalf("stats = %+v, want intake paused at the high-water mark with one capture", s)
 	}
@@ -1852,7 +1907,9 @@ func newRecomputeFixture(t *testing.T, size int) *recomputeFixture {
 		t.Fatalf("restore() error: %v", err)
 	}
 	b := newStagedBytes()
-	b.track(key, int64(size))
+	// The fixture stages a standalone file, so the collector is its only owner and it
+	// is retained as well as staged.
+	b.observe(key, int64(size), 1)
 	return &recomputeFixture{b: b, ix: ix, entry: entry, stagingRoot: stagingRoot, key: key}
 }
 
@@ -2093,5 +2150,173 @@ func TestWorkerDoesNotStartAQueuedJobAfterQuit(t *testing.T) {
 
 	if got := writer.attemptCount(); got != 0 {
 		t.Errorf("%d storage call(s) were made for jobs queued before quit, want 0", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Retained-byte accounting. A capture is a hard link, so it costs no additional
+// blocks while Ray still has its own link to the segment. Only once Ray rolls the
+// segment off its backup ring is the collector keeping those blocks alive, and only
+// that is what the intake watermark may measure.
+// ---------------------------------------------------------------------------
+
+// A capture Ray still owns must not count against the watermark. Gating on logical
+// staged bytes charged the collector for Ray's entire backup ring, which pauses intake
+// during ordinary healthy rotation and silently stops the feature doing its job.
+func TestRetainedBytesExcludeBlocksRayStillOwns(t *testing.T) {
+	dir := t.TempDir()
+	// A watermark far below the segment: logical accounting would pause immediately.
+	u := startUploading(t, dir, func(cfg *rotatedCollectorConfig) {
+		cfg.HighWaterBytes = 10
+		cfg.LowWaterBytes = 5
+		cfg.Writer = nil // uploads off: this is only about accounting
+	})
+
+	u.writeLog(t, "raylet.out", "active")
+	u.segment(t, "raylet.out.1", 500)
+
+	s := u.rc.stats()
+	if s.Captures != 1 {
+		t.Fatalf("stats = %+v, want the backup captured", s)
+	}
+	if s.StagedBytes != 500 {
+		t.Errorf("StagedBytes = %d, want the full logical size 500", s.StagedBytes)
+	}
+	if s.RetainedBytes != 0 {
+		t.Errorf("RetainedBytes = %d, want 0 while Ray still holds its own link", s.RetainedBytes)
+	}
+	if s.IntakePaused {
+		t.Errorf("stats = %+v, want intake open: the capture shares Ray's blocks and retains nothing", s)
+	}
+
+	// Sweeps must not drift into charging for it either.
+	u.fireTick(t)
+	if s := u.rc.stats(); s.RetainedBytes != 0 || s.IntakePaused {
+		t.Errorf("stats = %+v after a sweep, want the capture still retaining nothing", s)
+	}
+}
+
+// Once Ray rolls the segment off its ring the collector's link is the last one, so the
+// blocks exist only because of this feature and must be charged for. Nothing touches
+// the staging path when Ray unlinks its own name, so the reconcile sweep is what has
+// to notice.
+func TestRetainedBytesCountCapturesRayHasRolledOff(t *testing.T) {
+	dir := t.TempDir()
+	u := startUploading(t, dir, func(cfg *rotatedCollectorConfig) {
+		cfg.Writer = nil
+	})
+
+	u.writeLog(t, "raylet.out", "active")
+	u.segment(t, "raylet.out.1", 500)
+	if s := u.rc.stats(); s.RetainedBytes != 0 {
+		t.Fatalf("stats = %+v, want nothing retained while Ray holds its link", s)
+	}
+
+	// Ray rolls the segment off the end of its backup ring.
+	if err := os.Remove(filepath.Join(u.logsDir, "raylet.out.1")); err != nil {
+		t.Fatalf("remove Ray's link: %v", err)
+	}
+	// No event fires for a path outside the staging tree, so only the sweep can see it.
+	u.fireTick(t)
+
+	s := u.rc.stats()
+	if s.StagedBytes != 500 {
+		t.Errorf("StagedBytes = %d, want the logical size unchanged at 500", s.StagedBytes)
+	}
+	if s.RetainedBytes != 500 {
+		t.Errorf("RetainedBytes = %d, want 500 now that the collector holds the only link", s.RetainedBytes)
+	}
+}
+
+// The property B1 exists for: a storage outage cannot grow local disk without bound,
+// and recovery restores capture on its own.
+func TestOutageRetainsBoundedDiskThenResumes(t *testing.T) {
+	dir := t.TempDir()
+	u := startUploading(t, dir, func(cfg *rotatedCollectorConfig) {
+		cfg.HighWaterBytes = 200
+		cfg.LowWaterBytes = 100
+	})
+	// The object store is refusing writes, so nothing can be released.
+	u.writer.setFailAll(true)
+
+	u.writeLog(t, "raylet.out", "active")
+	u.rolledOffSegment(t, "raylet.out.1", 120)
+	u.rolledOffSegment(t, "raylet.out.2", 120)
+
+	s := u.rc.stats()
+	if s.RetainedBytes != 240 || !s.IntakePaused {
+		t.Fatalf("stats = %+v, want 240 retained bytes and intake paused", s)
+	}
+	if s.Captures != 2 || s.Pending != 2 {
+		t.Fatalf("stats = %+v, want both captures held as pending", s)
+	}
+
+	// Nothing already captured is evicted to make room, and new backups are skipped
+	// rather than displacing what is already held.
+	u.rolledOffSegment(t, "raylet.out.3", 120)
+	s = u.rc.stats()
+	if s.Captures != 2 || s.Pending != 2 || s.RetainedBytes != 240 {
+		t.Fatalf("stats = %+v, want the held captures kept and the new backup skipped", s)
+	}
+	if got := u.stagedPaths(t); len(got) != 2 {
+		t.Errorf("staging holds %v, want only the two captures made before the pause", got)
+	}
+
+	// Retry work continues while intake is shut — that is what eventually clears it.
+	before := u.writer.attemptCount()
+	u.clock.advance(time.Hour)
+	u.fireTick(t)
+	u.waitFor(t, "uploads to keep being retried while paused", func() bool {
+		u.clock.advance(time.Hour)
+		u.fireTick(t)
+		return u.writer.attemptCount() > before
+	})
+	if s := u.rc.stats(); !s.IntakePaused {
+		t.Errorf("stats = %+v, want intake still paused while nothing has been released", s)
+	}
+
+	// Storage recovers. The uploads succeed, the collector is the only link holder so
+	// each release frees real blocks, retained bytes fall past the low mark and intake
+	// reopens on its own.
+	u.writer.setFailAll(false)
+	u.waitFor(t, "intake to resume once the retained captures drain", func() bool {
+		u.clock.advance(time.Hour)
+		u.fireTick(t)
+		return !u.rc.stats().IntakePaused
+	})
+	if s := u.rc.stats(); s.RetainedBytes > u.rc.gate.low {
+		t.Errorf("stats = %+v, want retained bytes at or below the low-water mark", s)
+	}
+}
+
+// A restart has no persisted record of which captures the collector alone was holding,
+// so retention has to be re-derived from the link counts on the staging volume itself.
+func TestReconstructionComputesRetainedFromLinkCounts(t *testing.T) {
+	dir := t.TempDir()
+	logsDir := filepath.Join(dir, "session", "logs")
+	stagingRoot := filepath.Join(dir, "rotated-staging")
+	writeFile(t, filepath.Join(logsDir, "raylet.out"), "active")
+
+	// One staged capture Ray still has a link to...
+	stageManually(t, logsDir, stagingRoot, "raylet.out.1", strings.Repeat("a", 300), false)
+	// ...and one Ray has already rolled off, leaving staging as the only reference.
+	stageManually(t, logsDir, stagingRoot, "raylet.out.2", strings.Repeat("b", 700), false)
+	if err := os.Remove(filepath.Join(logsDir, "raylet.out.2")); err != nil {
+		t.Fatalf("remove Ray's link to raylet.out.2: %v", err)
+	}
+
+	u := startUploading(t, dir, func(cfg *rotatedCollectorConfig) {
+		cfg.Writer = nil // uploads off, so reconstruction is what is measured
+	})
+
+	s := u.rc.stats()
+	if s.Captures != 2 {
+		t.Fatalf("stats = %+v, want both staged captures adopted", s)
+	}
+	if s.StagedBytes != 1000 {
+		t.Errorf("StagedBytes = %d, want both logical sizes, 1000", s.StagedBytes)
+	}
+	if s.RetainedBytes != 700 {
+		t.Errorf("RetainedBytes = %d, want only the sole-owned capture, 700", s.RetainedBytes)
 	}
 }

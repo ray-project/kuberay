@@ -60,9 +60,9 @@ type rotatedCollectorConfig struct {
 	NodeName    string
 
 	// Cluster is where captures land in object storage. Writer is what puts them
-	// there; a nil Writer leaves the collector capturing and accounting normally with
-	// the upload pipeline switched off, which is how it runs until the wiring tranche
-	// hands it the runtime's storage client.
+	// there, and production always supplies one. A nil Writer leaves the collector
+	// capturing and accounting normally with the upload pipeline switched off, which
+	// is how tests exercise capture on its own.
 	Cluster clusterIdentity
 	Writer  objectWriter
 
@@ -155,7 +155,11 @@ type rotatedCollector struct {
 // snapshot it is produced by the owner goroutine, because staged bytes, the upload
 // queue and the intake gate are owner-owned and must never be read from outside it.
 type collectorStats struct {
+	// StagedBytes is every logical byte the collector has pinned. RetainedBytes is
+	// the subset the collector alone is keeping allocated, which is what the intake
+	// watermark is measured against.
 	StagedBytes       int64
+	RetainedBytes     int64
 	Captures          int
 	Pending           int
 	Uploaded          int
@@ -428,6 +432,7 @@ func (rc *rotatedCollector) stats() collectorStats {
 func (rc *rotatedCollector) currentStats() collectorStats {
 	s := collectorStats{
 		StagedBytes:     rc.bytes.total,
+		RetainedBytes:   rc.bytes.retained,
 		Captures:        rc.ix.len(),
 		QueuedUploads:   len(rc.up.queue),
 		InFlightUploads: rc.up.inFlight,
@@ -732,7 +737,7 @@ func (rc *rotatedCollector) capture(path, name string) error {
 	// sweep discards this observation again.
 	rc.gate.observedSpace()
 
-	key, size, err := rc.pinnedInode(staged)
+	key, size, nlink, err := rc.pinnedInode(staged)
 	if err != nil {
 		return errors.Join(err, discardStagingLink(staged))
 	}
@@ -755,7 +760,12 @@ func (rc *rotatedCollector) capture(path, name string) error {
 	}
 	// Accounting and scheduling follow registration, never precede it: a capture the
 	// index rejected has had its link removed and must leave no trace behind.
-	rc.bytes.track(key, size)
+	//
+	// os.Link only succeeds against a source that exists, so a fresh capture has at
+	// least two links and contributes nothing to retained bytes. It starts counting
+	// later, once Ray rolls the segment off its backup ring and the reconcile sweep
+	// re-reads the link count.
+	rc.bytes.observe(key, size, nlink)
 	// The limit is enforced here, not on the next trip through the event loop. A
 	// scan registers every backup it finds without returning to that loop, so
 	// deferring this would let the rest of the scan through after the volume was
@@ -766,25 +776,26 @@ func (rc *rotatedCollector) capture(path, name string) error {
 	return nil
 }
 
-// pinnedInode reads the identity and size of the file the staging link actually
-// pinned. The link must still be a regular file: if the source turned into a symlink
-// or another non-regular object first, what was linked is not a log segment.
+// pinnedInode reads the identity, size and link count of the file the staging link
+// actually pinned. The link must still be a regular file: if the source turned into a
+// symlink or another non-regular object first, what was linked is not a log segment.
 //
-// The size is read from the same stat, so accounting describes exactly the file that
-// was pinned rather than whatever the source path holds a moment later.
-func (rc *rotatedCollector) pinnedInode(staged string) (inodeKey, int64, error) {
+// All three come from the same stat, so accounting describes exactly the file that was
+// pinned rather than whatever the source path holds a moment later. The link count is
+// what tells retained-byte accounting whether Ray still owns this segment.
+func (rc *rotatedCollector) pinnedInode(staged string) (inodeKey, int64, uint64, error) {
 	fi, err := os.Lstat(staged)
 	if err != nil {
-		return inodeKey{}, 0, fmt.Errorf("stat staged capture %s: %w", staged, err)
+		return inodeKey{}, 0, 0, fmt.Errorf("stat staged capture %s: %w", staged, err)
 	}
 	if !fi.Mode().IsRegular() {
-		return inodeKey{}, 0, fmt.Errorf("staged capture %s is not a regular file (%s)", staged, fi.Mode())
+		return inodeKey{}, 0, 0, fmt.Errorf("staged capture %s is not a regular file (%s)", staged, fi.Mode())
 	}
-	key, _, err := inodeFromFileInfo(fi)
+	key, nlink, err := inodeFromFileInfo(fi)
 	if err != nil {
-		return inodeKey{}, 0, fmt.Errorf("read inode of staged capture %s: %w", staged, err)
+		return inodeKey{}, 0, 0, fmt.Errorf("read inode of staged capture %s: %w", staged, err)
 	}
-	return key, fi.Size(), nil
+	return key, fi.Size(), nlink, nil
 }
 
 // discardStagingLink removes a link the collector created but will not track. An
@@ -814,12 +825,15 @@ func registerStaged(stagingRoot string, ix *captureIndex, key inodeKey, e staged
 }
 
 // stagedRecord is one staging file found during reconstruction, together with the
-// inode it was holding at that moment.
+// inode it was holding at that moment and how many links that inode had. The link
+// count is what lets a restart rebuild retained-byte accounting from the filesystem
+// alone, with nothing persisted.
 type stagedRecord struct {
 	entry stagedEntry
 	path  string
 	key   inodeKey
 	size  int64
+	nlink uint64
 }
 
 // reconstructStaging rebuilds the index from the staging volume so a restarted
@@ -871,8 +885,10 @@ func (rc *rotatedCollector) reconstructStaging() error {
 				continue
 			}
 			// One inode, counted once, whether the previous run left it pending or
-			// uploaded: both states pin the same blocks.
-			rc.bytes.track(r.key, r.size)
+			// uploaded: both states pin the same blocks. Whether those blocks are
+			// retained *because of* the collector is re-derived from the link count
+			// this walk read, so a restart recovers retention with nothing persisted.
+			rc.bytes.observe(r.key, r.size, r.nlink)
 			winners[r.key] = r
 			continue
 		}
@@ -933,11 +949,11 @@ func (rc *rotatedCollector) collectStagedRecords(root string) ([]stagedRecord, e
 			rc.report(fmt.Errorf("staged capture %s is not a regular file (%s), ignoring it", path, fi.Mode()))
 			return nil
 		}
-		key, _, err := inodeFromFileInfo(fi)
+		key, nlink, err := inodeFromFileInfo(fi)
 		if err != nil {
 			return fmt.Errorf("read inode of staged capture %s: %w", path, err)
 		}
-		records = append(records, stagedRecord{key: key, entry: entry, path: path, size: fi.Size()})
+		records = append(records, stagedRecord{key: key, entry: entry, path: path, size: fi.Size(), nlink: nlink})
 		return nil
 	})
 	if err != nil {

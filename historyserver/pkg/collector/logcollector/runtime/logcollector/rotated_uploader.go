@@ -295,9 +295,9 @@ func newUploadScheduler(writer objectWriter, backoff []time.Duration) *uploadSch
 	}
 }
 
-// enabled reports whether uploads happen at all. Until the wiring tranche supplies a
-// writer the collector still captures, tracks bytes and reconstructs staging; it
-// simply has nowhere to send the bytes.
+// enabled reports whether uploads happen at all. Production always supplies a writer;
+// without one the collector still captures, tracks bytes and reconstructs staging, but
+// has nowhere to send the bytes.
 func (u *uploadScheduler) enabled() bool { return u.writer != nil }
 
 // start launches the worker. It is called once, from the owner goroutine, after
@@ -404,39 +404,77 @@ func (u *uploadScheduler) delay(attempt int) time.Duration {
 	return u.backoff[attempt-1]
 }
 
-// stagedBytes is the owner's accounting of how much of the staging volume the
-// collector is holding.
+// stagedBytes is the owner's accounting of the staging volume, kept as two separate
+// totals because they answer two different questions.
 //
-// One inode is counted once, at the size of its staged regular file, which is the
-// conservative answer to "how much would be freed if this capture were released":
-// Ray may still hold its own link, in which case releasing frees nothing, but the
-// collector must assume it is responsible for the blocks it pinned.
+//   - total is how many logical bytes the collector has pinned. One inode is counted
+//     once, at the size of its staged regular file. It is a diagnostic.
+//   - retained is how many of those bytes exist *because of* the collector: the ones
+//     the filesystem would have reclaimed already if this feature were not running.
+//     It is what backpressure is measured against.
+//
+// They differ because a capture is a hard link, not a copy. While Ray still holds its
+// own link to a rotated segment the blocks belong to Ray's backup ring, and releasing
+// the capture would free nothing, so the capture contributes zero to retained. Only
+// once Ray rolls the segment off its ring — leaving the staging link as the last
+// reference, nlink == 1 — is the collector keeping those blocks alive, and only then
+// does the capture count. Gating on total instead would charge the collector for Ray's
+// entire backup ring and pause capture during perfectly healthy rotation.
 type stagedBytes struct {
 	sizes map[inodeKey]int64
-	total int64
+	// retainedSizes holds an entry only for captures the collector is solely
+	// responsible for. Presence is the record that nlink was last seen at 1.
+	retainedSizes map[inodeKey]int64
+	total         int64
+	retained      int64
 	// stale records that an incremental update did not add up. Rather than let the
-	// total drift, the next maintenance sweep recomputes it from the index, which is
-	// the authoritative list of what the collector is holding.
+	// totals drift, the next maintenance sweep recomputes them from the index, which
+	// is the authoritative list of what the collector is holding.
 	stale bool
 }
 
 func newStagedBytes() *stagedBytes {
-	return &stagedBytes{sizes: make(map[inodeKey]int64)}
+	return &stagedBytes{
+		sizes:         make(map[inodeKey]int64),
+		retainedSizes: make(map[inodeKey]int64),
+	}
 }
 
-func (b *stagedBytes) track(key inodeKey, size int64) {
+// observe records a capture's size and whether the collector is now its only owner.
+// nlink comes from the same stat as size, so the two describe one moment.
+func (b *stagedBytes) observe(key inodeKey, size int64, nlink uint64) {
 	if prev, ok := b.sizes[key]; ok {
 		b.total += size - prev
 	} else {
 		b.total += size
 	}
 	b.sizes[key] = size
+
+	prev, wasRetained := b.retainedSizes[key]
+	if nlink == 1 {
+		if wasRetained {
+			b.retained += size - prev
+		} else {
+			b.retained += size
+		}
+		b.retainedSizes[key] = size
+		return
+	}
+	// Someone else still holds a link, so these blocks are not this feature's doing.
+	if wasRetained {
+		b.retained -= prev
+		delete(b.retainedSizes, key)
+	}
 }
 
 func (b *stagedBytes) forget(key inodeKey) {
+	if size, ok := b.retainedSizes[key]; ok {
+		b.retained -= size
+		delete(b.retainedSizes, key)
+	}
 	size, ok := b.sizes[key]
 	if !ok {
-		// The caller released something accounting never saw, so the total is no
+		// The caller released something accounting never saw, so the totals are no
 		// longer trustworthy.
 		b.stale = true
 		return
@@ -447,69 +485,85 @@ func (b *stagedBytes) forget(key inodeKey) {
 
 func (b *stagedBytes) markStale() { b.stale = true }
 
-// recompute rebuilds the total from the captures the index actually holds.
+// recompute rebuilds both totals from the captures the index actually holds.
+//
+// It is also how a capture's ownership is re-read. Ray rolling a segment off its
+// backup ring drops nlink from 2 to 1 without touching the staging path, so no
+// filesystem event on the staging tree announces it; this sweep is what notices.
 //
 // Every entry must be proven: a regular file at the entry's own staging path holding
-// exactly the inode the index pinned, with the size taken from that same stat. An
-// entry that cannot be proven keeps its last known size rather than dropping to zero,
-// and leaves accounting stale — because the alternative is worse than an approximate
-// total. Counting an unreadable capture as zero would make staged bytes fall, and a
-// falling total is what releases backpressure; the collector would conclude the
-// pressure was over precisely because it had lost track of what it was holding.
+// exactly the inode the index pinned, with size and link count taken from that same
+// stat. An entry that cannot be proven keeps its last known size and is counted as
+// retained, rather than dropping to zero, and leaves accounting stale. Counting an
+// unreadable capture as zero would make retained bytes fall, and a falling total is
+// what releases backpressure; the collector would conclude the pressure was over
+// precisely because it had lost track of what it was holding.
 //
 // Only a sweep in which every indexed capture verified may clear stale.
 func (b *stagedBytes) recompute(stagingRoot string, ix *captureIndex, report func(error)) {
 	sizes := make(map[inodeKey]int64, ix.len())
-	var total int64
+	retainedSizes := make(map[inodeKey]int64, len(b.retainedSizes))
+	var total, retained int64
 	verified := true
 
 	for key, c := range ix.byInode {
-		size, err := verifiedStagedSize(c, stagingRoot)
+		size, nlink, err := verifiedStagedSize(c, stagingRoot)
 		if err != nil {
 			verified = false
 			report(fmt.Errorf("recompute staged bytes: %w", err))
-			// Retain what was last known about this capture. If nothing was ever
-			// known, it contributes nothing — but accounting stays stale, so that
-			// gap can never be mistaken for relieved pressure.
+			// Retain what was last known about this capture, and charge it as
+			// retained: an entry the collector cannot inspect is one it must assume
+			// it is holding. If nothing was ever known it contributes nothing — but
+			// accounting stays stale, so that gap can never be mistaken for relieved
+			// pressure.
 			if prev, known := b.sizes[key]; known {
 				sizes[key] = prev
 				total += prev
+				retainedSizes[key] = prev
+				retained += prev
 			}
 			continue
 		}
 		sizes[key] = size
 		total += size
+		if nlink == 1 {
+			retainedSizes[key] = size
+			retained += size
+		}
 	}
 
 	b.sizes = sizes
+	b.retainedSizes = retainedSizes
 	b.total = total
+	b.retained = retained
 	b.stale = !verified
 }
 
-// trusted reports whether the total is currently believed to describe the volume.
+// trusted reports whether the totals are currently believed to describe the volume.
 func (b *stagedBytes) trusted() bool { return !b.stale }
 
-// verifiedStagedSize returns the size of a capture's staged file, but only once that
-// path has been proven to still be a regular file holding the pinned inode. Size and
-// identity come from one stat, so the number returned describes the file that was
-// checked rather than whatever the path names a moment later.
-func verifiedStagedSize(c *capture, stagingRoot string) (int64, error) {
+// verifiedStagedSize returns the size and link count of a capture's staged file, but
+// only once that path has been proven to still be a regular file holding the pinned
+// inode. Size, link count and identity come from one stat, so the numbers returned
+// describe the file that was checked rather than whatever the path names a moment
+// later.
+func verifiedStagedSize(c *capture, stagingRoot string) (int64, uint64, error) {
 	p := c.Entry.path(stagingRoot)
 	fi, err := os.Lstat(p)
 	if err != nil {
-		return 0, fmt.Errorf("stat capture %s at %s: %w", c.Entry.CaptureID, p, err)
+		return 0, 0, fmt.Errorf("stat capture %s at %s: %w", c.Entry.CaptureID, p, err)
 	}
 	if !fi.Mode().IsRegular() {
-		return 0, fmt.Errorf("capture %s at %s is not a regular file (%s)", c.Entry.CaptureID, p, fi.Mode())
+		return 0, 0, fmt.Errorf("capture %s at %s is not a regular file (%s)", c.Entry.CaptureID, p, fi.Mode())
 	}
-	staged, _, err := inodeFromFileInfo(fi)
+	staged, nlink, err := inodeFromFileInfo(fi)
 	if err != nil {
-		return 0, fmt.Errorf("read inode of capture %s at %s: %w", c.Entry.CaptureID, p, err)
+		return 0, 0, fmt.Errorf("read inode of capture %s at %s: %w", c.Entry.CaptureID, p, err)
 	}
 	if staged != c.Inode {
-		return 0, fmt.Errorf("capture %s at %s now holds %s, not the pinned %s", c.Entry.CaptureID, p, staged, c.Inode)
+		return 0, 0, fmt.Errorf("capture %s at %s now holds %s, not the pinned %s", c.Entry.CaptureID, p, staged, c.Inode)
 	}
-	return fi.Size(), nil
+	return fi.Size(), nlink, nil
 }
 
 // intakeGate decides whether new captures may be created.
@@ -703,40 +757,53 @@ func (rc *rotatedCollector) pump() error {
 	return nil
 }
 
-// enforceHighWater settles the watermark against the current total right where the
-// total changed, so a long scan cannot keep capturing past the limit.
+// enforceHighWater settles the watermark against the retained total right where that
+// total changed, so a sweep cannot keep capturing past the limit.
 func (rc *rotatedCollector) enforceHighWater() {
-	if rc.gate.applyHighWater(rc.bytes.total) {
+	if rc.gate.applyHighWater(rc.bytes.retained) {
 		rc.reportIntakePaused()
 	}
 }
 
 func (rc *rotatedCollector) reportIntakePaused() {
 	rc.intakePauses++
-	rc.report(fmt.Errorf("%w: %d staged byte(s) reached the high-water mark of %d; captured data is kept and uploads continue, but backups rotated away from now on cannot be preserved",
-		errIntakePaused, rc.bytes.total, rc.gate.high))
+	rc.report(fmt.Errorf("%w: %d retained byte(s) reached the high-water mark of %d; captured data is kept and uploads continue, but backups rotated away from now on cannot be preserved",
+		errIntakePaused, rc.bytes.retained, rc.gate.high))
 }
 
-// settleIntake applies the current byte total to the gate and reports transitions.
+// settleIntake applies the retained total to the gate and reports transitions.
+//
+// Retained rather than logical bytes: the gate exists to bound the disk this feature
+// keeps allocated, and a capture Ray still has its own link to keeps none.
 //
 // The transition counters matter beyond diagnostics: a resume followed immediately by
 // a fresh pause leaves the gate looking untouched, so the count is the only evidence
 // that intake was ever wrongly reopened.
 func (rc *rotatedCollector) settleIntake() (resumed bool) {
-	paused, resumed := rc.gate.evaluate(rc.bytes.total, rc.bytes.trusted())
+	paused, resumed := rc.gate.evaluate(rc.bytes.retained, rc.bytes.trusted())
 	if paused {
 		rc.reportIntakePaused()
 	}
 	if resumed {
 		rc.intakeResumes++
-		logrus.Infof("Rotated log collector: staging fell to %d byte(s); resuming intake", rc.bytes.total)
+		logrus.Infof("Rotated log collector: retained staging fell to %d byte(s); resuming intake", rc.bytes.retained)
 	}
 	return resumed
 }
 
-// maintain is the backstop sweep: rediscover the tree, re-establish accounting if it
-// drifted, queue anything pending that is not already scheduled, retry releases and
-// act on anything whose retry has come due.
+// maintain is the backstop sweep: rediscover the tree, queue anything pending that is
+// not already scheduled, retry releases, re-establish accounting and act on anything
+// whose retry has come due.
+//
+// Accounting is recomputed on every sweep rather than only when it is marked stale,
+// because a capture's ownership changes without anything touching the staging tree:
+// when Ray rolls a segment off its backup ring the staging link's nlink falls from 2
+// to 1, and that is the moment the collector starts retaining blocks the filesystem
+// would otherwise have reclaimed. Nothing reports that, so the sweep re-reads it. It
+// costs one Lstat per tracked capture and reuses the pass that already existed.
+//
+// It runs after the releases so the totals describe what is still held once this
+// sweep's releases are done.
 //
 // The sweep is also the only place a disk-full pause can be tested, so it opens with
 // a single probe allowance and closes by withdrawing whatever is left of it. That
@@ -746,11 +813,9 @@ func (rc *rotatedCollector) maintain() {
 	rc.scanTree()
 	rc.gate.disarmProbe()
 
-	if rc.bytes.stale {
-		rc.bytes.recompute(rc.cfg.StagingRoot, rc.ix, rc.report)
-	}
 	rc.sweepUploads()
 	rc.sweepReleases()
+	rc.bytes.recompute(rc.cfg.StagingRoot, rc.ix, rc.report)
 	rc.processDue()
 }
 

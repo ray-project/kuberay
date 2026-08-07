@@ -26,6 +26,37 @@ import (
 // only the fsnotify watcher, the reconcile ticker, the supervisor's clock and the
 // object store are substituted.
 
+// disabledReason and durablyDisabled read the supervisor's failure record. Production
+// never asks either question — it decides through startable — so they live here rather
+// than adding permanently unused accessors to the supervisor. They take mu the same way
+// the production readers do, so they are safe to call while a collector is running.
+
+// disabledReason returns why rotated collection has no collector for an identity,
+// whether that condition is durable or merely not due for a retry yet.
+func (s *rotatedSupervisor) disabledReason(key rotatedKey) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f, ok := s.failures[key]; ok {
+		return f.err
+	}
+	return nil
+}
+
+// durablyDisabled reports whether an identity was switched off for a condition that
+// will not be retried.
+func (s *rotatedSupervisor) durablyDisabled(key rotatedKey) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, ok := s.failures[key]
+	return ok && f.durable
+}
+
 // runtimeWriter is the one storage writer both halves of the runtime share, exactly as
 // production does: the rotated uploader and the legacy walk both write through it, so a
 // single recording shows which objects production produced.
@@ -581,10 +612,28 @@ func TestRuntimePassesSessionNodeAndPaths(t *testing.T) {
 	if rc.cfg.NodeName != testNodeID {
 		t.Errorf("NodeName = %s, want %s", rc.cfg.NodeName, testNodeID)
 	}
-	// No user-facing capacity value exists to derive watermarks from, so watermark
-	// backpressure stays off in production. ENOSPC protection does not depend on it.
-	if rc.cfg.HighWaterBytes != 0 || rc.cfg.LowWaterBytes != 0 {
-		t.Errorf("watermarks = %d/%d, want 0/0 until an operator-supplied capacity exists",
+}
+
+// TestRuntimeConfiguresBoundedIntake is the wiring regression test for the watermarks.
+//
+// The collector-level tests already prove what the intake gate does once it has a
+// limit; what they cannot show is whether production ever gives it one. A collector
+// built with zero watermarks captures without any staging bound, so an object store
+// that stops accepting writes would let capture pin every byte Ray logs from then on —
+// a hard link keeps the blocks alive after Ray unlinks its own name.
+func TestRuntimeConfiguresBoundedIntake(t *testing.T) {
+	h := newRuntimeHarness(t)
+	rc := h.start()
+
+	if rc.cfg.HighWaterBytes <= 0 {
+		t.Errorf("HighWaterBytes = %d, want a positive bound: capture is otherwise unbounded while uploads fail",
+			rc.cfg.HighWaterBytes)
+	}
+	if rc.cfg.LowWaterBytes <= 0 {
+		t.Errorf("LowWaterBytes = %d, want a positive resume threshold", rc.cfg.LowWaterBytes)
+	}
+	if rc.cfg.LowWaterBytes >= rc.cfg.HighWaterBytes {
+		t.Errorf("watermarks = %d/%d, want LowWaterBytes below HighWaterBytes so the gate has hysteresis",
 			rc.cfg.HighWaterBytes, rc.cfg.LowWaterBytes)
 	}
 }
@@ -1381,6 +1430,10 @@ func TestRuntimeConcurrentSessionChangesKeepOneOwner(t *testing.T) {
 	if run.finished() {
 		t.Error("the surviving collector is not running")
 	}
+	// ensure returns as soon as the survivor's goroutine is spawned, so wait for that
+	// goroutine to reach its loop before inspecting watchers — it installs its watcher
+	// on the way there. This is the same round trip awaitCollector uses.
+	run.rc.snapshot()
 	// Every retired collector is stopped, so its watcher is closed. Exactly one — the
 	// survivor's — is open.
 	open := 0

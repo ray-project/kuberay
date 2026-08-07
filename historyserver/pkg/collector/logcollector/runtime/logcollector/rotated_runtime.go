@@ -64,6 +64,24 @@ const (
 	// never come back — and this is the backstop for anything that pruning misses, so
 	// a process that outlives thousands of session changes cannot grow this map.
 	maxRotatedFailureRecords = 16
+
+	// defaultStagingHighWaterBytes and defaultStagingLowWaterBytes bound the disk this
+	// feature keeps allocated.
+	//
+	// They are measured against retained bytes, not logical staged bytes: a capture
+	// counts only once the collector holds the last link to its inode. A segment Ray
+	// still has in its own backup ring costs nothing extra — the hard link shares Ray's
+	// blocks — so healthy rotation never approaches these marks. What does approach them
+	// is an object store that has stopped accepting writes, where captures Ray has since
+	// rolled off accumulate with nothing able to release them.
+	//
+	// Reaching the high mark pauses new capture only: nothing already captured is
+	// evicted, uploads, promotions and releases keep running, and a segment larger than
+	// the whole budget is still captured, because the limit is applied after the capture
+	// that crossed it. The gap to the low mark is hysteresis, so a total sitting near the
+	// limit does not flap.
+	defaultStagingHighWaterBytes int64 = 1 << 30 // 1 GiB
+	defaultStagingLowWaterBytes  int64 = 1 << 29 // 512 MiB
 )
 
 // rotatedKey is the identity a collector is built for. A change to either half means
@@ -170,8 +188,8 @@ type rotatedFailure struct {
 //
 // A holder of lifecycle may take mu. Nothing ever takes lifecycle while holding mu, so
 // the two cannot invert. The consequence that matters is that a collector goroutine
-// reporting its own failure, and every observer — activeKey, disabledReason — take
-// only mu and so never wait behind a drain.
+// reporting its own failure, and every observer of the current run, take only mu and so
+// never wait behind a drain.
 //
 // Neither lock is ever held while calling into RayLogHandler, and the handler never
 // calls in while holding its own lock, so there is no inversion with the node-name
@@ -294,15 +312,15 @@ func (s *rotatedSupervisor) ensure(session, node, logsDir string) {
 		NodeName:    node,
 		Cluster:     s.cluster,
 		Writer:      s.writer,
-		// HighWaterBytes and LowWaterBytes stay at zero, which disables watermark
-		// backpressure. The runtime has no capacity figure to derive them from — the
-		// staging tree shares Ray's own temporary volume, whose size the collector is
-		// never told — and inventing a limit would either throttle capture on a large
-		// volume or fail to protect a small one. ENOSPC protection is unaffected: it
-		// comes from the filesystem refusing a link, not from these numbers.
+		// Bound what capture may pin, so an object store that stops accepting writes
+		// cannot turn every rotated segment into a permanent hold on the volume Ray is
+		// still logging to. ENOSPC handling is separate and unaffected: it comes from
+		// the filesystem refusing a link, which catches a volume another process filled.
 		//
 		// Everything else — reconcile interval, upload backoff, worker stop grace,
 		// capture IDs — takes the package defaults.
+		HighWaterBytes: defaultStagingHighWaterBytes,
+		LowWaterBytes:  defaultStagingLowWaterBytes,
 	}
 	if s.tune != nil {
 		s.tune(&cfg)
@@ -623,32 +641,6 @@ func (s *rotatedSupervisor) startable(key rotatedKey) bool {
 		return false
 	}
 	return true
-}
-
-// disabledReason returns why rotated collection has no collector for an identity,
-// whether that condition is durable or merely not due for a retry yet.
-func (s *rotatedSupervisor) disabledReason(key rotatedKey) error {
-	if s == nil {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if f, ok := s.failures[key]; ok {
-		return f.err
-	}
-	return nil
-}
-
-// durablyDisabled reports whether an identity was switched off for a condition that
-// will not be retried.
-func (s *rotatedSupervisor) durablyDisabled(key rotatedKey) bool {
-	if s == nil {
-		return false
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	f, ok := s.failures[key]
-	return ok && f.durable
 }
 
 // retireUnless stops the current collector unless it belongs to session.
