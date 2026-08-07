@@ -663,6 +663,11 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 // follows it, which is the case issue #2564 reports. A Pod that is terminating is skipped because
 // its replacement will come back with the template labels. Before any head Pod exists there is
 // nothing to select yet, so the template is the only source available.
+//
+// A cluster is only supposed to have one head Pod, and reconcilePods refuses to clean up extras on
+// its own, so the oldest one wins when several are alive. List order is not specified, and without
+// a tiebreak the selector could flip from one reconcile to the next and rewrite the service every
+// time. The oldest Pod is also the one that has been serving traffic.
 func (r *RayClusterReconciler) headServiceSelectorOverrides(ctx context.Context, instance *rayv1.RayCluster) (map[string]string, error) {
 	sourceLabels := instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels
 
@@ -670,12 +675,18 @@ func (r *RayClusterReconciler) headServiceSelectorOverrides(ctx context.Context,
 	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return nil, err
 	}
-	for _, headPod := range headPods.Items {
+	var servingHeadPod *corev1.Pod
+	for i := range headPods.Items {
+		headPod := &headPods.Items[i]
 		if headPod.DeletionTimestamp != nil {
 			continue
 		}
-		sourceLabels = headPod.Labels
-		break
+		if servingHeadPod == nil || isOlderHeadPod(headPod, servingHeadPod) {
+			servingHeadPod = headPod
+		}
+	}
+	if servingHeadPod != nil {
+		sourceLabels = servingHeadPod.Labels
 	}
 
 	overrides := make(map[string]string, 2)
@@ -685,6 +696,15 @@ func (r *RayClusterReconciler) headServiceSelectorOverrides(ctx context.Context,
 		}
 	}
 	return overrides, nil
+}
+
+// isOlderHeadPod reports whether a was created before b, falling back to the name so that two Pods
+// created within the same clock tick still produce a stable answer.
+func isOlderHeadPod(a, b *corev1.Pod) bool {
+	if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+		return a.CreationTimestamp.Before(&b.CreationTimestamp)
+	}
+	return a.Name < b.Name
 }
 
 // updateHeadService keeps the parts of an existing head service that the operator owns in sync with

@@ -1225,6 +1225,41 @@ func TestReconcileHeadServiceKeepsSelectingRunningHeadPod(t *testing.T) {
 		"the selector should track the head Pod, not the template")
 }
 
+// TestReconcileHeadServicePrefersOldestHeadPod pins the tiebreak when more than one head Pod is
+// alive, which reconcilePods refuses to clean up on its own. List order is not specified, so
+// without a tiebreak the selector could flip between reconciles and rewrite the service each time.
+// The oldest Pod is the one that has been serving traffic, so it is the one that must not be
+// orphaned.
+func TestReconcileHeadServicePrefersOldestHeadPod(t *testing.T) {
+	setupTest(t)
+
+	ctx := context.TODO()
+	cluster := testRayCluster.DeepCopy()
+
+	oldest := runningHeadPod(cluster, "serving-app")
+	oldest.Name = "zzz-oldest-head"
+	oldest.CreationTimestamp = metav1.NewTime(time.Now().Add(-time.Hour))
+
+	newer := runningHeadPod(cluster, "intruder-app")
+	newer.Name = "aaa-newer-head"
+	newer.CreationTimestamp = metav1.NewTime(time.Now())
+
+	r := newHeadServiceReconciler(cluster, oldest, newer)
+	require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+	svc := getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "serving-app", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey],
+		"the oldest head Pod should decide the selector regardless of list order")
+
+	// The choice must not depend on which reconcile pass we are in.
+	for i := 0; i < 5; i++ {
+		require.NoError(t, r.reconcileHeadService(ctx, cluster))
+	}
+	svc = getHeadService(ctx, t, r.Client, cluster)
+	assert.Equal(t, "serving-app", svc.Spec.Selector[utils.KubernetesApplicationNameLabelKey],
+		"repeated reconciles should not flip the selector")
+}
+
 // TestReconcileHeadServiceFollowsRestartedHeadPod is the other half of issue #2564. Once the head
 // Pod restarts it comes back carrying the new template label, and the selector has to follow it.
 func TestReconcileHeadServiceFollowsRestartedHeadPod(t *testing.T) {
