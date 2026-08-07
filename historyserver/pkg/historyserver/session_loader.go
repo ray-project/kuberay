@@ -31,7 +31,7 @@ const (
 	//   - add-then-evict: cache momentarily holds oldTotal + newEntry
 	//   - one large session: a single snapshot bigger than the whole budget is kept
 	//   - per-request decode: every GET unmarshals cached bytes into a full *SessionSnapshot
-	DefaultSessionCacheMaxBytes = 256 << 20
+	DefaultSessionCacheMaxBytes = 2 << 30
 )
 
 // processor is an interface to enable mocking SessionProcessor in tests.
