@@ -147,7 +147,7 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
 
 		t.Run("mTLS auto-generate cert-manager resources created", func(t *testing.T) {
-			LogWithTimestamp(t, " %s", "tls-certmgr-res")
+			LogWithTimestamp(t, "Testing cert-manager resources")
 			g := NewWithT(t)
 
 			refetchedRayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
@@ -175,11 +175,11 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 			g.Expect(workerSecret.Data).To(HaveKey("tls.key"), "worker secret should have tls.key")
 			g.Expect(workerSecret.Data).To(HaveKey("ca.crt"), "worker secret should have ca.crt")
 
-			LogWithTimestamp(t, "Cert-manager CA, head, and worker secrets verified for cluster %s", "tls-certmgr-res")
+			LogWithTimestamp(t, "Cert-manager CA, head, and worker secrets verified for cluster %s", clusterName)
 		})
 
 		t.Run("mTLS auto-generate pod TLS configuration", func(t *testing.T) {
-			LogWithTimestamp(t, " %s", "tls-pod-config")
+			LogWithTimestamp(t, "Testing pod TLS configuration")
 			g := NewWithT(t)
 
 			// Verify head pod configuration
@@ -193,11 +193,11 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 				verifyTLSVolumeMount(g, &workerPods[i], workerSecretName)
 			}
 
-			LogWithTimestamp(t, "Pod TLS configuration verified for cluster %s", "tls-pod-config")
+			LogWithTimestamp(t, "Pod TLS configuration verified for cluster %s", clusterName)
 		})
 
 		t.Run("mTLS auto-generate Ray job submission succeeds", func(t *testing.T) {
-			LogWithTimestamp(t, " %s", "tls-job-submit")
+			LogWithTimestamp(t, "Testing Ray job submission with auto-generated")
 			g := NewWithT(t)
 
 			// Submit a simple Ray job and verify it completes.
@@ -223,7 +223,7 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 				gg.Expect(stdout.String()).To(ContainSubstring("succeeded"))
 			}, TestTimeoutMedium).Should(Succeed())
 
-			LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", "tls-job-submit")
+			LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
 		})
 	})
 }
