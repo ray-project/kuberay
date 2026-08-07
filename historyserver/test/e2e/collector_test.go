@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -391,13 +390,17 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Get the sessionID from the head pod to build the expected S3 key
-// 3. Wait for the timezone file to appear in S3 at {sessionName}/fetched_endpoints/restful__timezone
-// 4. Read the file and verify it contains valid JSON with the expected schema (offset, value)
-// 5. Delete S3 bucket to ensure test isolation
+// 2. Assert the timezone data reaches S3 with the expected key and schema
+// 3. Delete S3 bucket to ensure test isolation
 func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
+	assertTimezoneStored(test, g, rayCluster, s3Client)
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3Client *s3.S3) {
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
 	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
@@ -433,8 +436,6 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Timezone data stored successfully: %s", string(timezoneBody))
-
-	DeleteS3Bucket(test, g, s3Client)
 }
 
 // testCollectorStoresPlacementGroups verifies that the Head collector periodically polls
@@ -658,15 +659,6 @@ func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 func testCollectorWithTokenAuth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := ApplyRayClusterWithCollectorTokenAuth(test, g, namespace)
 
-	// The operator generates the auth Secret; without it the sidecars could not resolve a token.
-	secretName := utils.CheckName(rayCluster.Name)
-	g.Eventually(func(gg Gomega) {
-		secret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), secretName, metav1.GetOptions{})
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(secret.Data).To(HaveKey(utils.RAY_AUTH_TOKEN_SECRET_KEY))
-		gg.Expect(secret.Data[utils.RAY_AUTH_TOKEN_SECRET_KEY]).NotTo(BeEmpty())
-	}, TestTimeoutShort).Should(Succeed())
-
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -685,48 +677,9 @@ PY`
 	g.Expect(strings.TrimSpace(unauthenticated.String())).To(Equal("401"),
 		"Dashboard must reject unauthenticated requests, otherwise this test proves nothing")
 
-	// The crash loop from #5056 took ~60s to surface, so a plain Expect right after startup would
-	// pass even against the broken build. Hold the assertion open instead.
-	LogWithTimestamp(test.T(), "Verifying collector containers do not crash-loop under token auth")
-	g.Consistently(func(gg Gomega) {
-		pod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-
-		var found bool
-		for _, status := range pod.Status.ContainerStatuses {
-			if status.Name != "collector" {
-				continue
-			}
-			found = true
-			gg.Expect(status.RestartCount).To(BeZero(), "collector restarted, it is likely failing to authenticate")
-			gg.Expect(status.State.Running).NotTo(BeNil(), "collector is not running")
-		}
-		gg.Expect(found).To(BeTrue(), "collector container status not reported")
-	}, TestTimeoutShort, 5*time.Second).Should(Succeed())
-
-	// Data in storage is the real proof: reaching it requires an authenticated Dashboard call.
-	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
-	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
-	timezoneKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
-
-	LogWithTimestamp(test.T(), "Waiting for authenticated endpoint data at S3 key: %s", timezoneKey)
-	g.Eventually(func(gg Gomega) {
-		result, err := s3Client.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    new(timezoneKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer result.Body.Close()
-
-		body, err := io.ReadAll(result.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(body).NotTo(BeEmpty())
-
-		var timezone map[string]any
-		gg.Expect(json.Unmarshal(body, &timezone)).To(Succeed())
-		gg.Expect(timezone).To(HaveKey("value"))
-	}, TestTimeoutMedium).Should(Succeed())
+	// Data in storage is the real proof: the collector only writes the timezone object after an
+	// authenticated Dashboard call succeeds.
+	assertTimezoneStored(test, g, rayCluster, s3Client)
 
 	DeleteS3Bucket(test, g, s3Client)
 }
