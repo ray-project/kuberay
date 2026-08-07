@@ -112,7 +112,7 @@ spec:
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR
-              value: "root"
+              value: "storage-root"
             - name: EVENTS_PORT
               value: "8084"
             volumeMounts:
@@ -209,7 +209,7 @@ spec:
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR
-              value: "root"
+              value: "storage-root"
             - name: EVENTS_PORT
               value: "8084"
             volumeMounts:
