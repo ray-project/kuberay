@@ -172,7 +172,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", util.RayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.image, "image", defaultImageWithTag, "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
@@ -204,8 +204,8 @@ func (options *SubmitJobOptions) Complete() error {
 		options.fileName = filepath.Clean(options.fileName)
 	}
 
-	// If the image is the default but the ray version is not the default, set the image to use the specified ray version
-	if options.image == defaultImageWithTag && options.rayVersion != util.RayVersion {
+	// If the image is the default, align its tag with the configured Ray version.
+	if options.image == defaultImageWithTag {
 		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
 	}
 
