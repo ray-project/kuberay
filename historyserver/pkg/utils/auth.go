@@ -20,7 +20,7 @@ const (
 	RayK8sTokenPath           = RayTokenMountPath + "/token"
 )
 
-func IsRayAuthEnabled() bool {
+func isRayAuthEnabled() bool {
 	return strings.EqualFold(os.Getenv(RAY_AUTH_MODE_ENV_VAR), RayAuthModeToken)
 }
 
@@ -47,7 +47,7 @@ func getRayAuthToken() (string, error) {
 		return token, nil
 	case staticAuthToken() != "":
 		return staticAuthToken(), nil
-	case IsRayAuthEnabled():
+	case isRayAuthEnabled():
 		return "", fmt.Errorf("%s=%s but no credential is available: set %s, or %s=true with the projected token volume mounted at %s",
 			RAY_AUTH_MODE_ENV_VAR, RayAuthModeToken, RAY_AUTH_TOKEN_ENV_VAR, RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, RayTokenMountPath)
 	default:

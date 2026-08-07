@@ -34,7 +34,7 @@ func TestIsRayAuthEnabled(t *testing.T) {
 		t.Run(tc.scenario, func(t *testing.T) {
 			clearAuthEnv(t)
 			t.Setenv(RAY_AUTH_MODE_ENV_VAR, tc.authMode)
-			assert.Equal(t, tc.expected, IsRayAuthEnabled())
+			assert.Equal(t, tc.expected, isRayAuthEnabled())
 		})
 	}
 }
