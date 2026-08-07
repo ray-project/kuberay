@@ -141,7 +141,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-2'
@@ -174,7 +174,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-3'
@@ -207,7 +207,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-4'
@@ -240,7 +240,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-5'
@@ -273,7 +273,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-6'
@@ -306,7 +306,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-7'
@@ -339,7 +339,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-8'
@@ -372,7 +372,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-9'
@@ -405,7 +405,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-10'
@@ -438,7 +438,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-11'
@@ -471,7 +471,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-12'
@@ -504,7 +504,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-13'
@@ -537,7 +537,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-14'
@@ -570,7 +570,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-15'
@@ -603,7 +603,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-16'
@@ -636,7 +636,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-17'
@@ -669,7 +669,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-18'
@@ -702,7 +702,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-19'
@@ -735,7 +735,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-20'
@@ -768,7 +768,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-21'
@@ -801,7 +801,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-22'
@@ -834,7 +834,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-23'
@@ -867,7 +867,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-24'
@@ -900,7 +900,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade With Locust-25'
@@ -933,7 +933,7 @@
     - set -o pipefail
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^TestRayServiceIncrementalUpgradeWithLocust$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m go test -timeout 60m -v ./test/e2eincrementalupgrade -run '^(TestRayServiceIncrementalUpgradeWithLocust|TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust)$' 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test Autoscaler E2E Part 1 (nightly operator)'
