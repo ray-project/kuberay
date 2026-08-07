@@ -22,8 +22,6 @@ spec:
             test: rayjob-historyserver-gcs
         spec:
           serviceAccountName: historyserver
-          imagePullSecrets:
-          affinity:
           containers:
           - env:
             - name: RAY_TMP_ROOT
@@ -40,9 +38,6 @@ spec:
               value: "ALL"
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
-            securityContext:
-              allowPrivilegeEscalation: true
-              privileged: true
             name: ray-head
             resources:
               limits:
@@ -57,8 +52,8 @@ spec:
             - name: code-sample
               mountPath: /home/ray/samples
           - name: collector
-            image: quay.io/kuberay/collector:nightly
-            imagePullPolicy: Always
+            image: ${COLLECTOR_IMAGE}
+            imagePullPolicy: IfNotPresent
             env:
             - name: RAY_CLUSTER_NAME
               valueFrom:
@@ -114,10 +109,6 @@ spec:
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
-          tolerations:
-          - key: ray
-            operator: Equal
-            value: cpu
           volumes:
           - name: historyserver
             emptyDir: {}
@@ -157,9 +148,6 @@ spec:
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             name: ray-worker
-            securityContext:
-              allowPrivilegeEscalation: true
-              privileged: true
             resources:
               limits:
                 cpu: "2"
@@ -171,8 +159,8 @@ spec:
             - name: historyserver
               mountPath: *rayTmpRoot
           - name: collector
-            image: quay.io/kuberay/collector:nightly
-            imagePullPolicy: Always
+            image: ${COLLECTOR_IMAGE}
+            imagePullPolicy: IfNotPresent
             env:
             - name: RAY_CLUSTER_NAME
               valueFrom:
@@ -207,10 +195,6 @@ spec:
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
-          tolerations:
-          - key: ray
-            operator: Equal
-            value: cpu
           volumes:
           - name: historyserver
             emptyDir: {}

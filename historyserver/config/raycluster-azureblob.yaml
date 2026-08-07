@@ -16,8 +16,6 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
-        imagePullSecrets:
-        affinity:
         containers:
         - env:
           - name: RAY_TMP_ROOT
@@ -30,11 +28,10 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+            value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           name: ray-head
           resources:
             limits:
@@ -80,10 +77,6 @@ spec:
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
@@ -99,7 +92,6 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
-        imagePullSecrets:
         containers:
         - env:
           - name: RAY_TMP_ROOT
@@ -112,12 +104,11 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+            value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-worker
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           resources:
             limits:
               cpu: "2"
@@ -162,10 +153,6 @@ spec:
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
