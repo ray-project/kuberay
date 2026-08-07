@@ -19,8 +19,6 @@ spec:
           test: raycluster-historyserver
       spec:
         serviceAccountName: historyserver
-        imagePullSecrets:
-        affinity:
         containers:
         - env:
           - name: RAY_TMP_ROOT
@@ -37,9 +35,6 @@ spec:
             value: "ALL"
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           name: ray-head
           resources:
             limits:
@@ -105,10 +100,6 @@ spec:
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
@@ -142,9 +133,6 @@ spec:
           image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-worker
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           resources:
             limits:
               cpu: "2"
@@ -188,10 +176,6 @@ spec:
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
