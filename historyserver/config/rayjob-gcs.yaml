@@ -102,13 +102,9 @@ spec:
             - name: RAY_ROLE
               value: "Head"
             - name: OWNER_KIND
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-crd']
+              value: "rayjob"
             - name: OWNER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
+              value: "rayjob-historyserver-gcs"
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR
@@ -199,13 +195,9 @@ spec:
             - name: RAY_ROLE
               value: "Worker"
             - name: OWNER_KIND
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-crd']
+              value: "rayjob"
             - name: OWNER_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['ray.io/originated-from-cr-name']
+              value: "rayjob-historyserver-gcs"
             - name: STORAGE_BACKEND
               value: "gcs"
             - name: RAY_ROOT_DIR

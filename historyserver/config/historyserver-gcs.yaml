@@ -42,7 +42,7 @@ spec:
             value: "gcs"
           - name: RAY_ROOT_DIR
             value: "storage-root"
-        image: historyserver:v0.1.0
+        image: ${HISTORY_SERVER_IMAGE}
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
