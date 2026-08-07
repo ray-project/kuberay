@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -21,7 +22,7 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := NewConfigMap(namespace.Name, Files(test, "counter.py", "fail.py"))
+	jobsAC := NewConfigMap(namespace.Name, Files(test, "counter.py", "fail.py", "long_running.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
@@ -114,6 +115,63 @@ env_vars:
 			gg.Expect(err).ToNot(HaveOccurred())
 			gg.Expect(rayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusNew))
 		}, time.Second*3, time.Millisecond*500).Should(Succeed())
+	})
+
+	test.T().Run("Suspend and resume a clusterSelector RayJob", func(t *testing.T) {
+		t.Parallel()
+
+		// RayJob with a long-running entrypoint so we can suspend while it is running
+		rayJobAC := rayv1ac.RayJob("suspend-cluster-selector", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+
+		// Suspend the RayJob
+		LogWithTimestamp(test.T(), "Suspending RayJob %s/%s", rayJob.Namespace, rayJob.Name)
+		rayJobAC.Spec.WithSuspend(true)
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Suspended'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusSuspended)))
+
+		// Assert the RayCluster still exists (clusterSelector does not delete the cluster)
+		_, err = GetRayCluster(test, namespace.Name, rayCluster.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Assert suspended status fields
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusStopped))
+		g.Expect(rayJob.Status.JobId).To(BeEmpty())
+		g.Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+		g.Expect(rayJob.Status.RayClusterName).To(Equal(rayCluster.Name))
+
+		// Resume the RayJob
+		LogWithTimestamp(test.T(), "Resuming RayJob %s/%s", rayJob.Namespace, rayJob.Name)
+		rayJobAC.Spec.WithSuspend(false)
+		rayJob, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running' again", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
 	test.T().Run("RayJob should not be created due to managedBy invalid value", func(_ *testing.T) {
