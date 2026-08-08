@@ -7,7 +7,7 @@ metadata:
   namespace: default
 spec:
   # Enable Ray token authentication. Requires Ray 2.52.0+
-  # rayVersion: "2.52.0"
+  # rayVersion: "2.55.0"
   # authOptions:
   #   mode: token
   headGroupSpec:
@@ -20,8 +20,6 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
-        imagePullSecrets:
-        affinity:
         containers:
         - env:
           - name: RAY_TMP_ROOT
@@ -32,17 +30,10 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-            # in ray 2.52.0, we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            # in ray 2.53.0 (noy yet done). we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
-                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
-                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
-          image: rayproject/ray:2.52.0
+            value: "ALL"
+          image: rayproject/ray:2.55.0
           imagePullPolicy: IfNotPresent
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           name: ray-head
           resources:
             limits:
@@ -58,12 +49,20 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          - name: RAY_CLUSTER_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['ray.io/cluster']
+          - name: RAY_CLUSTER_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           - name: POD_IP
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: raycluster-historyserver-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
@@ -103,6 +102,12 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
+          - name: RAY_ROLE
+            value: "Head"
+          - name: STORAGE_BACKEND
+            value: "s3"
+          - name: RAY_ROOT_DIR
+            value: "log"
           # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
           # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN
@@ -110,20 +115,9 @@ spec:
           #     secretKeyRef:
           #       name: raycluster-historyserver  # defaults to the RayCluster name
           #       key: auth_token
-          command:
-          - collector
-          - --role=Head
-          - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-historyserver
-          - --ray-root-dir=log
-          - --events-port=8084
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
@@ -139,7 +133,6 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
-        imagePullSecrets:
         containers:
         - env:
           - name: RAY_TMP_ROOT
@@ -150,18 +143,11 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-            # in ray 2.52.0, we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            # in ray 2.53.0 (not yet done). we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
-                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
-                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
-          image: rayproject/ray:2.52.0
+            value: "ALL"
+          image: rayproject/ray:2.55.0
           imagePullPolicy: IfNotPresent
           name: ray-worker
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           resources:
             limits:
               cpu: "2"
@@ -176,12 +162,20 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          - name: RAY_CLUSTER_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['ray.io/cluster']
+          - name: RAY_CLUSTER_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           - name: POD_IP
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
           - name: FQ_RAY_IP
-            value: raycluster-historyserver-head-svc.default.svc.cluster.local
+            value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: AWS_ACCESS_KEY_ID
@@ -200,6 +194,12 @@ spec:
             value: "true"
           - name: S3DISABLE_SSL
             value: "true"
+          - name: RAY_ROLE
+            value: "Worker"
+          - name: STORAGE_BACKEND
+            value: "s3"
+          - name: RAY_ROOT_DIR
+            value: "log"
           # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
           # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN
@@ -207,20 +207,9 @@ spec:
           #     secretKeyRef:
           #       name: raycluster-historyserver  # defaults to the RayCluster name
           #       key: auth_token
-          command:
-          - collector
-          - --role=Worker
-          - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-historyserver
-          - --ray-root-dir=log
-          - --events-port=8084
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
-        tolerations:
-        - key: ray
-          operator: Equal
-          value: cpu
         volumes:
         - name: historyserver
           emptyDir: {}
