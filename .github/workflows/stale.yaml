@@ -64,7 +64,7 @@ jobs:
 
           # --- Pull request settings (Ray's current stale-PR policy) ---
           # Number of days of inactivity before a pull request becomes stale.
-          days-before-pr-stale: 14
+          days-before-pr-stale: 120
 
           # Number of days of inactivity after being marked stale before a pull request is closed.
           days-before-pr-close: 14
