@@ -113,7 +113,6 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 	}
 
 	g := NewWithT(t)
-	t.Parallel()
 
 	namespace := test.NewTestNamespace()
 	clusterName := "raycluster-tls-autogen"
