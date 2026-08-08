@@ -918,7 +918,7 @@ func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
 	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
 		return false
 	}
-	return spec != nil && spec.UpgradeStrategy != nil &&
+	return spec != nil && spec.UpgradeStrategy != nil && spec.UpgradeStrategy.Type != nil &&
 		*spec.UpgradeStrategy.Type == rayv1.RayServiceNewClusterWithIncrementalUpgrade
 }
 
