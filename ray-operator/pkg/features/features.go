@@ -56,6 +56,15 @@ const (
 	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
 
+	// owner: N/A
+	// rep: N/A
+	// alpha: v1.8
+	//
+	// When enabled, the RestartPolicy for head and worker pods is no longer forced to Never
+	// when autoscaler V2 is active, allowing users to set any RestartPolicy they prefer.
+	// The validation that enforces RestartPolicy=Never when using autoscaler V2 is also skipped.
+	AutoscalerFlexibleRestartPolicy featuregate.Feature = "AutoscalerFlexibleRestartPolicy"
+
 	// owner: @chipspeak @kryanbeane
 	// rep: N/A
 	// alpha: v1.7
@@ -98,6 +107,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade:     {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
+	AutoscalerFlexibleRestartPolicy:  {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
