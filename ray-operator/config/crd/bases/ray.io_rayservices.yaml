@@ -338,8 +338,20 @@ spec:
                         x-kubernetes-validations:
                         - message: gcsFaultToleranceOptions.backend is immutable
                           rule: self == oldSelf
+                      enableActivePassiveHead:
+                        default: false
+                        type: boolean
                       externalStorageNamespace:
                         type: string
+                      leaderElectionLeaseDurationSeconds:
+                        format: int32
+                        type: integer
+                      leaderElectionRenewDeadlineSeconds:
+                        format: int32
+                        type: integer
+                      leaderElectionRetryPeriodSeconds:
+                        format: int32
+                        type: integer
                       redisAddress:
                         type: string
                       redisPassword:
