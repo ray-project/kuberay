@@ -92,7 +92,18 @@ func TestGetRayAuthToken(t *testing.T) {
 		t.Setenv(RAY_AUTH_MODE_ENV_VAR, RayAuthModeToken)
 		_, err := getRayAuthToken()
 		require.Error(t, err)
+		require.ErrorIs(t, err, errRayAuthConfig)
 		assert.Contains(t, err.Error(), "no credential is available")
+	})
+
+	t.Run("missing projected token fails", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(RAY_AUTH_MODE_ENV_VAR, RayAuthModeToken)
+		t.Setenv(RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "true")
+		_, err := getRayAuthToken()
+		require.Error(t, err)
+		require.ErrorIs(t, err, errRayAuthConfig)
+		assert.Contains(t, err.Error(), RayK8sTokenPath)
 	})
 }
 

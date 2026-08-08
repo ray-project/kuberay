@@ -273,7 +273,8 @@ func GetNodeRayIDWithFQIP() (string, error) {
 		if err == nil {
 			return nodeID, nil
 		}
-		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) || errors.Is(err, errDashboardAuthFailed) {
+		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) ||
+			errors.Is(err, errDashboardAuthFailed) || errors.Is(err, errRayAuthConfig) {
 			return "", err
 		}
 		logrus.Warnf("Attempt %d/12 to discover Ray NodeID failed: %v, retrying in 5s", i+1, err)
