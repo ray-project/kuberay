@@ -42,3 +42,11 @@ func GetRayPersistCompletePath() string {
 func GetRaySessionLatestPath() string {
 	return filepath.Join(GetTmpRayRoot(), "session_latest")
 }
+
+// GetRayRotatedStagingPath returns the directory where the collector stages rotated
+// log segments it has pinned with hard links. It sits beside prev-logs rather than
+// inside it so that the prev-logs walker, which uploads and then deletes whole node
+// directories, never touches captures that are still draining.
+func GetRayRotatedStagingPath() string {
+	return filepath.Join(GetTmpRayRoot(), "rotated-staging")
+}
