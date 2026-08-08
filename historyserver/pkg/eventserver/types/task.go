@@ -1,8 +1,11 @@
 package types
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -99,6 +102,69 @@ type TaskLogInfo struct {
 	StderrEnd   int64  `json:"stderrEnd"`
 }
 
+// protoJSONInt64 accepts the quoted int64 representation required by ProtoJSON
+// as well as regular JSON numbers.
+type protoJSONInt64 int64
+
+func (value *protoJSONInt64) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if bytes.Equal(data, []byte("null")) {
+		return nil
+	}
+
+	if len(data) > 0 && data[0] == '"' {
+		var encodedValue string
+		if err := json.Unmarshal(data, &encodedValue); err != nil {
+			return err
+		}
+		parsedValue, err := strconv.ParseInt(encodedValue, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid int64 value %q: %w", encodedValue, err)
+		}
+		*value = protoJSONInt64(parsedValue)
+		return nil
+	}
+
+	var parsedValue int64
+	if err := json.Unmarshal(data, &parsedValue); err != nil {
+		return err
+	}
+	*value = protoJSONInt64(parsedValue)
+	return nil
+}
+
+// UnmarshalJSON accepts TaskLogInfo offsets produced by both standard JSON
+// encoders and ProtoJSON encoders.
+func (t *TaskLogInfo) UnmarshalJSON(data []byte) error {
+	decoded := struct {
+		StdoutFile  string         `json:"stdoutFile"`
+		StderrFile  string         `json:"stderrFile"`
+		StdoutStart protoJSONInt64 `json:"stdoutStart"`
+		StdoutEnd   protoJSONInt64 `json:"stdoutEnd"`
+		StderrStart protoJSONInt64 `json:"stderrStart"`
+		StderrEnd   protoJSONInt64 `json:"stderrEnd"`
+	}{
+		StdoutFile:  t.StdoutFile,
+		StderrFile:  t.StderrFile,
+		StdoutStart: protoJSONInt64(t.StdoutStart),
+		StdoutEnd:   protoJSONInt64(t.StdoutEnd),
+		StderrStart: protoJSONInt64(t.StderrStart),
+		StderrEnd:   protoJSONInt64(t.StderrEnd),
+	}
+
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	t.StdoutFile = decoded.StdoutFile
+	t.StderrFile = decoded.StderrFile
+	t.StdoutStart = int64(decoded.StdoutStart)
+	t.StdoutEnd = int64(decoded.StdoutEnd)
+	t.StderrStart = int64(decoded.StderrStart)
+	t.StderrEnd = int64(decoded.StderrEnd)
+	return nil
+}
+
 // Task's fields are populated from the TASK_DEFINITION_EVENT, ACTOR_TASK_DEFINITION_EVENT, and TASK_LIFECYCLE_EVENT.
 // A TASK_DEFINITION_EVENT or an ACTOR_TASK_DEFINITION_EVENT is expected to be emitted once per task attempt,
 // For proto definitions, please refer to:
@@ -153,8 +219,7 @@ type Task struct {
 	// Actor task repr name, if applicable.
 	ActorReprName *string `json:"actorReprName,omitempty"`
 
-	// TaskLogInfo is just added at https://github.com/ray-project/ray/pull/60287.
-	// TODO(jiangjiawei1103): Add support for TaskLogInfo.
+	// TaskLogInfo was added at https://github.com/ray-project/ray/pull/60287.
 	TaskLogInfo *TaskLogInfo `json:"taskLogInfo,omitempty"`
 
 	State        TaskStatus

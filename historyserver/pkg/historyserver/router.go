@@ -1837,6 +1837,20 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	resp.Write(respData)
 }
 
+func formatTaskLogInfoForResponse(taskLogInfo *eventtypes.TaskLogInfo) interface{} {
+	if taskLogInfo == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"stdout_file":  taskLogInfo.StdoutFile,
+		"stderr_file":  taskLogInfo.StderrFile,
+		"stdout_start": taskLogInfo.StdoutStart,
+		"stdout_end":   taskLogInfo.StdoutEnd,
+		"stderr_start": taskLogInfo.StderrStart,
+		"stderr_end":   taskLogInfo.StderrEnd,
+	}
+}
+
 // formatTaskForResponse formats a task data result of a single task attempt for the response.
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
@@ -1898,7 +1912,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		// TODO(jiangjiawei1103): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
-		result["task_log_info"] = task.TaskLogInfo
+		result["task_log_info"] = formatTaskLogInfoForResponse(task.TaskLogInfo)
 		if task.RayErrorInfo != nil {
 			result["error_message"] = task.RayErrorInfo.ErrorMessage
 		} else {

@@ -515,6 +515,139 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 	}
 }
 
+func TestTaskLogInfoLifecycleReplay(t *testing.T) {
+	const (
+		clusterName = "cluster1"
+		taskID      = "ccccdddd5678ccccaaaabbbb1234aaaabbbb1234aaaabbbb"
+	)
+
+	makeLogEvent := func(attempt int, taskLogInfo map[string]any) map[string]any {
+		return map[string]any{
+			"eventType": string(types.TASK_LIFECYCLE_EVENT),
+			"taskLifecycleEvent": map[string]any{
+				"taskId":           taskID,
+				"taskAttempt":      attempt,
+				"stateTransitions": []any{},
+				"taskLogInfo":      taskLogInfo,
+			},
+		}
+	}
+	start := makeLogEvent(0, map[string]any{
+		"stdoutFile": "worker.out", "stderrFile": "worker.err",
+		"stdoutStart": "0", "stdoutEnd": "0", "stderrStart": "7", "stderrEnd": "0",
+	})
+	end := makeLogEvent(0, map[string]any{
+		"stdoutFile": "", "stderrFile": "",
+		"stdoutStart": "0", "stdoutEnd": "20", "stderrStart": "0", "stderrEnd": "30",
+	})
+	definition := makeTaskEventMap("bench_task", "", taskID, 0)
+	stateWithoutLogInfo := map[string]any{
+		"eventType": string(types.TASK_LIFECYCLE_EVENT),
+		"taskLifecycleEvent": map[string]any{
+			"taskId":      taskID,
+			"taskAttempt": 0,
+			"stateTransitions": []any{map[string]any{
+				"state": "RUNNING", "timestamp": "2026-08-08T01:45:58.211147463Z",
+			}},
+		},
+	}
+	want := &types.TaskLogInfo{
+		StdoutFile: "worker.out", StderrFile: "worker.err",
+		StdoutStart: 0, StdoutEnd: 20, StderrStart: 7, StderrEnd: 30,
+	}
+
+	for _, tt := range []struct {
+		name   string
+		events []map[string]any
+	}{
+		{name: "start then end", events: []map[string]any{start, end, definition, stateWithoutLogInfo}},
+		{name: "end then start", events: []map[string]any{end, start, definition, stateWithoutLogInfo}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewEventHandler(nil)
+			for _, event := range tt.events {
+				require.NoError(t, h.storeEvent(clusterName, event))
+			}
+			tasks := h.getTasks(clusterName)
+			require.Len(t, tasks, 1)
+			assert.Equal(t, want, tasks[0].TaskLogInfo)
+			assert.Equal(t, "bench_task", tasks[0].TaskName)
+			assert.Equal(t, types.RUNNING, tasks[0].State)
+		})
+	}
+
+	t.Run("metadata-only update preserves lifecycle fields", func(t *testing.T) {
+		h := NewEventHandler(nil)
+		state := stateWithoutLogInfo["taskLifecycleEvent"].(map[string]any)
+		state["jobId"] = "aaaabbbb"
+		state["workerPid"] = 123
+		state["actorReprName"] = "Counter.increment"
+		require.NoError(t, h.storeEvent(clusterName, stateWithoutLogInfo))
+		before := h.getTasks(clusterName)[0]
+
+		require.NoError(t, h.storeEvent(clusterName, end))
+		after := h.getTasks(clusterName)[0]
+		assert.Equal(t, before.StateTransitions, after.StateTransitions)
+		assert.Equal(t, before.State, after.State)
+		assert.Equal(t, before.JobID, after.JobID)
+		assert.Equal(t, before.WorkerPID, after.WorkerPID)
+		assert.Equal(t, before.ActorReprName, after.ActorReprName)
+		require.NotNil(t, after.TaskLogInfo)
+		assert.Equal(t, int64(20), after.TaskLogInfo.StdoutEnd)
+	})
+
+	t.Run("task attempts remain isolated", func(t *testing.T) {
+		h := NewEventHandler(nil)
+		attempt1 := makeLogEvent(1, map[string]any{
+			"stdoutFile": "attempt1.out", "stdoutStart": "25", "stdoutEnd": "0",
+		})
+		require.NoError(t, h.storeEvent(clusterName, end))
+		require.NoError(t, h.storeEvent(clusterName, attempt1))
+		tasks := h.getTasks(clusterName)
+		require.Len(t, tasks, 2)
+		assert.Equal(t, int64(20), tasks[0].TaskLogInfo.StdoutEnd)
+		assert.Equal(t, "attempt1.out", tasks[1].TaskLogInfo.StdoutFile)
+		assert.Zero(t, tasks[1].TaskLogInfo.StdoutEnd)
+	})
+
+	h := NewEventHandler(nil)
+	err := h.storeEvent(clusterName, map[string]any{
+		"eventType": string(types.TASK_LIFECYCLE_EVENT),
+		"taskLifecycleEvent": map[string]any{
+			"taskId": taskID, "taskAttempt": 0, "stateTransitions": []any{},
+		},
+	})
+	require.Error(t, err, "an empty lifecycle event without TaskLogInfo must still be rejected")
+}
+
+func TestStoreRay256TaskLogInfoJSONL(t *testing.T) {
+	const capturedEvents = `
+{"eventType":"TASK_LIFECYCLE_EVENT","taskLifecycleEvent":{"jobId":"AwAAAA==","nodeId":"","stateTransitions":[],"taskAttempt":0,"taskId":"UYPGNywAXvb///////////////8DAAAA","taskLogInfo":{"stderrEnd":"6331","stderrFile":"","stderrStart":"0","stdoutEnd":"6331","stdoutFile":"","stdoutStart":"0"},"workerId":"","workerPid":0}}
+{"eventType":"TASK_DEFINITION_EVENT","taskDefinitionEvent":{"jobId":"AwAAAA==","language":"PYTHON","requiredResources":{"CPU":0.2},"taskAttempt":0,"taskId":"UYPGNywAXvb///////////////8DAAAA","taskName":"bench_task","taskType":"NORMAL_TASK"}}
+{"eventType":"TASK_LIFECYCLE_EVENT","taskLifecycleEvent":{"jobId":"AwAAAA==","nodeId":"","stateTransitions":[{"state":"RUNNING","timestamp":"2026-08-08T01:45:58.211147463Z"}],"taskAttempt":0,"taskId":"UYPGNywAXvb///////////////8DAAAA","workerId":"","workerPid":215}}
+{"eventType":"TASK_LIFECYCLE_EVENT","taskLifecycleEvent":{"jobId":"AwAAAA==","nodeId":"D2kMAY8zIxLFuYnLXnAKJtuumyBv618fCGSF7g==","stateTransitions":[{"state":"PENDING_ARGS_AVAIL","timestamp":"2026-08-08T01:45:57.009825296Z"},{"state":"SUBMITTED_TO_WORKER","timestamp":"2026-08-08T01:45:58.209153338Z"},{"state":"FINISHED","timestamp":"2026-08-08T01:45:58.224019505Z"}],"taskAttempt":0,"taskId":"UYPGNywAXvb///////////////8DAAAA","workerId":"BYdHtXNHrWxpi1lRHeTmT8N+THrSsDPrfN988Q==","workerPid":0}}
+`
+
+	events, err := DecodeEventFileBytes("ray-2.56-events.jsonl", []byte(capturedEvents))
+	require.NoError(t, err)
+	require.Len(t, events, 4)
+
+	h := NewEventHandler(nil)
+	for _, event := range events {
+		require.NoError(t, h.storeEvent("cluster1", event))
+	}
+	tasks := h.getTasks("cluster1")
+	require.Len(t, tasks, 1)
+	task := tasks[0]
+	assert.Equal(t, "bench_task", task.TaskName)
+	assert.Equal(t, types.FINISHED, task.State)
+	assert.NotEmpty(t, task.NodeID)
+	assert.NotEmpty(t, task.WorkerID)
+	require.NotNil(t, task.TaskLogInfo)
+	assert.Equal(t, int64(6331), task.TaskLogInfo.StdoutEnd)
+	assert.Equal(t, int64(6331), task.TaskLogInfo.StderrEnd)
+}
+
 // TestActorLifecycleEventDeduplication verifies that duplicate actor events are correctly filtered
 func TestActorLifecycleEventDeduplication(t *testing.T) {
 	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.

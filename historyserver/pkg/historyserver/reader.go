@@ -499,9 +499,8 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPath
 		)
 	}
 
-	// Try to use task_log_info if available
-	// NOTE: task_log_info is currently not supported in ray export event, so we will always
-	// fallback to following logic.
+	// Prefer task_log_info when Ray provides a file name. Some lifecycle events
+	// contain only offsets, so keep the worker ID fallback below.
 	if foundTask.TaskLogInfo != nil {
 		var logFilename string
 		if suffix == "err" {
@@ -509,7 +508,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPath
 		} else {
 			logFilename = foundTask.TaskLogInfo.StdoutFile
 		}
-		if logFilename != "" {
+		if logFilename = taskLogBasename(logFilename); logFilename != "" {
 			return foundTask.NodeID, logFilename, nil
 		}
 	}
@@ -530,6 +529,19 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPath
 	}
 
 	return nodeIDHex, logFilename, nil
+}
+
+// taskLogBasename maps Ray's absolute worker-container log path to the file
+// name stored below the History Server's per-node logs prefix.
+func taskLogBasename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+	filename = path.Base(filename)
+	if filename == "." || filename == ".." || filename == "/" {
+		return ""
+	}
+	return filename
 }
 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
