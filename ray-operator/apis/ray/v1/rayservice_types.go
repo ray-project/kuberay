@@ -61,6 +61,7 @@ var DeploymentStatusEnum = struct {
 }
 
 // These options are currently only supported for the IncrementalUpgrade type.
+// +kubebuilder:validation:XValidation:rule="has(self.gatewayRef) != (has(self.gatewayClassName) && size(self.gatewayClassName) != 0)",message="Exactly one of gatewayClassName or gatewayRef must be specified"
 type ClusterUpgradeOptions struct {
 	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
 	// Defaults to 100%.
@@ -72,7 +73,78 @@ type ClusterUpgradeOptions struct {
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
-	GatewayClassName string `json:"gatewayClassName"`
+	// Mutually exclusive with GatewayRef: set exactly one.
+	// +optional
+	GatewayClassName string `json:"gatewayClassName,omitempty"`
+	// GatewayRef, when set, attaches the RayService's HTTPRoute to a
+	// pre-existing Gateway instead of creating a per-RayService Gateway. Use this
+	// when the cluster's Gateway controller only reconciles a specific shared
+	// Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-
+	// created Gateways are never programmed). When set, KubeRay skips Gateway
+	// creation and only manages the HTTPRoute's backend weights on the referenced
+	// Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace.
+	// Mutually exclusive with GatewayClassName: set exactly one.
+	// +optional
+	GatewayRef *GatewayReference `json:"gatewayRef,omitempty"`
+}
+
+// GatewayReference references an existing Gateway resource. The controller only manages
+// the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
+// pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
+// so it does not act as a catch-all that collides with other HTTPRoutes on a shared
+// Gateway that KubeRay does not otherwise configure.
+//
+// The referenced Gateway must already exist and must allow HTTPRoutes from the
+// RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
+// updates, or deletes the referenced Gateway.
+type GatewayReference struct {
+	// Name of the existing Gateway. Must be a valid Gateway resource name
+	// (an RFC 1123 subdomain).
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Name string `json:"name"`
+	// Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.
+	// Must be a valid namespace name (an RFC 1123 label).
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	Namespace string `json:"namespace,omitempty"`
+	// SectionName is the name of a listener on the referenced Gateway to attach the
+	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
+	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
+	// Must be a valid Gateway API SectionName (an RFC 1123 subdomain).
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	SectionName string `json:"sectionName,omitempty"`
+	// Port is the network port of the referenced Gateway's listener to attach the
+	// HTTPRoute to. When both SectionName and Port are set, the selected listener
+	// must match both. When omitted, listener selection is not constrained by port.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
+	// Hostnames scope the RayService's HTTPRoute to the given hostnames on the
+	// referenced Gateway. On a shared Gateway this prevents the route from acting as
+	// a catch-all and colliding with other HTTPRoutes. When omitted, the route
+	// matches all hostnames the Gateway's listener accepts (the previous behavior).
+	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
+	// "*.example.com" is allowed).
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Hostnames []string `json:"hostnames,omitempty"`
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced
+	// Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it
+	// does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"
+	// (match all paths, the previous behavior) when omitted.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:Pattern=`^/`
+	PathPrefix string `json:"pathPrefix,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

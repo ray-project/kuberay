@@ -16,7 +16,17 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds,omitempty"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
+	// Mutually exclusive with GatewayRef: set exactly one.
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
+	// GatewayRef, when set, attaches the RayService's HTTPRoute to a
+	// pre-existing Gateway instead of creating a per-RayService Gateway. Use this
+	// when the cluster's Gateway controller only reconciles a specific shared
+	// Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-
+	// created Gateways are never programmed). When set, KubeRay skips Gateway
+	// creation and only manages the HTTPRoute's backend weights on the referenced
+	// Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace.
+	// Mutually exclusive with GatewayClassName: set exactly one.
+	GatewayRef *GatewayReferenceApplyConfiguration `json:"gatewayRef,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -54,5 +64,13 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value int3
 // If called multiple times, the GatewayClassName field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value string) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayClassName = &value
+	return b
+}
+
+// WithGatewayRef sets the GatewayRef field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the GatewayRef field is set to the value of the last call.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayRef(value *GatewayReferenceApplyConfiguration) *ClusterUpgradeOptionsApplyConfiguration {
+	b.GatewayRef = value
 	return b
 }

@@ -516,8 +516,21 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	}
 
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		// Always target the per-RayService Gateway KubeRay owns ("{name}-gateway" in
+		// the RayService namespace), never RayServiceGatewayNamespacedName — the
+		// latter now resolves to the shared Gateway when GatewayRef is set,
+		// and deleting that would tear down ingress for every other RayService on it.
+		//
+		// Targeting the owned name explicitly also cleans up an orphan left behind by
+		// switching a RayService from gatewayClassName to gatewayRef: the old
+		// "{name}-gateway" is still deleted here, while a service that only ever used
+		// gatewayRef simply has no such Gateway (Get returns NotFound).
+		ownedGatewayName := types.NamespacedName{
+			Name:      fmt.Sprintf("%s-gateway", rayServiceInstance.Name),
+			Namespace: rayServiceInstance.Namespace,
+		}
 		gateway := &gwv1.Gateway{}
-		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
+		if err := r.Get(ctx, ownedGatewayName, gateway); err == nil {
 			allDeleted = false
 			if gateway.DeletionTimestamp.IsZero() {
 				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
@@ -930,6 +943,23 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
+	// When a pre-existing (shared) Gateway is referenced, KubeRay does not own or
+	// create a Gateway — it only manages the HTTPRoute. Verify the referenced
+	// Gateway exists; if it is missing, record an event and return so the HTTPRoute
+	// is not attached to a non-existent Gateway.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
+		gatewayName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
+		if err := r.Get(ctx, gatewayName, &gwv1.Gateway{}); err != nil {
+			if errors.IsNotFound(err) {
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToGetGateway), string(utils.GetAction),
+					"Referenced Gateway %s/%s not found for RayService %s/%s", gatewayName.Namespace, gatewayName.Name, rayServiceInstance.Namespace, rayServiceInstance.Name)
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+
 	// Construct desired Gateway object for RayService
 	desiredGateway, err := r.createGateway(rayServiceInstance)
 	if err != nil {
@@ -1087,12 +1117,16 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
 	activeServePort := common.GetServePort(activeRayCluster)
 
+	// Serve services live in the RayService's namespace. This equals the Gateway's
+	// namespace in the default (KubeRay-created) case, but differs when attaching to
+	// a shared Gateway in another namespace (GatewayRef), so reference the
+	// RayService namespace explicitly for the backends.
 	backendRefs := []gwv1.HTTPBackendRef{
 		{
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(activeClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
 					Port:      new(activeServePort),
 				},
 				Weight: new(activeClusterWeight),
@@ -1109,7 +1143,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
 					Port:      new(pendingServePort),
 				},
 				Weight: new(pendingClusterWeight),
@@ -1117,25 +1151,53 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		})
 	}
 
+	// The HTTPRoute lives in the RayService's namespace (so the RayService owner
+	// reference and GC work), while its ParentRef below targets the Gateway —
+	// which may be in a different namespace when using GatewayRef.
 	httpRouteName := rayServiceInstance.Name + "-httproute"
+	parentRef := gwv1.ParentReference{
+		Name:      gwv1.ObjectName(gatewayInstance.Name),
+		Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+	}
+
+	// Default routing: a "/" PathPrefix match and no hostnames (matches every host
+	// the listener accepts) — the original behavior for a KubeRay-created Gateway.
+	pathPrefix := "/"
+	var hostnames []gwv1.Hostname
+
+	// When attaching to a shared Gateway, GatewayRef options refine the route so it
+	// does not act as a catch-all that collides with other HTTPRoutes: SectionName/
+	// Port pin the listener, and Hostnames/PathPrefix scope which traffic it claims.
+	// For a KubeRay-created Gateway GatewayRef is nil, so the defaults above apply.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
+		if opts.GatewayRef.SectionName != "" {
+			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
+		}
+		if opts.GatewayRef.Port != nil {
+			parentRef.Port = new(*opts.GatewayRef.Port)
+		}
+		if opts.GatewayRef.PathPrefix != "" {
+			pathPrefix = opts.GatewayRef.PathPrefix
+		}
+		for _, h := range opts.GatewayRef.Hostnames {
+			hostnames = append(hostnames, gwv1.Hostname(h))
+		}
+	}
+
 	desiredHTTPRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: rayServiceInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
-				ParentRefs: []gwv1.ParentReference{
-					{
-						Name:      gwv1.ObjectName(gatewayInstance.Name),
-						Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
-					},
-				},
+				ParentRefs: []gwv1.ParentReference{parentRef},
 			},
+			Hostnames: hostnames,
 			Rules: []gwv1.HTTPRouteRule{
 				{
 					Matches: []gwv1.HTTPRouteMatch{
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: new("/"),
+								Value: new(pathPrefix),
 							},
 						},
 					},

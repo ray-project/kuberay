@@ -205,6 +205,20 @@ func RayClusterNetworkResourcesOptions(instance *rayv1.RayCluster) AssociationOp
 }
 
 func RayServiceGatewayNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	// When an existing (shared) Gateway is referenced, target it directly instead
+	// of the per-RayService Gateway KubeRay would otherwise create. An empty
+	// Namespace defaults to the RayService's namespace (k8s single-resource
+	// reference convention).
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayService.Spec); opts != nil && opts.GatewayRef != nil {
+		namespace := opts.GatewayRef.Namespace
+		if namespace == "" {
+			namespace = rayService.Namespace
+		}
+		return types.NamespacedName{
+			Name:      opts.GatewayRef.Name,
+			Namespace: namespace,
+		}
+	}
 	return types.NamespacedName{
 		Name:      fmt.Sprintf("%s-gateway", rayService.Name),
 		Namespace: rayService.Namespace,
