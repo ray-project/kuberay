@@ -896,33 +896,23 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 
 // Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
 func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, instance *rayv1.RayCluster) error {
-	// Check if there are worker groups with NumOfHosts > 1 in the cluster
-	isMultiHost := false
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-		if workerGroup.NumOfHosts > 1 {
-			isMultiHost = true
-			break
-		}
+	services := corev1.ServiceList{}
+	options := common.RayClusterHeadlessServiceListOptions(instance)
+
+	if err := r.List(ctx, &services, options...); err != nil {
+		return err
 	}
+	// Check if there's an existing headless service in the cluster.
+	if len(services.Items) != 0 {
+		// service exists, do nothing
+		return nil
+	}
+	// Create headless worker service if there's no existing one in the cluster.
+	// Used for stable per-worker Pod FQDNs (hostname + subdomain) and multi-host peer communication.
+	headlessSvc := common.BuildHeadlessServiceForRayCluster(*instance)
 
-	if isMultiHost {
-		services := corev1.ServiceList{}
-		options := common.RayClusterHeadlessServiceListOptions(instance)
-
-		if err := r.List(ctx, &services, options...); err != nil {
-			return err
-		}
-		// Check if there's an existing headless service in the cluster.
-		if len(services.Items) != 0 {
-			// service exists, do nothing
-			return nil
-		}
-		// Create headless tpu worker service if there's no existing one in the cluster.
-		headlessSvc := common.BuildHeadlessServiceForRayCluster(*instance)
-
-		if err := r.createService(ctx, headlessSvc, instance); err != nil {
-			return err
-		}
+	if err := r.createService(ctx, headlessSvc, instance); err != nil {
+		return err
 	}
 
 	return nil
