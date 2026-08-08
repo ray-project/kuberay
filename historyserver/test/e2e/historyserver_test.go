@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"testing"
@@ -1922,7 +1923,7 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 	tasks, ok := result["result"].([]any)
 	g.Expect(ok).To(BeTrue())
 
-	var taskID string
+	var taskID, nodeID, stdoutFile string
 	for _, value := range tasks {
 		task, ok := value.(map[string]any)
 		if !ok || task["name"] != "my_task" || task["type"] != "NORMAL_TASK" || task["state"] != "FINISHED" {
@@ -1936,15 +1937,35 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 		if !ok {
 			continue
 		}
-		stdoutEnd, stdoutErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stdout_end"]), 10, 64)
-		stderrEnd, stderrErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stderr_end"]), 10, 64)
-		if stdoutErr == nil && stderrErr == nil && (stdoutEnd > 0 || stderrEnd > 0) {
+		stdoutFileValue, _ := taskLogInfo["stdout_file"].(string)
+		stdoutStart, startErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stdout_start"]), 10, 64)
+		stdoutEnd, endErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stdout_end"]), 10, 64)
+		if stdoutFileValue != "" && startErr == nil && endErr == nil && stdoutStart > 0 && stdoutEnd > stdoutStart {
 			taskID, _ = task["task_id"].(string)
+			nodeID, _ = task["node_id"].(string)
+			stdoutFile = stdoutFileValue
 			break
 		}
 	}
 	g.Expect(taskID).NotTo(BeEmpty(),
-		"completed Ray 2.56 my_task should expose non-empty task_log_info")
+		"completed Ray 2.56 my_task should expose a complete stdout byte range")
+	g.Expect(nodeID).NotTo(BeEmpty())
+
+	workerLogURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1",
+		historyServerURL,
+		EndpointLogsFile,
+		url.QueryEscape(nodeID),
+		url.QueryEscape(path.Base(stdoutFile)),
+	)
+	workerLogResp, err := client.Get(workerLogURL)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer workerLogResp.Body.Close()
+	g.Expect(workerLogResp.StatusCode).To(Equal(http.StatusOK))
+	workerLogBody, err := io.ReadAll(workerLogResp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 0"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 2"))
 
 	logURL := fmt.Sprintf("%s%s?task_id=%s&suffix=out&lines=-1",
 		historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
@@ -1955,6 +1976,8 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 	logBody, err := io.ReadAll(logResp.Body)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(string(logBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 0"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 2"))
 }
 
 // testLiveClusterNodes verifies that the /nodes?view=summary endpoint for a live cluster will return the current

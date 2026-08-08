@@ -14,16 +14,18 @@ import (
 
 type taskLogStorageReader struct {
 	filename string
+	content  string
+	files    []string
 }
 
 func (*taskLogStorageReader) List() []utils.ClusterInfo { return nil }
 
 func (r *taskLogStorageReader) GetContent(_ string, filename string) io.Reader {
 	r.filename = filename
-	return strings.NewReader("Processing 1\n")
+	return strings.NewReader(r.content)
 }
 
-func (*taskLogStorageReader) ListFiles(_, _ string) []string { return nil }
+func (r *taskLogStorageReader) ListFiles(_, _ string) []string { return r.files }
 
 func TestTaskLogBasename(t *testing.T) {
 	tests := map[string]struct {
@@ -65,13 +67,13 @@ func TestGetTaskLogFileUsesStoredBasename(t *testing.T) {
 		TaskID:      "task-id",
 		TaskAttempt: 0,
 		NodeID:      "node-id",
-		WorkerID:    "worker-id",
 		TaskLogInfo: &eventtypes.TaskLogInfo{
 			StdoutFile: "/tmp/ray/session_latest/logs/worker-abc-123.out",
+			StdoutEnd:  int64(len("Processing 1\n")),
 		},
 	}}})
 
-	reader := &taskLogStorageReader{}
+	reader := &taskLogStorageReader{content: "Processing 1\n"}
 	handler := &ServerHandler{sessionLoader: loader, reader: reader}
 	content, err := handler._getNodeLogFile(
 		clusterSessionKey,
@@ -87,6 +89,132 @@ func TestGetTaskLogFileUsesStoredBasename(t *testing.T) {
 	}
 	if got, want := reader.filename, "session/node-id/logs/worker-abc-123.out"; got != want {
 		t.Fatalf("storage filename = %q, want %q", got, want)
+	}
+}
+
+func TestGetTaskLogFileAppliesRangeBeforeLineLimit(t *testing.T) {
+	const clusterSessionKey = "raycluster_default_session"
+	const content = "before\ntask line 1\ntask line 2\nafter\n"
+	const taskContent = "task line 1\ntask line 2\n"
+	start := int64(strings.Index(content, taskContent))
+	end := start + int64(len(taskContent))
+
+	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
+		TaskID:      "task-id",
+		TaskAttempt: 0,
+		NodeID:      "node-id",
+		WorkerID:    "worker-id",
+		TaskLogInfo: &eventtypes.TaskLogInfo{
+			StdoutFile:  "/tmp/ray/session_latest/logs/worker-abc-123.out",
+			StdoutStart: start,
+			StdoutEnd:   end,
+		},
+	}}})
+
+	reader := &taskLogStorageReader{content: content}
+	handler := &ServerHandler{sessionLoader: loader, reader: reader}
+	got, err := handler._getNodeLogFile(
+		clusterSessionKey,
+		"cluster-prefix",
+		"session",
+		GetLogFileOptions{TaskID: "task-id", Suffix: "out", Lines: 1},
+	)
+	if err != nil {
+		t.Fatalf("_getNodeLogFile() error = %v", err)
+	}
+	if want := "task line 2"; string(got) != want {
+		t.Fatalf("_getNodeLogFile() content = %q, want %q", got, want)
+	}
+}
+
+func TestGetTaskLogFileRejectsIncompleteTaskLogInfo(t *testing.T) {
+	const clusterSessionKey = "raycluster_default_session"
+	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
+		TaskID:      "task-id",
+		TaskAttempt: 0,
+		NodeID:      "aa",
+		WorkerID:    "bb",
+		TaskLogInfo: &eventtypes.TaskLogInfo{StdoutEnd: 20},
+	}}})
+
+	reader := &taskLogStorageReader{
+		content: "other task\ntarget task\n",
+		files:   []string{"worker-bb-job-123.out"},
+	}
+	handler := &ServerHandler{sessionLoader: loader, reader: reader}
+	_, err := handler._getNodeLogFile(
+		clusterSessionKey,
+		"cluster-prefix",
+		"session",
+		GetLogFileOptions{TaskID: "task-id", Suffix: "out", Lines: -1},
+	)
+	if err == nil {
+		t.Fatal("_getNodeLogFile() should reject TaskLogInfo without a filename")
+	}
+	var httpErr *utils.HTTPError
+	if !assert.ErrorAs(t, err, &httpErr) {
+		return
+	}
+	assert.Equal(t, 404, httpErr.StatusCode())
+	assert.Empty(t, reader.filename, "incomplete task metadata must not read a guessed worker log")
+}
+
+func TestGetTaskLogFileRejectsAmbiguousZeroEnd(t *testing.T) {
+	const clusterSessionKey = "raycluster_default_session"
+	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
+		TaskID:      "task-id",
+		TaskAttempt: 0,
+		NodeID:      "node-id",
+		TaskLogInfo: &eventtypes.TaskLogInfo{StdoutFile: "worker.out"},
+	}}})
+
+	handler := &ServerHandler{sessionLoader: loader, reader: &taskLogStorageReader{content: "other task\n"}}
+	_, err := handler._getNodeLogFile(
+		clusterSessionKey,
+		"cluster-prefix",
+		"session",
+		GetLogFileOptions{TaskID: "task-id", Suffix: "out", Lines: -1},
+	)
+	var httpErr *utils.HTTPError
+	if !assert.ErrorAs(t, err, &httpErr) {
+		return
+	}
+	assert.Equal(t, 404, httpErr.StatusCode())
+}
+
+func TestApplyLogByteRange(t *testing.T) {
+	tests := map[string]struct {
+		byteRange *logByteRange
+		want      string
+		wantErr   bool
+	}{
+		"unbounded":       {byteRange: nil, want: "0123456789"},
+		"half-open range": {byteRange: &logByteRange{start: 2, end: 5}, want: "234"},
+		"empty range":     {byteRange: &logByteRange{start: 4, end: 4}, want: ""},
+		"end past EOF":    {byteRange: &logByteRange{start: 8, end: 20}, wantErr: true},
+		"start past EOF":  {byteRange: &logByteRange{start: 20, end: 30}, wantErr: true},
+		"negative start":  {byteRange: &logByteRange{start: -1, end: 2}, wantErr: true},
+		"negative end":    {byteRange: &logByteRange{start: 0, end: -1}, wantErr: true},
+		"reversed":        {byteRange: &logByteRange{start: 5, end: 4}, wantErr: true},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			reader, err := applyLogByteRange(strings.NewReader("0123456789"), test.byteRange)
+			var got []byte
+			if err == nil {
+				got, err = io.ReadAll(reader)
+			}
+			if test.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, test.want, string(got))
+		})
 	}
 }
 
