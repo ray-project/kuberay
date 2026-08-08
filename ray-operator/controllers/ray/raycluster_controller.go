@@ -911,11 +911,7 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 	// Used for stable per-worker Pod FQDNs (hostname + subdomain) and multi-host peer communication.
 	headlessSvc := common.BuildHeadlessServiceForRayCluster(*instance)
 
-	if err := r.createService(ctx, headlessSvc, instance); err != nil {
-		return err
-	}
-
-	return nil
+	return r.createService(ctx, headlessSvc, instance)
 }
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
