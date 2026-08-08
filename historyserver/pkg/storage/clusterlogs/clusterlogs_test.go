@@ -24,6 +24,11 @@ func TestClusterLogsPaths(t *testing.T) {
 		t.Errorf("SessionDir() = %q, want %q", got, wantSession)
 	}
 
+	wantFetchedEndpoints := wantSession + "/fetched_endpoints"
+	if got := FetchedEndpointsDir(wantPrefix, session); got != wantFetchedEndpoints {
+		t.Errorf("FetchedEndpointsDir() = %q, want %q", got, wantFetchedEndpoints)
+	}
+
 	wantNode := wantSession + "/node-1"
 	if got := NodeDir(rootDir, ownerKind, ownerName, ns, cluster, session, node); got != wantNode {
 		t.Errorf("NodeDir() = %q, want %q", got, wantNode)

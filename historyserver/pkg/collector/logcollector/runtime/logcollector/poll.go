@@ -15,6 +15,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -77,23 +78,56 @@ const shutdownPollBudget = 10 * time.Second
 // cancelable, and waiting it out could eat the grace period the final poll needs.
 const periodicPollJoinTimeout = 5 * time.Second
 
-// datasetPollState tracks jobs whose datasets no longer need fetching. Owned by one goroutine; no lock.
+// datasetPollState is owned by one goroutine at a time; no lock is needed.
 type datasetPollState struct {
-	done      map[string]struct{}
+	// terminalStored contains terminal jobs whose dataset response was successfully written.
+	terminalStored map[string]struct{}
+	// emptyRuns counts consecutive empty responses observed after a job becomes terminal.
 	emptyRuns map[string]int
 }
 
 func newDatasetPollState() *datasetPollState {
 	return &datasetPollState{
-		done:      make(map[string]struct{}),
-		emptyRuns: make(map[string]int),
+		terminalStored: make(map[string]struct{}),
+		emptyRuns:      make(map[string]int),
 	}
+}
+
+// periodicPollResult transfers ownership of state after the periodic poller exits.
+type periodicPollResult struct {
+	sessionName string
+	state       *datasetPollState
 }
 
 // PollAdditionalEndpointsPeriodically fetches the built-in endpoints, plus anything from
 // RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer; each cycle overwrites the previous one.
 // It stops when stop closes and cancels any blocked resolve or in-flight request at that point.
 func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}) {
+	r.pollAdditionalEndpointsPeriodically(stop)
+}
+
+func (r *RayLogHandler) startPeriodicEndpointPolling(stop <-chan struct{}) <-chan periodicPollResult {
+	// The core sends exactly once. A one-element buffer lets that send finish even if
+	// the shutdown join times out and no receiver remains.
+	results := make(chan periodicPollResult, 1)
+	go func() {
+		results <- r.pollAdditionalEndpointsPeriodically(stop)
+	}()
+	return results
+}
+
+func waitForPeriodicPollResult(results <-chan periodicPollResult, timeout time.Duration) (periodicPollResult, bool) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case result := <-results:
+		return result, true
+	case <-timer.C:
+		return periodicPollResult{}, false
+	}
+}
+
+func (r *RayLogHandler) pollAdditionalEndpointsPeriodically(stop <-chan struct{}) periodicPollResult {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -107,7 +141,7 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}
 	sessionName, err := waitForSessionName(ctx)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for endpoint polling: %v", err)
-		return
+		return periodicPollResult{}
 	}
 	logrus.Infof("Starting endpoint polling (interval=%v, endpoints=%v)", r.EndpointPollInterval, r.polledEndpoints())
 
@@ -121,7 +155,7 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}
 		select {
 		case <-stop:
 			logrus.Info("Shutdown signaled, stopping endpoint polling")
-			return
+			return periodicPollResult{sessionName: sessionName, state: state}
 		case <-ticker.C:
 			sessionName, state = r.pollCycle(ctx, sessionName, state)
 		}
@@ -170,7 +204,7 @@ func currentSessionName() (string, error) {
 }
 
 // processAdditionalEndpoints performs one final poll before shutdown.
-func (r *RayLogHandler) processAdditionalEndpoints() {
+func (r *RayLogHandler) processAdditionalEndpoints(previous periodicPollResult) {
 	logrus.Info("Processing polled endpoints before shutdown")
 
 	sessionName, err := currentSessionName()
@@ -179,12 +213,17 @@ func (r *RayLogHandler) processAdditionalEndpoints() {
 		return
 	}
 
-	// One budget for the whole pass: serial per-request timeouts would add up past the grace period.
+	state := newDatasetPollState()
+	if previous.state != nil && previous.sessionName == sessionName {
+		state = previous.state
+	}
+
+	// The budget cancels HTTP fetches. StorageWriter.WriteFile does not accept a
+	// context, so a write already in progress may finish after the deadline.
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownPollBudget)
 	defer cancel()
 
-	// Fresh state, so this final pass re-captures every job.
-	r.pollAllEndpoints(ctx, sessionName, newDatasetPollState(), true)
+	r.pollAllEndpoints(ctx, sessionName, state, true)
 	logrus.Info("Finished processing polled endpoints")
 }
 
@@ -229,7 +268,11 @@ func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string
 		if job.JobID == "" {
 			continue
 		}
-		if _, ok := state.done[job.JobID]; ok {
+		if _, ok := state.terminalStored[job.JobID]; ok {
+			continue
+		}
+		if !finalPoll && terminalJobStatuses[job.Status] &&
+			state.emptyRuns[job.JobID] >= terminalEmptyPollsBeforeGivingUp {
 			continue
 		}
 
@@ -239,12 +282,10 @@ func (r *RayLogHandler) pollDataDatasets(ctx context.Context, sessionName string
 		}
 		switch outcome {
 		case pollStored:
-			state.done[job.JobID] = struct{}{}
+			state.terminalStored[job.JobID] = struct{}{}
+			delete(state.emptyRuns, job.JobID)
 		case pollSkippedEmpty:
 			state.emptyRuns[job.JobID]++
-			if state.emptyRuns[job.JobID] >= terminalEmptyPollsBeforeGivingUp {
-				state.done[job.JobID] = struct{}{}
-			}
 		case pollFailed:
 			// Retried next cycle.
 		}
@@ -258,18 +299,18 @@ func (r *RayLogHandler) pollSingleEndpoint(ctx context.Context, endpoint, sessio
 		return pollFailed
 	}
 
+	// Do not start a storage write after the parent context is canceled.
+	if ctx.Err() != nil {
+		return pollFailed
+	}
+
 	if isEmptyPayload(endpoint, body, finalPoll) {
 		logrus.Debugf("Skipping %s: nothing to store", endpoint)
 		return pollSkippedEmpty
 	}
 
-	// A canceled ctx means shutdown started: the final poll owns the store from here.
-	if ctx.Err() != nil {
-		return pollFailed
-	}
-
 	storageKey := utils.EndpointPathToStorageKey(endpoint)
-	objectKey := path.Join(r.ClusterDir, sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	objectKey := path.Join(clusterlogs.FetchedEndpointsDir(r.ClusterDir, sessionName), storageKey)
 	if err := r.Writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
 		logrus.Errorf("Failed to store endpoint %s at %s: %v", endpoint, objectKey, err)
 		return pollFailed
@@ -316,19 +357,12 @@ func hasDatasets(body []byte) bool {
 	return len(resp.Datasets) > 0
 }
 
-// fetchEndpoint GETs one dashboard endpoint; in-flight requests are canceled on shutdown.
+// fetchEndpoint GETs one dashboard endpoint with the parent and per-request deadlines.
 func (r *RayLogHandler) fetchEndpoint(parent context.Context, endpoint string) ([]byte, error) {
 	url := r.DashboardAddress + endpoint
 
 	ctx, cancel := context.WithTimeout(parent, defaultRequestTimeout)
 	defer cancel()
-	go func() {
-		select {
-		case <-r.ShutdownChan:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

@@ -110,6 +110,8 @@ spec:
               value: "test"
             - name: S3FORCE_PATH_STYLE
               value: "true"
+            - name: RAY_COLLECTOR_POLL_INTERVAL
+              value: "5s"
             command:
             - collector
             - --role=Head

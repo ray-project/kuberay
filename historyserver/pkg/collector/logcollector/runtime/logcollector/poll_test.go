@@ -3,6 +3,8 @@ package logcollector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +19,8 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
+
+const trainRunsEndpoint = "/api/train/v2/runs/v1"
 
 // fakeDashboard stands in for the Ray Dashboard, recording every requested path.
 type fakeDashboard struct {
@@ -93,6 +97,45 @@ func writtenKeys(writer *MockStorageWriter) []string {
 	return keys
 }
 
+type blockingStorageWriter struct {
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (w *blockingStorageWriter) CreateDirectory(string) error {
+	return nil
+}
+
+func (w *blockingStorageWriter) WriteFile(string, io.ReadSeeker) error {
+	w.once.Do(func() { close(w.entered) })
+	<-w.release
+	return nil
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type cancelOnEOFBody struct {
+	io.Reader
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnEOFBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err == io.EOF {
+		b.cancel()
+	}
+	return n, err
+}
+
+func (b *cancelOnEOFBody) Close() error {
+	return nil
+}
+
 // TestPollDataDatasetsFansOutPerJob verifies per-job fan-out from /api/jobs/, skipping blank IDs.
 func TestPollDataDatasetsFansOutPerJob(t *testing.T) {
 	g := NewWithT(t)
@@ -143,6 +186,48 @@ func TestPollDataDatasetsSkipsEmptyResponse(t *testing.T) {
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
+// TestPollDataDatasetsDoesNotCountRunningEmpties verifies the retry cap begins only after
+// a job becomes terminal, so early empty responses cannot suppress its first terminal fetch.
+func TestPollDataDatasetsDoesNotCountRunningEmpties(t *testing.T) {
+	g := NewWithT(t)
+
+	var mu sync.Mutex
+	status := "RUNNING"
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.URL.Path == jobsEndpoint {
+			_, _ = w.Write([]byte(fmt.Sprintf(`[{"job_id": "01000000", "status": %q}]`, status)))
+			return
+		}
+		attempts++
+		if status == "RUNNING" {
+			_, _ = w.Write([]byte(`{"datasets": []}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"datasets": [{"dataset": "complete"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	handler, writer := newPollTestHandler(t, srv.URL)
+	state := newDatasetPollState()
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+	g.Expect(state.emptyRuns).NotTo(HaveKey("01000000"))
+
+	mu.Lock()
+	status = "SUCCEEDED"
+	mu.Unlock()
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+
+	mu.Lock()
+	defer mu.Unlock()
+	g.Expect(attempts).To(Equal(3))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
+	g.Expect(writtenKeys(writer)).To(HaveLen(1))
+}
+
 // TestPollDataDatasetsStopsPollingTerminalJobs verifies a terminal job is fetched once
 // while a running job keeps being refreshed.
 func TestPollDataDatasetsStopsPollingTerminalJobs(t *testing.T) {
@@ -166,8 +251,8 @@ func TestPollDataDatasetsStopsPollingTerminalJobs(t *testing.T) {
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
 
-	g.Expect(state.done).To(HaveKey("01000000"))
-	g.Expect(state.done).NotTo(HaveKey("02000000"))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).NotTo(HaveKey("02000000"))
 	// The terminal job is fetched only on the first cycle; the running one every cycle.
 	g.Expect(dash.requestsFor("/api/data/datasets/01000000")).To(HaveLen(1))
 	g.Expect(dash.requestsFor("/api/data/datasets/02000000")).To(HaveLen(3))
@@ -201,11 +286,11 @@ func TestPollDataDatasetsRetriesFailedTerminalJob(t *testing.T) {
 
 	state := newDatasetPollState()
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
-	g.Expect(state.done).To(BeEmpty())
+	g.Expect(state.terminalStored).To(BeEmpty())
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
-	g.Expect(state.done).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
 	g.Expect(writtenKeys(writer)).To(Equal([]string{
 		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__01000000",
 	}))
@@ -239,11 +324,11 @@ func TestPollDataDatasetsRetriesTerminalJobWithLateStats(t *testing.T) {
 
 	state := newDatasetPollState()
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
-	g.Expect(state.done).To(BeEmpty())
+	g.Expect(state.terminalStored).To(BeEmpty())
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 
 	handler.pollDataDatasets(context.Background(), "session_1", state, false)
-	g.Expect(state.done).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
 	g.Expect(writtenKeys(writer)).To(Equal([]string{
 		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__01000000",
 	}))
@@ -266,9 +351,83 @@ func TestPollDataDatasetsGivesUpOnRepeatedlyEmptyTerminalJob(t *testing.T) {
 		handler.pollDataDatasets(context.Background(), "session_1", state, false)
 	}
 
-	g.Expect(state.done).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).NotTo(HaveKey("01000000"))
+	g.Expect(state.emptyRuns).To(HaveKeyWithValue("01000000", terminalEmptyPollsBeforeGivingUp))
 	g.Expect(dash.requestsFor("/api/data/datasets/01000000")).To(HaveLen(terminalEmptyPollsBeforeGivingUp))
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
+}
+
+// TestFinalDatasetPollReusesPeriodicState verifies the final poll skips terminal jobs
+// already stored, while retrying terminal jobs that were empty or failed periodically.
+func TestFinalDatasetPollReusesPeriodicState(t *testing.T) {
+	g := NewWithT(t)
+
+	var mu sync.Mutex
+	attempts := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == jobsEndpoint {
+			_, _ = w.Write([]byte(`[
+				{"job_id": "01000000", "status": "SUCCEEDED"},
+				{"job_id": "02000000", "status": "SUCCEEDED"},
+				{"job_id": "03000000", "status": "SUCCEEDED"}
+			]`))
+			return
+		}
+		jobID := strings.TrimPrefix(r.URL.Path, dataDatasetsEndpointPrefix)
+		mu.Lock()
+		attempts[jobID]++
+		attempt := attempts[jobID]
+		mu.Unlock()
+
+		switch jobID {
+		case "01000000":
+			_, _ = w.Write([]byte(`{"datasets": [{"dataset": "stored"}]}`))
+		case "02000000":
+			if attempt <= terminalEmptyPollsBeforeGivingUp {
+				_, _ = w.Write([]byte(`{"datasets": []}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"datasets": [{"dataset": "late"}]}`))
+		case "03000000":
+			if attempt <= 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(`{"datasets": [{"dataset": "retried"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	handler, writer := newPollTestHandler(t, srv.URL)
+	state := newDatasetPollState()
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+	handler.pollDataDatasets(context.Background(), "session_1", state, false)
+
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).NotTo(HaveKey("02000000"))
+	g.Expect(state.terminalStored).NotTo(HaveKey("03000000"))
+	g.Expect(state.emptyRuns).To(HaveKeyWithValue("02000000", terminalEmptyPollsBeforeGivingUp))
+
+	handler.pollDataDatasets(context.Background(), "session_1", state, true)
+
+	mu.Lock()
+	defer mu.Unlock()
+	g.Expect(attempts).To(Equal(map[string]int{
+		"01000000": 1,
+		"02000000": 3,
+		"03000000": 3,
+	}))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).To(HaveKey("02000000"))
+	g.Expect(state.terminalStored).To(HaveKey("03000000"))
+	g.Expect(state.emptyRuns).NotTo(HaveKey("02000000"))
+	g.Expect(writtenKeys(writer)).To(ConsistOf(
+		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__01000000",
+		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__02000000",
+		"cluster-dir/session_1/fetched_endpoints/restful__api__data__datasets__03000000",
+	))
 }
 
 // TestPollAllEndpointsStoresStaticEndpoints verifies the built-in endpoints are stored under
@@ -314,12 +473,12 @@ func TestPollCycleFollowsSessionChange(t *testing.T) {
 	pointAt("session_old")
 	session, state := handler.pollCycle(context.Background(), "session_old", newDatasetPollState())
 	g.Expect(session).To(Equal("session_old"))
-	g.Expect(state.done).To(HaveKey("01000000"))
+	g.Expect(state.terminalStored).To(HaveKey("01000000"))
 
 	pointAt("session_new")
 	session, state = handler.pollCycle(context.Background(), session, state)
 	g.Expect(session).To(Equal("session_new"))
-	g.Expect(state.done).To(HaveKey("01000000"), "the new session's job must be captured, not skipped")
+	g.Expect(state.terminalStored).To(HaveKey("01000000"), "the new session's job must be captured, not skipped")
 
 	// The same job ID is stored once per session, not once overall.
 	g.Expect(dash.requestsFor("/api/data/datasets/01000000")).To(HaveLen(2))
@@ -327,6 +486,49 @@ func TestPollCycleFollowsSessionChange(t *testing.T) {
 		"cluster-dir/session_old/fetched_endpoints/restful__api__data__datasets__01000000",
 		"cluster-dir/session_new/fetched_endpoints/restful__api__data__datasets__01000000",
 	))
+}
+
+// TestFinalPollReusesStateOnlyForCurrentSession verifies a restarted Ray head cannot
+// inherit terminal job IDs from the previous session.
+func TestFinalPollReusesStateOnlyForCurrentSession(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		previousSession string
+		wantRequests    int
+	}{
+		{name: "same session", previousSession: "session_new", wantRequests: 0},
+		{name: "changed session", previousSession: "session_old", wantRequests: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			tmpRoot := t.TempDir()
+			t.Setenv("RAY_TMP_ROOT", tmpRoot)
+			g.Expect(os.MkdirAll(filepath.Join(tmpRoot, "session_new"), 0o755)).To(Succeed())
+			g.Expect(os.Symlink(filepath.Join(tmpRoot, "session_new"), filepath.Join(tmpRoot, "session_latest"))).To(Succeed())
+
+			dash := &fakeDashboard{
+				jobs:     `[{"job_id": "01000000", "status": "SUCCEEDED"}]`,
+				datasets: map[string]string{"01000000": `{"datasets": [{"dataset": "new"}]}`},
+			}
+			srv := dash.start(t)
+			handler, writer := newPollTestHandler(t, srv.URL)
+			state := newDatasetPollState()
+			state.terminalStored["01000000"] = struct{}{}
+
+			handler.processAdditionalEndpoints(periodicPollResult{
+				sessionName: tc.previousSession,
+				state:       state,
+			})
+
+			g.Expect(dash.requestsFor("/api/data/datasets/01000000")).To(HaveLen(tc.wantRequests))
+			dataKey := "cluster-dir/session_new/fetched_endpoints/restful__api__data__datasets__01000000"
+			if tc.wantRequests == 0 {
+				g.Expect(writtenKeys(writer)).NotTo(ContainElement(dataKey))
+			} else {
+				g.Expect(writtenKeys(writer)).To(ContainElement(dataKey))
+			}
+		})
+	}
 }
 
 // TestPeriodicPollingStopsOnShutdownSignal verifies the loop exits on the shutdown signal,
@@ -393,7 +595,43 @@ func TestPeriodicPollingCancelsInFlightRequestOnShutdown(t *testing.T) {
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
-// TestPollAllEndpointsStopsWhenContextExpires verifies the shutdown budget bounds the whole pass.
+// TestPeriodicPollTimeoutBuffersLateResult verifies a timed-out join does not share state
+// and the periodic goroutine can still transfer its result and exit after a blocked write.
+func TestPeriodicPollTimeoutBuffersLateResult(t *testing.T) {
+	g := NewWithT(t)
+
+	tmpRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", tmpRoot)
+	g.Expect(os.MkdirAll(filepath.Join(tmpRoot, "session_1"), 0o755)).To(Succeed())
+	g.Expect(os.Symlink(filepath.Join(tmpRoot, "session_1"), filepath.Join(tmpRoot, "session_latest"))).To(Succeed())
+
+	dash := &fakeDashboard{jobs: `[]`}
+	srv := dash.start(t)
+	writer := &blockingStorageWriter{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	handler, _ := newPollTestHandler(t, srv.URL)
+	handler.Writer = writer
+	handler.EndpointPollInterval = time.Hour
+
+	stop := make(chan struct{})
+	results := handler.startPeriodicEndpointPolling(stop)
+	g.Eventually(writer.entered).Should(BeClosed())
+	close(stop)
+
+	result, joined := waitForPeriodicPollResult(results, 0)
+	g.Expect(joined).To(BeFalse())
+	g.Expect(result.state).To(BeNil())
+
+	close(writer.release)
+	g.Eventually(func() int { return len(results) }).Should(Equal(1))
+	lateResult := <-results
+	g.Expect(lateResult.sessionName).To(Equal("session_1"))
+	g.Expect(lateResult.state).NotTo(BeNil())
+}
+
+// TestPollAllEndpointsStopsWhenContextExpires verifies a canceled context prevents new requests.
 func TestPollAllEndpointsStopsWhenContextExpires(t *testing.T) {
 	g := NewWithT(t)
 
@@ -410,6 +648,41 @@ func TestPollAllEndpointsStopsWhenContextExpires(t *testing.T) {
 	g.Expect(writtenKeys(writer)).To(BeEmpty())
 }
 
+// TestPollSingleEndpointDoesNotStoreAfterCancellation verifies a response fetched just as
+// shutdown starts remains retryable instead of being recorded as durably stored.
+func TestPollSingleEndpointDoesNotStoreAfterCancellation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "non-empty response", body: `{"datasets": [{"dataset": "complete"}]}`},
+		{name: "empty response", body: `{"datasets": []}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			handler, writer := newPollTestHandler(t, "http://dashboard")
+			handler.HttpClient = &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: &cancelOnEOFBody{
+						Reader: strings.NewReader(tc.body),
+						cancel: cancel,
+					},
+					Request: req,
+				}, nil
+			})}
+
+			outcome := handler.pollSingleEndpoint(ctx, dataDatasetsEndpointPrefix+"01000000", "session_1", false)
+
+			g.Expect(outcome).To(Equal(pollFailed))
+			g.Expect(ctx.Err()).To(MatchError(context.Canceled))
+			g.Expect(writtenKeys(writer)).To(BeEmpty())
+		})
+	}
+}
+
 // TestPolledEndpointsAppendsConfiguredOnes verifies RAY_COLLECTOR_ADDITIONAL_ENDPOINTS adds
 // to the built-in set, deduplicated.
 func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
@@ -419,14 +692,14 @@ func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	g.Expect(handler.polledEndpoints()).To(Equal(staticPolledEndpoints))
 
 	handler.AdditionalEndpoints = []string{
-		"/nodes?view=summary",
+		trainRunsEndpoint,
 		serveApplicationsEndpoint, // already built in
-		"/nodes?view=summary",     // repeated by the user
+		trainRunsEndpoint,         // repeated by the user
 	}
 	g.Expect(handler.polledEndpoints()).To(Equal([]string{
 		serveApplicationsEndpoint,
 		placementGroupsEndpoint,
-		"/nodes?view=summary",
+		trainRunsEndpoint,
 	}))
 
 	// The built-in list itself must not be mutated by the append.
@@ -443,13 +716,13 @@ func TestPollAllEndpointsStoresConfiguredEndpoint(t *testing.T) {
 	dash := &fakeDashboard{jobs: `[]`}
 	srv := dash.start(t)
 	handler, writer := newPollTestHandler(t, srv.URL)
-	handler.AdditionalEndpoints = []string{"/nodes?view=summary"}
+	handler.AdditionalEndpoints = []string{trainRunsEndpoint}
 
 	handler.pollAllEndpoints(context.Background(), "session_1", newDatasetPollState(), false)
 
-	g.Expect(dash.requestsFor("/nodes?view=summary")).To(HaveLen(1))
+	g.Expect(dash.requestsFor(trainRunsEndpoint)).To(HaveLen(1))
 	g.Expect(writtenKeys(writer)).To(ContainElement(
-		"cluster-dir/session_1/fetched_endpoints/restful__nodes?view=summary"))
+		"cluster-dir/session_1/fetched_endpoints/restful__api__train__v2__runs__v1"))
 	g.Expect(writtenKeys(writer)).To(HaveLen(3))
 }
 
@@ -518,7 +791,7 @@ func TestIsEmptyPayloadOnlyGuardsKnownEndpoints(t *testing.T) {
 	g.Expect(isEmptyPayload(serveApplicationsEndpoint, []byte(`{"applications": {}}`), false)).To(BeFalse())
 	g.Expect(isEmptyPayload(dataDatasetsEndpointPrefix+"01000000", []byte(`{"datasets": []}`), false)).To(BeTrue())
 	g.Expect(isEmptyPayload(placementGroupsEndpoint, []byte(`{}`), true)).To(BeFalse())
-	g.Expect(isEmptyPayload("/nodes?view=summary", []byte(`{}`), true)).To(BeFalse())
+	g.Expect(isEmptyPayload(trainRunsEndpoint, []byte(`{}`), true)).To(BeFalse())
 }
 
 func TestHasDatasets(t *testing.T) {

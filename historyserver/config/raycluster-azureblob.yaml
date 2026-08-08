@@ -67,9 +67,13 @@ spec:
           # - name: RAY_COLLECTOR_POLL_INTERVAL
           #   value: "1m"
           # Optional extras on top of the built-in endpoints (Serve, placement groups, Ray Data).
-          # Paths must match the frontend request URI, query string included.
+          # Paths must match the History Server replay request URI, query string included.
+          # For example, preserve Ray Train V2 run details for a future History Server view.
+          # Requires the Ray Train workload/driver (not the collector) to set
+          # RAY_TRAIN_V2_ENABLED=1 and RAY_TRAIN_ENABLE_STATE_TRACKING=1;
+          # verify this DeveloperAPI URI when changing Ray versions.
           # - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-          #   value: "/nodes?view=summary"
+          #   value: "/api/train/v2/runs/v1"
           # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
           - name: AZURE_STORAGE_CONNECTION_STRING
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"

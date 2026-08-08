@@ -43,6 +43,12 @@ func SessionDir(rootDir, ownerKind, ownerName, namespace, clusterName, sessionNa
 	return path.Join(cp, sessionName)
 }
 
+// FetchedEndpointsDir returns the directory containing dashboard endpoint snapshots:
+// <prefix>/<session-name>/fetched_endpoints
+func FetchedEndpointsDir(prefix, sessionName string) string {
+	return path.Join(prefix, sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME)
+}
+
 // NodeDir returns the path to a node's directory under a session:
 // <prefix>/<session-name>/<node-name>
 func NodeDir(rootDir, ownerKind, ownerName, namespace, clusterName, sessionName, nodeName string) string {

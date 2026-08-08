@@ -73,9 +73,13 @@ spec:
           # - name: RAY_COLLECTOR_POLL_INTERVAL
           #   value: "1m"
           # Optional extras on top of the built-in endpoints (Serve, placement groups, Ray Data).
-          # Paths must match the frontend request URI, query string included.
+          # Paths must match the History Server replay request URI, query string included.
+          # For example, preserve Ray Train V2 run details for a future History Server view.
+          # Requires the Ray Train workload/driver (not the collector) to set
+          # RAY_TRAIN_V2_ENABLED=1 and RAY_TRAIN_ENABLE_STATE_TRACKING=1;
+          # verify this DeveloperAPI URI when changing Ray versions.
           # - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-          #   value: "/nodes?view=summary"
+          #   value: "/api/train/v2/runs/v1"
           - name: S3DISABLE_SSL
             value: "true"
           - name: AWS_ACCESS_KEY_ID
