@@ -13,26 +13,53 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-const RayClusterManifestPath = "../../config/raycluster.yaml"
+const (
+	RayClusterManifestPath = "../../config/raycluster.yaml"
+
+	// RayVersionForTokenAuth is the minimum rayVersion the operator accepts for token auth.
+	RayVersionForTokenAuth = "2.52.0"
+)
 
 // ApplyRayClusterWithCollectorWithEnvs deploys a Ray cluster with the collector sidecar into the test namespace,
 // adding the specified environment variables to the head pod.
 func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1.Namespace, envs map[string]string) *rayv1.RayCluster {
+	return applyRayClusterWithCollector(test, g, namespace, func(rayCluster *rayv1.RayCluster) {
+		headContainer := &rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+		if len(headContainer.Env) == 0 {
+			headContainer.Env = []corev1.EnvVar{}
+		}
+
+		for key, value := range envs {
+			env := corev1.EnvVar{
+				Name:  key,
+				Value: value,
+			}
+			headContainer.Env = append(headContainer.Env, env)
+		}
+	})
+}
+
+// ApplyRayClusterWithCollectorTokenAuth deploys a Ray cluster whose Dashboard requires token
+// authentication, and wires the collector sidecars to the auth token.
+func ApplyRayClusterWithCollectorTokenAuth(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
+	return applyRayClusterWithCollector(test, g, namespace, func(rayCluster *rayv1.RayCluster) {
+		rayCluster.Spec.RayVersion = RayVersionForTokenAuth
+		rayCluster.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeToken}
+
+		// reconcileAuthSecret generates this Secret when authOptions.secretName is unset.
+		secretName := utils.CheckName(rayCluster.Name)
+		injectCollectorAuthToken(rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, secretName)
+		for wg := range rayCluster.Spec.WorkerGroupSpecs {
+			injectCollectorAuthToken(rayCluster.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, secretName)
+		}
+	})
+}
+
+func applyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespace, mutate func(*rayv1.RayCluster)) *rayv1.RayCluster {
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
-	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
-	if len(headContainer.Env) == 0 {
-		headContainer.Env = []corev1.EnvVar{}
-	}
-
-	for key, value := range envs {
-		env := corev1.EnvVar{
-			Name:  key,
-			Value: value,
-		}
-		headContainer.Env = append(headContainer.Env, env)
-	}
+	mutate(rayClusterFromYaml)
 
 	// Inject namespace name as the ray-cluster-namespace for head group collector
 	injectCollectorRayClusterNamespaceAndEnvVar(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, rayClusterFromYaml.Name, namespace.Name)
@@ -75,6 +102,21 @@ func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, 
 			})
 			setOrAppendEnv(&containers[i], "FQ_RAY_IP", fqdnRayIP, nil)
 		}
+	}
+}
+
+// injectCollectorAuthToken points every collector sidecar at the auth token in the given Secret.
+func injectCollectorAuthToken(containers []corev1.Container, secretName string) {
+	for i := range containers {
+		if containers[i].Name != "collector" {
+			continue
+		}
+		setOrAppendEnv(&containers[i], utils.RAY_AUTH_TOKEN_ENV_VAR, "", &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+			},
+		})
 	}
 }
 

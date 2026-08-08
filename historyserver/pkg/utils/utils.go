@@ -30,8 +30,9 @@ const (
 )
 
 var (
-	sessionIDRegex = regexp.MustCompile(SESSION_ID_REGEX)
-	hexRegex       = regexp.MustCompile(HEX_REGEX)
+	sessionIDRegex         = regexp.MustCompile(SESSION_ID_REGEX)
+	hexRegex               = regexp.MustCompile(HEX_REGEX)
+	errDashboardAuthFailed = errors.New("ray dashboard rejected the request: authentication failed")
 )
 
 // EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
@@ -232,11 +233,22 @@ func FetchCurrentNodeID() (string, error) {
 	endpoint := fmt.Sprintf("%s%s/api/v0/nodes?limit=10000", scheme, strings.TrimRight(addr, "/"))
 	client := &http.Client{Timeout: 1 * time.Second}
 
-	resp, err := client.Get(endpoint)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	if err := SetRayAuthHeader(req); err != nil {
+		return "", fmt.Errorf("failed to authenticate request to %s: %w", endpoint, err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if IsAuthFailure(resp.StatusCode) {
+		return "", fmt.Errorf("%w: HTTP status %d from endpoint %s", errDashboardAuthFailed, resp.StatusCode, endpoint)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP status %d from endpoint %s", resp.StatusCode, endpoint)
 	}
@@ -261,9 +273,11 @@ func GetNodeRayIDWithFQIP() (string, error) {
 		if err == nil {
 			return nodeID, nil
 		}
-		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) {
+		if errors.Is(err, ErrPodIPNotSet) || errors.Is(err, ErrFQRayIPNotSet) ||
+			errors.Is(err, errDashboardAuthFailed) || errors.Is(err, errRayAuthConfig) {
 			return "", err
 		}
+		logrus.Warnf("Attempt %d/12 to discover Ray NodeID failed: %v, retrying in 5s", i+1, err)
 		lastErr = err
 		time.Sleep(5 * time.Second)
 	}

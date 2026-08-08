@@ -2,26 +2,27 @@ apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:
-    ray.io/cluster: raycluster-historyserver
-  name: raycluster-historyserver
-  namespace: default
+    ray.io/cluster: raycluster-historyserver-kubernetes-auth
+  name: raycluster-historyserver-kubernetes-auth
 spec:
-  # Enable Ray token authentication. Requires Ray 2.52.0+
-  # rayVersion: "2.55.0"
-  # authOptions:
-  #   mode: token
+  # enableK8sTokenAuth requires Ray 2.55.0+. authOptions.secretName must NOT be
+  # set at the same time.
+  rayVersion: '2.55.0'
+  authOptions:
+    mode: 'token'
+    enableK8sTokenAuth: true
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
       num-cpus: "0"
-    serviceType: ClusterIP
     template:
-      metadata:
-        labels:
-          test: raycluster-historyserver
       spec:
+        serviceAccountName: raycluster-historyserver-kubernetes-auth
         containers:
-        - env:
+        - name: ray-head
+          imagePullPolicy: IfNotPresent
+          image: rayproject/ray:2.55.0
+          env:
           - name: RAY_TMP_ROOT
             value: &rayTmpRoot /tmp/ray
           - name: RAY_enable_ray_event
@@ -32,16 +33,20 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
-          image: rayproject/ray:2.55.0
-          imagePullPolicy: IfNotPresent
-          name: ray-head
           resources:
             limits:
               cpu: "5"
-              memory: 10G
+              memory: "10Gi"
             requests:
               cpu: "50m"
-              memory: 1G
+              memory: "1Gi"
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -68,25 +73,11 @@ spec:
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
           # (e.g., /api/v0/cluster_metadata) from the Ray Dashboard running in the same pod.
           # Only the head collector uses this; worker collectors do not need it.
-          # If your Ray Dashboard uses a non-default port (not 8265), update this value accordingly.
           - name: RAY_DASHBOARD_ADDRESS
             value: "http://localhost:8265"
-          # RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is a comma-separated list of Ray Dashboard
-          # API endpoint paths that the head collector will periodically poll and store.
-          # Use this for endpoints whose data cannot be obtained via Ray events.
-          # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
-          # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
-          - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-            # Query params must match the Ray Dashboard frontend request exactly
-            # (see https://github.com/ray-project/ray/blob/cb9c80fee6a700efe61ea97987248ce82e3fa2e2/python/ray/dashboard/client/src/service/placementGroup.ts):
-            #   detail=1    — include bundles and stats fields required by PlacementGroupTable
-            #   limit=10000 — match the frontend's default limit to avoid truncation
-            value: "/api/v0/placement_groups?detail=1&limit=10000"
-          # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
-          # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
-          - name: RAY_COLLECTOR_POLL_INTERVAL
-            value: "30s"
-          - name: S3DISABLE_SSL
+          - name: RAY_AUTH_MODE
+            value: "token"
+          - name: RAY_ENABLE_K8S_TOKEN_AUTH
             value: "true"
           - name: AWS_ACCESS_KEY_ID
             value: minioadmin
@@ -102,39 +93,44 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
+          - name: S3DISABLE_SSL
+            value: "true"
           - name: RAY_ROLE
             value: "Head"
           - name: STORAGE_BACKEND
             value: "s3"
           - name: RAY_ROOT_DIR
             value: "log"
-          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
-          # needs the token to call the Dashboard.
-          # - name: RAY_AUTH_TOKEN
-          #   valueFrom:
-          #     secretKeyRef:
-          #       name: raycluster-historyserver  # defaults to the RayCluster name
-          #       key: auth_token
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
+          - name: ray-token
+            mountPath: /var/run/secrets/ray.io/serviceaccount
+            readOnly: true
         volumes:
         - name: historyserver
           emptyDir: {}
   workerGroupSpecs:
-  - groupName: cpu
-    maxReplicas: 1000
+  - replicas: 1
     minReplicas: 1
-    numOfHosts: 1
+    maxReplicas: 5
+    groupName: workergroup
     rayStartParams: {}
-    replicas: 1
     template:
-      metadata:
-        labels:
-          test: raycluster-historyserver
       spec:
+        serviceAccountName: raycluster-historyserver-kubernetes-auth
         containers:
-        - env:
+        - name: ray-worker
+          imagePullPolicy: IfNotPresent
+          image: rayproject/ray:2.55.0
+          env:
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
           - name: RAY_enable_ray_event
@@ -145,16 +141,13 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
-          image: rayproject/ray:2.55.0
-          imagePullPolicy: IfNotPresent
-          name: ray-worker
           resources:
             limits:
               cpu: "2"
-              memory: 2G
+              memory: "2Gi"
             requests:
               cpu: "50m"
-              memory: 1G
+              memory: "1Gi"
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -178,6 +171,10 @@ spec:
             value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
+          - name: RAY_AUTH_MODE
+            value: "token"
+          - name: RAY_ENABLE_K8S_TOKEN_AUTH
+            value: "true"
           - name: AWS_ACCESS_KEY_ID
             value: minioadmin
           - name: AWS_SECRET_ACCESS_KEY
@@ -200,16 +197,78 @@ spec:
             value: "s3"
           - name: RAY_ROOT_DIR
             value: "log"
-          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
-          # needs the token to call the Dashboard.
-          # - name: RAY_AUTH_TOKEN
-          #   valueFrom:
-          #     secretKeyRef:
-          #       name: raycluster-historyserver  # defaults to the RayCluster name
-          #       key: auth_token
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
+          - name: ray-token
+            mountPath: /var/run/secrets/ray.io/serviceaccount
+            readOnly: true
         volumes:
         - name: historyserver
           emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: raycluster-historyserver-kubernetes-auth
+---
+# The Ray Dashboard runs TokenReview/SubjectAccessReview to validate incoming
+# tokens, so the cluster's ServiceAccount needs permission to create them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-authenticator
+rules:
+- apiGroups: ["authentication.k8s.io"]
+  resources:
+  - 'tokenreviews'
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources:
+  - 'subjectaccessreviews'
+  verbs: ["create"]
+---
+# Grants the caller ray:write on rayclusters, which is what the Dashboard
+# authorizes the presented token against.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-writer
+rules:
+- apiGroups: ["ray.io"]
+  resources:
+  - 'rayclusters'
+  verbs: ["ray:write"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ray-authenticator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-authenticator
+subjects:
+- kind: ServiceAccount
+  name: raycluster-historyserver-kubernetes-auth
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: raycluster-historyserver-kubernetes-auth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-writer
+subjects:
+- kind: ServiceAccount
+  name: raycluster-historyserver-kubernetes-auth
+  namespace: default

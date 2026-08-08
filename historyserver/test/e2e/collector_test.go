@@ -80,6 +80,10 @@ func TestCollector(t *testing.T) {
 			name:     "Timezone: collector should fetch and store timezone endpoint data once on startup",
 			testFunc: testCollectorStoresTimezone,
 		},
+		{
+			name:     "Token auth: collector should authenticate against the Ray Dashboard instead of crash-looping",
+			testFunc: testCollectorWithTokenAuth,
+		},
 	}
 
 	for _, tt := range tests {
@@ -386,13 +390,17 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Get the sessionID from the head pod to build the expected S3 key
-// 3. Wait for the timezone file to appear in S3 at {sessionName}/fetched_endpoints/restful__timezone
-// 4. Read the file and verify it contains valid JSON with the expected schema (offset, value)
-// 5. Delete S3 bucket to ensure test isolation
+// 2. Assert the timezone data reaches S3 with the expected key and schema
+// 3. Delete S3 bucket to ensure test isolation
 func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
+	assertTimezoneStored(test, g, rayCluster, s3Client)
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3Client *s3.S3) {
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
 	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
@@ -428,8 +436,6 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Timezone data stored successfully: %s", string(timezoneBody))
-
-	DeleteS3Bucket(test, g, s3Client)
 }
 
 // testCollectorStoresPlacementGroups verifies that the Head collector periodically polls
@@ -648,4 +654,32 @@ func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 		}
 		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
 	}
+}
+
+func testCollectorWithTokenAuth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := ApplyRayClusterWithCollectorTokenAuth(test, g, namespace)
+
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Guard against a vacuous pass: if the Dashboard served this cluster without credentials the
+	// rest of the assertions would hold even with the fix reverted. Probed with Python because
+	// the Ray images ship no curl.
+	probe := `python3 - <<'PY'
+import urllib.error, urllib.request
+try:
+    urllib.request.urlopen("http://localhost:8265/api/v0/nodes?limit=1", timeout=10)
+    print("200")
+except urllib.error.HTTPError as err:
+    print(err.code)
+PY`
+	unauthenticated, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", probe})
+	g.Expect(strings.TrimSpace(unauthenticated.String())).To(Equal("401"),
+		"Dashboard must reject unauthenticated requests, otherwise this test proves nothing")
+
+	// Data in storage is the real proof: the collector only writes the timezone object after an
+	// authenticated Dashboard call succeeds.
+	assertTimezoneStored(test, g, rayCluster, s3Client)
+
+	DeleteS3Bucket(test, g, s3Client)
 }

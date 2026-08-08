@@ -80,6 +80,7 @@ Sample configs are in the `config/` directory:
 | `azurite.yaml` | Azurite deployment for Azure Blob Storage emulation |
 | `raycluster.yaml` | Ray cluster with collector sidecar (S3/MinIO) |
 | `raycluster-azureblob.yaml` | Ray cluster with collector sidecar (Azure Blob) |
+| `raycluster-kubernetes-auth.yaml` | Ray cluster with collector sidecar using Kubernetes token authentication (S3/MinIO) |
 | `rayjob.yaml` | Sample Ray job for testing |
 | `historyserver.yaml` | History Server deployment (S3/MinIO) |
 | `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
