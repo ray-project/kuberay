@@ -97,6 +97,10 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 		logrus.Errorf("Failed to list live RayClusters: %v", err)
 	}
 	for _, liveCluster := range liveClusters {
+		if isRayClusterSuspended(liveCluster) {
+			// No live head Pod to show; it will surface via stored sessions below.
+			continue
+		}
 		liveClusterInfo := buildLiveClusterInfo(liveCluster)
 		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
@@ -124,9 +128,9 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 	if isLatestOrEmpty || session == "live" {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
-			if err == nil {
+			if err == nil && !isRayClusterSuspended(liveCluster) {
 				return buildLiveClusterInfo(liveCluster), true, nil
-			} else if !apierrors.IsNotFound(err) {
+			} else if err != nil && !apierrors.IsNotFound(err) {
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to check live RayCluster %s/%s: %w", namespace, resourceName, err)
 			}
 		} else {
@@ -143,8 +147,11 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to list live RayClusters: %w", err)
 			}
 			// TODO: A RayService owns both an active and a pending cluster during an upgrade. Needs to decide which one to take.
-			if len(liveClusters) > 0 {
-				info := buildLiveClusterInfo(liveClusters[0])
+			for _, liveCluster := range liveClusters {
+				if isRayClusterSuspended(liveCluster) {
+					continue
+				}
+				info := buildLiveClusterInfo(liveCluster)
 				if info.OwnerKind == "" {
 					info.OwnerKind = resTypeLower
 					info.OwnerName = resourceName
