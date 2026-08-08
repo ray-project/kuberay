@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -79,6 +81,14 @@ func TestCollector(t *testing.T) {
 		{
 			name:     "Timezone: collector should fetch and store timezone endpoint data once on startup",
 			testFunc: testCollectorStoresTimezone,
+		},
+		{
+			name:     "Serve applications: collector should poll and store a converged Serve snapshot",
+			testFunc: testCollectorStoresServeApplications,
+		},
+		{
+			name:     "Ray Data datasets: collector should store per-job datasets only for the job that used Ray Data",
+			testFunc: testCollectorStoresDataDatasets,
 		},
 	}
 
@@ -432,74 +442,42 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 	DeleteS3Bucket(test, g, s3Client)
 }
 
-// testCollectorStoresPlacementGroups verifies that the Head collector periodically polls
-// /api/v0/placement_groups from the Ray Dashboard and stores the result in S3.
-//
-// The placement_groups endpoint is configured via RAY_COLLECTOR_ADDITIONAL_ENDPOINTS in
-// raycluster.yaml and polled by PollAdditionalEndpointsPeriodically.
-//
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Submit a RayJob that creates a detached placement group (so the PG persists after the job)
-// 3. Get the sessionID from the head pod to build the expected S3 key
-// 4. Wait for the placement groups file to appear in S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups
-// 5. Read the file and verify it contains valid JSON with a non-empty placement_groups list
-// 6. Delete S3 bucket to ensure test isolation
+// testCollectorStoresPlacementGroups verifies the collector stores the placement_groups
+// snapshot; the RayJob creates a detached placement group so the PG outlives the job.
+// The history-server replay of this endpoint is covered by testDeadClusterPlacementGroups.
 func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	// Submit a RayJob that creates a detached placement group named "test_pg".
-	// The detached lifetime ensures the PG persists after the job exits, so the
-	// collector captures non-empty data when polling /api/v0/placement_groups.
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	// The collector stores the endpoint with query params (as configured in RAY_COLLECTOR_ADDITIONAL_ENDPOINTS).
+	// Matches placementGroupsEndpoint in the collector's poll.go, query params included.
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	sessionDir := clusterlogs.SessionDir("log", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
 	pgKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
-
-	var pgBody []byte
 	g.Eventually(func(gg Gomega) {
-		result, err := s3Client.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer result.Body.Close()
-
-		body, err := io.ReadAll(result.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(body).NotTo(BeEmpty(), "Placement groups file should not be empty")
-
-		// Verify it is valid JSON with a non-empty placement groups list.
-		var response map[string]interface{}
-		err = json.Unmarshal(body, &response)
-		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
-
-		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
-		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
-		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
-		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
-		data, ok := response["data"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
-		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
-		resultObj, ok := data["result"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
-		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
-
-		pgList, ok := resultObj["result"].([]interface{})
-		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
-		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
-
-		pgBody = body
+		assertPlacementGroupsNonEmpty(gg, readS3Object(gg, s3Client, pgKey))
 	}, TestTimeoutMedium).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Placement groups data stored successfully: %s", string(pgBody))
-
 	DeleteS3Bucket(test, g, s3Client)
+}
+
+// assertPlacementGroupsNonEmpty requires at least one PG in the State API envelope
+// {"result": true, "data": {"result": {"result": [...]}}}; the RayJob creates a detached one.
+func assertPlacementGroupsNonEmpty(g Gomega, body []byte) {
+	var response struct {
+		Result bool `json:"result"`
+		Data   struct {
+			Result struct {
+				Result []json.RawMessage `json:"result"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed(), "placement groups response should be valid JSON")
+	g.Expect(response.Result).To(BeTrue(), "state API result field should be true")
+	g.Expect(response.Data.Result.Result).NotTo(BeEmpty(), "placement groups list should not be empty")
 }
 
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
@@ -648,4 +626,187 @@ func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 		}
 		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
 	}
+}
+
+// readS3Object reads an object body, failing the enclosing Eventually if it is absent.
+func readS3Object(g Gomega, s3Client *s3.S3, key string) []byte {
+	result, err := s3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(S3BucketName),
+		Key:    aws.String(key),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+	defer result.Body.Close()
+
+	body, err := io.ReadAll(result.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	return body
+}
+
+// listFetchedEndpoints lists polled-endpoint objects by storage-key prefix. Listing beats
+// constructing the key: the session name would have to come from an already-deleted head pod.
+func listFetchedEndpoints(g Gomega, s3Client *s3.S3, clusterPrefix, storageKeyPrefix string) []string {
+	marker := "/" + utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME + "/"
+
+	var keys []string
+	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(S3BucketName),
+		Prefix: aws.String(clusterPrefix + "/"),
+	}, func(page *s3.ListObjectsV2Output, _ bool) bool {
+		for _, obj := range page.Contents {
+			key := aws.StringValue(obj.Key)
+			idx := strings.Index(key, marker)
+			if idx >= 0 && strings.HasPrefix(key[idx+len(marker):], storageKeyPrefix) {
+				keys = append(keys, key)
+			}
+		}
+		return true
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+	return keys
+}
+
+// enterClusterForOwner sets the session cookie via enter_cluster, which takes the owner's
+// name and resolves the generated cluster name itself; a plain RayCluster is its own owner.
+func enterClusterForOwner(test Test, g *WithT, client *http.Client, historyServerURL, namespace, ownerKind, ownerName, clusterName, session string) {
+	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s/%s", historyServerURL, namespace, ownerKind, ownerName, session)
+	LogWithTimestamp(test.T(), "Setting cluster context: %s", enterURL)
+
+	g.Eventually(func(gg Gomega) {
+		var result map[string]any
+		gg.Expect(json.Unmarshal(getHistoryServerJSON(gg, client, enterURL), &result)).To(Succeed())
+		gg.Expect(result["result"]).To(Equal("success"))
+		gg.Expect(result["name"]).To(Equal(clusterName), "enter_cluster should resolve the owner to its generated cluster")
+		gg.Expect(result["session"]).To(Equal(session))
+	}, TestTimeoutShort).Should(Succeed())
+}
+
+// getHistoryServerJSON GETs a history server URL and returns the body, requiring 200.
+func getHistoryServerJSON(g Gomega, client *http.Client, url string) []byte {
+	resp, err := client.Get(url)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	return body
+}
+
+// testCollectorStoresServeApplications verifies the collector stores a converged Serve
+// snapshot, then replays it through the history server after the RayService is deleted.
+// The round trip matters: collector and server derive the storage key from different
+// inputs, and a mismatch surfaces as a valid-but-empty 200, not an error.
+func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayService := ApplyRayServiceAndWaitForRunning(test, g, namespace)
+	clusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+	clusterPrefix := clusterlogs.Prefix("log", utils.RayServiceKind, rayService.Name, namespace.Name, clusterName)
+
+	// Matches serveApplicationsEndpoint in the collector's poll.go.
+	storageKey := utils.EndpointPathToStorageKey("/api/serve/applications/")
+	LogWithTimestamp(test.T(), "Waiting for a converged Serve snapshot under S3 prefix: %s", clusterPrefix)
+
+	g.Eventually(func(gg Gomega) {
+		keys := listFetchedEndpoints(gg, s3Client, clusterPrefix, storageKey)
+		gg.Expect(keys).To(HaveLen(1), "the head collector stores exactly one Serve snapshot per session")
+		assertServeAppConverged(gg, readS3Object(gg, s3Client, keys[0]))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	DeleteRayServiceAndWait(test, g, namespace.Name, rayService.Name, clusterName)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+	clusterInfo := getClusterFromList(test, g, historyServerURL, clusterName, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
+		utils.RayServiceKind, rayService.Name, clusterName, clusterInfo.SessionName)
+
+	LogWithTimestamp(test.T(), "Replaying /api/serve/applications/ through the history server")
+	g.Eventually(func(gg Gomega) {
+		assertServeAppConverged(gg, getHistoryServerJSON(gg, client, historyServerURL+"/api/serve/applications/"))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+// assertServeAppConverged requires RUNNING/HEALTHY: a mid-deploy snapshot and the empty
+// fallback are both valid JSON.
+func assertServeAppConverged(g Gomega, body []byte) {
+	var response struct {
+		Applications map[string]struct {
+			Status      string `json:"status"`
+			Deployments map[string]struct {
+				Status string `json:"status"`
+			} `json:"deployments"`
+		} `json:"applications"`
+	}
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed(), "Serve response should be valid JSON")
+
+	app, ok := response.Applications["history-e2e"]
+	g.Expect(ok).To(BeTrue(), "applications should contain history-e2e, got %v", response.Applications)
+	g.Expect(app.Status).To(Equal("RUNNING"), "history-e2e should have converged")
+
+	deployment, ok := app.Deployments["NoOp"]
+	g.Expect(ok).To(BeTrue(), "history-e2e should contain the NoOp deployment")
+	g.Expect(deployment.Status).To(Equal("HEALTHY"), "NoOp replica should be healthy")
+}
+
+// testCollectorStoresDataDatasets verifies per-job Ray Data snapshots: exactly one object
+// (jobs without datasets are never stored), surviving a self-shutdown cluster, and served
+// back by the history server for the URI the frontend requests.
+func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayJob := ApplyRayDataJobAndWaitForCompletion(test, g, namespace)
+	clusterName := rayJob.Status.RayClusterName
+	clusterPrefix := clusterlogs.Prefix("log", utils.RayJobKind, rayJob.Name, namespace.Name, clusterName)
+
+	// "/api/data/datasets/" maps to "restful__api__data__datasets"; per-job keys append
+	// "__{job_id}", so this prefix matches every stored job.
+	storageKeyPrefix := utils.EndpointPathToStorageKey("/api/data/datasets/")
+	LogWithTimestamp(test.T(), "Waiting for a non-empty datasets object under S3 prefix: %s", clusterPrefix)
+
+	var jobID string
+	g.Eventually(func(gg Gomega) {
+		keys := listFetchedEndpoints(gg, s3Client, clusterPrefix, storageKeyPrefix)
+		gg.Expect(keys).To(HaveLen(1),
+			"exactly one job used Ray Data, so exactly one datasets object should exist")
+		assertDatasetsNonEmpty(gg, readS3Object(gg, s3Client, keys[0]))
+
+		// Ray assigns the job ID, so recover it from the key the collector chose.
+		jobID = strings.TrimPrefix(path.Base(keys[0]), storageKeyPrefix+"__")
+		gg.Expect(jobID).NotTo(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// shutdownAfterJobFinishes tears the cluster down on its own, which is what turns
+	// the session into a replayable one.
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, clusterName)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+	clusterInfo := getClusterFromList(test, g, historyServerURL, clusterName, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after shutdown")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
+		utils.RayJobKind, rayJob.Name, clusterName, clusterInfo.SessionName)
+
+	datasetsURL := fmt.Sprintf("%s/api/data/datasets/%s", historyServerURL, jobID)
+	LogWithTimestamp(test.T(), "Replaying %s through the history server", datasetsURL)
+	g.Eventually(func(gg Gomega) {
+		assertDatasetsNonEmpty(gg, getHistoryServerJSON(gg, client, datasetsURL))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+// assertDatasetsNonEmpty requires real stats: empty coming back means the object was missing.
+func assertDatasetsNonEmpty(g Gomega, body []byte) {
+	var response struct {
+		Datasets []json.RawMessage `json:"datasets"`
+	}
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed(), "datasets response should be valid JSON")
+	g.Expect(response.Datasets).NotTo(BeEmpty(), "datasets must be non-empty")
 }

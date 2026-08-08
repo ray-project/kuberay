@@ -160,6 +160,8 @@ func main() {
 		}
 	}
 
+	// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is optional: the head collector always
+	// polls its built-in endpoints, and anything listed here is polled on top.
 	var additionalEndpoints []string
 	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
 		for _, ep := range strings.Split(epStr, ",") {
@@ -170,16 +172,15 @@ func main() {
 		}
 	}
 
+	// Fall back instead of exiting: crash-looping this sidecar would take the head pod
+	// out of its Service endpoints.
 	endpointPollInterval := 30 * time.Second
-	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
-		parsed, parseErr := time.ParseDuration(intervalStr)
-		if parseErr != nil {
-			logrus.Fatalf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: %v", parseErr)
+	if v := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			endpointPollInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_POLL_INTERVAL=%s, using default %s", v, endpointPollInterval)
 		}
-		if parsed <= 0 {
-			logrus.Fatalf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s", intervalStr)
-		}
-		endpointPollInterval = parsed
 	}
 
 	jsonData := make(map[string]interface{})
@@ -229,6 +230,12 @@ func main() {
 
 	sessionName := path.Base(activeSessionDir)
 
+	// The head collector shares a pod with the dashboard; override for non-default ports.
+	dashboardAddress := "http://localhost:8265"
+	if v := os.Getenv("RAY_DASHBOARD_ADDRESS"); v != "" {
+		dashboardAddress = v
+	}
+
 	globalConfig := types.RayCollectorConfig{
 		RootDir:             rayRootDir,
 		SessionDir:          activeSessionDir,
@@ -238,7 +245,7 @@ func main() {
 		RayClusterNamespace: rayClusterNamespace,
 		PushInterval:        pushInterval,
 		LogBatching:         logBatching,
-		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
+		DashboardAddress:    dashboardAddress,
 		OwnerKind:           ownerKind,
 		OwnerName:           ownerName,
 
