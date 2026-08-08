@@ -112,119 +112,116 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 		t.Skip("cert-manager CRDs not found; skipping TLS auto-generate e2e test")
 	}
 
+	g := NewWithT(t)
+	t.Parallel()
+
 	namespace := test.NewTestNamespace()
 	clusterName := "raycluster-tls-autogen"
 
-	test.T().Run("RayCluster with auto-generated mTLS certificates", func(t *testing.T) {
-		t.Parallel()
+	rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+		WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(t, "Created RayCluster %s/%s successfully with mTLS auto-generate", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become Ready
+	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+	LogWithTimestamp(t, "RayCluster %s is Ready", clusterName)
+
+	// Verify head pod is running
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod).NotTo(BeNil())
+	g.Expect(IsPodRunningAndReady(headPod)).To(BeTrue(), "head pod should be running and ready")
+
+	// Verify worker pods are running
+	workerPods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workerPods).NotTo(BeEmpty())
+	g.Expect(AllPodsRunningAndReady(workerPods)).To(BeTrue(), "all worker pods should be running and ready")
+
+	headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
+	workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+
+	test.T().Run("cert-manager resources created", func(t *testing.T) {
+		LogWithTimestamp(t, "Testing cert-manager resources")
 		g := NewWithT(t)
 
-		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
-			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
-
-		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		refetchedRayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
-		LogWithTimestamp(t, "Created RayCluster %s/%s successfully with mTLS auto-generate", rayCluster.Namespace, rayCluster.Name)
 
-		// Wait for cluster to become Ready
-		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
-			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-		LogWithTimestamp(t, "RayCluster %s is Ready", clusterName)
+		// Verify cert-manager CA secret was created.
+		caSecretName := utils.GetCASecretName(clusterName, refetchedRayCluster.UID)
+		caSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "CA secret %s should exist", caSecretName)
+		g.Expect(caSecret.Data).To(HaveKey("tls.crt"), "CA secret should have tls.crt")
+		g.Expect(caSecret.Data).To(HaveKey("tls.key"), "CA secret should have tls.key")
+		g.Expect(caSecret.Data).To(HaveKey("ca.crt"), "CA secret should have ca.crt")
 
-		// Verify head pod is running
-		headPod, err := GetHeadPod(test, rayCluster)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(headPod).NotTo(BeNil())
-		g.Expect(IsPodRunningAndReady(headPod)).To(BeTrue(), "head pod should be running and ready")
+		// Verify head certificate secret was created by cert-manager.
+		headSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "head secret %s should exist", headSecretName)
+		g.Expect(headSecret.Data).To(HaveKey("tls.crt"), "head secret should have tls.crt")
+		g.Expect(headSecret.Data).To(HaveKey("tls.key"), "head secret should have tls.key")
+		g.Expect(headSecret.Data).To(HaveKey("ca.crt"), "head secret should have ca.crt")
 
-		// Verify worker pods are running
-		workerPods, err := GetWorkerPods(test, rayCluster)
-		g.Expect(err).NotTo(HaveOccurred())
+		// Verify worker certificate secret was created by cert-manager.
+		workerSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), workerSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "worker secret %s should exist", workerSecretName)
+		g.Expect(workerSecret.Data).To(HaveKey("tls.crt"), "worker secret should have tls.crt")
+		g.Expect(workerSecret.Data).To(HaveKey("tls.key"), "worker secret should have tls.key")
+		g.Expect(workerSecret.Data).To(HaveKey("ca.crt"), "worker secret should have ca.crt")
+
+		LogWithTimestamp(t, "Cert-manager CA, head, and worker secrets verified for cluster %s", clusterName)
+	})
+
+	test.T().Run("pod TLS configuration", func(t *testing.T) {
+		LogWithTimestamp(t, "Testing pod TLS configuration")
+		g := NewWithT(t)
+
+		// Verify head pod configuration
+		verifyContainerTLSEnvVars(g, &headPod.Spec.Containers[utils.RayContainerIndex])
+		verifyTLSVolumeMount(g, headPod, headSecretName)
+
+		// Verify worker pod configuration
 		g.Expect(workerPods).NotTo(BeEmpty())
-		g.Expect(AllPodsRunningAndReady(workerPods)).To(BeTrue(), "all worker pods should be running and ready")
+		for i := range workerPods {
+			verifyContainerTLSEnvVars(g, &workerPods[i].Spec.Containers[utils.RayContainerIndex])
+			verifyTLSVolumeMount(g, &workerPods[i], workerSecretName)
+		}
 
-		headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
-		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+		LogWithTimestamp(t, "Pod TLS configuration verified for cluster %s", clusterName)
+	})
 
-		t.Run("mTLS auto-generate cert-manager resources created", func(t *testing.T) {
-			LogWithTimestamp(t, "Testing cert-manager resources")
-			g := NewWithT(t)
+	test.T().Run("Ray job submission succeeds", func(t *testing.T) {
+		LogWithTimestamp(t, "Testing Ray job submission with auto-generated")
+		g := NewWithT(t)
 
-			refetchedRayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
+		// Submit a simple Ray job and verify it completes.
+		// This proves head-worker mTLS communication is functional.
+		submissionID := fmt.Sprintf("mtls-test-job-%d", time.Now().Unix())
+		submitCmd := []string{
+			"bash", "-c",
+			fmt.Sprintf(
+				"ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'import ray; ray.init(); print(ray.cluster_resources())'",
+				submissionID,
+			),
+		}
+		stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+		g.Expect(stdout.String()).To(ContainSubstring(submissionID), "job submission should succeed")
 
-			// Verify cert-manager CA secret was created.
-			caSecretName := utils.GetCASecretName(clusterName, refetchedRayCluster.UID)
-			caSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), "CA secret %s should exist", caSecretName)
-			g.Expect(caSecret.Data).To(HaveKey("tls.crt"), "CA secret should have tls.crt")
-			g.Expect(caSecret.Data).To(HaveKey("tls.key"), "CA secret should have tls.key")
-			g.Expect(caSecret.Data).To(HaveKey("ca.crt"), "CA secret should have ca.crt")
-
-			// Verify head certificate secret was created by cert-manager.
-			headSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), "head secret %s should exist", headSecretName)
-			g.Expect(headSecret.Data).To(HaveKey("tls.crt"), "head secret should have tls.crt")
-			g.Expect(headSecret.Data).To(HaveKey("tls.key"), "head secret should have tls.key")
-			g.Expect(headSecret.Data).To(HaveKey("ca.crt"), "head secret should have ca.crt")
-
-			// Verify worker certificate secret was created by cert-manager.
-			workerSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), workerSecretName, metav1.GetOptions{})
-			g.Expect(err).NotTo(HaveOccurred(), "worker secret %s should exist", workerSecretName)
-			g.Expect(workerSecret.Data).To(HaveKey("tls.crt"), "worker secret should have tls.crt")
-			g.Expect(workerSecret.Data).To(HaveKey("tls.key"), "worker secret should have tls.key")
-			g.Expect(workerSecret.Data).To(HaveKey("ca.crt"), "worker secret should have ca.crt")
-
-			LogWithTimestamp(t, "Cert-manager CA, head, and worker secrets verified for cluster %s", clusterName)
-		})
-
-		t.Run("mTLS auto-generate pod TLS configuration", func(t *testing.T) {
-			LogWithTimestamp(t, "Testing pod TLS configuration")
-			g := NewWithT(t)
-
-			// Verify head pod configuration
-			verifyContainerTLSEnvVars(g, &headPod.Spec.Containers[utils.RayContainerIndex])
-			verifyTLSVolumeMount(g, headPod, headSecretName)
-
-			// Verify worker pod configuration
-			g.Expect(workerPods).NotTo(BeEmpty())
-			for i := range workerPods {
-				verifyContainerTLSEnvVars(g, &workerPods[i].Spec.Containers[utils.RayContainerIndex])
-				verifyTLSVolumeMount(g, &workerPods[i], workerSecretName)
-			}
-
-			LogWithTimestamp(t, "Pod TLS configuration verified for cluster %s", clusterName)
-		})
-
-		t.Run("mTLS auto-generate Ray job submission succeeds", func(t *testing.T) {
-			LogWithTimestamp(t, "Testing Ray job submission with auto-generated")
-			g := NewWithT(t)
-
-			// Submit a simple Ray job and verify it completes.
-			// This proves head-worker mTLS communication is functional.
-			submissionID := fmt.Sprintf("mtls-test-job-%d", time.Now().Unix())
-			submitCmd := []string{
+		// Wait for the job to complete
+		g.Eventually(func(gg Gomega) {
+			statusCmd := []string{
 				"bash", "-c",
-				fmt.Sprintf(
-					"ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'import ray; ray.init(); print(ray.cluster_resources())'",
-					submissionID,
-				),
+				fmt.Sprintf("ray job status --address http://127.0.0.1:8265 %s", submissionID),
 			}
-			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
-			g.Expect(stdout.String()).To(ContainSubstring(submissionID), "job submission should succeed")
+			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
+			gg.Expect(stdout.String()).To(ContainSubstring("succeeded"))
+		}, TestTimeoutMedium).Should(Succeed())
 
-			// Wait for the job to complete
-			g.Eventually(func(gg Gomega) {
-				statusCmd := []string{
-					"bash", "-c",
-					fmt.Sprintf("ray job status --address http://127.0.0.1:8265 %s", submissionID),
-				}
-				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
-				gg.Expect(stdout.String()).To(ContainSubstring("succeeded"))
-			}, TestTimeoutMedium).Should(Succeed())
-
-			LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
-		})
+		LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
 	})
 }
 
