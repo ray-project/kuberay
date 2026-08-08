@@ -1,0 +1,164 @@
+suite: Test multiple namespaces Role
+
+templates:
+  - multiple_namespaces_role.yaml
+
+release:
+  name: kuberay-operator
+  namespace: kuberay-system
+
+tests:
+  - it: Should not create Role if `rbacEnable` is `false`
+    set:
+      rbacEnable: false
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should not create Role if `singleNamespaceInstall` is `false`
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: false
+      crNamespacedRbacEnable: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should not create Role if `crNamespacedRbacEnable` is `false`
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should create Role when all three flags are enabled
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+    asserts:
+      - containsDocument:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          name: kuberay-operator
+          namespace: kuberay-system
+
+  - it: Should include volcano rules when batchScheduler.name is volcano
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+      batchScheduler:
+        enabled: false
+        name: volcano
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.volcano.sh
+            resources:
+              - podgroups
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - update
+              - watch
+
+  - it: Should include scheduler-plugins rules when batchScheduler.name is scheduler-plugins
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+      batchScheduler:
+        enabled: false
+        name: scheduler-plugins
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.x-k8s.io
+            resources:
+              - podgroups
+            verbs:
+              - create
+              - get
+              - list
+              - watch
+
+  - it: Should include volcano rules when batchScheduler.enabled is true (deprecated)
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+      batchScheduler:
+        enabled: true
+        name: ""
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.volcano.sh
+            resources:
+              - podgroups
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - update
+              - watch
+
+  - it: Should not include volcano or scheduler-plugins rules by default
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+      batchScheduler:
+        enabled: false
+        name: ""
+    asserts:
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.volcano.sh
+          any: true
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.x-k8s.io
+          any: true
+
+  - it: Should create a Role per watched namespace
+    set:
+      rbacEnable: true
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+      watchNamespace:
+        - ns-one
+        - ns-two
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          name: kuberay-operator
+          namespace: ns-one
+        documentIndex: 0
+      - containsDocument:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          name: kuberay-operator
+          namespace: ns-two
+        documentIndex: 1
