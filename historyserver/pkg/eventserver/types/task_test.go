@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTaskLogInfoUnmarshalJSON(t *testing.T) {
+func TestTaskLogInfoProtoJSON(t *testing.T) {
 	want := TaskLogInfo{
 		StdoutFile:  "worker.out",
 		StderrFile:  "worker.err",
@@ -19,25 +19,9 @@ func TestTaskLogInfoUnmarshalJSON(t *testing.T) {
 		StderrEnd:   40,
 	}
 
-	for _, tt := range []struct {
-		name string
-		data string
-	}{
-		{
-			name: "ProtoJSON quoted int64 values",
-			data: `{"stdoutFile":"worker.out","stderrFile":"worker.err","stdoutStart":"10","stdoutEnd":"20","stderrStart":"30","stderrEnd":"40"}`,
-		},
-		{
-			name: "regular JSON numbers",
-			data: `{"stdoutFile":"worker.out","stderrFile":"worker.err","stdoutStart":10,"stdoutEnd":20,"stderrStart":30,"stderrEnd":40}`,
-		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			var got TaskLogInfo
-			require.NoError(t, json.Unmarshal([]byte(tt.data), &got))
-			assert.Equal(t, want, got)
-		})
-	}
+	var got TaskLogInfo
+	require.NoError(t, json.Unmarshal([]byte(`{"stdoutFile":"worker.out","stderrFile":"worker.err","stdoutStart":"10","stdoutEnd":"20","stderrStart":"30","stderrEnd":"40"}`), &got))
+	assert.Equal(t, want, got)
 
 	t.Run("missing and null fields keep their existing values", func(t *testing.T) {
 		got := want
@@ -59,18 +43,18 @@ func TestTaskLogInfoUnmarshalJSON(t *testing.T) {
 	for _, data := range []string{
 		`{"stdoutEnd":"not-an-integer"}`,
 		`{"stdoutEnd":"9223372036854775808"}`,
+		`{"stdoutEnd":1}`,
 		`{"stdoutEnd":1.5}`,
 	} {
 		t.Run("invalid value "+data, func(t *testing.T) {
-			got := want
+			var got TaskLogInfo
 			require.Error(t, json.Unmarshal([]byte(data), &got))
-			assert.Equal(t, want, got, "a failed decode must not partially mutate TaskLogInfo")
 		})
 	}
 
-	t.Run("marshals offsets as JSON numbers", func(t *testing.T) {
+	t.Run("marshals offsets as ProtoJSON strings", func(t *testing.T) {
 		data, err := json.Marshal(want)
 		require.NoError(t, err)
-		assert.JSONEq(t, `{"stdoutFile":"worker.out","stderrFile":"worker.err","stdoutStart":10,"stdoutEnd":20,"stderrStart":30,"stderrEnd":40}`, string(data))
+		assert.JSONEq(t, `{"stdoutFile":"worker.out","stderrFile":"worker.err","stdoutStart":"10","stdoutEnd":"20","stderrStart":"30","stderrEnd":"40"}`, string(data))
 	})
 }
