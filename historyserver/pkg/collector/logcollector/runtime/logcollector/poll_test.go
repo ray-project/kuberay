@@ -549,7 +549,7 @@ func TestPeriodicPollingStopsOnShutdownSignal(t *testing.T) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		handler.PollAdditionalEndpointsPeriodically(stop)
+		handler.pollAdditionalEndpointsPeriodically(stop)
 		close(done)
 	}()
 
@@ -585,7 +585,7 @@ func TestPeriodicPollingCancelsInFlightRequestOnShutdown(t *testing.T) {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		handler.PollAdditionalEndpointsPeriodically(stop)
+		handler.pollAdditionalEndpointsPeriodically(stop)
 		close(done)
 	}()
 

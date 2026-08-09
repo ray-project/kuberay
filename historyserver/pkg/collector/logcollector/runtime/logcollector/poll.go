@@ -99,13 +99,6 @@ type periodicPollResult struct {
 	state       *datasetPollState
 }
 
-// PollAdditionalEndpointsPeriodically fetches the built-in endpoints, plus anything from
-// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS, on a timer; each cycle overwrites the previous one.
-// It stops when stop closes and cancels any blocked resolve or in-flight request at that point.
-func (r *RayLogHandler) PollAdditionalEndpointsPeriodically(stop <-chan struct{}) {
-	r.pollAdditionalEndpointsPeriodically(stop)
-}
-
 func (r *RayLogHandler) startPeriodicEndpointPolling(stop <-chan struct{}) <-chan periodicPollResult {
 	// The core sends exactly once. A one-element buffer lets that send finish even if
 	// the shutdown join times out and no receiver remains.

@@ -41,9 +41,6 @@ spec:
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             name: ray-head
-            securityContext:
-              allowPrivilegeEscalation: true
-              privileged: true
             ports:
             - containerPort: 6379
               name: gcs-server

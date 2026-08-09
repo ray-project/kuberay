@@ -2215,7 +2215,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // The test flow mirrors testDeadClusterMetadata:
 // 1. Deploy a cluster with the collector
 // 2. Submit a RayJob that creates a detached placement group
-// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 3. Wait for placement groups data to appear in S3 (written by periodic endpoint polling)
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
