@@ -369,7 +369,7 @@ const (
 func dumpCPUThrottleStatsFromCgroup(test Test, locustHeadPod *corev1.Pod, label string) {
 	stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 		"sh", "-c", "cat /sys/fs/cgroup/cpu.stat 2>/dev/null || cat /sys/fs/cgroup/cpu/cpu.stat", // check cgroup v2 and fallback to v1
-	})
+	}, true)
 	LogWithTimestamp(test.T(), "[%s] cpu.stat for %s:\n%s%s", label, locustHeadPod.Name, stdout.String(), stderr.String())
 }
 
