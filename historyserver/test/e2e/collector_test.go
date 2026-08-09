@@ -673,9 +673,9 @@ try:
 except urllib.error.HTTPError as err:
     print(err.code)
 PY`
-	unauthenticated, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", probe})
-	g.Expect(strings.TrimSpace(unauthenticated.String())).To(Equal("401"),
-		"Dashboard must reject unauthenticated requests, otherwise this test proves nothing")
+	stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", probe})
+	g.Expect(stderr.String()).To(BeEmpty())
+	g.Expect(strings.TrimSpace(stdout.String())).To(Equal("401"))
 
 	// Data in storage is the real proof: the collector only writes the timezone object after an
 	// authenticated Dashboard call succeeds.
