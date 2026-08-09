@@ -472,7 +472,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		// so no header is needed; auth-enabled clusters without a token fail before reaching here.
 		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
 			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
-				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
+				proxyReq.Header.Set(utils.RayAuthHeader, fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}

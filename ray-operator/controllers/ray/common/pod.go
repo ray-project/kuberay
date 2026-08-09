@@ -708,7 +708,6 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	if features.Enabled(features.RayClusterHistoryServer) && instance.Spec.HistoryServerOptions != nil && instance.Spec.HistoryServerOptions.CollectorOptions != nil {
 		collectorContainer := BuildCollectorContainer(instance.Spec.HistoryServerOptions.CollectorOptions, rayv1.WorkerNode, instance.Name, instance.Namespace, fqdnRayIP, instance.Labels)
 
-		// Worker collectors also reach the Dashboard (via FQ_RAY_IP) to discover their Ray NodeID.
 		if utils.IsAuthEnabled(&instance.Spec) {
 			SetContainerTokenAuthEnvVars(instance.Name, &collectorContainer, instance.Spec.AuthOptions)
 		}
