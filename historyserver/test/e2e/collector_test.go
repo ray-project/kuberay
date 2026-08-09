@@ -743,12 +743,12 @@ func assertServeAppConverged(g Gomega, body []byte) {
 	}
 	g.Expect(json.Unmarshal(body, &response)).To(Succeed(), "Serve response should be valid JSON")
 
-	app, ok := response.Applications["history-e2e"]
-	g.Expect(ok).To(BeTrue(), "applications should contain history-e2e, got %v", response.Applications)
-	g.Expect(app.Status).To(Equal("RUNNING"), "history-e2e should have converged")
+	app, ok := response.Applications["historyserver-demo"]
+	g.Expect(ok).To(BeTrue(), "applications should contain historyserver-demo, got %v", response.Applications)
+	g.Expect(app.Status).To(Equal("RUNNING"), "historyserver-demo should have converged")
 
 	deployment, ok := app.Deployments["NoOp"]
-	g.Expect(ok).To(BeTrue(), "history-e2e should contain the NoOp deployment")
+	g.Expect(ok).To(BeTrue(), "historyserver-demo should contain the NoOp deployment")
 	g.Expect(deployment.Status).To(Equal("HEALTHY"), "NoOp replica should be healthy")
 }
 

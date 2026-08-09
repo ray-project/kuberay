@@ -5,8 +5,8 @@ metadata:
 spec:
   # Self-contained: brings up its own cluster; also exercises the collector's shutdown path.
   shutdownAfterJobFinishes: true
-  # Long enough for one polling cycle after the job succeeds.
-  ttlSecondsAfterFinished: 30
+  # Keep the RayCluster alive long enough for the collector to capture the completed dataset stats.
+  ttlSecondsAfterFinished: 90
   entrypoint: |
     python -c "
     import ray
@@ -24,6 +24,8 @@ spec:
       serviceType: ClusterIP
       template:
         spec:
+          # Leave time for the collector's final endpoint poll and log flush during shutdown.
+          terminationGracePeriodSeconds: 60
           containers:
           - env:
             - name: RAY_TMP_ROOT
@@ -79,9 +81,6 @@ spec:
               value: "localhost"
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
-            # Shorter than the 30s default so a cycle fits inside ttlSecondsAfterFinished.
-            - name: RAY_COLLECTOR_POLL_INTERVAL
-              value: "5s"
             - name: S3DISABLE_SSL
               value: "true"
             - name: AWS_ACCESS_KEY_ID
