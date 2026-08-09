@@ -2,6 +2,8 @@ package storage
 
 import (
 	"strings"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // ListSessionNodeDirs returns node directory names under <prefix>/<sessionName>/.
@@ -12,7 +14,7 @@ func ListSessionNodeDirs(reader StorageReader, prefix string, sessionName string
 			continue
 		}
 		name := strings.TrimSuffix(entry, "/")
-		if name == "" {
+		if name == "" || name == utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
 			continue
 		}
 		nodes = append(nodes, name)
