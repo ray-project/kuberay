@@ -92,12 +92,12 @@ spec:
               value: "test"
             - name: S3FORCE_PATH_STYLE
               value: "true"
-            command:
-            - collector
-            - --role=Head
-            - --runtime-class-name=s3
-            - --ray-root-dir=log
-            - --events-port=8084
+            - name: RAY_ROLE
+              value: "Head"
+            - name: STORAGE_BACKEND
+              value: "s3"
+            - name: RAY_ROOT_DIR
+              value: "log"
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
