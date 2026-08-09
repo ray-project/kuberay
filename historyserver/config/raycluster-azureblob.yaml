@@ -7,7 +7,7 @@ metadata:
   namespace: default
 spec:
   # Enable Ray token authentication. Requires Ray 2.52.0+
-  # rayVersion: "2.52.0"
+  # rayVersion: "2.56.0"
   # authOptions:
   #   mode: token
   headGroupSpec:
