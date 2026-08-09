@@ -123,6 +123,10 @@ type rotationTask struct {
 	nodeID      string
 	createdAt   time.Time
 	size        int64
+	// finalAttempt is set to true when the task is being processed by a retry
+	// goroutine that was woken by shutdown (stopProducers). On failure, the task
+	// is abandoned rather than re-entering retryProcess, preventing infinite loops.
+	finalAttempt bool
 }
 
 // EventCollector persists events to local disk as JSONL and asynchronously
@@ -631,21 +635,16 @@ func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) 
 }
 
 // retryProcess re-processes a failed or deferred rotation task after a
-// backoff. Once shutdown begins, new retries are declined while sleeping ones
-// are woken for one final attempt. Tracked by consumerWG so shutdown waits.
+// backoff. Once shutdown begins, sleeping retries are woken for one final
+// attempt. Tracked by consumerWG so shutdown waits.
 func (ec *EventCollector) retryProcess(task rotationTask) {
-	select {
-	case <-ec.stopProducers:
-		logrus.Errorf("Giving up on retrying %s during shutdown; file left on disk", task.path)
-		return
-	default:
-	}
 	ec.consumerWG.Go(func() {
 		select {
 		case <-time.After(retryBackoff):
 		case <-ec.stopProducers:
-			// Shutdown cuts the backoff short; the attempt below is the final
-			// one, since a failure re-enters retryProcess and is declined.
+			// Shutdown cuts the backoff short; mark the attempt as final so
+			// that a failure does not re-enter retryProcess and loop forever.
+			task.finalAttempt = true
 		}
 		ec.processRotatedFile(task)
 	})
@@ -780,7 +779,11 @@ func (ec *EventCollector) processRotatedFile(task rotationTask) {
 				logrus.Warnf("Failed to remove %s after failed upload: %v", compressedPath, err)
 			}
 		}
-		ec.retryProcess(task)
+		if task.finalAttempt {
+			logrus.Errorf("Giving up on retrying %s during shutdown; file left on disk", task.path)
+		} else {
+			ec.retryProcess(task)
+		}
 		return
 	}
 	f.Close()
