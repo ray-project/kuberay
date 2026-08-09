@@ -66,8 +66,3 @@ spec:
         resources:
           requests:
             cpu: "500m"
-          limits:
-            # Loading a dead session is CPU-bound: it uses ~1.2 cores with bursts
-            # to ~2.2. A 500m cap is saturated for the whole load, which made a
-            # 100k-task session take 907s instead of 63s.
-            cpu: "4"
