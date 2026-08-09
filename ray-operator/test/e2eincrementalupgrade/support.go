@@ -363,6 +363,16 @@ const (
 	locustWarmupTimeout = 120 * time.Second
 )
 
+// dumpCPUThrottleStatsFromCgroup logs the Locust head pod's cgroup CPU throttling stats
+// (nr_throttled / throttled_usec, or throttled_time on cgroup v1), so CI logs reveal
+// whether the load generator itself is CPU-throttled during the run.
+func dumpCPUThrottleStatsFromCgroup(test Test, locustHeadPod *corev1.Pod, label string) {
+	stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+		"sh", "-c", "cat /sys/fs/cgroup/cpu.stat 2>/dev/null || cat /sys/fs/cgroup/cpu/cpu.stat", // check cgroup v2 and fallback to v1
+	})
+	LogWithTimestamp(test.T(), "[%s] cpu.stat for %s:\n%s%s", label, locustHeadPod.Name, stdout.String(), stderr.String())
+}
+
 // warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
 // Hence, all requests are sent to the old cluster during the warmup period.
 //
