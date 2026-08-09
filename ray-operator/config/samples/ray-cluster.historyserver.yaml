@@ -10,7 +10,12 @@ kind: RayCluster
 metadata:
   name: raycluster-historyserver
 spec:
-  rayVersion: "2.52.0"
+  rayVersion: '2.56.0'
+  # enableK8sTokenAuth requires Ray 2.55.0+. authOptions.secretName must NOT be
+  # set at the same time.
+  # authOptions:
+  #   mode: 'token'
+  #   enableK8sTokenAuth: true
   historyServerOptions:
     collectorOptions:
       image: quay.io/kuberay/collector:nightly
@@ -33,9 +38,11 @@ spec:
     rayStartParams: {}
     template:
       spec:
+        # Enable the following RBAC resources if you are using enableK8sTokenAuth.
+        # serviceAccountName: raycluster-historyserver
         containers:
         - name: ray-head
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.56.0
           resources:
             limits:
               cpu: "1"
@@ -58,9 +65,11 @@ spec:
     rayStartParams: {}
     template:
       spec:
+        # Enable the following RBAC resources if you are using enableK8sTokenAuth.
+        # serviceAccountName: raycluster-historyserver
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.56.0
           resources:
             limits:
               cpu: "1"
@@ -68,3 +77,64 @@ spec:
             requests:
               cpu: "1"
               memory: "1Gi"
+# Enable the following RBAC resources if you are using enableK8sTokenAuth.
+# ---
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: raycluster-historyserver
+# ---
+# # With enableK8sTokenAuth, Ray validates incoming tokens by calling TokenReview and
+# # SubjectAccessReview, so the cluster's ServiceAccount needs permission to create them.
+# # Without this the head's GCS fails to start with InvalidAuthToken and crash loops.
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: raycluster-historyserver-authenticator
+# rules:
+# - apiGroups: ["authentication.k8s.io"]
+#   resources:
+#   - 'tokenreviews'
+#   verbs: ["create"]
+# - apiGroups: ["authorization.k8s.io"]
+#   resources:
+#   - 'subjectaccessreviews'
+#   verbs: ["create"]
+# ---
+# # Grants the caller ray:write on rayclusters, which is what the Dashboard
+# # authorizes the presented token against.
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: raycluster-historyserver-writer
+# rules:
+# - apiGroups: ["ray.io"]
+#   resources:
+#   - 'rayclusters'
+#   verbs: ["ray:write"]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: raycluster-historyserver-authenticator
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: raycluster-historyserver-authenticator
+# subjects:
+# - kind: ServiceAccount
+#   name: raycluster-historyserver
+#   namespace: default
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: raycluster-historyserver-writer
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: raycluster-historyserver-writer
+# subjects:
+# - kind: ServiceAccount
+#   name: raycluster-historyserver
+#   namespace: default
