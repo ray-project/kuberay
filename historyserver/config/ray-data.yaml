@@ -5,7 +5,7 @@ metadata:
 spec:
   # Self-contained: brings up its own cluster; also exercises the collector's shutdown path.
   shutdownAfterJobFinishes: true
-  # Keep the RayCluster alive long enough for the collector to capture the completed dataset stats.
+  # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
   ttlSecondsAfterFinished: 90
   entrypoint: |
     python -c "
@@ -24,8 +24,6 @@ spec:
       serviceType: ClusterIP
       template:
         spec:
-          # Leave time for the collector's final endpoint poll and log flush during shutdown.
-          terminationGracePeriodSeconds: 60
           containers:
           - env:
             - name: RAY_TMP_ROOT

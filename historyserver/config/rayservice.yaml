@@ -26,8 +26,6 @@ spec:
       serviceType: ClusterIP
       template:
         spec:
-          # Leave time for the collector's final endpoint poll and log flush during shutdown.
-          terminationGracePeriodSeconds: 60
           containers:
           - env:
             - name: RAY_TMP_ROOT
@@ -40,7 +38,7 @@ spec:
               value: "http://localhost:8084/v1/events"
             - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
               value: "ALL"
-            image: rayproject/ray:2.55.0
+            image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             name: ray-head
             securityContext:
