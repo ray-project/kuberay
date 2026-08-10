@@ -59,18 +59,15 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
-// injectCollectorRayClusterNamespaceAndEnvVar injects the ray-cluster-namespace argument and required environment variables (POD_IP, FQ_RAY_IP) into all collector containers.
+// injectCollectorRayClusterNamespaceAndEnvVar injects the ray-cluster-namespace and required environment variables (RAY_CLUSTER_NAMESPACE, POD_IP, FQ_RAY_IP) into all collector containers.
 func injectCollectorRayClusterNamespaceAndEnvVar(containers []corev1.Container, rayClusterName string, rayClusterNamespace string) {
 	fqdnRayIP := fmt.Sprintf("%s-head-svc.%s.svc.cluster.local", rayClusterName, rayClusterNamespace)
 	for i := range containers {
 		if containers[i].Name == "collector" {
-			containers[i].Command = append(
-				containers[i].Command,
-				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
-			)
 			if containers[i].Env == nil {
 				containers[i].Env = []corev1.EnvVar{}
 			}
+			setOrAppendEnv(&containers[i], "RAY_CLUSTER_NAMESPACE", rayClusterNamespace, nil)
 			setOrAppendEnv(&containers[i], "POD_IP", "", &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "status.podIP",

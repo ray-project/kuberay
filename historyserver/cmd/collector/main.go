@@ -30,7 +30,7 @@ func main() {
 	rayClusterNamespace := ""
 	rayRootDir := ""
 	logBatching := 1000
-	eventsPort := 8080
+	eventsPort := 8084
 	pushInterval := time.Minute
 	ownerKind := ""
 	ownerName := ""
@@ -53,7 +53,7 @@ func main() {
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
-	flag.IntVar(&eventsPort, "events-port", 8080, "")
+	flag.IntVar(&eventsPort, "events-port", 8084, "")
 	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
