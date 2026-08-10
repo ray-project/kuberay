@@ -2,7 +2,7 @@ name: Mark and close stale issues and pull requests
 
 on:
   schedule:
-    # Runs twice a day at 15 minutes past midnight and noon UTC (same cadence as Ray's stale workflow).
+    # Runs twice a day at 15 minutes past midnight and noon UTC.
     - cron: '15 */12 * * *'
   workflow_dispatch: {}
 
