@@ -80,7 +80,7 @@ jobs:
           # Comment to post when marking a PR as stale.
           stale-pr-message: |
             This pull request has been automatically marked as stale because it has not had
-            any activity for 14 days. It will be closed in another 14 days if no further activity occurs.
+            any activity for 120 days. It will be closed in another 14 days if no further activity occurs.
             Thank you for your contributions.
 
             You can always ask for help on [Ray's public Slack channel](https://github.com/ray-project/kuberay#getting-involved).
