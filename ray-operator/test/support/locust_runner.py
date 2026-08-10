@@ -119,6 +119,10 @@ stdout, stderr = proc.communicate()
 
 print("STDOUT:", stdout.decode())
 print("STDERR:", stderr.decode())
+# Print returncode before parsing STDOUT as JSON, so a crash below (e.g. the
+# master producing no output) still surfaces the real exit status. A negative
+# value means the process was killed by signal N (returncode == -N).
+print("returncode:", proc.returncode)
 
 data = json.loads(stdout.decode())
 assert len(data) == 1, f"data_len: {len(data)}"
@@ -129,5 +133,4 @@ num_requests = data[0]["num_requests"]
 assert num_failures == 0, f"num_failures: {num_failures}"
 assert num_requests != 0, f"num_requests: {num_requests}"
 
-print("returncode:", proc.returncode)
 sys.exit(proc.returncode)
