@@ -5,7 +5,7 @@ This module is the writer and reader for GCS storage.
 It is required for the GKE Cluster running Ray to have workload identity (WI), to setup WI, please follow:
 [How-to: Workload Identity](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
 
-To use it with the History Server, set `--runtime-class-name=gcs`.
+To use it with the History Server, set `--storage-backend=gcs`.
 
 ```yaml
 apiVersion: apps/v1
@@ -26,7 +26,7 @@ spec:
         imagePullPolicy: Always
         command:
         - historyserver
-        - --runtime-class-name=gcs
+        - --storage-backend=gcs
         - --ray-root-dir=log
         ports:
         - containerPort: 8080
@@ -47,7 +47,7 @@ RayCluster will also have the following under both the worker and head collector
       command:
       - collector
       - --role=Head
-      - --runtime-class-name=gcs
+      - --storage-backend=gcs
       - --ray-cluster-name=raycluster-historyserver
       - --ray-root-dir=log
       - --events-port=8084

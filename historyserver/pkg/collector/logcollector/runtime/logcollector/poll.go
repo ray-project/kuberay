@@ -362,6 +362,10 @@ func (r *RayLogHandler) fetchEndpoint(parent context.Context, endpoint string) (
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	if err := utils.SetRayAuthHeader(req); err != nil {
+		return nil, fmt.Errorf("failed to authenticate request: %w", err)
+	}
+
 	resp, err := r.HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -371,6 +375,11 @@ func (r *RayLogHandler) fetchEndpoint(parent context.Context, endpoint string) (
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	// An auth failure drops this endpoint's data on every cycle for the lifetime of the Pod, so
+	// it must not be reported at the same level as a transient non-200.
+	if utils.IsAuthFailure(resp.StatusCode) {
+		return nil, fmt.Errorf("authentication failed with status %d; check that token auth is configured for the collector container", resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
