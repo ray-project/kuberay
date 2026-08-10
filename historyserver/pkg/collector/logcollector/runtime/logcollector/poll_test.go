@@ -430,9 +430,9 @@ func TestFinalDatasetPollReusesPeriodicState(t *testing.T) {
 	))
 }
 
-// TestPollAllEndpointsStoresStaticEndpoints verifies the built-in endpoints are stored under
+// TestPollAllEndpointsStoresDefaultEndpoints verifies the built-in endpoints are stored under
 // the exact URIs the frontend requests.
-func TestPollAllEndpointsStoresStaticEndpoints(t *testing.T) {
+func TestPollAllEndpointsStoresDefaultEndpoints(t *testing.T) {
 	g := NewWithT(t)
 
 	dash := &fakeDashboard{jobs: `[]`}
@@ -684,7 +684,7 @@ func TestPollSingleEndpointDoesNotStoreAfterCancellation(t *testing.T) {
 }
 
 // TestPolledEndpointsAppendsConfiguredOnes verifies RAY_COLLECTOR_ADDITIONAL_ENDPOINTS adds
-// to the built-in set, deduplicated.
+// to the fixed default set, deduplicated. Dynamic Ray Data endpoints are tested separately.
 func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	g := NewWithT(t)
 

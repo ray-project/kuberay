@@ -25,6 +25,13 @@ import (
 
 const defaultDashboardAddress = "http://localhost:8265"
 
+func resolveDashboardAddress(flagValue string) string {
+	if value := os.Getenv("RAY_DASHBOARD_ADDRESS"); value != "" {
+		return value
+	}
+	return flagValue
+}
+
 func main() {
 	role := ""
 	storageBackend := ""
@@ -61,7 +68,7 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
-	flag.StringVar(&dashboardAddress, "dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard")
+	flag.StringVar(&dashboardAddress, "dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard; overridden by RAY_DASHBOARD_ADDRESS when set")
 
 	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
 	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
@@ -117,6 +124,7 @@ func main() {
 	if val := os.Getenv("STORAGE_BACKEND_CONFIG_PATH"); val != "" {
 		storageBackendConfigPath = val
 	}
+	dashboardAddress = resolveDashboardAddress(dashboardAddress)
 
 	role = strings.TrimSpace(role)
 	if strings.EqualFold(role, "head") {
@@ -231,11 +239,6 @@ func main() {
 	}
 
 	sessionName := path.Base(activeSessionDir)
-
-	// Environment configuration takes precedence over the CLI flag.
-	if v := os.Getenv("RAY_DASHBOARD_ADDRESS"); v != "" {
-		dashboardAddress = v
-	}
 
 	globalConfig := types.RayCollectorConfig{
 		RootDir:             rayRootDir,

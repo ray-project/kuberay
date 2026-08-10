@@ -30,8 +30,9 @@ const (
 	dataDatasetsEndpointPrefix = "/api/data/datasets/"
 )
 
-// defaultPolledEndpoints lists the fixed dashboard endpoints polled for every
-// cluster. Per-job Ray Data endpoints are discovered and polled separately.
+// defaultPolledEndpoints lists the fixed dashboard endpoints polled by every
+// head collector. Ray Data is also built in, but its per-job endpoints are
+// discovered through jobsEndpoint and polled separately by pollDataDatasets.
 var defaultPolledEndpoints = []string{
 	serveApplicationsEndpoint,
 	placementGroupsEndpoint,

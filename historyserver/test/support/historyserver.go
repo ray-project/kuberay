@@ -51,18 +51,10 @@ const (
 // HistoryServerEndpoints defines endpoints that should be proxied to Ray Dashboard
 // Ref: https://github.com/ray-project/kuberay/blob/8fc4e2a0e644db392534927b7c03d15e3ab7bdbc/historyserver/pkg/historyserver/router.go#L66-L128
 //
-// Excluded endpoints that require parameters:
-//   - /nodes/{node_id}
-//   - /api/jobs/{job_id}
-//   - /api/v0/logs (requires node_id)
-//   - /logical/actors/{actor_id}
-//
-// Excluded endpoints that are not yet implemented:
-//   - /api/cluster_status
-//   - /api/data/datasets/{job_id}
-//   - /api/jobs
-//   - /api/serve/applications
-//   - /api/v0/placement_groups
+// This generic smoke-test table only includes endpoints that need no dynamic IDs or
+// workload-specific fixtures. Parameterized endpoints (nodes, jobs, logs, and actors)
+// and endpoints with dedicated coverage (cluster status, jobs, Serve, Ray Data, and
+// placement groups) are intentionally excluded.
 var HistoryServerEndpoints = []string{
 	"/nodes?view=summary",
 	"/api/v0/tasks",
