@@ -65,7 +65,8 @@ spec:
         # - --use-auth-token-mode=true
         ports:
         - containerPort: 8080
-        # Soft-bound encoded snapshots at 8 GiB; leave pod memory for decoding.
+        # Cache is soft-bounded at 8 GiB; 12 GiB leaves decode headroom.
+        # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
         - --session-cache-max-bytes=8589934592
         resources:
