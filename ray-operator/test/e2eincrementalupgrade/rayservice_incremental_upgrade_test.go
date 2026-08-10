@@ -307,7 +307,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 					test,
 					locustHeadPod,
 					common.RayHeadContainer,
-					[]string{"pkill", "-SIGINT", "-f", "locust --headless"},
+					[]string{"pkill", "-SIGTERM", "-f", "locust --headless"},
 				)
 				LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 				if err := eg.Wait(); err != nil && !test.T().Failed() {
@@ -666,7 +666,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 					test,
 					locustHeadPod,
 					common.RayHeadContainer,
-					[]string{"pkill", "-SIGINT", "-f", "locust --headless"},
+					[]string{"pkill", "-SIGTERM", "-f", "locust --headless"},
 				)
 				LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 				if err := eg.Wait(); err != nil && !test.T().Failed() {
