@@ -6,6 +6,10 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
+  # Enable Ray token authentication. Requires Ray 2.52.0+
+  # rayVersion: "2.56.0"
+  # authOptions:
+  #   mode: token
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
@@ -72,6 +76,13 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: raycluster-historyserver  # defaults to the RayCluster name
+          #       key: auth_token
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -146,6 +157,13 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: raycluster-historyserver  # defaults to the RayCluster name
+          #       key: auth_token
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot

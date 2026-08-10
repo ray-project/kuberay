@@ -111,6 +111,12 @@ func (r *RayLogHandler) pollSingleEndpoint(endpoint, sessionName string) {
 		return
 	}
 
+	if err := utils.SetRayAuthHeader(req); err != nil {
+		cancel()
+		logrus.Errorf("Failed to authenticate request for additional endpoint %s: %v", endpoint, err)
+		return
+	}
+
 	resp, err := r.HttpClient.Do(req)
 	if err != nil {
 		cancel()
@@ -123,6 +129,13 @@ func (r *RayLogHandler) pollSingleEndpoint(endpoint, sessionName string) {
 	cancel()
 	if err != nil {
 		logrus.Warnf("Failed to read response body for additional endpoint %s: %v", endpoint, err)
+		return
+	}
+
+	// An auth failure drops this endpoint's data on every cycle for the lifetime of the Pod, so
+	// it must not be reported at the same level as a transient non-200.
+	if utils.IsAuthFailure(resp.StatusCode) {
+		logrus.Errorf("Additional endpoint %s returned status %d: the collector is not authenticated against the Ray Dashboard, so this endpoint's data will keep being dropped. Check that token auth is configured for the collector container.", endpoint, resp.StatusCode)
 		return
 	}
 

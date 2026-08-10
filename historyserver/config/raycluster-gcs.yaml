@@ -8,6 +8,10 @@ metadata:
   name: raycluster-historyserver
   namespace: default
 spec:
+  # Enable Ray token authentication. Requires Ray 2.52.0+
+  # rayVersion: "2.56.0"
+  # authOptions:
+  #   mode: token
   headGroupSpec:
     rayStartParams:
       dashboard-host: 0.0.0.0
@@ -93,6 +97,13 @@ spec:
             value: "gcs"
           - name: EVENTS_PORT
             value: "8084"
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: ${RAY_CLUSTER}  # defaults to the RayCluster name
+          #       key: auth_token
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot
@@ -165,6 +176,13 @@ spec:
             value: "gcs"
           - name: EVENTS_PORT
             value: "8084"
+          # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
+          # needs the token to call the Dashboard.
+          # - name: RAY_AUTH_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: ${RAY_CLUSTER}  # defaults to the RayCluster name
+          #       key: auth_token
           volumeMounts:
           - name: historyserver
             mountPath: *rayTmpRoot

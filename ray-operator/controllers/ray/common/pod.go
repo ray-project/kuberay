@@ -304,6 +304,13 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if features.Enabled(features.RayClusterHistoryServer) && instance.Spec.HistoryServerOptions != nil && instance.Spec.HistoryServerOptions.CollectorOptions != nil {
 		fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
 		collectorContainer := BuildCollectorContainer(instance.Spec.HistoryServerOptions.CollectorOptions, rayv1.HeadNode, instance.Name, instance.Namespace, fqdnRayIP, instance.Labels)
+
+		// The collector queries the Ray Dashboard, so it needs the same credentials as the Ray
+		// container.
+		if utils.IsAuthEnabled(&instance.Spec) {
+			SetContainerTokenAuthEnvVars(instance.Name, &collectorContainer, instance.Spec.AuthOptions)
+		}
+
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
 	}
 
@@ -700,6 +707,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 
 	if features.Enabled(features.RayClusterHistoryServer) && instance.Spec.HistoryServerOptions != nil && instance.Spec.HistoryServerOptions.CollectorOptions != nil {
 		collectorContainer := BuildCollectorContainer(instance.Spec.HistoryServerOptions.CollectorOptions, rayv1.WorkerNode, instance.Name, instance.Namespace, fqdnRayIP, instance.Labels)
+
+		if utils.IsAuthEnabled(&instance.Spec) {
+			SetContainerTokenAuthEnvVars(instance.Name, &collectorContainer, instance.Spec.AuthOptions)
+		}
+
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, collectorContainer)
 	}
 
