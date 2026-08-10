@@ -62,7 +62,7 @@ jobs:
 
             Thanks again for the report!
 
-          # --- Pull request settings (Ray's current stale-PR policy) ---
+          # --- Pull request settings ---
           # Number of days of inactivity before a pull request becomes stale.
           days-before-pr-stale: 120
 
