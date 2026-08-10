@@ -20,7 +20,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-          # --- Issue settings (Ray's historical stale-issue policy) ---
+          # --- Issue settings ---
           # Number of days of inactivity before an issue becomes stale.
           days-before-issue-stale: 120
 
