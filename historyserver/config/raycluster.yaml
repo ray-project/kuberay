@@ -7,7 +7,7 @@ metadata:
   namespace: default
 spec:
   # Enable Ray token authentication. Requires Ray 2.52.0+
-  # rayVersion: "2.55.0"
+  # rayVersion: "2.56.0"
   # authOptions:
   #   mode: token
   headGroupSpec:
@@ -99,8 +99,6 @@ spec:
             value: "Head"
           - name: STORAGE_BACKEND
             value: "s3"
-          - name: RAY_ROOT_DIR
-            value: "log"
           # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
           # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN
@@ -191,8 +189,6 @@ spec:
             value: "Worker"
           - name: STORAGE_BACKEND
             value: "s3"
-          - name: RAY_ROOT_DIR
-            value: "log"
           # Uncomment when the RayCluster sets `spec.authOptions.mode: token`; the collector
           # needs the token to call the Dashboard.
           # - name: RAY_AUTH_TOKEN

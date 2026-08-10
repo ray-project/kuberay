@@ -100,7 +100,6 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
             "cwd": "${workspaceFolder}",
             "args": [
                 "--storage-backend=s3",
-                "--ray-root-dir=log"
             ],
             "env": {
                 "S3_REGION": "test",
@@ -140,7 +139,6 @@ export S3DISABLE_SSL=true
 # Run the history server.
 ./output/bin/historyserver \
   --storage-backend=s3 \
-  --ray-root-dir=log \
   --use-kubernetes-proxy=true
 ```
 

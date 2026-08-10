@@ -220,7 +220,7 @@ const (
 	OWNER_KIND                                                                   = "OWNER_KIND"
 	OWNER_NAME                                                                   = "OWNER_NAME"
 	EVENTS_PORT                                                                  = "EVENTS_PORT"
-	RAY_ROOT_DIR                                                                 = "RAY_ROOT_DIR"
+	STORAGE_ROOT_DIR                                                             = "STORAGE_ROOT_DIR"
 	LOG_BATCHING                                                                 = "LOG_BATCHING"
 	PUSH_INTERVAL                                                                = "PUSH_INTERVAL"
 	STORAGE_BACKEND                                                              = "STORAGE_BACKEND"
