@@ -689,7 +689,7 @@ func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	g := NewWithT(t)
 
 	handler, _ := newPollTestHandler(t, "http://unused")
-	g.Expect(handler.polledEndpoints()).To(Equal(staticPolledEndpoints))
+	g.Expect(handler.polledEndpoints()).To(Equal(defaultPolledEndpoints))
 
 	handler.AdditionalEndpoints = []string{
 		trainRunsEndpoint,
@@ -703,7 +703,7 @@ func TestPolledEndpointsAppendsConfiguredOnes(t *testing.T) {
 	}))
 
 	// The built-in list itself must not be mutated by the append.
-	g.Expect(staticPolledEndpoints).To(Equal([]string{
+	g.Expect(defaultPolledEndpoints).To(Equal([]string{
 		serveApplicationsEndpoint,
 		placementGroupsEndpoint,
 	}))

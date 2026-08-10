@@ -23,6 +23,8 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+const defaultDashboardAddress = "http://localhost:8265"
+
 func main() {
 	role := ""
 	storageBackend := ""
@@ -37,6 +39,7 @@ func main() {
 	enableEventCollector := true
 	enableLogCollector := true
 	storageBackendConfigPath := ""
+	dashboardAddress := defaultDashboardAddress
 
 	// Event collector disk-first storage flags.
 	eventDataDir := "/tmp/ray/event-data"
@@ -58,6 +61,7 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
+	flag.StringVar(&dashboardAddress, "dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard")
 
 	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
 	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
@@ -228,8 +232,7 @@ func main() {
 
 	sessionName := path.Base(activeSessionDir)
 
-	// The head collector shares a pod with the dashboard; override for non-default ports.
-	dashboardAddress := "http://localhost:8265"
+	// Environment configuration takes precedence over the CLI flag.
 	if v := os.Getenv("RAY_DASHBOARD_ADDRESS"); v != "" {
 		dashboardAddress = v
 	}

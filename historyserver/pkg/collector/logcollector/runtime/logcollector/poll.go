@@ -30,15 +30,16 @@ const (
 	dataDatasetsEndpointPrefix = "/api/data/datasets/"
 )
 
-// dataDatasetsEndpointPrefix needs a job ID, so pollDataDatasets handles it.
-var staticPolledEndpoints = []string{
+// defaultPolledEndpoints lists the fixed dashboard endpoints polled for every
+// cluster. Per-job Ray Data endpoints are discovered and polled separately.
+var defaultPolledEndpoints = []string{
 	serveApplicationsEndpoint,
 	placementGroupsEndpoint,
 }
 
 // polledEndpoints merges the built-in and configured endpoints, deduplicated.
 func (r *RayLogHandler) polledEndpoints() []string {
-	all := slices.Concat(staticPolledEndpoints, r.AdditionalEndpoints)
+	all := slices.Concat(defaultPolledEndpoints, r.AdditionalEndpoints)
 	endpoints := make([]string, 0, len(all))
 	seen := make(map[string]struct{}, len(all))
 	for _, endpoint := range all {

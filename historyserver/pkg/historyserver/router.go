@@ -198,7 +198,7 @@ func routerAPI(s *ServerHandler) {
 
 	// Fallback route for additional polled endpoints stored in storage by the collector.
 	// This must be registered last because go-restful matches more specific routes first.
-	ws.Route(ws.GET("/{subpath:*}").To(s.getAdditionalEndpoint).Filter(s.CookieHandle).
+	ws.Route(ws.GET("/{subpath:*}").To(s.getFetchedEndpoint).Filter(s.CookieHandle).
 		Doc("fallback handler for additional polled endpoints stored in storage").
 		Writes(""))
 }
@@ -1105,13 +1105,12 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	resp.Write(data)
 }
 
-// getAdditionalEndpoint is the fallback handler for endpoints that don't have a
-// dedicated handler. It reads the endpoint's data from storage, where the collector
-// has previously stored it via periodic polling.
-//
-// Storage key convention: the request path "/api/v0/nodes/summary" maps to
-// storage key "restful__api__v0__nodes__summary" under {sessionName}/fetched_endpoints/.
-func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restful.Response) {
+// getFetchedEndpoint handles the catch-all route registered after all explicit routes.
+// Live requests are proxied to the Ray Dashboard. For dead sessions, it replays
+// built-in and user-configured endpoints that the collector stored under
+// {sessionName}/fetched_endpoints/; known missing endpoints receive a schema-valid
+// empty response, while unknown endpoints return 404.
+func (s *ServerHandler) getFetchedEndpoint(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
@@ -1174,7 +1173,8 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 		})
 		return data
 	default:
-		// Nothing is stored for a job that never used Ray Data; match the live dashboard.
+		// No snapshot was captured for this job's datasets endpoint. This does not prove
+		// the job never used Ray Data, so return the live API's empty shape instead of 404.
 		if strings.HasPrefix(trimmed, "/api/data/datasets/") {
 			data, _ := json.Marshal(map[string]interface{}{
 				"datasets": []interface{}{},
@@ -1185,8 +1185,9 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 	}
 }
 
-// ensurePlacementGroupFields adds missing "bundles" and "stats" fields to each placement group
-// in the response. The collector may not store these fields, but the frontend crashes without them.
+// ensurePlacementGroupFields is the one replay compatibility adjustment: stored
+// placement groups may omit "bundles" and "stats", which the frontend reads directly.
+// Serve and Ray Data responses are otherwise replayed in their stored API shape.
 // Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L32
 // Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L53
 func ensurePlacementGroupFields(data []byte) []byte {
