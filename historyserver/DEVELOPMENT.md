@@ -120,7 +120,7 @@ Install Ray locally. Make sure to use at least Ray `v2.55`.
 
 ```bash
 pip uninstall -y ray
-pip install -U "ray[default]==2.55.0"
+pip install -U "ray[default]==2.56.0"
 ```
 
 Run the `ray start` command:
