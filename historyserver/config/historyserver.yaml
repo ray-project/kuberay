@@ -66,3 +66,7 @@ spec:
         resources:
           requests:
             cpu: "500m"
+            memory: "2Gi"
+          limits:
+            # Tune with --session-cache-max-bytes and concurrent session reads.
+            memory: "4Gi"
