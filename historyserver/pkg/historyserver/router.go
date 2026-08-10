@@ -1173,6 +1173,27 @@ func missingSnapshotFallback(urlPath string) []byte {
 			"applications": map[string]interface{}{},
 		})
 		return data
+	case "/api/v0/placement_groups":
+		// Match Ray's empty State API response so the replayed frontend does not
+		// receive a 404 when no placement-group snapshot was stored.
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/dashboard/modules/state/state_head.py#L128-L135
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/dashboard/routes.py#L176-L213
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/util/state/common.py#L966-L1003
+		data, _ := json.Marshal(map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                   0,
+					"num_after_truncation":    0,
+					"num_filtered":            0,
+					"result":                  []interface{}{},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		})
+		return data
 	default:
 		// No snapshot was stored for this job. Ray may return an empty response after
 		// finished dataset stats are evicted, and collection can also fail before a non-empty

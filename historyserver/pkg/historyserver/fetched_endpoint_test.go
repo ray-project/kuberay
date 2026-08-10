@@ -7,6 +7,21 @@ import (
 )
 
 func TestMissingSnapshotFallback(t *testing.T) {
+	emptyPlacementGroups := map[string]any{
+		"result": true,
+		"msg":    "",
+		"data": map[string]any{
+			"result": map[string]any{
+				"total":                   float64(0),
+				"num_after_truncation":    float64(0),
+				"num_filtered":            float64(0),
+				"result":                  []any{},
+				"partial_failure_warning": "",
+				"warnings":                nil,
+			},
+		},
+	}
+
 	tests := []struct {
 		name string
 		path string
@@ -23,6 +38,20 @@ func TestMissingSnapshotFallback(t *testing.T) {
 			want: map[string]any{"datasets": []any{}},
 		},
 		{
+			name: "placement groups",
+			path: "/api/v0/placement_groups",
+			want: emptyPlacementGroups,
+		},
+		{
+			name: "placement groups trailing slash",
+			path: "/api/v0/placement_groups/",
+			want: emptyPlacementGroups,
+		},
+		{
+			name: "placement groups extra path segment",
+			path: "/api/v0/placement_groups/unknown",
+		},
+		{
 			name: "unknown",
 			path: "/api/unknown",
 		},
@@ -31,7 +60,7 @@ func TestMissingSnapshotFallback(t *testing.T) {
 			path: "/api/data/datasets/",
 		},
 		{
-			name: "Ray Data unknown descendant",
+			name: "Ray Data extra path segment",
 			path: "/api/data/datasets/01000000/unknown",
 		},
 	}
