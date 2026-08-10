@@ -99,7 +99,7 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
             "program": "${workspaceFolder}/historyserver/cmd/historyserver/main.go",
             "cwd": "${workspaceFolder}",
             "args": [
-                "--runtime-class-name=s3",
+                "--storage-backend=s3",
                 "--ray-root-dir=log"
             ],
             "env": {
@@ -139,7 +139,7 @@ export S3DISABLE_SSL=true
 
 # Run the history server.
 ./output/bin/historyserver \
-  --runtime-class-name=s3 \
+  --storage-backend=s3 \
   --ray-root-dir=log \
   --use-kubernetes-proxy=true
 ```

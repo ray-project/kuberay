@@ -18,10 +18,10 @@ import (
 )
 
 func main() {
-	runtimeClassName := ""
+	storageBackend := ""
 	rayRootDir := ""
 	kubeconfigs := ""
-	runtimeClassConfigPath := ""
+	storageBackendConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
 	useAuthTokenMode := false
@@ -30,11 +30,11 @@ func main() {
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	sessionCacheSize := historyserver.DefaultSessionCacheSize
 	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
+	flag.StringVar(&storageBackend, "storage-backend", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
+	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
 	flag.BoolVar(&useAuthTokenMode, "use-auth-token-mode", false, "Enable Ray dashboard token authentication mode (requires x-ray-authorization header)")
 	flag.Float64Var(&qps, "kube-api-qps", historyserver.DefaultKubeAPIQPS, "The QPS value for the client communicating with the Kubernetes API server.")
@@ -45,14 +45,12 @@ func main() {
 	flag.Parse()
 
 	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
-		runtimeClassName = val
-	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
-		runtimeClassName = val
+		storageBackend = val
 	}
-	if runtimeClassName == "" {
-		logrus.Fatal("--runtime-class-name, STORAGE_BACKEND, or RUNTIME_CLASS_NAME environment variable is required")
+	if storageBackend == "" {
+		logrus.Fatal("--storage-backend or STORAGE_BACKEND environment variable is required")
 	}
-	runtimeClassName = strings.ToLower(runtimeClassName)
+	storageBackend = strings.ToLower(storageBackend)
 
 	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
 		rayRootDir = val
@@ -82,20 +80,20 @@ func main() {
 	}
 
 	jsonData := make(map[string]interface{})
-	if runtimeClassConfigPath != "" {
-		data, err := os.ReadFile(runtimeClassConfigPath)
+	if storageBackendConfigPath != "" {
+		data, err := os.ReadFile(storageBackendConfigPath)
 		if err != nil {
-			logrus.Fatalf("Failed to read runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to read storage-backend-config-path from %s: %v", storageBackendConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			logrus.Fatalf("Failed to parse runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to parse storage-backend-config-path from %s: %v", storageBackendConfigPath, err)
 		}
 	}
 
 	registry := collector.GetReaderRegistry()
-	factory, ok := registry[runtimeClassName]
+	factory, ok := registry[storageBackend]
 	if !ok {
-		logrus.Fatalf("Unsupported runtime-class-name for reader: %s", runtimeClassName)
+		logrus.Fatalf("Unsupported storage-backend for reader: %s", storageBackend)
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
@@ -104,7 +102,7 @@ func main() {
 
 	reader, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		logrus.Fatalf("Failed to create reader for runtime class name %s: %v", runtimeClassName, err)
+		logrus.Fatalf("Failed to create reader for storage backend %s: %v", storageBackend, err)
 	}
 
 	serverCtx, serverCancel := signal.NotifyContext(
