@@ -9349,6 +9349,9 @@ spec:
       name: head service IP
       priority: 1
       type: string
+    deprecated: true
+    deprecationWarning: ray.io/v1alpha1 RayCluster is deprecated; use ray.io/v1 RayCluster.
+      v1alpha1 receives no new fields and will be removed in a future release.
     name: v1alpha1
     schema:
       openAPIV3Schema:

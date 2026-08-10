@@ -943,6 +943,10 @@ _Appears in:_
 
 RayCluster is the Schema for the RayClusters API
 
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only and is frozen at its December 2023 feature set. Use
+ray.io/v1, the storage version, for all new and existing RayClusters.
+
 
 
 
@@ -984,6 +988,10 @@ _Appears in:_
 
 
 RayJob is the Schema for the rayjobs API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only and is frozen at its December 2023 feature set. Use
+ray.io/v1, the storage version, for all new and existing RayJobs.
 
 
 
@@ -1032,6 +1040,10 @@ _Appears in:_
 
 
 RayService is the Schema for the rayservices API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only and is frozen at its December 2023 feature set. Use
+ray.io/v1, the storage version, for all new and existing RayServices.
 
 
 

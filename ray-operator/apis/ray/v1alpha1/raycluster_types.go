@@ -169,7 +169,12 @@ const (
 )
 
 // RayCluster is the Schema for the RayClusters API
+//
+// Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+// compatibility only and is frozen at its December 2023 feature set. Use
+// ray.io/v1, the storage version, for all new and existing RayClusters.
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="ray.io/v1alpha1 RayCluster is deprecated; use ray.io/v1 RayCluster. v1alpha1 receives no new fields and will be removed in a future release."
 // +kubebuilder:resource:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="desired workers",type=integer,JSONPath=".status.desiredWorkerReplicas",priority=0

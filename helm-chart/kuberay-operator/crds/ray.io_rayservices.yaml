@@ -9765,7 +9765,10 @@ spec:
     storage: true
     subresources:
       status: {}
-  - name: v1alpha1
+  - deprecated: true
+    deprecationWarning: ray.io/v1alpha1 RayService is deprecated; use ray.io/v1 RayService.
+      v1alpha1 receives no new fields and will be removed in a future release.
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
