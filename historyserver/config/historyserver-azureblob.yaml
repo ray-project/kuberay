@@ -46,6 +46,12 @@ spec:
         - --ray-root-dir=log
         ports:
         - containerPort: 8080
+        # Soft-bound encoded snapshots at 8 GiB; leave pod memory for decoding.
+        args:
+        - --session-cache-max-bytes=8589934592
         resources:
-          limits:
+          requests:
             cpu: "500m"
+            memory: "2Gi"
+          limits:
+            memory: "12Gi"

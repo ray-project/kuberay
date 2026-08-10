@@ -65,10 +65,12 @@ spec:
         # - --use-auth-token-mode=true
         ports:
         - containerPort: 8080
+        # Soft-bound encoded snapshots at 8 GiB; leave pod memory for decoding.
+        args:
+        - --session-cache-max-bytes=8589934592
         resources:
           requests:
             cpu: "500m"
             memory: "2Gi"
           limits:
-            # Tune with --session-cache-max-bytes and concurrent session reads.
-            memory: "4Gi"
+            memory: "12Gi"
