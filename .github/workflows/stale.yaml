@@ -37,7 +37,6 @@ jobs:
             P1,
             P2,
             P3,
-            triage,
             good-first-issue,
             release-blocker
 
