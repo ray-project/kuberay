@@ -399,12 +399,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
 			// clusterSelector mode: preserve RayClusterName and DashboardURL for re-submission on resume.
-			// When retrying, set JobStatus to New so the job is resubmitted immediately (matching owned-cluster behavior).
-			if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying {
-				rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
-			} else {
-				rayJobInstance.Status.JobStatus = rayv1.JobStatusStopped
-			}
+			// Note: BackoffLimit is rejected for clusterSelector jobs (see validation.go), so
+			// JobDeploymentStatusRetrying is unreachable here — only Suspending enters this path.
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusStopped
 		} else {
 			// Owned cluster mode: clear all cluster-related status since the cluster is deleted.
 			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
