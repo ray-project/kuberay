@@ -177,6 +177,39 @@ type GcsFaultToleranceOptions struct {
 	// store. Only used when Backend is "rocksdb".
 	// +optional
 	Storage *GcsEmbeddedStorage `json:"storage,omitempty"`
+
+	// ----- Active-Passive Head HA fields -----
+
+	// ActivePassiveHead configures active-passive high availability for the GCS.
+	// It is only supported when Redis is configured (i.e. Backend is "redis" and
+	// RedisAddress is set); it is not supported with the "rocksdb" backend.
+	// +optional
+	ActivePassiveHead *ActivePassiveHeadOptions `json:"activePassiveHead,omitempty"`
+}
+
+// ActivePassiveHeadOptions configures active-passive head high availability for
+// the GCS via leader election. The lease timings mirror the leader election
+// configuration used by Kubernetes components.
+type ActivePassiveHeadOptions struct {
+	// Enable enables active-passive high availability for the GCS. If enabled,
+	// KubeRay will provision a standby head node to ensure quick recovery.
+	// +kubebuilder:default:=false
+	Enable *bool `json:"enable,omitempty"`
+	// LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
+	// +optional
+	// +kubebuilder:default:=15
+	// +kubebuilder:validation:Minimum=1
+	LeaseDurationSeconds *int32 `json:"leaseDurationSeconds,omitempty"`
+	// RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences.
+	// +optional
+	// +kubebuilder:default:=10
+	// +kubebuilder:validation:Minimum=1
+	RenewDeadlineSeconds *int32 `json:"renewDeadlineSeconds,omitempty"`
+	// RetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts.
+	// +optional
+	// +kubebuilder:default:=2
+	// +kubebuilder:validation:Minimum=1
+	RetryPeriodSeconds *int32 `json:"retryPeriodSeconds,omitempty"`
 }
 
 // GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.

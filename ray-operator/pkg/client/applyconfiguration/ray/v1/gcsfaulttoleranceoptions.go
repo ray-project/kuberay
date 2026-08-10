@@ -25,6 +25,10 @@ type GcsFaultToleranceOptionsApplyConfiguration struct {
 	// Storage configures the persistent volume backing the embedded RocksDB
 	// store. Only used when Backend is "rocksdb".
 	Storage *GcsEmbeddedStorageApplyConfiguration `json:"storage,omitempty"`
+	// ActivePassiveHead configures active-passive high availability for the GCS.
+	// It is only supported when Redis is configured (i.e. Backend is "redis" and
+	// RedisAddress is set); it is not supported with the "rocksdb" backend.
+	ActivePassiveHead *ActivePassiveHeadOptionsApplyConfiguration `json:"activePassiveHead,omitempty"`
 }
 
 // GcsFaultToleranceOptionsApplyConfiguration constructs a declarative configuration of the GcsFaultToleranceOptions type for use with
@@ -78,5 +82,13 @@ func (b *GcsFaultToleranceOptionsApplyConfiguration) WithRedisAddress(value stri
 // If called multiple times, the Storage field is set to the value of the last call.
 func (b *GcsFaultToleranceOptionsApplyConfiguration) WithStorage(value *GcsEmbeddedStorageApplyConfiguration) *GcsFaultToleranceOptionsApplyConfiguration {
 	b.Storage = value
+	return b
+}
+
+// WithActivePassiveHead sets the ActivePassiveHead field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ActivePassiveHead field is set to the value of the last call.
+func (b *GcsFaultToleranceOptionsApplyConfiguration) WithActivePassiveHead(value *ActivePassiveHeadOptionsApplyConfiguration) *GcsFaultToleranceOptionsApplyConfiguration {
+	b.ActivePassiveHead = value
 	return b
 }

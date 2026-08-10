@@ -17,6 +17,27 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 
 
+#### ActivePassiveHeadOptions
+
+
+
+ActivePassiveHeadOptions configures active-passive head high availability for
+the GCS via leader election. The lease timings mirror the leader election
+configuration used by Kubernetes components.
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enable` _boolean_ | Enable enables active-passive high availability for the GCS. If enabled,<br />KubeRay will provision a standby head node to ensure quick recovery. | false |  |
+| `leaseDurationSeconds` _integer_ | LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition. | 15 | Minimum: 1 <br /> |
+| `renewDeadlineSeconds` _integer_ | RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences. | 10 | Minimum: 1 <br /> |
+| `retryPeriodSeconds` _integer_ | RetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts. | 2 | Minimum: 1 <br /> |
+
+
 #### AuthMode
 
 _Underlying type:_ _string_
@@ -326,6 +347,7 @@ _Appears in:_
 | `externalStorageNamespace` _string_ |  |  |  |
 | `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
+| `activePassiveHead` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveHead configures active-passive high availability for the GCS.<br />It is only supported when Redis is configured (i.e. Backend is "redis" and<br />RedisAddress is set); it is not supported with the "rocksdb" backend. |  |  |
 
 
 #### HeadGroupSpec
