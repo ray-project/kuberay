@@ -1,4 +1,4 @@
-package kuberneteswasv1alpha2
+package v1alpha2
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
@@ -20,33 +21,37 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	kuberneteswas "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 const (
-	pluginName                  = "kubernetes-was-v1alpha2"
 	podGroupProtectionFinalizer = "scheduling.k8s.io/podgroup-protection"
 	// clusterPodGroupTemplateName is the name of the single PodGroupTemplate that
 	// gang schedules the entire RayCluster (head + all worker groups) together.
 	clusterPodGroupTemplateName = "cluster"
 )
 
-type schedulingSkipReason string
+type skipReason string
 
 const (
-	skipReasonNone        schedulingSkipReason = ""
-	skipReasonAutoscaling schedulingSkipReason = "autoscaling enabled"
+	skipReasonNone                   skipReason = ""
+	skipReasonGangSchedulingDisabled skipReason = "gang scheduling not enabled on RayCluster"
+	skipReasonAutoscaling            skipReason = "autoscaling enabled"
 )
 
 type KubernetesWASV1Alpha2Scheduler struct {
 	cli client.Client
 }
 
-type KubernetesWASV1Alpha2SchedulerFactory struct{}
+// Provider implements kuberneteswas.Provider for scheduling.k8s.io/v1alpha2.
+type Provider struct{}
 
-func GetPluginName() string { return pluginName }
+func init() {
+	kuberneteswas.RegisterProvider(&Provider{})
+}
 
-func (k *KubernetesWASV1Alpha2Scheduler) Name() string { return GetPluginName() }
+func (k *KubernetesWASV1Alpha2Scheduler) Name() string { return kuberneteswas.GetPluginName() }
 
 func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
 	rayCluster, ok := object.(*rayv1.RayCluster)
@@ -54,8 +59,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx conte
 		return nil
 	}
 
-	if skipReason := nativeSchedulingSkipReason(rayCluster); skipReason != skipReasonNone {
-		ctrl.LoggerFrom(ctx).WithName(pluginName).Info("Skipping Kubernetes workload-aware scheduling", "reason", string(skipReason))
+	if reason := schedulingSkipReason(rayCluster); reason != skipReasonNone {
+		ctrl.LoggerFrom(ctx).WithName(kuberneteswas.GetPluginName()).Info("Skipping Kubernetes workload-aware scheduling", "reason", string(reason))
 		_, err := k.CleanupOnCompletion(ctx, rayCluster)
 		return err
 	}
@@ -67,7 +72,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Co
 	setDefaultSchedulerName(child)
 
 	rayCluster, ok := parent.(*rayv1.RayCluster)
-	if !ok || nativeSchedulingSkipReason(rayCluster) != skipReasonNone {
+	if !ok || schedulingSkipReason(rayCluster) != skipReasonNone {
 		return
 	}
 	// The entire RayCluster (head + every worker group) is gang scheduled as a
@@ -83,18 +88,25 @@ func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnCompletion(ctx context.Context
 	return k.deleteSchedulingResources(ctx, rayCluster)
 }
 
-func (kf *KubernetesWASV1Alpha2SchedulerFactory) New(_ context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
-	if err := schedulingV1alpha2Available(config); err != nil {
-		return nil, err
-	}
-	return &KubernetesWASV1Alpha2Scheduler{cli: cli}, nil
+// The methods below adapt this package to kuberneteswas.Provider.
+
+func (p *Provider) GroupVersion() schema.GroupVersion {
+	return schedulingv1alpha2.SchemeGroupVersion
 }
 
-func (kf *KubernetesWASV1Alpha2SchedulerFactory) AddToScheme(scheme *runtime.Scheme) {
+func (p *Provider) Available(config *rest.Config) error {
+	return schedulingV1alpha2Available(config)
+}
+
+func (p *Provider) AddToScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(schedulingv1alpha2.AddToScheme(scheme))
 }
 
-func (kf *KubernetesWASV1Alpha2SchedulerFactory) ConfigureReconciler(b *builder.Builder) *builder.Builder {
+func (p *Provider) NewScheduler(cli client.Client) schedulerinterface.BatchScheduler {
+	return &KubernetesWASV1Alpha2Scheduler{cli: cli}
+}
+
+func (p *Provider) ConfigureReconciler(b *builder.Builder) *builder.Builder {
 	return b.Owns(&schedulingv1alpha2.Workload{}).
 		Owns(&schedulingv1alpha2.PodGroup{})
 }
@@ -105,7 +117,7 @@ type podGroupSpec struct {
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
-	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
+	logger := ctrl.LoggerFrom(ctx).WithName(kuberneteswas.GetPluginName())
 
 	workload, err := k.buildWorkload(rayCluster)
 	if err != nil {
@@ -120,6 +132,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Con
 		if err := k.cli.Get(ctx, types.NamespacedName{Name: workload.Name, Namespace: workload.Namespace}, existing); err != nil {
 			return fmt.Errorf("failed to get existing Workload %s/%s: %w", workload.Namespace, workload.Name, err)
 		}
+		// Workload PodGroupTemplates are immutable, so a spec change (e.g. a new
+		// MinCount) requires deleting and recreating the Workload and its PodGroup.
 		if isWorkloadStale(existing, rayCluster) {
 			logger.Info("Workload is stale, deleting and recreating", "name", workload.Name)
 			if _, err := k.deleteSchedulingResources(ctx, rayCluster); err != nil {
@@ -151,6 +165,15 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Con
 		}
 		if existing.DeletionTimestamp != nil {
 			return fmt.Errorf("PodGroup %s/%s is being deleted (finalizer pending), will retry", podGroup.Namespace, podGroup.Name)
+		}
+		// PodGroup SchedulingPolicy is immutable, so if the existing PodGroup drifted
+		// from the desired spec, delete and recreate it (and the Workload).
+		if isPodGroupStale(existing, podGroupSpec.schedulingPolicy) {
+			logger.Info("PodGroup is stale, deleting and recreating", "name", podGroup.Name)
+			if _, err := k.deleteSchedulingResources(ctx, rayCluster); err != nil {
+				return err
+			}
+			return k.syncSchedulingResources(ctx, rayCluster)
 		}
 	}
 
@@ -240,6 +263,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.C
 
 	for i := range podGroupList.Items {
 		podGroup := &podGroupList.Items[i]
+		// The scheduler adds a podgroup-protection finalizer; remove it so the
+		// PodGroup can be deleted as part of the RayCluster lifecycle.
 		if controllerutil.RemoveFinalizer(podGroup, podGroupProtectionFinalizer) {
 			if err := k.cli.Update(ctx, podGroup); err != nil && !errors.IsNotFound(err) {
 				return didDelete, fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
@@ -266,7 +291,12 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.C
 	return didDelete, nil
 }
 
-func nativeSchedulingSkipReason(rayCluster *rayv1.RayCluster) schedulingSkipReason {
+func schedulingSkipReason(rayCluster *rayv1.RayCluster) skipReason {
+	// Gang scheduling is opt-in per RayCluster via the gang-scheduling label.
+	if _, ok := rayCluster.GetLabels()[utils.RayGangSchedulingEnabled]; !ok {
+		return skipReasonGangSchedulingDisabled
+	}
+	// TODO: support the Ray autoscaler with workload-aware scheduling.
 	if utils.IsAutoscalingEnabled(&rayCluster.Spec) {
 		return skipReasonAutoscaling
 	}
@@ -284,6 +314,10 @@ func isWorkloadStale(existing *schedulingv1alpha2.Workload, rayCluster *rayv1.Ra
 		return true
 	}
 	return !schedulingPoliciesMatch(existingTemplate.SchedulingPolicy, desired.schedulingPolicy)
+}
+
+func isPodGroupStale(existing *schedulingv1alpha2.PodGroup, desired schedulingv1alpha2.PodGroupSchedulingPolicy) bool {
+	return !schedulingPoliciesMatch(existing.Spec.SchedulingPolicy, desired)
 }
 
 func schedulingPoliciesMatch(a, b schedulingv1alpha2.PodGroupSchedulingPolicy) bool {

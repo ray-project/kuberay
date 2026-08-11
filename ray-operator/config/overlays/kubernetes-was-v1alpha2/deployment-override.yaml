@@ -1,5 +1,6 @@
 # Strategic merge patch for kuberay-operator Deployment.
-# Enables the Kubernetes workload-aware scheduling v1alpha2 batch scheduler plugin.
+# Enables the Kubernetes workload-aware scheduling v1alpha2 batch scheduler plugin
+# via the KubernetesWAS feature gate.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,5 +11,4 @@ spec:
       containers:
       - name: kuberay-operator
         args:
-        - --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=true,RayMultiHostIndexing=true,RayCronJob=true,RayServiceIncrementalUpgrade=true,SidecarSubmitterRestart=true
-        - --batch-scheduler=kubernetes-was-v1alpha2
+        - --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=true,RayMultiHostIndexing=true,RayCronJob=true,RayServiceIncrementalUpgrade=true,SidecarSubmitterRestart=true,KubernetesWAS=true

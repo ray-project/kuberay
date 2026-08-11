@@ -348,9 +348,9 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 
 ## Kubernetes Workload-Aware Scheduling v1alpha2
 
-The `kubernetes-was-v1alpha2` batch scheduler plugin enables Kubernetes workload-aware gang scheduling through the `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs. It uses the Kubernetes default scheduler and is configured with `--batch-scheduler=kubernetes-was-v1alpha2`; there is no KubeRay feature gate or per-RayCluster annotation.
+The Kubernetes Workload-Aware Scheduling (WAS) batch scheduler enables gang scheduling of RayClusters through the `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs, using the Kubernetes default scheduler. It is enabled with the `KubernetesWAS` feature gate (`--feature-gates=KubernetesWAS=true`); do not also set `--batch-scheduler` (the two are mutually exclusive). Each RayCluster opts in with the `ray.io/gang-scheduling-enabled: "true"` label.
 
-For user-facing documentation, see the [Kubernetes WAS v1alpha2 guide](../docs/guidance/kubernetes-was-v1alpha2.md).
+For user-facing documentation, see the [Kubernetes WAS guide](../docs/guidance/kubernetes-was.md).
 
 ### Testing locally with Kind
 
@@ -370,7 +370,7 @@ kind create cluster --name kubernetes-was-v1alpha2 \
 make docker-image IMG=kuberay/operator:latest
 kind load docker-image kuberay/operator:latest --name kubernetes-was-v1alpha2
 
-# Deploy with the Kubernetes WAS v1alpha2 batch scheduler enabled.
+# Deploy with the Kubernetes WAS batch scheduler enabled (via the KubernetesWAS feature gate).
 make deploy-kubernetes-was-v1alpha2 IMG=kuberay/operator:latest
 ```
 

@@ -20,13 +20,20 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
+// newWASRayClusterAC builds a RayCluster apply configuration opted in to gang
+// scheduling via the ray.io/gang-scheduling-enabled label.
+func newWASRayClusterAC(name, namespace string) *rayv1ac.RayClusterApplyConfiguration {
+	return rayv1ac.RayCluster(name, namespace).
+		WithLabels(map[string]string{utils.RayGangSchedulingEnabled: "true"})
+}
+
 func TestKubernetesWAS_CreatesWorkloadAndPodGroups(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("native-sched", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("native-sched", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -86,7 +93,7 @@ func TestKubernetesWAS_PodSchedulingGroup(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("sched-group", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("sched-group", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -120,7 +127,7 @@ func TestKubernetesWAS_MultipleWorkerGroups(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("multi-wg", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("multi-wg", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -177,7 +184,7 @@ func TestKubernetesWAS_AutoscalingSkipped(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("autoscale-skip", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("autoscale-skip", namespace.Name).
 		WithSpec(NewRayClusterSpec().WithEnableInTreeAutoscaling(true))
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -203,7 +210,7 @@ func TestKubernetesWAS_GangSchedules(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("gang-sched", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("gang-sched", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -237,7 +244,7 @@ func TestKubernetesWAS_OwnerReferenceGC(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("gc-test", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("gc-test", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -272,7 +279,7 @@ func TestKubernetesWAS_Idempotent(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("idempotent", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("idempotent", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -297,7 +304,7 @@ func TestKubernetesWAS_SuspendDeletesResources(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("suspend-del", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("suspend-del", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -335,7 +342,7 @@ func TestKubernetesWAS_ResumeRecreatesResources(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("resume-rec", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("resume-rec", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -402,7 +409,7 @@ func TestKubernetesWAS_ScaleUpRecreatesWorkload(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("scale-up", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("scale-up", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -462,7 +469,7 @@ func TestKubernetesWAS_ScaleDownRecreatesWorkload(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("scale-down", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("scale-down", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -533,7 +540,7 @@ func TestKubernetesWAS_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("add-wg", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("add-wg", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -603,7 +610,7 @@ func TestKubernetesWAS_GangAtomicityIncludesHead(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("100000Gi"),
 					}))))
 
-	rayClusterAC := rayv1ac.RayCluster("gang-atomic", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("gang-atomic", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -679,7 +686,7 @@ func TestKubernetesWAS_ManyWorkerGroups(t *testing.T) {
 			WithTemplate(WorkerPodTemplateApplyConfiguration()))
 	}
 
-	rayClusterAC := rayv1ac.RayCluster("many-wg", namespace.Name).WithSpec(clusterSpec)
+	rayClusterAC := newWASRayClusterAC("many-wg", namespace.Name).WithSpec(clusterSpec)
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayCluster.Spec.WorkerGroupSpecs).To(HaveLen(workerGroupCount))
@@ -723,7 +730,7 @@ func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("suspend-wg", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("suspend-wg", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -828,7 +835,7 @@ func TestKubernetesWAS_RecreateUpgradeRecreatesResources(t *testing.T) {
 		return WorkerPodTemplateApplyConfiguration().WithAnnotations(map[string]string{"was-test/upgrade-marker": marker})
 	}
 
-	rayClusterAC := rayv1ac.RayCluster("recreate-upg", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("recreate-upg", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithUpgradeStrategy(rayv1ac.RayClusterUpgradeStrategy().WithType(rayv1.RayClusterRecreate)).
@@ -886,7 +893,7 @@ func TestKubernetesWAS_MultiHostWorkerGroup(t *testing.T) {
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("multi-host", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("multi-host", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().

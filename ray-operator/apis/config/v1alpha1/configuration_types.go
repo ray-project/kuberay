@@ -50,7 +50,7 @@ type Configuration struct {
 
 	// BatchScheduler enables the batch scheduler integration with a specific scheduler
 	// based on the given name, currently, supported values are volcano, yunikorn,
-	// kai-scheduler, kubernetes-was-v1alpha2, and scheduler-plugins.
+	// kai-scheduler, and scheduler-plugins.
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
 	// MetricsAddr is the address the metrics endpoint binds to.

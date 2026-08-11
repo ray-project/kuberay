@@ -951,6 +951,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		// The RayCluster is not being deleted, so owner-reference GC does not remove
+		// the batch scheduler resources; clean them up explicitly while suspended.
 		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
 			return err
 		}
@@ -980,6 +982,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		// Recreate replaces every pod, so delete the stale batch scheduler resources;
+		// they are rebuilt from the current spec on the next reconcile.
 		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
 			return err
 		}

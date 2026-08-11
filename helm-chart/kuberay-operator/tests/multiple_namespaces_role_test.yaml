@@ -34,8 +34,9 @@ tests:
     set:
       singleNamespaceInstall: true
       crNamespacedRbacEnable: true
-      batchScheduler:
-        name: kubernetes-was-v1alpha2
+      featureGates:
+        - name: KubernetesWAS
+          enabled: true
     asserts:
       - contains:
           path: rules

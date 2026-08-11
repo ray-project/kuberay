@@ -9,9 +9,10 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
-	kuberneteswasv1alpha2 "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was-v1alpha2"
+	kuberneteswas "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestGetSchedulerFactory(t *testing.T) {
@@ -74,14 +75,14 @@ func TestGetSchedulerFactory(t *testing.T) {
 			want: reflect.TypeFor[*kaischeduler.KaiSchedulerFactory](),
 		},
 		{
-			name: "enableBatchScheduler=false, batchScheduler set to kubernetes-was-v1alpha2",
+			name: "enableBatchScheduler=false, batchScheduler set to kubernetes-was-v1alpha2 is rejected without the gate",
 			args: args{
 				rayConfigs: v1alpha1.Configuration{
 					EnableBatchScheduler: false,
-					BatchScheduler:       kuberneteswasv1alpha2.GetPluginName(),
+					BatchScheduler:       "kubernetes-was-v1alpha2",
 				},
 			},
-			want: reflect.TypeFor[*kuberneteswasv1alpha2.KubernetesWASV1Alpha2SchedulerFactory](),
+			expectedErrMsg: "the scheduler is not supported, name=kubernetes-was-v1alpha2",
 		},
 		{
 			name: "enableBatchScheduler not set, batchScheduler set to yunikorn",
@@ -109,15 +110,6 @@ func TestGetSchedulerFactory(t *testing.T) {
 				},
 			},
 			want: reflect.TypeFor[*kaischeduler.KaiSchedulerFactory](),
-		},
-		{
-			name: "enableBatchScheduler not set, batchScheduler set to kubernetes-was-v1alpha2",
-			args: args{
-				rayConfigs: v1alpha1.Configuration{
-					BatchScheduler: kuberneteswasv1alpha2.GetPluginName(),
-				},
-			},
-			want: reflect.TypeFor[*kuberneteswasv1alpha2.KubernetesWASV1Alpha2SchedulerFactory](),
 		},
 		{
 			name: "enableBatchScheduler not set, batchScheduler set to unknown value",
@@ -176,4 +168,22 @@ func TestGetSchedulerFactory(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetSchedulerFactoryKubernetesWAS(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.KubernetesWAS, true)
+
+	factory, err := getSchedulerFactory(v1alpha1.Configuration{})
+	require.NoError(t, err)
+	require.IsType(t, &kuberneteswas.SchedulerFactory{}, factory)
+}
+
+func TestGetSchedulerFactoryKubernetesWASRejectsOtherSchedulers(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.KubernetesWAS, true)
+
+	_, err := getSchedulerFactory(v1alpha1.Configuration{BatchScheduler: volcano.GetPluginName()})
+	require.Error(t, err)
+
+	_, err = getSchedulerFactory(v1alpha1.Configuration{EnableBatchScheduler: true})
+	require.Error(t, err)
 }

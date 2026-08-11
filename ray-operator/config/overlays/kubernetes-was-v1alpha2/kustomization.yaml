@@ -17,7 +17,7 @@ patches:
       kind: Deployment
       name: kuberay-operator
   # The scheduling.k8s.io RBAC is scoped to this overlay (mirroring the Helm chart,
-  # which gates it on batchScheduler.name) so the base install does not grant it.
+  # which gates it on the KubernetesWAS feature gate) so the base install does not grant it.
   - target:
       group: rbac.authorization.k8s.io
       version: v1

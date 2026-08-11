@@ -36,8 +36,9 @@ tests:
     set:
       rbacEnable: true
       singleNamespaceInstall: false
-      batchScheduler:
-        name: kubernetes-was-v1alpha2
+      featureGates:
+        - name: KubernetesWAS
+          enabled: true
     asserts:
       - contains:
           path: rules

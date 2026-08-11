@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr/testr"
 
 	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
-	kuberneteswasv1alpha2 "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was-v1alpha2"
 	schedulerPlugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
@@ -84,14 +83,14 @@ func TestValidateBatchSchedulerConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid option, batch-scheduler=kubernetes-was-v1alpha2",
+			name: "invalid option, batch-scheduler=kubernetes-was-v1alpha2 requires the KubernetesWAS feature gate",
 			args: args{
 				logger: testr.New(t),
 				config: Configuration{
-					BatchScheduler: kuberneteswasv1alpha2.GetPluginName(),
+					BatchScheduler: "kubernetes-was-v1alpha2",
 				},
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "invalid option, invalid scheduler name",

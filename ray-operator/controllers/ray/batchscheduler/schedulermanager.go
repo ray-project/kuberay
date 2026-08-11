@@ -13,10 +13,12 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	kaischeduler "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kai-scheduler"
-	kuberneteswasv1alpha2 "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was-v1alpha2"
+	kuberneteswas "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was"
+	_ "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was/v1alpha2" // register the v1alpha2 WAS provider
 	schedulerplugins "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/scheduler-plugins"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/volcano"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/yunikorn"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 type SchedulerManager struct {
@@ -51,6 +53,15 @@ func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration
 }
 
 func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface.BatchSchedulerFactory, error) {
+	// The KubernetesWAS feature gate selects the Kubernetes WAS scheduler and is mutually
+	// exclusive with --batch-scheduler and --enable-batch-scheduler.
+	if features.Enabled(features.KubernetesWAS) {
+		if len(rayConfigs.BatchScheduler) > 0 || rayConfigs.EnableBatchScheduler {
+			return nil, fmt.Errorf("the KubernetesWAS feature gate cannot be combined with --batch-scheduler or --enable-batch-scheduler")
+		}
+		return &kuberneteswas.SchedulerFactory{}, nil
+	}
+
 	var factory schedulerinterface.BatchSchedulerFactory
 
 	// when a batch scheduler name is provided
@@ -64,8 +75,6 @@ func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface
 			factory = &yunikorn.YuniKornSchedulerFactory{}
 		case kaischeduler.GetPluginName():
 			factory = &kaischeduler.KaiSchedulerFactory{}
-		case kuberneteswasv1alpha2.GetPluginName():
-			factory = &kuberneteswasv1alpha2.KubernetesWASV1Alpha2SchedulerFactory{}
 		case schedulerplugins.GetPluginName():
 			factory = &schedulerplugins.KubeSchedulerFactory{}
 		default:
