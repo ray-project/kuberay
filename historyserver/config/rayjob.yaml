@@ -14,10 +14,6 @@ spec:
     @ray.remote(num_cpus=1)
     def my_task(x):
         print(f'Processing {x}', flush=True)
-        if x == 1:
-            # Keep the task running beyond Ray's 1-second task-event flush interval
-            # so its start and end log metadata are exported separately.
-            time.sleep(2)
         return x * 2
 
     # --- Scenario 2: Nested tasks (parent spawns child) ---
