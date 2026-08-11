@@ -596,5 +596,4 @@ var _ = Context("RayJob with suspend operation", func() {
 				"Expected JobDeploymentStatus to remain Suspending when StopJob fails")
 		})
 	})
-
 })
