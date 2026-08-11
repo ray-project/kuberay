@@ -50,6 +50,10 @@ type logByteRange struct {
 	end   int64
 }
 
+// exactRangeReader reads exactly `remaining` bytes from the underlying reader.
+// Unlike io.LimitReader, it returns io.ErrUnexpectedEOF if the reader ends
+// early, so a truncated log file surfaces as an error instead of silently
+// returning a partial task log.
 type exactRangeReader struct {
 	reader    io.Reader
 	remaining int64
