@@ -25,13 +25,6 @@ import (
 
 const defaultDashboardAddress = "http://localhost:8265"
 
-func resolveDashboardAddress(flagValue string) string {
-	if value := os.Getenv("RAY_DASHBOARD_ADDRESS"); value != "" {
-		return value
-	}
-	return flagValue
-}
-
 func main() {
 	role := ""
 	storageBackend := ""
@@ -124,7 +117,9 @@ func main() {
 	if val := os.Getenv("STORAGE_BACKEND_CONFIG_PATH"); val != "" {
 		storageBackendConfigPath = val
 	}
-	dashboardAddress = resolveDashboardAddress(dashboardAddress)
+	if val := os.Getenv("RAY_DASHBOARD_ADDRESS"); val != "" {
+		dashboardAddress = val
+	}
 
 	role = strings.TrimSpace(role)
 	if strings.EqualFold(role, "head") {
