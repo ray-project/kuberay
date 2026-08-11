@@ -9,8 +9,13 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 // TestByteCache_ReadEndpointsRoundTripIsLossless is an in-process HTTP test:
@@ -29,9 +34,18 @@ func TestByteCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
 		session = "session_2026-04-22_10-00-00_000000_1"
 	)
 
+	scheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(scheme)
 	handler := &ServerHandler{
 		maxClusters: 100,
-		clustersMap: make(map[utils.ClusterKey][]utils.ClusterInfo),
+		reader: &mockStorageReader{
+			clusters: []utils.ClusterInfo{
+				{Namespace: ns, Name: name, SessionName: session, OwnerKind: "rayjob", OwnerName: "job-bc"},
+			},
+		},
+		clientManager: &ClientManager{
+			clients: []client.Client{fake.NewClientBuilder().WithScheme(scheme).Build()},
+		},
 	}
 	fp := &fakeProcessor{
 		fn: func(_ context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
@@ -40,9 +54,6 @@ func TestByteCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
 		},
 	}
 	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
-	handler.clustersMap[utils.ClusterKey{Namespace: ns, Name: name}] = []utils.ClusterInfo{
-		{Namespace: ns, Name: name, SessionName: session, OwnerKind: "RayJob", OwnerName: "job-bc"},
-	}
 
 	routerRayClusterSet(handler)
 	routerNodes(handler)
@@ -51,7 +62,7 @@ func TestByteCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
 	routerLogical(handler)
 	container := restful.DefaultContainer
 
-	enterURL := "/enter_cluster/" + ns + "/" + name + "/" + session
+	enterURL := "/enter_cluster/" + ns + "/raycluster/" + name + "/" + session
 	enterReq := httptest.NewRequest(http.MethodGet, enterURL, nil)
 	enterResp := httptest.NewRecorder()
 	container.ServeHTTP(enterResp, enterReq)
