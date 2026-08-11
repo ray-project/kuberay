@@ -42,7 +42,7 @@ spec:
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
-        - --runtime-class-name=azureblob
+        - --storage-backend=azureblob
         - --ray-root-dir=log
         ports:
         - containerPort: 8080

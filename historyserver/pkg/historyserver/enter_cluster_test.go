@@ -112,7 +112,7 @@ func TestEnterCluster(t *testing.T) {
 			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	// Register actual router
 	routerRayClusterSet(handler)
@@ -275,7 +275,7 @@ func TestEnterClusterLatestFromStorage(t *testing.T) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
@@ -340,7 +340,7 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 			return SessionStatusLive, nil, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
@@ -392,7 +392,7 @@ func TestEnterClusterReturnsNotFoundWhenRemovedFromStorage(t *testing.T) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
@@ -450,7 +450,7 @@ func TestEnterClusterReturnsErrorOnTransientK8sError(t *testing.T) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
@@ -508,7 +508,7 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer

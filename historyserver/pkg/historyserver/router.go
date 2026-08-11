@@ -447,7 +447,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		}
 		// In auth-token mode, drop the client-supplied x-ray-authorization so it cannot bypass
 		// the server-managed token injected below.
-		if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+		if s.useAuthTokenMode && strings.EqualFold(key, utils.RayAuthHeader) {
 			continue
 		}
 		// Authorization has to be dropped in two cases. In auth-token mode, Ray only falls back to
@@ -472,7 +472,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		// so no header is needed; auth-enabled clusters without a token fail before reaching here.
 		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
 			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
-				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
+				proxyReq.Header.Set(utils.RayAuthHeader, fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}
