@@ -62,7 +62,7 @@ func TestTaskLogBasename(t *testing.T) {
 
 func TestGetTaskLogFileUsesStoredBasename(t *testing.T) {
 	const clusterSessionKey = "raycluster_default_session"
-	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1})
 	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
 		TaskID:      "task-id",
 		TaskAttempt: 0,
@@ -99,7 +99,7 @@ func TestGetTaskLogFileAppliesRangeBeforeLineLimit(t *testing.T) {
 	start := int64(strings.Index(content, taskContent))
 	end := start + int64(len(taskContent))
 
-	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1})
 	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
 		TaskID:      "task-id",
 		TaskAttempt: 0,
@@ -130,7 +130,7 @@ func TestGetTaskLogFileAppliesRangeBeforeLineLimit(t *testing.T) {
 
 func TestGetTaskLogFileRejectsIncompleteTaskLogInfo(t *testing.T) {
 	const clusterSessionKey = "raycluster_default_session"
-	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1})
 	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
 		TaskID:      "task-id",
 		TaskAttempt: 0,
@@ -163,7 +163,7 @@ func TestGetTaskLogFileRejectsIncompleteTaskLogInfo(t *testing.T) {
 
 func TestGetTaskLogFileRejectsAmbiguousZeroEnd(t *testing.T) {
 	const clusterSessionKey = "raycluster_default_session"
-	loader := newTestSessionLoader(t, &fakeProcessor{}, 1)
+	loader := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1})
 	loader.putSnapshot(clusterSessionKey, &eventserver.SessionSnapshot{Tasks: []eventtypes.Task{{
 		TaskID:      "task-id",
 		TaskAttempt: 0,
