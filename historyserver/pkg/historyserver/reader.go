@@ -86,6 +86,18 @@ func crdLabelValueFor(kindLower string) string {
 	}
 }
 
+func selectRayServiceCluster(rayService *rayv1.RayService, liveClusters []*rayv1.RayCluster) *rayv1.RayCluster {
+	clustersByName := make(map[string]*rayv1.RayCluster, len(liveClusters))
+	for _, cluster := range liveClusters {
+		clustersByName[cluster.Name] = cluster
+	}
+
+	if activeCluster := clustersByName[rayService.Status.ActiveServiceStatus.RayClusterName]; activeCluster != nil {
+		return activeCluster
+	}
+	return clustersByName[rayService.Status.PendingServiceStatus.RayClusterName]
+}
+
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
@@ -142,9 +154,22 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 			if err != nil {
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to list live RayClusters: %w", err)
 			}
-			// TODO: A RayService owns both an active and a pending cluster during an upgrade. Needs to decide which one to take.
-			if len(liveClusters) > 0 {
-				info := buildLiveClusterInfo(liveClusters[0])
+			var liveCluster *rayv1.RayCluster
+			if resTypeLower == utils.RayServiceKind && len(liveClusters) > 0 {
+				rayService, err := s.clientManager.GetRayService(ctx, namespace, resourceName)
+				if err != nil {
+					if !apierrors.IsNotFound(err) {
+						return utils.ClusterInfo{}, false, fmt.Errorf("failed to get RayService %s/%s: %w", namespace, resourceName, err)
+					}
+				} else {
+					liveCluster = selectRayServiceCluster(rayService, liveClusters)
+				}
+			} else if len(liveClusters) > 0 {
+				liveCluster = liveClusters[0]
+			}
+
+			if liveCluster != nil {
+				info := buildLiveClusterInfo(liveCluster)
 				if info.OwnerKind == "" {
 					info.OwnerKind = resTypeLower
 					info.OwnerName = resourceName
