@@ -609,7 +609,7 @@ func TestEnterClusterRedirect(t *testing.T) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
