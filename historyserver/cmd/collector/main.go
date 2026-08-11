@@ -68,7 +68,7 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
-	flag.StringVar(&dashboardAddress, "dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard; overridden by RAY_DASHBOARD_ADDRESS when set")
+	flag.StringVar(&dashboardAddress, "ray-dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard; overridden by RAY_DASHBOARD_ADDRESS when set")
 
 	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
 	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
