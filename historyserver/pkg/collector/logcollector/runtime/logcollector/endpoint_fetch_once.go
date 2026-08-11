@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -138,7 +139,7 @@ func (r *RayLogHandler) fetchAndStoreEndpoint(cfg endpointFetchConfig) {
 
 		// Successfully fetched — store it under the session path
 		storageKey := utils.EndpointPathToStorageKey(cfg.endpoint)
-		objectKey := path.Join(r.ClusterDir, sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+		objectKey := path.Join(clusterlogs.FetchedEndpointsDir(r.ClusterDir, sessionName), storageKey)
 		if err := r.Writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
 			logrus.Errorf("Failed to store %s at %s: %v", cfg.endpoint, objectKey, err)
 			if !r.sleepOrShutdown(retryInterval) {

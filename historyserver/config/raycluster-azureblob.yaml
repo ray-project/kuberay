@@ -32,7 +32,7 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
-          image: rayproject/ray:2.55.0
+          image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-head
           resources:
@@ -65,6 +65,20 @@ spec:
             value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
           - name: RAY_TMP_ROOT
             value: *rayTmpRoot
+          # Optional; defaults to http://localhost:8265 (head only).
+          # - name: RAY_DASHBOARD_ADDRESS
+          #   value: "http://localhost:9265"
+          # Optional; defaults to 30s.
+          # - name: RAY_COLLECTOR_POLL_INTERVAL
+          #   value: "1m"
+          # Optional extras on top of the built-in endpoints (Serve, placement groups, Ray Data).
+          # Paths must match the History Server replay request URI, query string included.
+          # For example, preserve Ray Train V2 run details for a future History Server view.
+          # Requires the Ray Train workload/driver (not the collector) to set
+          # RAY_TRAIN_V2_ENABLED=1 and RAY_TRAIN_ENABLE_STATE_TRACKING=1;
+          # verify this DeveloperAPI URI when changing Ray versions.
+          # - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
+          #   value: "/api/train/v2/runs/v1"
           - name: RAY_ROLE
             value: "Head"
           - name: STORAGE_BACKEND
@@ -113,7 +127,7 @@ spec:
             value: "http://localhost:8084/v1/events"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "ALL"
-          image: rayproject/ray:2.55.0
+          image: rayproject/ray:2.56.0
           imagePullPolicy: IfNotPresent
           name: ray-worker
           resources:

@@ -2209,13 +2209,13 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
 // stored placement groups data from S3 for a dead (deleted) cluster.
 //
-// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// This endpoint is served by the getFetchedEndpoint fallback handler (/{subpath:*}),
 // which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
 //
 // The test flow mirrors testDeadClusterMetadata:
 // 1. Deploy a cluster with the collector
 // 2. Submit a RayJob that creates a detached placement group
-// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 3. Wait for placement groups data to appear in S3 (written by periodic endpoint polling)
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
@@ -2280,8 +2280,8 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 		err = json.Unmarshal(body, &response)
 		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
 		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
-		// The history server serves raw bytes from S3 without transformation, so the
-		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		// The history server preserves this envelope and backfills bundles within each
+		// placement group when the stored response omits that frontend-required field.
 		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
 		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
 		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
