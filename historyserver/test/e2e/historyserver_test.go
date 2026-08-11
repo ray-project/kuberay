@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"path"
 	"regexp"
-	"strconv"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -1938,9 +1937,9 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 			continue
 		}
 		stdoutFileValue, _ := taskLogInfo["stdout_file"].(string)
-		stdoutStart, startErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stdout_start"]), 10, 64)
-		stdoutEnd, endErr := strconv.ParseInt(fmt.Sprint(taskLogInfo["stdout_end"]), 10, 64)
-		if stdoutFileValue != "" && startErr == nil && endErr == nil && stdoutStart > 0 && stdoutEnd > stdoutStart {
+		stdoutStart, startOK := taskLogInfo["stdout_start"].(float64)
+		stdoutEnd, endOK := taskLogInfo["stdout_end"].(float64)
+		if stdoutFileValue != "" && startOK && endOK && stdoutStart > 0 && stdoutEnd > stdoutStart {
 			taskID, _ = task["task_id"].(string)
 			nodeID, _ = task["node_id"].(string)
 			stdoutFile = stdoutFileValue
