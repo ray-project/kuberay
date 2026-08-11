@@ -133,7 +133,7 @@ func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]
 	}
 	eventType := types.EventType(eventTypeStr)
 
-	logrus.Infof("current eventType: %v", eventType)
+	logrus.Debugf("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
 		return h.handleTaskDefinitionEvent(eventMap, clusterSessionKey, false)
