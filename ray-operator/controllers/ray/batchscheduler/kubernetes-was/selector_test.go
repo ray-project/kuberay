@@ -19,6 +19,14 @@ type fakeProvider struct {
 	available error
 }
 
+var (
+	errNotServed     = errors.New("not served")
+	v1alpha2Provider = &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1alpha2"}}
+	v1alpha3Provider = &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1alpha3"}}
+	v1beta1Provider  = &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1beta1"}}
+	v1Provider       = &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1"}}
+)
+
 func (f *fakeProvider) GroupVersion() schema.GroupVersion                            { return f.gv }
 func (f *fakeProvider) Available(*rest.Config) error                                 { return f.available }
 func (f *fakeProvider) AddToScheme(*runtime.Scheme)                                  {}
@@ -33,6 +41,13 @@ func withProviders(t *testing.T, providers ...Provider) {
 	t.Cleanup(func() { registeredProviders = original })
 }
 
+func setProviderUnavailable(t *testing.T, provider *fakeProvider) {
+	t.Helper()
+	original := provider.available
+	provider.available = errNotServed
+	t.Cleanup(func() { provider.available = original })
+}
+
 func TestSelectProviderNoneRegistered(t *testing.T) {
 	withProviders(t)
 
@@ -40,28 +55,37 @@ func TestSelectProviderNoneRegistered(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSelectProviderNilConfigReturnsFirst(t *testing.T) {
-	first := &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1alpha2"}}
-	second := &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1alpha3"}}
-	withProviders(t, first, second)
+func TestSelectProviderNilConfigReturnsPreferredVersion(t *testing.T) {
+	withProviders(t, v1alpha2Provider, v1alpha3Provider)
 
 	got, err := selectProvider(nil)
 	require.NoError(t, err)
-	require.Same(t, first, got)
+	require.Same(t, v1alpha3Provider, got)
 }
 
-func TestSelectProviderReturnsFirstAvailable(t *testing.T) {
-	unavailable := &fakeProvider{gv: schema.GroupVersion{Version: "v1alpha3"}, available: errors.New("not served")}
-	available := &fakeProvider{gv: schema.GroupVersion{Version: "v1alpha2"}}
-	withProviders(t, unavailable, available)
+func TestSelectProviderUsesKubeAwareVersionOrder(t *testing.T) {
+	withProviders(t, v1alpha2Provider, v1Provider, v1alpha3Provider, v1beta1Provider)
+
+	for _, expected := range []*fakeProvider{v1Provider, v1beta1Provider, v1alpha3Provider, v1alpha2Provider} {
+		got, err := selectProvider(&rest.Config{})
+		require.NoError(t, err)
+		require.Same(t, expected, got)
+		setProviderUnavailable(t, expected)
+	}
+}
+
+func TestSelectProviderPreservesRegistrationOrderForEqualVersions(t *testing.T) {
+	second := *v1alpha2Provider
+	withProviders(t, v1alpha2Provider, &second)
 
 	got, err := selectProvider(&rest.Config{})
 	require.NoError(t, err)
-	require.Same(t, available, got)
+	require.Same(t, v1alpha2Provider, got)
 }
 
 func TestSelectProviderAllUnavailable(t *testing.T) {
-	withProviders(t, &fakeProvider{gv: schema.GroupVersion{Version: "v1alpha2"}, available: errors.New("not served")})
+	withProviders(t, v1alpha2Provider)
+	setProviderUnavailable(t, v1alpha2Provider)
 
 	_, err := selectProvider(&rest.Config{})
 	require.Error(t, err)

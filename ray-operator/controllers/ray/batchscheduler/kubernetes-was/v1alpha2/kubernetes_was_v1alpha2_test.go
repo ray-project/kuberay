@@ -19,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -81,17 +83,23 @@ func TestDoBatchSchedulingOnSubmissionSkipsAndCleansUpWhenAutoscalingEnabled(t *
 		Namespace: rayCluster.Namespace,
 		Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 	enableAutoscaling := true
 	rayCluster.Spec.EnableInTreeAutoscaling = &enableAutoscaling
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "waiting for PodGroup default/test-cluster-cluster")
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{}))
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err))
+
+	err = scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.NoError(t, err)
 
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{})
-	assert.True(t, apierrors.IsNotFound(err))
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
@@ -106,15 +114,21 @@ func TestDoBatchSchedulingOnSubmissionSkipsAndCleansUpWithoutGangLabel(t *testin
 		Namespace: rayCluster.Namespace,
 		Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "waiting for PodGroup default/test-cluster-cluster")
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{}))
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err))
+
+	err = scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.NoError(t, err)
 
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{})
-	assert.True(t, apierrors.IsNotFound(err))
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
@@ -191,7 +205,96 @@ func TestAddMetadataToChildResourceSkipsSchedulingGroupWhenAutoscalingEnabled(t 
 	assert.Empty(t, pod.Spec.SchedulerName)
 }
 
-func TestCleanupOnCompletionDeletesSchedulingResourcesAndFinalizers(t *testing.T) {
+func TestCleanupOnCompletionDeletesSchedulingResourcesInDependencyOrder(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	existingWorkload := &schedulingv1alpha2.Workload{ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace}}
+	existingPodGroup := &schedulingv1alpha2.PodGroup{ObjectMeta: metav1.ObjectMeta{
+		Name:       "test-cluster-cluster",
+		Namespace:  rayCluster.Namespace,
+		Finalizers: []string{podGroupProtectionFinalizer},
+	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "waiting for PodGroup default/test-cluster-cluster")
+	assert.True(t, didCleanup)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err))
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{}))
+
+	didCleanup, err = scheduler.CleanupOnCompletion(ctx, rayCluster)
+	require.NoError(t, err)
+	assert.True(t, didCleanup)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err))
+}
+
+func TestCleanupOnCompletionRejectsForeignPodGroupBeforeDeletingOwnedWorkload(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster.Name = "foreign-cluster"
+	foreignRayCluster.UID = types.UID("foreign-cluster-uid")
+	ownedWorkload := &schedulingv1alpha2.Workload{ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace}}
+	foreignPodGroup := &schedulingv1alpha2.PodGroup{ObjectMeta: metav1.ObjectMeta{
+		Name:       clusterPodGroupName(rayCluster.Name),
+		Namespace:  rayCluster.Namespace,
+		Finalizers: []string{podGroupProtectionFinalizer},
+	}}
+	setRayClusterControllerReference(rayCluster, ownedWorkload)
+	setRayClusterControllerReference(foreignRayCluster, foreignPodGroup)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(ownedWorkload, foreignPodGroup).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not controlled by RayCluster")
+	assert.False(t, didCleanup)
+
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: ownedWorkload.Name, Namespace: ownedWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignPodGroup.Name, Namespace: foreignPodGroup.Namespace}, podGroup))
+	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+}
+
+func TestCleanupOnCompletionRejectsForeignWorkloadBeforeDeletingOwnedPodGroup(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster.Name = "foreign-cluster"
+	foreignRayCluster.UID = types.UID("foreign-cluster-uid")
+	foreignWorkload := &schedulingv1alpha2.Workload{ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace}}
+	ownedPodGroup := &schedulingv1alpha2.PodGroup{ObjectMeta: metav1.ObjectMeta{
+		Name:       clusterPodGroupName(rayCluster.Name),
+		Namespace:  rayCluster.Namespace,
+		Finalizers: []string{podGroupProtectionFinalizer},
+	}}
+	setRayClusterControllerReference(foreignRayCluster, foreignWorkload)
+	setRayClusterControllerReference(rayCluster, ownedPodGroup)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(foreignWorkload, ownedPodGroup).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not controlled by RayCluster")
+	assert.False(t, didCleanup)
+
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignWorkload.Name, Namespace: foreignWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: ownedPodGroup.Name, Namespace: ownedPodGroup.Namespace}, podGroup))
+	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+}
+
+func TestCleanupOnCompletionWaitsForPodGroupsBeforeDeletingWorkload(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -200,19 +303,25 @@ func TestCleanupOnCompletionDeletesSchedulingResourcesAndFinalizers(t *testing.T
 		Name:       "test-cluster-cluster",
 		Namespace:  rayCluster.Namespace,
 		Labels:     map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-		Finalizers: []string{podGroupProtectionFinalizer},
+		Finalizers: []string{podGroupProtectionFinalizer, "example.com/retain"},
 	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "waiting for PodGroup default/test-cluster-cluster")
 	assert.True(t, didCleanup)
 
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{})
-	assert.True(t, apierrors.IsNotFound(err))
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
-	assert.True(t, apierrors.IsNotFound(err))
+	// Only the explicitly approved protection finalizer is removed. The unrelated
+	// finalizer keeps the PodGroup terminating, and cleanup must retain the Workload.
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
+	assert.NotContains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
+	assert.NotNil(t, podGroup.DeletionTimestamp)
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingWorkload.Name, Namespace: existingWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
 }
 
 func TestCleanupOnCompletionNotFoundIsNoop(t *testing.T) {
@@ -227,7 +336,69 @@ func TestCleanupOnCompletionNotFoundIsNoop(t *testing.T) {
 	assert.False(t, didCleanup)
 }
 
-func TestBuildClusterPodGroupSpec(t *testing.T) {
+func TestSyncSchedulingResourcesRejectsForeignSameNameWorkload(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster.Name = "foreign-cluster"
+	foreignRayCluster.UID = types.UID("foreign-cluster-uid")
+	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
+	foreignWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
+		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
+		}},
+	}
+	setRayClusterControllerReference(foreignRayCluster, foreignWorkload)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(foreignWorkload).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Workload default/test-cluster is not controlled")
+
+	// Matching desired state is not sufficient for adoption, and synchronization
+	// must not proceed to create the PodGroup.
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignWorkload.Name, Namespace: foreignWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
+	getErr := fakeClient.Get(ctx, types.NamespacedName{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(getErr))
+}
+
+func TestSyncSchedulingResourcesRejectsForeignSameNamePodGroup(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster := newTestRayCluster(newWorkerGroup())
+	foreignRayCluster.Name = "foreign-cluster"
+	foreignRayCluster.UID = types.UID("foreign-cluster-uid")
+	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
+		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
+		}},
+	}
+	foreignPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterPodGroupName(rayCluster.Name),
+			Namespace: rayCluster.Namespace,
+			Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
+		},
+		Spec: schedulingv1alpha2.PodGroupSpec{SchedulingPolicy: desiredPolicy},
+	}
+	setRayClusterControllerReference(rayCluster, existingWorkload)
+	setRayClusterControllerReference(foreignRayCluster, foreignPodGroup)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, foreignPodGroup).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PodGroup default/test-cluster-cluster is not controlled")
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignPodGroup.Name, Namespace: foreignPodGroup.Namespace}, &schedulingv1alpha2.PodGroup{}))
+}
+
+func TestBuildClusterSchedulingPolicy(t *testing.T) {
 	one := int32(1)
 	suspended := true
 
@@ -272,16 +443,15 @@ func TestBuildClusterPodGroupSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec := buildClusterPodGroupSpec(tt.cluster)
-			assert.Equal(t, "cluster", spec.templateName)
-			require.NotNil(t, spec.schedulingPolicy.Gang)
-			assert.Nil(t, spec.schedulingPolicy.Basic)
-			assert.Equal(t, tt.wantMinCount, spec.schedulingPolicy.Gang.MinCount)
+			policy := buildClusterSchedulingPolicy(tt.cluster)
+			require.NotNil(t, policy.Gang)
+			assert.Nil(t, policy.Basic)
+			assert.Equal(t, tt.wantMinCount, policy.Gang.MinCount)
 		})
 	}
 }
 
-func TestSyncSchedulingResourcesRecreatesStaleWorkload(t *testing.T) {
+func TestSyncSchedulingResourcesReplacesStaleResourcesAcrossReconciles(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 5))
@@ -296,11 +466,22 @@ func TestSyncSchedulingResourcesRecreatesStaleWorkload(t *testing.T) {
 		Namespace: rayCluster.Namespace,
 		Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deleted PodGroup default/test-cluster-cluster before replacing stale Workload")
+	// Replacement teardown is dependency ordered: the Workload remains until its
+	// runtime PodGroup has been removed.
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, &schedulingv1alpha2.Workload{}))
+
+	err = scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deleted stale Workload")
+
+	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
 	workload := &schedulingv1alpha2.Workload{}
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, workload)
@@ -340,11 +521,14 @@ func TestSyncSchedulingResourcesRecreatesStalePodGroup(t *testing.T) {
 			SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}},
 		},
 	}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deleted stale PodGroup")
+	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
 	podGroup := &schedulingv1alpha2.PodGroup{}
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup)
@@ -354,46 +538,64 @@ func TestSyncSchedulingResourcesRecreatesStalePodGroup(t *testing.T) {
 	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 }
 
-func TestSyncSchedulingResourcesRecreatesStalePodGroupRemovingFinalizer(t *testing.T) {
+func TestSyncPodGroupDeleteUsesUIDPreconditionAndDefersRecreation(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
-	rayCluster := newTestRayCluster(newWorkerGroup()) // 3 replicas -> desired MinCount 4
-
-	desiredSpec := buildClusterPodGroupSpec(rayCluster)
-	// A non-stale Workload so reconciliation proceeds to the PodGroup.
+	rayCluster := newTestRayCluster(newWorkerGroup())
+	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
 	existingWorkload := &schedulingv1alpha2.Workload{
 		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
 		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
-			{Name: desiredSpec.templateName, SchedulingPolicy: desiredSpec.schedulingPolicy},
+			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
 		}},
 	}
-	// The PodGroup drifted (old MinCount) and carries the podgroup-protection finalizer
-	// that the Kubernetes PodGroupProtection controller adds while member pods run.
 	existingPodGroup := &schedulingv1alpha2.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "test-cluster-cluster",
+			Name:       clusterPodGroupName(rayCluster.Name),
 			Namespace:  rayCluster.Namespace,
+			UID:        types.UID("stale-podgroup-uid"),
 			Labels:     map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-			Finalizers: []string{podGroupProtectionFinalizer},
+			Finalizers: []string{podGroupProtectionFinalizer, "example.com/retain"},
 		},
 		Spec: schedulingv1alpha2.PodGroupSpec{
-			SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}},
+			SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{
+				Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: desiredPolicy.Gang.MinCount - 1},
+			},
 		},
 	}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
+	deleteCalled := false
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(existingWorkload, existingPodGroup).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(_ context.Context, _ client.WithWatch, object client.Object, options ...client.DeleteOption) error {
+				podGroup, ok := object.(*schedulingv1alpha2.PodGroup)
+				require.True(t, ok)
+				deleteOptions := (&client.DeleteOptions{}).ApplyOptions(options)
+				require.NotNil(t, deleteOptions.Preconditions)
+				require.NotNil(t, deleteOptions.Preconditions.UID)
+				assert.Equal(t, podGroup.UID, *deleteOptions.Preconditions.UID)
+				deleteCalled = true
+				// Simulate an API server that accepted Delete but has not removed the
+				// object yet. Reconciliation must not create its replacement now.
+				return nil
+			},
+		}).
+		Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "deleted stale PodGroup")
+	assert.True(t, deleteCalled)
 
 	podGroup := &schedulingv1alpha2.PodGroup{}
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup)
-	require.NoError(t, err)
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
-	// The stale PodGroup is deleted (finalizer removed first) and recreated with the
-	// new MinCount, so the recreated object no longer carries the protection finalizer.
-	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
+	assert.Equal(t, desiredPolicy.Gang.MinCount-1, podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.NotContains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
 }
 
 func TestDoBatchSchedulingOnSubmissionIsIdempotentWhenUnchanged(t *testing.T) {
@@ -427,7 +629,7 @@ func TestDoBatchSchedulingOnSubmissionIsIdempotentWhenUnchanged(t *testing.T) {
 	assert.Equal(t, podGroupAfterFirst.ResourceVersion, podGroupAfterSecond.ResourceVersion, "PodGroup should not be recreated on an unchanged reconcile")
 }
 
-func TestSyncSchedulingResourcesRetriesWhenPodGroupBeingDeleted(t *testing.T) {
+func TestSyncSchedulingResourcesRemovesProtectionFinalizerWhenPodGroupBeingDeleted(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -435,28 +637,35 @@ func TestSyncSchedulingResourcesRetriesWhenPodGroupBeingDeleted(t *testing.T) {
 	// A non-stale Workload already exists so reconciliation proceeds to the PodGroup.
 	// Build its template from the cluster spec so the Workload stays non-stale even
 	// if the test helpers' replica counts change.
-	desiredSpec := buildClusterPodGroupSpec(rayCluster)
+	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
 	existingWorkload := &schedulingv1alpha2.Workload{
 		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
 		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
-			{Name: desiredSpec.templateName, SchedulingPolicy: desiredSpec.schedulingPolicy},
+			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
 		}},
 	}
-	// The PodGroup is mid-deletion (finalizer pending).
+	// The PodGroup is mid-deletion with the protection finalizer still present.
 	deletionTime := metav1.NewTime(time.Now())
 	existingPodGroup := &schedulingv1alpha2.PodGroup{ObjectMeta: metav1.ObjectMeta{
 		Name:              "test-cluster-cluster",
 		Namespace:         rayCluster.Namespace,
 		Labels:            map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-		Finalizers:        []string{podGroupProtectionFinalizer},
+		Finalizers:        []string{podGroupProtectionFinalizer, "example.com/retain"},
 		DeletionTimestamp: &deletionTime,
 	}}
+	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is being deleted")
+
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
+	assert.NotContains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
+	assert.NotNil(t, podGroup.DeletionTimestamp)
 }
 
 func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
@@ -466,7 +675,7 @@ func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
 
 	// A non-stale Workload exists but is mid-deletion. The scheduler must not proceed
 	// to create a PodGroup against a Workload that is still being deleted.
-	desiredSpec := buildClusterPodGroupSpec(rayCluster)
+	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
 	deletionTime := metav1.NewTime(time.Now())
 	existingWorkload := &schedulingv1alpha2.Workload{
 		ObjectMeta: metav1.ObjectMeta{
@@ -476,9 +685,10 @@ func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
 			DeletionTimestamp: &deletionTime,
 		},
 		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
-			{Name: desiredSpec.templateName, SchedulingPolicy: desiredSpec.schedulingPolicy},
+			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
 		}},
 	}
+	setRayClusterControllerReference(rayCluster, existingWorkload)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
@@ -494,7 +704,8 @@ func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
 
 func TestIsWorkloadStale(t *testing.T) {
 	baseCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 3))
-	baseWorkload, err := (&KubernetesWASV1Alpha2Scheduler{cli: clientFake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()}).buildWorkload(baseCluster)
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: clientFake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()}
+	baseWorkload, _, err := scheduler.buildSchedulingResources(baseCluster)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -513,27 +724,9 @@ func TestIsWorkloadStale(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantStale, isWorkloadStale(tt.workload, tt.cluster))
-		})
-	}
-}
-
-func TestSchedulingPoliciesMatch(t *testing.T) {
-	tests := []struct {
-		name string
-		a    schedulingv1alpha2.PodGroupSchedulingPolicy
-		b    schedulingv1alpha2.PodGroupSchedulingPolicy
-		want bool
-	}{
-		{name: "both basic", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}, want: true},
-		{name: "same gang", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, want: true},
-		{name: "different gang", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 5}}, want: false},
-		{name: "basic vs gang", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 1}}, want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, schedulingPoliciesMatch(tt.a, tt.b))
+			desired, _, err := scheduler.buildSchedulingResources(tt.cluster)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStale, isWorkloadStale(tt.workload, desired))
 		})
 	}
 }
@@ -640,11 +833,17 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func TestSchedulingSkippedWithoutGangLabel(t *testing.T) {
+func TestSchedulingSkippedWhenGangSchedulingDisabled(t *testing.T) {
 	rayCluster := newTestRayCluster(newWorkerGroup())
-	require.Equal(t, skipReasonNone, schedulingSkipReason(rayCluster))
+	require.Empty(t, schedulingSkipReason(rayCluster))
 
 	delete(rayCluster.Labels, utils.RayGangSchedulingEnabled)
+	require.Equal(t, skipReasonGangSchedulingDisabled, schedulingSkipReason(rayCluster))
+
+	rayCluster.Labels[utils.RayGangSchedulingEnabled] = "false"
+	require.Equal(t, skipReasonGangSchedulingDisabled, schedulingSkipReason(rayCluster))
+
+	rayCluster.Labels[utils.RayGangSchedulingEnabled] = "False"
 	require.Equal(t, skipReasonGangSchedulingDisabled, schedulingSkipReason(rayCluster))
 }
 
@@ -653,12 +852,23 @@ func newTestRayCluster(workerGroups ...rayv1.WorkerGroupSpec) *rayv1.RayCluster 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 			Labels:    map[string]string{utils.RayGangSchedulingEnabled: "true"},
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec:    rayv1.HeadGroupSpec{Template: corev1.PodTemplateSpec{}},
 			WorkerGroupSpecs: workerGroups,
 		},
+	}
+}
+
+func setRayClusterControllerReference(rayCluster *rayv1.RayCluster, objects ...metav1.Object) {
+	ownerReference := *metav1.NewControllerRef(rayCluster, rayv1.GroupVersion.WithKind("RayCluster"))
+	for _, object := range objects {
+		if object.GetUID() == "" {
+			object.SetUID(types.UID(object.GetName() + "-uid"))
+		}
+		object.SetOwnerReferences([]metav1.OwnerReference{ownerReference})
 	}
 }
 

@@ -234,6 +234,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	if !instance.DeletionTimestamp.IsZero() &&
 		utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) &&
 		controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
+		logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
+		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
+			return ctrl.Result{}, err
+		}
 		logger.Info(
 			"Removing the stale Redis cleanup finalizer from an embedded-backend RayCluster that is being deleted.",
 			"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
@@ -275,6 +279,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 			// Delete all worker Pods if they exist.
 			if _, err = r.deleteAllPods(ctx, common.RayClusterWorkerPodsAssociationOptions(instance)); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+			logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
+			if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
+				return ctrl.Result{}, err
 			}
 			if len(headPods.Items) > 0 {
 				logger.Info(
@@ -967,7 +975,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 	if statusConditionGateEnabled {
 		if suspendStatus == rayv1.RayClusterSuspended {
-			return nil // stop reconcilePods because the cluster is suspended.
+			logger.Info("RayCluster is suspended, cleaning up batch scheduler resources")
+			return r.cleanupBatchSchedulerResources(ctx, instance)
 		}
 		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
 		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {

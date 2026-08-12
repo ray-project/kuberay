@@ -49,8 +49,7 @@ type Configuration struct {
 	LeaderElectionNamespace string `json:"leaderElectionNamespace,omitempty"`
 
 	// BatchScheduler enables the batch scheduler integration with a specific scheduler
-	// based on the given name, currently, supported values are volcano, yunikorn,
-	// kai-scheduler, and scheduler-plugins.
+	// based on the given name, currently, supported values are volcano, yunikorn, kai-scheduler.
 	BatchScheduler string `json:"batchScheduler,omitempty"`
 
 	// MetricsAddr is the address the metrics endpoint binds to.

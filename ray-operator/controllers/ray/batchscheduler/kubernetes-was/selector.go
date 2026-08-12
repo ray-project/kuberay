@@ -3,31 +3,35 @@ package kuberneteswas
 import (
 	"errors"
 	"fmt"
+	"slices"
 
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 )
 
 // selectProvider resolves which versioned provider to use.
 //
-// For now it auto-detects the first registered provider whose scheduling.k8s.io
-// API version is served by the cluster. As the API churns (v1alpha2 -> v1alpha3
-// -> ...), additional providers register themselves and this picks the served
-// one.
+// Registered providers are ranked using Kubernetes API version ordering, then
+// the highest-ranked version served by the cluster is selected.
 //
-// TODO: honor a deploy-time preferred-version list and a per-RayCluster override
-// (both must still resolve to a served + registered version).
+// TODO: honor a deploy-time preferred API version.
 func selectProvider(config *rest.Config) (Provider, error) {
 	if len(registeredProviders) == 0 {
 		return nil, fmt.Errorf("no %s providers registered", pluginName)
 	}
 
-	// A nil config (e.g. in unit tests) skips discovery and uses the first provider.
+	providers := slices.Clone(registeredProviders)
+	slices.SortStableFunc(providers, func(left, right Provider) int {
+		return version.CompareKubeAwareVersionStrings(right.GroupVersion().Version, left.GroupVersion().Version)
+	})
+
+	// A nil config (e.g. in unit tests) skips discovery and uses the preferred provider.
 	if config == nil {
-		return registeredProviders[0], nil
+		return providers[0], nil
 	}
 
 	var unavailable []error
-	for _, provider := range registeredProviders {
+	for _, provider := range providers {
 		if err := provider.Available(config); err != nil {
 			unavailable = append(unavailable, err)
 			continue

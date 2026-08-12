@@ -356,15 +356,12 @@ For user-facing documentation, see the [Kubernetes WAS guide](../docs/guidance/k
 
 Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with `GenericWorkload` enabled on the API server and controller manager, `scheduling.k8s.io/v1alpha2` served by the API server, and `GangScheduling` enabled on kube-scheduler. The kind config uses the published `kindest/node:v1.36.1` image:
 
-```bash
-# Install kind v0.32.0 or newer.
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
+Kind v0.32.0 or newer is required.
 
+```bash
 # Create the cluster with the required feature gates and alpha API.
 kind create cluster --name kubernetes-was-v1alpha2 \
-  --config ../ci/kind-config-kubernetes-was-v1alpha2.yml
+  --config hack/kind-config-kubernetes-was-v1alpha2.yml
 
 # Build and load the operator image.
 make docker-image IMG=kuberay/operator:latest
