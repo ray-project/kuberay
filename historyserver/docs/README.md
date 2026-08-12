@@ -85,10 +85,13 @@ Sample configs are in the `config/` directory:
 | `raycluster-kubernetes-auth.yaml` | Ray cluster with collector sidecar using Kubernetes token authentication (S3/MinIO) |
 | `rayjob.yaml` | Sample Ray job for testing |
 | `rayjob-gcs.yaml` | Sample Ray job for testing (GCS) |
+| `rayservice.yaml` | Sample RayService for testing |
+| `ray-data.yaml` | Sample Ray Data job for testing |
 | `historyserver.yaml` | History Server deployment (S3/MinIO) |
 | `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
 | `historyserver-gcs.yaml` | History Server deployment (GCS) |
 | `service_account.yaml` | Service account for History Server |
+| `service_account_auth_token_mode.yaml` | RBAC for History Server to read Ray auth token Secrets (auth token mode only) |
 
 ## Additional resources
 

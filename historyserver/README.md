@@ -125,7 +125,7 @@ Each backend requires specific configuration parameters passed through environme
 - `config/`: Kubernetes manifests and sample configs
 - `docs/`: Setup and development guides
 - `html/`: Embedded HTML templates
-- `test/`: E2E and support tests
+- `test/`: E2E tests
 
 ### Testing
 
