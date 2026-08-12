@@ -884,6 +884,10 @@ _Appears in:_
 
 Package v1alpha1 contains API Schema definitions for the ray v1alpha1 API group
 
+Deprecated: ray.io/v1alpha1 is served for backward compatibility only and is
+frozen at its December 2023 feature set. Use
+github.com/ray-project/kuberay/ray-operator/apis/ray/v1 instead.
+
 ### Resource Types
 - [RayCluster](#raycluster)
 - [RayJob](#rayjob)
