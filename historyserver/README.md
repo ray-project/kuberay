@@ -120,12 +120,25 @@ Each backend requires specific configuration parameters passed through environme
 
 ### Code Structure
 
-- `cmd/`: Main applications (collector and historyserver)
-- `pkg/`: Core packages (collector, historyserver, eventserver, storage, utils)
-- `config/`: Kubernetes manifests and sample configs
-- `docs/`: Setup and development guides
-- `html/`: Embedded HTML templates
-- `test/`: E2E tests
+```text
+historyserver/
+├── cmd/
+│   ├── collector/
+│   └── historyserver/
+├── config/               # Kubernetes manifests and sample configs
+├── docs/                 # Setup and development guides
+├── html/                 # Embedded HTML templates
+├── pkg/
+│   ├── collector/
+│   ├── compression/
+│   ├── eventserver/
+│   ├── historyserver/
+│   ├── storage/          # s3, gcs, azureblob, aliyunoss, ...
+│   └── utils/
+└── test/
+    ├── e2e/
+    └── support/
+```
 
 ### Testing
 
@@ -227,4 +240,4 @@ per first-time cold-path call. Warm-path calls produce no parse log lines.
 ## Deployment
 
 History Server can be deployed in Kubernetes using the manifests in the `config/` directory.
-Examples are provided for different storage backends including MinIO, GCS, and Azure Blob.
+Examples are provided for different storage backends including S3/MinIO, GCS, and Azure Blob.
