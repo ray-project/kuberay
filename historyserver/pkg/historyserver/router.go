@@ -23,7 +23,6 @@ import (
 	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -1021,7 +1020,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 	// exist in the object store. We scan the storage directory under the session to discover
 	// node IDs directly so we can still read debug_state.txt.
 	if len(nodeIDs) == 0 {
-		nodeIDs = storage.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionName)
+		nodeIDs = clusterlogs.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionName)
 	}
 	successCount := 0
 

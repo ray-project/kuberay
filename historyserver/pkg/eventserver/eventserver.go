@@ -532,7 +532,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 
 	// Check candidate prefixes under each node (<sessionName>/<nodeName>/job_events/)
 	var candidatePrefixes []string
-	for _, nodeName := range storage.ListSessionNodeDirs(h.reader, clusterLogPathPrefix, clusterInfo.SessionName) {
+	for _, nodeName := range clusterlogs.ListSessionNodeDirs(h.reader, clusterLogPathPrefix, clusterInfo.SessionName) {
 		candidatePrefixes = append(candidatePrefixes, clusterlogs.RelJobEventsDir(clusterInfo.SessionName, nodeName, "")+"/")
 	}
 
@@ -560,7 +560,7 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 
 	// Check candidate prefixes under each node (<sessionName>/<nodeName>/node_events/)
 	var candidatePrefixes []string
-	for _, nodeName := range storage.ListSessionNodeDirs(h.reader, clusterLogPathPrefix, clusterInfo.SessionName) {
+	for _, nodeName := range clusterlogs.ListSessionNodeDirs(h.reader, clusterLogPathPrefix, clusterInfo.SessionName) {
 		candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(clusterInfo.SessionName, nodeName)+"/")
 	}
 

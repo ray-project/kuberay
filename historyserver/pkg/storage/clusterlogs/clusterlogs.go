@@ -4,6 +4,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -91,4 +92,20 @@ func RelJobEventsDir(sessionName, nodeName, jobID string) string {
 		return p
 	}
 	return path.Join(p, jobID)
+}
+
+// ListSessionNodeDirs returns node directory names under <prefix>/<sessionName>/.
+func ListSessionNodeDirs(reader storage.StorageReader, prefix, sessionName string) []string {
+	var nodes []string
+	for _, entry := range reader.ListFiles(prefix, sessionName) {
+		if !strings.HasSuffix(entry, "/") {
+			continue
+		}
+		name := strings.TrimSuffix(entry, "/")
+		if name == "" || name == utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
+			continue
+		}
+		nodes = append(nodes, name)
+	}
+	return nodes
 }
