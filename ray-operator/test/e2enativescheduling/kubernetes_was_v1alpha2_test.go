@@ -658,6 +658,81 @@ func TestKubernetesWAS_GangAtomicityIncludesHead(t *testing.T) {
 		}, BeFalse()))
 }
 
+// TestKubernetesWAS_GangHoldsSchedulablePods verifies all-or-nothing scheduling
+// with multiple replicas: worker pods that would schedule on their own are held
+// Pending because another member of the whole-cluster gang is unschedulable, so
+// the gang's minCount can never be met and no pod in the cluster is scheduled.
+func TestKubernetesWAS_GangHoldsSchedulablePods(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	// One worker requests far more memory than any node can provide, so the
+	// whole-cluster gang can never be satisfied.
+	unschedulableWorker := corev1ac.PodTemplateSpec().
+		WithSpec(corev1ac.PodSpec().
+			WithContainers(corev1ac.Container().
+				WithName("ray-worker").
+				WithImage(GetRayImage()).
+				WithResources(corev1ac.ResourceRequirements().
+					WithRequests(corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("100000Gi"),
+					}))))
+
+	rayClusterAC := newWASRayClusterAC("gang-holds", namespace.Name).
+		WithSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(HeadPodTemplateApplyConfiguration())).
+			WithWorkerGroupSpecs(
+				// These workers would schedule on their own (see other tests).
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(2).
+					WithMinReplicas(2).
+					WithMaxReplicas(2).
+					WithGroupName("schedulable").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(WorkerPodTemplateApplyConfiguration()),
+				// This one cannot, which makes the whole gang unschedulable.
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(1).
+					WithMinReplicas(1).
+					WithMaxReplicas(1).
+					WithGroupName("unschedulable").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(unschedulableWorker)))
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created partially-schedulable RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+
+	// minCount = 1 head + 2 schedulable + 1 unschedulable = 4 pods.
+	const expectedPods = 4
+	LogWithTimestamp(test.T(), "Waiting for all %d pods to be created", expectedPods)
+	g.Eventually(func() ([]corev1.Pod, error) {
+		return GetAllPods(test, rayCluster)
+	}, TestTimeoutMedium).Should(HaveLen(expectedPods))
+
+	LogWithTimestamp(test.T(), "Verifying no pod is scheduled while the gang is unsatisfiable")
+	g.Consistently(func(inner Gomega) {
+		pods, err := GetAllPods(test, rayCluster)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(pods).To(HaveLen(expectedPods))
+		for _, pod := range pods {
+			inner.Expect(pod.Spec.NodeName).To(BeEmpty(), "pod %s should not be scheduled to a node", pod.Name)
+			inner.Expect(pod.Status.Phase).To(Equal(corev1.PodPending), "pod %s should be Pending", pod.Name)
+		}
+	}, 20*time.Second, 2*time.Second).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Verifying the PodGroup never reports Scheduled")
+	g.Consistently(PodGroup(test, namespace.Name, rayCluster.Name+"-cluster"), 10*time.Second, 2*time.Second).
+		Should(WithTransform(func(pg *schedulingv1alpha2.PodGroup) bool {
+			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha2.PodGroupScheduled)
+		}, BeFalse()))
+}
+
 // TestKubernetesWAS_ManyWorkerGroups verifies that a RayCluster with more than
 // seven worker groups schedules successfully. The previous per-worker-group
 // design capped worker groups at seven (a Workload allows only eight PodGroup

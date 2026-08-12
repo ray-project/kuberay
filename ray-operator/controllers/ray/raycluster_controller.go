@@ -352,6 +352,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+		// Clean up explicitly so the PodGroup protection finalizer is removed; otherwise
+		// owner-reference GC of the Workload/PodGroup can be blocked on deletion.
 		logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
 		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
 			return ctrl.Result{}, err

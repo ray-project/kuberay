@@ -27,14 +27,14 @@ import (
 
 func TestAddMetadataToChildResourceSetsDefaultSchedulerName(t *testing.T) {
 	scheduler := &KubernetesWASV1Alpha2Scheduler{}
-	parent := &metav1.ObjectMeta{}
+	rayCluster := newTestRayCluster(newWorkerGroup())
 
 	pod := &corev1.Pod{}
-	scheduler.AddMetadataToChildResource(context.Background(), parent, pod, "head")
+	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, pod, "head")
 	require.Equal(t, corev1.DefaultSchedulerName, pod.Spec.SchedulerName)
 
 	template := &corev1.PodTemplateSpec{}
-	scheduler.AddMetadataToChildResource(context.Background(), parent, template, "worker-group")
+	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, template, "worker-group")
 	require.Equal(t, corev1.DefaultSchedulerName, template.Spec.SchedulerName)
 }
 
@@ -186,8 +186,9 @@ func TestAddMetadataToChildResourceSkipsSchedulingGroupWhenAutoscalingEnabled(t 
 	pod := &corev1.Pod{}
 	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, pod, "workers")
 
+	// Skipped clusters are left untouched: no scheduling group and no forced scheduler name.
 	assert.Nil(t, pod.Spec.SchedulingGroup)
-	assert.Equal(t, corev1.DefaultSchedulerName, pod.Spec.SchedulerName)
+	assert.Empty(t, pod.Spec.SchedulerName)
 }
 
 func TestCleanupOnCompletionDeletesSchedulingResourcesAndFinalizers(t *testing.T) {
@@ -353,6 +354,48 @@ func TestSyncSchedulingResourcesRecreatesStalePodGroup(t *testing.T) {
 	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 }
 
+func TestSyncSchedulingResourcesRecreatesStalePodGroupRemovingFinalizer(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup()) // 3 replicas -> desired MinCount 4
+
+	desiredSpec := buildClusterPodGroupSpec(rayCluster)
+	// A non-stale Workload so reconciliation proceeds to the PodGroup.
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
+		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+			{Name: desiredSpec.templateName, SchedulingPolicy: desiredSpec.schedulingPolicy},
+		}},
+	}
+	// The PodGroup drifted (old MinCount) and carries the podgroup-protection finalizer
+	// that the Kubernetes PodGroupProtection controller adds while member pods run.
+	existingPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-cluster",
+			Namespace:  rayCluster.Namespace,
+			Labels:     map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+		Spec: schedulingv1alpha2.PodGroupSpec{
+			SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload, existingPodGroup).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.NoError(t, err)
+
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup)
+	require.NoError(t, err)
+	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
+	// The stale PodGroup is deleted (finalizer removed first) and recreated with the
+	// new MinCount, so the recreated object no longer carries the protection finalizer.
+	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
+	assert.NotContains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+}
+
 func TestDoBatchSchedulingOnSubmissionIsIdempotentWhenUnchanged(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
@@ -416,6 +459,39 @@ func TestSyncSchedulingResourcesRetriesWhenPodGroupBeingDeleted(t *testing.T) {
 	assert.Contains(t, err.Error(), "is being deleted")
 }
 
+func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
+	ctx := context.Background()
+	scheme := newTestScheme(t)
+	rayCluster := newTestRayCluster(newWorkerGroup())
+
+	// A non-stale Workload exists but is mid-deletion. The scheduler must not proceed
+	// to create a PodGroup against a Workload that is still being deleted.
+	desiredSpec := buildClusterPodGroupSpec(rayCluster)
+	deletionTime := metav1.NewTime(time.Now())
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              rayCluster.Name,
+			Namespace:         rayCluster.Namespace,
+			Finalizers:        []string{podGroupProtectionFinalizer},
+			DeletionTimestamp: &deletionTime,
+		},
+		Spec: schedulingv1alpha2.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+			{Name: desiredSpec.templateName, SchedulingPolicy: desiredSpec.schedulingPolicy},
+		}},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(existingWorkload).Build()
+	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
+
+	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is being deleted")
+
+	// No PodGroup should have been created while the Workload is terminating.
+	podGroup := &schedulingv1alpha2.PodGroup{}
+	getErr := fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup)
+	assert.True(t, apierrors.IsNotFound(getErr))
+}
+
 func TestIsWorkloadStale(t *testing.T) {
 	baseCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 3))
 	baseWorkload, err := (&KubernetesWASV1Alpha2Scheduler{cli: clientFake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()}).buildWorkload(baseCluster)
@@ -449,7 +525,6 @@ func TestSchedulingPoliciesMatch(t *testing.T) {
 		b    schedulingv1alpha2.PodGroupSchedulingPolicy
 		want bool
 	}{
-		{name: "both empty", want: true},
 		{name: "both basic", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}, want: true},
 		{name: "same gang", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, want: true},
 		{name: "different gang", a: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}, b: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 5}}, want: false},

@@ -69,12 +69,11 @@ func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx conte
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
-	setDefaultSchedulerName(child)
-
 	rayCluster, ok := parent.(*rayv1.RayCluster)
 	if !ok || schedulingSkipReason(rayCluster) != skipReasonNone {
 		return
 	}
+	setDefaultSchedulerName(child)
 	// The entire RayCluster (head + every worker group) is gang scheduled as a
 	// single PodGroup, so all pods reference the same PodGroup regardless of group.
 	setSchedulingGroup(child, clusterPodGroupName(rayCluster.Name))
@@ -117,66 +116,93 @@ type podGroupSpec struct {
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
+	if err := k.syncWorkload(ctx, rayCluster); err != nil {
+		return err
+	}
+	return k.syncPodGroup(ctx, rayCluster)
+}
+
+func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx).WithName(kuberneteswas.GetPluginName())
 
-	workload, err := k.buildWorkload(rayCluster)
+	desired, err := k.buildWorkload(rayCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build Workload for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
-	if err := k.cli.Create(ctx, workload); err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create Workload %s/%s: %w", workload.Namespace, workload.Name, err)
-		}
 
-		existing := &schedulingv1alpha2.Workload{}
-		if err := k.cli.Get(ctx, types.NamespacedName{Name: workload.Name, Namespace: workload.Namespace}, existing); err != nil {
-			return fmt.Errorf("failed to get existing Workload %s/%s: %w", workload.Namespace, workload.Name, err)
+	existing := &schedulingv1alpha2.Workload{}
+	err = k.cli.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+	if errors.IsNotFound(err) {
+		if err := k.cli.Create(ctx, desired); err != nil {
+			return fmt.Errorf("failed to create Workload %s/%s: %w", desired.Namespace, desired.Name, err)
 		}
-		// Workload PodGroupTemplates are immutable, so a spec change (e.g. a new
-		// MinCount) requires deleting and recreating the Workload and its PodGroup.
-		if isWorkloadStale(existing, rayCluster) {
-			logger.Info("Workload is stale, deleting and recreating", "name", workload.Name)
-			if _, err := k.deleteSchedulingResources(ctx, rayCluster); err != nil {
-				return err
-			}
-			workload, err = k.buildWorkload(rayCluster)
-			if err != nil {
-				return fmt.Errorf("failed to rebuild Workload for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
-			}
-			if err := k.cli.Create(ctx, workload); err != nil {
-				return fmt.Errorf("failed to recreate Workload %s/%s: %w", workload.Namespace, workload.Name, err)
-			}
-		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get Workload %s/%s: %w", desired.Namespace, desired.Name, err)
+	}
+	if existing.DeletionTimestamp != nil {
+		return fmt.Errorf("Workload %s/%s is being deleted, will retry", existing.Namespace, existing.Name)
+	}
+	if !isWorkloadStale(existing, rayCluster) {
+		return nil
 	}
 
+	// Workloads are immutable in scheduling.k8s.io/v1alpha2 (mutability is added in
+	// v1alpha3), so a spec change (e.g. a new MinCount) requires deleting and
+	// recreating the Workload.
+	if err := k.cli.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete stale Workload %s/%s: %w", existing.Namespace, existing.Name, err)
+	}
+	if err := k.cli.Create(ctx, desired); err != nil {
+		return fmt.Errorf("failed to recreate Workload %s/%s: %w", desired.Namespace, desired.Name, err)
+	}
+	logger.Info("Recreated stale Workload", "name", desired.Name)
+	return nil
+}
+
+func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx).WithName(kuberneteswas.GetPluginName())
+
 	podGroupSpec := buildClusterPodGroupSpec(rayCluster)
-	podGroup, err := k.buildPodGroup(rayCluster, podGroupSpec.templateName, podGroupSpec.schedulingPolicy)
+	desired, err := k.buildPodGroup(rayCluster, podGroupSpec.templateName, podGroupSpec.schedulingPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to build PodGroup for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
 
-	if err := k.cli.Create(ctx, podGroup); err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
+	existing := &schedulingv1alpha2.PodGroup{}
+	err = k.cli.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing)
+	if errors.IsNotFound(err) {
+		if err := k.cli.Create(ctx, desired); err != nil {
+			return fmt.Errorf("failed to create PodGroup %s/%s: %w", desired.Namespace, desired.Name, err)
 		}
-		existing := &schedulingv1alpha2.PodGroup{}
-		if err := k.cli.Get(ctx, types.NamespacedName{Name: podGroup.Name, Namespace: podGroup.Namespace}, existing); err != nil {
-			return fmt.Errorf("failed to get existing PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
-		}
-		if existing.DeletionTimestamp != nil {
-			return fmt.Errorf("PodGroup %s/%s is being deleted (finalizer pending), will retry", podGroup.Namespace, podGroup.Name)
-		}
-		// PodGroup SchedulingPolicy is immutable, so if the existing PodGroup drifted
-		// from the desired spec, delete and recreate it (and the Workload).
-		if isPodGroupStale(existing, podGroupSpec.schedulingPolicy) {
-			logger.Info("PodGroup is stale, deleting and recreating", "name", podGroup.Name)
-			if _, err := k.deleteSchedulingResources(ctx, rayCluster); err != nil {
-				return err
-			}
-			return k.syncSchedulingResources(ctx, rayCluster)
-		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get PodGroup %s/%s: %w", desired.Namespace, desired.Name, err)
+	}
+	if existing.DeletionTimestamp != nil {
+		return fmt.Errorf("PodGroup %s/%s is being deleted (finalizer pending), will retry", existing.Namespace, existing.Name)
+	}
+	if !isPodGroupStale(existing, podGroupSpec.schedulingPolicy) {
+		return nil
 	}
 
+	// A PodGroup's scheduling policy is immutable in scheduling.k8s.io/v1alpha2
+	// (mutability is added in v1alpha3), so a drifted PodGroup must be deleted and
+	// recreated. Remove the podgroup-protection finalizer first so it can be deleted.
+	if controllerutil.RemoveFinalizer(existing, podGroupProtectionFinalizer) {
+		if err := k.cli.Update(ctx, existing); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", existing.Namespace, existing.Name, err)
+		}
+	}
+	if err := k.cli.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete stale PodGroup %s/%s: %w", existing.Namespace, existing.Name, err)
+	}
+	if err := k.cli.Create(ctx, desired); err != nil {
+		return fmt.Errorf("failed to recreate PodGroup %s/%s: %w", desired.Namespace, desired.Name, err)
+	}
+	logger.Info("Recreated stale PodGroup", "name", desired.Name)
 	return nil
 }
 
@@ -211,6 +237,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildWorkload(rayCluster *rayv1.RayClus
 			},
 		},
 		Spec: schedulingv1alpha2.WorkloadSpec{
+			// ControllerRef is a back-reference to the owning RayCluster for tooling; it is
+			// distinct from the owner reference set via SetControllerReference (used for GC).
 			ControllerRef: &schedulingv1alpha2.TypedLocalObjectReference{
 				APIGroup: rayv1.GroupVersion.Group,
 				Kind:     "RayCluster",
@@ -321,9 +349,6 @@ func isPodGroupStale(existing *schedulingv1alpha2.PodGroup, desired schedulingv1
 }
 
 func schedulingPoliciesMatch(a, b schedulingv1alpha2.PodGroupSchedulingPolicy) bool {
-	if a.Basic == nil && a.Gang == nil && b.Basic == nil && b.Gang == nil {
-		return true
-	}
 	if a.Basic != nil && b.Basic != nil {
 		return true
 	}
