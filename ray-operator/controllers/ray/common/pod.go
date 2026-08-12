@@ -277,7 +277,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
-			if !features.Enabled(features.AutoscalerFlexibleRestartPolicy) {
+			if !utils.SupportsFlexibleRestartPolicy(instance.Spec.RayVersion) {
 				podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 			}
 		} else if utils.IsAutoscalingV1Enabled(&instance.Spec) {
@@ -690,7 +690,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
-	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) && !features.Enabled(features.AutoscalerFlexibleRestartPolicy) {
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) && !utils.SupportsFlexibleRestartPolicy(instance.Spec.RayVersion) {
 		// Use the autoscaler version to determine whether the RestartPolicy should be Never or not.
 		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}

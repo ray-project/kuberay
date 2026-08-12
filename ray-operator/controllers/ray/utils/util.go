@@ -1212,6 +1212,22 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 	return true
 }
 
+// SupportsFlexibleRestartPolicy returns true when the Ray version is 2.56.0 or later,
+// meaning the RestartPolicy for head and worker pods is no longer forced to Never
+// when autoscaler V2 is active.
+// If the version is unspecified or below 2.56.0 the original behavior (restrict to Never) applies.
+func SupportsFlexibleRestartPolicy(rayVersion string) bool {
+	if rayVersion == "" {
+		return false
+	}
+	v, err := utilversion.ParseGeneric(rayVersion)
+	if err != nil {
+		return false
+	}
+	minVersion := utilversion.MustParseGeneric("2.56.0")
+	return v.AtLeast(minVersion)
+}
+
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
 // This check only compares the fields explicitly managed by the RayService controller.
 // If the controller starts managing additional Gateway fields in the future,

@@ -929,18 +929,17 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy tests that when the
-// AutoscalerFlexibleRestartPolicy feature gate is enabled, non-Never RestartPolicy values
-// are accepted for head and worker pods even when autoscaler V2 is active.
+// TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy tests that when Ray version is
+// 2.56.0 or later, non-Never RestartPolicy values are accepted for head and worker pods
+// even when autoscaler V2 is active.
 func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.AutoscalerFlexibleRestartPolicy, true)
-
 	tests := map[string]struct {
 		expectedErr string
 		spec        rayv1.RayClusterSpec
 	}{
-		"should not return error if AutoscalerFlexibleRestartPolicy is enabled and head Pod has a non-Never restartPolicy": {
+		"should not return error if Ray >= 2.56.0 and head Pod has a non-Never restartPolicy": {
 			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
 				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
@@ -950,8 +949,9 @@ func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
 				},
 			},
 		},
-		"should not return error if AutoscalerFlexibleRestartPolicy is enabled and a worker group has a non-Never restartPolicy": {
+		"should not return error if Ray >= 2.56.0 and a worker group has a non-Never restartPolicy": {
 			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
 				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
@@ -971,8 +971,9 @@ func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
 				},
 			},
 		},
-		"should not return error if AutoscalerFlexibleRestartPolicy is enabled and restartPolicy is unset": {
+		"should not return error if Ray >= 2.56.0 and restartPolicy is unset": {
 			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
 				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
@@ -987,6 +988,31 @@ func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
 					},
 				},
 			},
+		},
+		"should return error if Ray < 2.56.0 and head Pod has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.55.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+		"should return error if Ray version is not specified and head Pod has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
 		},
 	}
 
