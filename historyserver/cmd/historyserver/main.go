@@ -19,7 +19,7 @@ import (
 
 func main() {
 	storageBackend := ""
-	rayRootDir := ""
+	storageRootDir := ""
 	kubeconfigs := ""
 	storageBackendConfigPath := ""
 	dashboardDir := ""
@@ -32,7 +32,7 @@ func main() {
 	sessionCacheMaxBytes := historyserver.DefaultSessionCacheMaxBytes
 	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
 	flag.StringVar(&storageBackend, "storage-backend", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
+	flag.StringVar(&storageRootDir, "storage-root-dir", "", "The root dir inside the bucket")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "Path to backend config JSON")
@@ -54,8 +54,8 @@ func main() {
 	}
 	storageBackend = strings.ToLower(storageBackend)
 
-	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
-		rayRootDir = val
+	if val := os.Getenv("STORAGE_ROOT_DIR"); val != "" {
+		storageRootDir = val
 	}
 
 	if qps <= 0 {
@@ -102,7 +102,7 @@ func main() {
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
-		RootDir: rayRootDir,
+		RootDir: storageRootDir,
 	}
 
 	reader, err := factory(&globalConfig, jsonData)

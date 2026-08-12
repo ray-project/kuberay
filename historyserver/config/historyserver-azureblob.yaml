@@ -43,7 +43,6 @@ spec:
         command:
         - historyserver
         - --storage-backend=azureblob
-        - --ray-root-dir=log
         ports:
         - containerPort: 8080
         # Cache is soft-bounded at 8 GiB; 12 GiB leaves decode headroom.

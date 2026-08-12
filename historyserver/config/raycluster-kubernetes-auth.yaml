@@ -99,8 +99,6 @@ spec:
             value: "Head"
           - name: STORAGE_BACKEND
             value: "s3"
-          - name: RAY_ROOT_DIR
-            value: "log"
           resources:
             limits:
               cpu: "200m"
@@ -195,8 +193,6 @@ spec:
             value: "Worker"
           - name: STORAGE_BACKEND
             value: "s3"
-          - name: RAY_ROOT_DIR
-            value: "log"
           resources:
             limits:
               cpu: "200m"

@@ -107,8 +107,6 @@ spec:
               value: "Head"
             - name: STORAGE_BACKEND
               value: "s3"
-            - name: RAY_ROOT_DIR
-              value: "log"
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot

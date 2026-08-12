@@ -30,7 +30,7 @@ func main() {
 	storageBackend := ""
 	rayClusterName := ""
 	rayClusterNamespace := ""
-	rayRootDir := ""
+	storageRootDir := ""
 	logBatching := 1000
 	eventsPort := 8084
 	pushInterval := time.Minute
@@ -54,7 +54,7 @@ func main() {
 	flag.StringVar(&storageBackend, "storage-backend", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
+	flag.StringVar(&storageRootDir, "storage-root-dir", "", "The root dir inside the bucket")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8084, "")
 	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "")
@@ -86,8 +86,8 @@ func main() {
 	if val := os.Getenv("OWNER_NAME"); val != "" {
 		ownerName = val
 	}
-	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
-		rayRootDir = val
+	if val := os.Getenv("STORAGE_ROOT_DIR"); val != "" {
+		storageRootDir = val
 	}
 	if val := os.Getenv("EVENTS_PORT"); val != "" {
 		if port, err := strconv.Atoi(val); err == nil {
@@ -236,7 +236,7 @@ func main() {
 	sessionName := path.Base(activeSessionDir)
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:             rayRootDir,
+		RootDir:             storageRootDir,
 		SessionDir:          activeSessionDir,
 		RayNodeName:         rayNodeId,
 		Role:                role,
@@ -275,7 +275,7 @@ func main() {
 		// Create and initialize EventCollector
 		go func() {
 			defer wg.Done()
-			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
+			eventCollector := eventcollector.NewEventCollector(writer, storageRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
 				DataDir:            eventDataDir,
 				RotationInterval:   eventRotationInterval,
 				MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
