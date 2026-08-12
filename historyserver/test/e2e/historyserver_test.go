@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"testing"
 
@@ -88,7 +89,7 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLiveClusterTasks,
 		},
 		{
-			name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
+			name:     "Dead cluster: /api/v0/tasks should return detailed task information from historical replay",
 			testFunc: testDeadClusterTasks,
 		},
 		{
@@ -1762,8 +1763,8 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks?detail=1 tests completed successfully")
 }
 
-// testDeadClusterTasks verifies that the /api/v0/tasks endpoint for a dead cluster will return the
-// detailed task information of all task attempts without historical replay.
+// testDeadClusterTasks verifies that the /api/v0/tasks endpoint for a dead cluster returns
+// detailed task information reconstructed from historical events.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
@@ -1800,6 +1801,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyDeadClusterTaskLogInfo(g, client, historyServerURL)
 
 	jobIDs := getAllEligibleJobIDs(g, client, historyServerURL)
 	jobIDForFilter := jobIDs[0]
@@ -1900,6 +1902,81 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks tests completed successfully")
+}
+
+func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerURL string) {
+	resp, err := client.Get(historyServerURL + EndpointTasks + "?detail=1")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	var response map[string]any
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed())
+
+	data, ok := response["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	result, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	tasks, ok := result["result"].([]any)
+	g.Expect(ok).To(BeTrue())
+
+	var taskID, nodeID, stdoutFile string
+	for _, value := range tasks {
+		task, ok := value.(map[string]any)
+		if !ok || task["name"] != "my_task" || task["type"] != "NORMAL_TASK" || task["state"] != "FINISHED" {
+			continue
+		}
+		workerID, ok := task["worker_id"].(string)
+		if !ok || workerID == "" {
+			continue
+		}
+		taskLogInfo, ok := task["task_log_info"].(map[string]any)
+		if !ok {
+			continue
+		}
+		stdoutFileValue, _ := taskLogInfo["stdout_file"].(string)
+		stdoutStart, startOK := taskLogInfo["stdout_start"].(float64)
+		stdoutEnd, endOK := taskLogInfo["stdout_end"].(float64)
+		if stdoutFileValue != "" && startOK && endOK && stdoutStart > 0 && stdoutEnd > stdoutStart {
+			taskID, _ = task["task_id"].(string)
+			nodeID, _ = task["node_id"].(string)
+			stdoutFile = stdoutFileValue
+			break
+		}
+	}
+	g.Expect(taskID).NotTo(BeEmpty(),
+		"completed Ray 2.56 my_task should expose a complete stdout byte range")
+	g.Expect(nodeID).NotTo(BeEmpty())
+
+	workerLogURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1",
+		historyServerURL,
+		EndpointLogsFile,
+		url.QueryEscape(nodeID),
+		url.QueryEscape(path.Base(stdoutFile)),
+	)
+	workerLogResp, err := client.Get(workerLogURL)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer workerLogResp.Body.Close()
+	g.Expect(workerLogResp.StatusCode).To(Equal(http.StatusOK))
+	workerLogBody, err := io.ReadAll(workerLogResp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 0"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 2"))
+
+	logURL := fmt.Sprintf("%s%s?task_id=%s&suffix=out&lines=-1",
+		historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
+	logResp, err := client.Get(logURL)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer logResp.Body.Close()
+	g.Expect(logResp.StatusCode).To(Equal(http.StatusOK))
+	logBody, err := io.ReadAll(logResp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(string(logBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 0"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 2"))
 }
 
 // testLiveClusterNodes verifies that the /nodes?view=summary endpoint for a live cluster will return the current

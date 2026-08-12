@@ -119,7 +119,10 @@ spec:
     maxReplicas: 1000
     minReplicas: 1
     numOfHosts: 1
-    rayStartParams: {}
+    # Keep one reusable Python worker so the task-log E2E can prove byte-range
+    # isolation within a single physical worker log file.
+    rayStartParams:
+      num-cpus: "1"
     replicas: 1
     template:
       metadata:

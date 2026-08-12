@@ -10,11 +10,15 @@ spec:
     from ray.util.placement_group import placement_group
     ray.init()
 
-    # --- Scenario 1: Root-level NORMAL_TASK (single call) ---
-    @ray.remote(num_cpus=0.1)
+    # --- Scenario 1: Root-level NORMAL_TASK with same-worker log boundaries ---
+    @ray.remote(num_cpus=1)
     def my_task(x):
-        # NOTE: Add this to ensure will produce log.out
         print(f'Processing {x}', flush=True)
+        if x == 1:
+            # TODO: Remove this sleep once ray#65288 is released.
+            # Ray 2.56 overwrites task log metadata when start and end events
+            # are flushed together, which causes tasks to lose their log file path.
+            time.sleep(2)
         return x * 2
 
     # --- Scenario 2: Nested tasks (parent spawns child) ---
@@ -50,8 +54,11 @@ spec:
             return self.count
 
     # Execute all scenarios:
+    ray.get(my_task.options(name='task_log_before').remote(0))
     task_result = ray.get(my_task.remote(1))
     print(f'Task result: {task_result}')
+
+    ray.get(my_task.options(name='task_log_noise').remote(2))
 
     nested_result = ray.get(parent_task.remote())
     print(f'Nested result: {nested_result}')
