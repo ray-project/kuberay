@@ -134,7 +134,7 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		Eventually(func() error {
 			_, err := exec.CommandContext(ctx, "curl", "http://localhost:8265").CombinedOutput()
 			return err
-		}, 60*time.Second, 1*time.Millisecond).ShouldNot(HaveOccurred())
+		}, 60*time.Second, 500*time.Millisecond).ShouldNot(HaveOccurred())
 	})
 
 	It("should not succeed", func() {
