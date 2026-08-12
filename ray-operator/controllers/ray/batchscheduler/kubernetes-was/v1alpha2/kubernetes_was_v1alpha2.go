@@ -37,7 +37,7 @@ type skipReason string
 const (
 	skipReasonNone                   skipReason = ""
 	skipReasonGangSchedulingDisabled skipReason = "gang scheduling not enabled on RayCluster"
-	skipReasonAutoscaling            skipReason = "autoscaling enabled"
+	skipReasonAutoscaling            skipReason = "autoscaling is not yet supported"
 )
 
 type KubernetesWASV1Alpha2Scheduler struct {
