@@ -1,6 +1,7 @@
 package support
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -37,6 +38,11 @@ func GetContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 }
 
 func PortForwardService(test Test, g *WithT, namespace, serviceName string, port int) {
+	// kubectl can exit silently right after Start() (apiserver hiccup,
+	// service-to-pod resolution race), leaving nothing listening on the local
+	// port. Capture stderr so the test log shows why it died.
+	// ponytail: diagnostics only for now, add restart-on-death if this recurs.
+	var stderr bytes.Buffer
 	kubectlCmd := exec.Command(
 		"kubectl",
 		"-n", namespace,
@@ -44,6 +50,7 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 		fmt.Sprintf("svc/%s", serviceName),
 		fmt.Sprintf("%d:%d", port, port),
 	)
+	kubectlCmd.Stderr = &stderr
 	err := kubectlCmd.Start()
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -52,6 +59,9 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 	test.T().Cleanup(func() {
 		_ = kubectlCmd.Process.Kill()
 		_ = kubectlCmd.Wait()
+		if stderr.Len() > 0 {
+			LogWithTimestamp(test.T(), "kubectl port-forward svc/%s:%d stderr: %s", serviceName, port, stderr.String())
+		}
 	})
 }
 
