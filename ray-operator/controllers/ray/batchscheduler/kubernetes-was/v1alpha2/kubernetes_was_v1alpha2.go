@@ -190,6 +190,10 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCl
 }
 
 func (k *KubernetesWASV1Alpha2Scheduler) deletePodGroup(ctx context.Context, podGroup *schedulingv1alpha2.PodGroup) (bool, error) {
+	// Kubernetes uses this finalizer to protect a PodGroup while Pods still
+	// reference it. KubeRay removes it before explicitly deleting an owned
+	// PodGroup because replacement or cleanup may occur before those Pods
+	// terminate.
 	didDelete := controllerutil.RemoveFinalizer(podGroup, podGroupProtectionFinalizer)
 	if didDelete {
 		if err := k.cli.Update(ctx, podGroup); err != nil {

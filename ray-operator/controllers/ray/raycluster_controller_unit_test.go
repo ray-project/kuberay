@@ -2665,7 +2665,7 @@ func TestReconcilePodsContinuesBatchSchedulerCleanupWhenSuspended(t *testing.T) 
 	assert.Equal(t, 1, scheduler.cleanupCalls)
 }
 
-func TestGCSFTDeletionRunsBatchSchedulerCleanupBeforeRedisCleanup(t *testing.T) {
+func TestGCSFTDeletionLeavesBatchSchedulerCleanupToGarbageCollection(t *testing.T) {
 	setupTest(t)
 	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
 	os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, "true")
@@ -2692,17 +2692,7 @@ func TestGCSFTDeletionRunsBatchSchedulerCleanupBeforeRedisCleanup(t *testing.T) 
 	require.NoError(t, corev1.AddToScheme(testScheme))
 	require.NoError(t, rayv1.AddToScheme(testScheme))
 	fakeClient := clientFake.NewClientBuilder().WithScheme(testScheme).WithObjects(cluster, headPod).Build()
-	errCleanup := errors.New("batch scheduler cleanup pending")
-	scheduler := &rayClusterCleanupScheduler{
-		cleanupErr: errCleanup,
-		cleanupCheck: func() error {
-			err := fakeClient.Get(context.Background(), client.ObjectKeyFromObject(headPod), &corev1.Pod{})
-			if err == nil {
-				return errors.New("head Pod still exists when batch scheduler cleanup starts")
-			}
-			return client.IgnoreNotFound(err)
-		},
-	}
+	scheduler := &rayClusterCleanupScheduler{}
 	reconciler := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &events.FakeRecorder{},
@@ -2712,9 +2702,12 @@ func TestGCSFTDeletionRunsBatchSchedulerCleanupBeforeRedisCleanup(t *testing.T) 
 		},
 	}
 
-	_, err := reconciler.rayClusterReconcile(context.Background(), cluster)
-	require.ErrorIs(t, err, errCleanup)
-	assert.Equal(t, 1, scheduler.cleanupCalls)
+	result, err := reconciler.rayClusterReconcile(context.Background(), cluster)
+	require.NoError(t, err)
+	assert.Equal(t, 10*time.Second, result.RequeueAfter)
+	assert.Equal(t, 0, scheduler.cleanupCalls)
+	err = fakeClient.Get(context.Background(), client.ObjectKeyFromObject(headPod), &corev1.Pod{})
+	require.True(t, k8serrors.IsNotFound(err))
 }
 
 func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {

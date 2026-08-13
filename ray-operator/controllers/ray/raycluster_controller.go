@@ -234,10 +234,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	if !instance.DeletionTimestamp.IsZero() &&
 		utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) &&
 		controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
-		logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
-		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
-			return ctrl.Result{}, err
-		}
 		logger.Info(
 			"Removing the stale Redis cleanup finalizer from an embedded-backend RayCluster that is being deleted.",
 			"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
@@ -279,10 +275,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 			// Delete all worker Pods if they exist.
 			if _, err = r.deleteAllPods(ctx, common.RayClusterWorkerPodsAssociationOptions(instance)); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-			}
-			logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
-			if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
-				return ctrl.Result{}, err
 			}
 			if len(headPods.Items) > 0 {
 				logger.Info(
@@ -360,12 +352,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		// Clean up explicitly so the PodGroup protection finalizer is removed; otherwise
-		// owner-reference GC of the Workload/PodGroup can be blocked on deletion.
-		logger.Info("RayCluster is being deleted, cleaning up batch scheduler resources")
-		if err := r.cleanupBatchSchedulerResources(ctx, instance); err != nil {
-			return ctrl.Result{}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
