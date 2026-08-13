@@ -69,7 +69,7 @@ func main() {
 	}
 	sessionCacheMaxBytes, err := historyserver.ParseSessionCacheMaxMemory(sessionCacheMaxMemory)
 	if err != nil {
-		logrus.Fatalf("--session-cache-max-memory: %v", err)
+		logrus.Fatalf("--session-cache-max-memory %q: %v", sessionCacheMaxMemory, err)
 	}
 	if sessionCacheTTL < 0 {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
