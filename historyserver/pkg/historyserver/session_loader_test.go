@@ -35,7 +35,7 @@ func TestParseSessionCacheMaxMemory(t *testing.T) {
 		{name: "decimal suffix", input: "8G", want: 8000000000},
 		{name: "plain byte count", input: "8589934592", want: 8589934592},
 		{name: "exponent", input: "2e9", want: 2000000000},
-		{name: "fractional rounds up", input: "8.5Gi", want: 9126805504},
+		{name: "fractional binary suffix", input: "8.5Gi", want: 9126805504},
 		{name: "zero disables the bound", input: "0", want: 0},
 		{name: "default", input: DefaultSessionCacheMaxMemory, want: 2 << 30},
 		{name: "negative", input: "-1", wantErr: true},
