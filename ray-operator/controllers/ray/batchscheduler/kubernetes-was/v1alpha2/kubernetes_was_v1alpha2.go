@@ -127,13 +127,17 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 	if err != nil {
 		return err
 	}
-	// Only act on a Workload we own; a same-named foreign object is ignored.
-	exists := found && metav1.IsControlledBy(existing, rayCluster)
-	if !exists {
+	if !found {
 		if err := k.cli.Create(ctx, desired); err != nil {
 			return fmt.Errorf("failed to create Workload %s/%s: %w", desired.Namespace, desired.Name, err)
 		}
 		return nil
+	}
+	// A same-named Workload we do not own is a name collision; fail loudly rather
+	// than fight its real owner every reconcile.
+	// TODO: also emit a Warning event once the scheduler plugin has an event recorder.
+	if !metav1.IsControlledBy(existing, rayCluster) {
+		return fmt.Errorf("Workload %s/%s already exists and is not owned by this RayCluster; rename it or use a different RayCluster name to avoid the collision", existing.Namespace, existing.Name)
 	}
 	if existing.DeletionTimestamp != nil {
 		return fmt.Errorf("Workload %s/%s is being deleted, will retry", existing.Namespace, existing.Name)
@@ -167,13 +171,17 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCl
 	if err != nil {
 		return err
 	}
-	// Only act on a PodGroup we own; a same-named foreign object is ignored.
-	exists := found && metav1.IsControlledBy(existing, rayCluster)
-	if !exists {
+	if !found {
 		if err := k.cli.Create(ctx, desired); err != nil {
 			return fmt.Errorf("failed to create PodGroup %s/%s: %w", desired.Namespace, desired.Name, err)
 		}
 		return nil
+	}
+	// A same-named PodGroup we do not own is a name collision; fail loudly rather
+	// than fight its real owner every reconcile.
+	// TODO: also emit a Warning event once the scheduler plugin has an event recorder.
+	if !metav1.IsControlledBy(existing, rayCluster) {
+		return fmt.Errorf("PodGroup %s/%s already exists and is not owned by this RayCluster; rename it or use a different RayCluster name to avoid the collision", existing.Namespace, existing.Name)
 	}
 	if existing.DeletionTimestamp != nil {
 		if _, err := k.deletePodGroup(ctx, existing); err != nil {

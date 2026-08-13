@@ -358,8 +358,7 @@ func TestSyncSchedulingResourcesRejectsForeignSameNameWorkload(t *testing.T) {
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create Workload default/test-cluster")
-	assert.Contains(t, err.Error(), "already exists")
+	assert.Contains(t, err.Error(), "Workload default/test-cluster already exists and is not owned by this RayCluster")
 
 	// We do not adopt a same-named foreign Workload, and synchronization must not
 	// proceed to create the PodGroup.
@@ -397,8 +396,7 @@ func TestSyncSchedulingResourcesRejectsForeignSameNamePodGroup(t *testing.T) {
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create PodGroup default/test-cluster-cluster")
-	assert.Contains(t, err.Error(), "already exists")
+	assert.Contains(t, err.Error(), "PodGroup default/test-cluster-cluster already exists and is not owned by this RayCluster")
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignPodGroup.Name, Namespace: foreignPodGroup.Namespace}, &schedulingv1alpha2.PodGroup{}))
 }
 
