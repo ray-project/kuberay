@@ -123,10 +123,12 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Con
 
 func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha2.Workload) error {
 	existing := &schedulingv1alpha2.Workload{}
-	exists, err := k.getOwnedSchedulingResource(ctx, "Workload", client.ObjectKeyFromObject(desired), existing, rayCluster)
+	found, err := k.getSchedulingResource(ctx, "Workload", client.ObjectKeyFromObject(desired), existing)
 	if err != nil {
 		return err
 	}
+	// Only act on a Workload we own; a same-named foreign object is ignored.
+	exists := found && metav1.IsControlledBy(existing, rayCluster)
 	if !exists {
 		if err := k.cli.Create(ctx, desired); err != nil {
 			return fmt.Errorf("failed to create Workload %s/%s: %w", desired.Namespace, desired.Name, err)
@@ -144,9 +146,9 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 	// references. A later reconcile recreates the Workload before the PodGroup.
 	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
 	podGroup := &schedulingv1alpha2.PodGroup{}
-	if exists, err := k.getOwnedSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup, rayCluster); err != nil {
+	if found, err := k.getSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup); err != nil {
 		return err
-	} else if exists {
+	} else if found && metav1.IsControlledBy(podGroup, rayCluster) {
 		if _, err := k.deletePodGroup(ctx, podGroup); err != nil {
 			return err
 		}
@@ -161,10 +163,12 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 
 func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha2.PodGroup) error {
 	existing := &schedulingv1alpha2.PodGroup{}
-	exists, err := k.getOwnedSchedulingResource(ctx, "PodGroup", client.ObjectKeyFromObject(desired), existing, rayCluster)
+	found, err := k.getSchedulingResource(ctx, "PodGroup", client.ObjectKeyFromObject(desired), existing)
 	if err != nil {
 		return err
 	}
+	// Only act on a PodGroup we own; a same-named foreign object is ignored.
+	exists := found && metav1.IsControlledBy(existing, rayCluster)
 	if !exists {
 		if err := k.cli.Create(ctx, desired); err != nil {
 			return fmt.Errorf("failed to create PodGroup %s/%s: %w", desired.Namespace, desired.Name, err)
@@ -277,17 +281,20 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildSchedulingResources(rayCluster *ra
 func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
 	podGroup := &schedulingv1alpha2.PodGroup{}
 	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
-	podGroupExists, err := k.getOwnedSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup, rayCluster)
+	podGroupFound, err := k.getSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup)
 	if err != nil {
 		return false, err
 	}
+	// Only act on resources we own; a same-named foreign object is ignored.
+	podGroupExists := podGroupFound && metav1.IsControlledBy(podGroup, rayCluster)
 
 	workload := &schedulingv1alpha2.Workload{}
 	workloadKey := client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}
-	workloadExists, err := k.getOwnedSchedulingResource(ctx, "Workload", workloadKey, workload, rayCluster)
+	workloadFound, err := k.getSchedulingResource(ctx, "Workload", workloadKey, workload)
 	if err != nil {
 		return false, err
 	}
+	workloadExists := workloadFound && metav1.IsControlledBy(workload, rayCluster)
 
 	didDelete := false
 	if podGroupExists {
@@ -316,15 +323,12 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.C
 	return didDelete, nil
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) getOwnedSchedulingResource(ctx context.Context, kind string, key client.ObjectKey, object client.Object, rayCluster *rayv1.RayCluster) (bool, error) {
+func (k *KubernetesWASV1Alpha2Scheduler) getSchedulingResource(ctx context.Context, kind string, key client.ObjectKey, object client.Object) (bool, error) {
 	if err := k.cli.Get(ctx, key, object); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to get %s %s: %w", kind, key, err)
-	}
-	if !metav1.IsControlledBy(object, rayCluster) {
-		return false, fmt.Errorf("%s %s/%s is not controlled by RayCluster %s/%s", kind, object.GetNamespace(), object.GetName(), rayCluster.Namespace, rayCluster.Name)
 	}
 	return true, nil
 }
@@ -336,8 +340,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteWithUIDPrecondition(ctx context.C
 
 func schedulingSkipReason(rayCluster *rayv1.RayCluster) string {
 	// Gang scheduling is opt-in per RayCluster via the gang-scheduling label.
-	gangSchedulingEnabled, ok := rayCluster.GetLabels()[utils.RayGangSchedulingEnabled]
-	if !ok || strings.EqualFold(gangSchedulingEnabled, "false") {
+	if !strings.EqualFold(rayCluster.GetLabels()[utils.RayGangSchedulingEnabled], "true") {
 		return skipReasonGangSchedulingDisabled
 	}
 	// TODO: support the Ray autoscaler with workload-aware scheduling.

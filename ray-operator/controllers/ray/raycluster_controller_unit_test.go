@@ -57,8 +57,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
-	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
@@ -86,23 +84,6 @@ var (
 	workerSelector          labels.Selector
 	workersToDelete         []string
 )
-
-type rayClusterCleanupScheduler struct {
-	schedulerinterface.DefaultBatchScheduler
-	cleanupCalls int
-	cleanupErr   error
-	cleanupCheck func() error
-}
-
-func (s *rayClusterCleanupScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
-	s.cleanupCalls++
-	if s.cleanupCheck != nil {
-		if err := s.cleanupCheck(); err != nil {
-			return false, err
-		}
-	}
-	return false, s.cleanupErr
-}
 
 const (
 	// MultiKueueController represents the vaue of the MultiKueue controller
@@ -2634,80 +2615,6 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestReconcilePodsContinuesBatchSchedulerCleanupWhenSuspended(t *testing.T) {
-	setupTest(t)
-	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
-
-	cluster := testRayCluster.DeepCopy()
-	cluster.Spec.Suspend = new(true)
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:   string(rayv1.RayClusterSuspended),
-		Status: metav1.ConditionTrue,
-		Reason: string(rayv1.RayClusterSuspended),
-	})
-
-	errCleanup := errors.New("batch scheduler cleanup pending")
-	scheduler := &rayClusterCleanupScheduler{cleanupErr: errCleanup}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-	reconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &events.FakeRecorder{},
-		Scheme:   scheme.Scheme,
-		options: RayClusterReconcilerOptions{
-			BatchSchedulerManager: batchscheduler.NewSchedulerManagerForTest(scheduler),
-		},
-	}
-
-	err := reconciler.reconcilePods(context.Background(), cluster)
-	require.ErrorIs(t, err, errCleanup)
-	assert.Equal(t, 1, scheduler.cleanupCalls)
-}
-
-func TestGCSFTDeletionLeavesBatchSchedulerCleanupToGarbageCollection(t *testing.T) {
-	setupTest(t)
-	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
-	os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, "true")
-
-	cluster := testRayCluster.DeepCopy()
-	cluster.Spec.EnableInTreeAutoscaling = nil
-	if cluster.Annotations == nil {
-		cluster.Annotations = map[string]string{}
-	}
-	cluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
-	controllerutil.AddFinalizer(cluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
-	now := metav1.Now()
-	cluster.DeletionTimestamp = &now
-	headPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
-		Name:      "head-pod",
-		Namespace: cluster.Namespace,
-		Labels: map[string]string{
-			utils.RayClusterLabelKey:  cluster.Name,
-			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
-		},
-	}}
-
-	testScheme := runtime.NewScheme()
-	require.NoError(t, corev1.AddToScheme(testScheme))
-	require.NoError(t, rayv1.AddToScheme(testScheme))
-	fakeClient := clientFake.NewClientBuilder().WithScheme(testScheme).WithObjects(cluster, headPod).Build()
-	scheduler := &rayClusterCleanupScheduler{}
-	reconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &events.FakeRecorder{},
-		Scheme:   testScheme,
-		options: RayClusterReconcilerOptions{
-			BatchSchedulerManager: batchscheduler.NewSchedulerManagerForTest(scheduler),
-		},
-	}
-
-	result, err := reconciler.rayClusterReconcile(context.Background(), cluster)
-	require.NoError(t, err)
-	assert.Equal(t, 10*time.Second, result.RequeueAfter)
-	assert.Equal(t, 0, scheduler.cleanupCalls)
-	err = fakeClient.Get(context.Background(), client.ObjectKeyFromObject(headPod), &corev1.Pod{})
-	require.True(t, k8serrors.IsNotFound(err))
 }
 
 func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {

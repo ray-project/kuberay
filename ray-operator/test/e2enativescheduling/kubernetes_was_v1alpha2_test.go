@@ -298,13 +298,13 @@ func TestKubernetesWAS_Idempotent(t *testing.T) {
 	g.Consistently(PodGroups(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
 }
 
-func TestKubernetesWAS_SuspendDeletesResources(t *testing.T) {
+func TestKubernetesWAS_SuspendPreservesResources(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := newWASRayClusterAC("suspend-del", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("suspend-keep", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -326,23 +326,25 @@ func TestKubernetesWAS_SuspendDeletesResources(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
 
-	LogWithTimestamp(test.T(), "Verifying Workload is deleted after suspend")
-	g.Eventually(func() bool {
-		_, err := GetWorkload(test, namespace.Name, rayCluster.Name)
-		return errors.IsNotFound(err)
-	}, TestTimeoutShort).Should(BeTrue())
+	LogWithTimestamp(test.T(), "Verifying the suspended RayCluster has no Pods")
+	g.Eventually(func(inner Gomega) {
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(workerPods).To(BeEmpty())
+	}, TestTimeoutShort).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Verifying PodGroups are deleted after suspend")
-	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
+	LogWithTimestamp(test.T(), "Verifying Workload and PodGroup persist while suspended")
+	g.Consistently(Workloads(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
+	g.Consistently(PodGroups(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
 }
 
-func TestKubernetesWAS_ResumeRecreatesResources(t *testing.T) {
+func TestKubernetesWAS_ResumeReusesResources(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := newWASRayClusterAC("resume-rec", namespace.Name).
+	rayClusterAC := newWASRayClusterAC("resume-reuse", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -358,6 +360,9 @@ func TestKubernetesWAS_ResumeRecreatesResources(t *testing.T) {
 	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalWorkloadUID := workload.UID
+	podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	originalPodGroupUID := podGroup.UID
 
 	LogWithTimestamp(test.T(), "Suspending RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(true))
@@ -366,11 +371,10 @@ func TestKubernetesWAS_ResumeRecreatesResources(t *testing.T) {
 
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
-	g.Eventually(func() bool {
-		_, err := GetWorkload(test, namespace.Name, rayCluster.Name)
-		return errors.IsNotFound(err)
-	}, TestTimeoutShort).Should(BeTrue())
-	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
+
+	LogWithTimestamp(test.T(), "Verifying Workload and PodGroup persist while suspended")
+	g.Consistently(Workloads(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
+	g.Consistently(PodGroups(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
 
 	LogWithTimestamp(test.T(), "Resuming RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(false))
@@ -381,20 +385,20 @@ func TestKubernetesWAS_ResumeRecreatesResources(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
-	LogWithTimestamp(test.T(), "Verifying Workload is recreated after resume")
-	g.Eventually(func(inner Gomega) {
-		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
-		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalWorkloadUID), "Workload should have a new UID after resume")
-		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
-		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
-		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
-		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
-	}, TestTimeoutShort).Should(Succeed())
-
-	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
-	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	LogWithTimestamp(test.T(), "Verifying the Workload is reused (same UID) after resume")
+	w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(w.UID).To(Equal(originalWorkloadUID), "Workload should be reused with the same UID after resume")
+	g.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
+	g.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
+	g.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
+	g.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
+
+	LogWithTimestamp(test.T(), "Verifying the PodGroup is reused (same UID) after resume")
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
+	pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pg.UID).To(Equal(originalPodGroupUID), "PodGroup should be reused with the same UID after resume")
 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -897,10 +901,11 @@ func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 }
 
-// TestKubernetesWAS_RecreateUpgradeRecreatesResources verifies that a Recreate
-// upgrade (a pod-spec change that forces all pods to be recreated) also cleans up
-// and recreates the whole-cluster Workload and PodGroup.
-func TestKubernetesWAS_RecreateUpgradeRecreatesResources(t *testing.T) {
+// TestKubernetesWAS_RecreateUpgradeReusesResources verifies that a Recreate
+// upgrade (a pod-spec change that forces all pods to be recreated) does not
+// disturb the whole-cluster Workload and PodGroup when the gang size is
+// unchanged: the recreated pods rejoin the existing PodGroup.
+func TestKubernetesWAS_RecreateUpgradeReusesResources(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -936,27 +941,30 @@ func TestKubernetesWAS_RecreateUpgradeRecreatesResources(t *testing.T) {
 	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalWorkloadUID := workload.UID
+	podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	originalPodGroupUID := podGroup.UID
 
 	LogWithTimestamp(test.T(), "Changing the worker pod template to trigger a Recreate upgrade")
 	rayClusterAC.Spec.WorkerGroupSpecs[0].WithTemplate(workerTemplate("v2"))
 	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Verifying the Workload and PodGroup are recreated and the cluster returns to ready")
-	g.Eventually(func(inner Gomega) {
-		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
-		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalWorkloadUID), "Workload should be recreated by the Recreate upgrade")
-		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
-		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
-	}, TestTimeoutMedium).Should(Succeed())
-
+	LogWithTimestamp(test.T(), "Waiting for the Recreate upgrade to settle and the cluster to return to ready")
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
-	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
-	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	LogWithTimestamp(test.T(), "Verifying the Workload and PodGroup are reused (same UID) because the gang size is unchanged")
+	w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(w.UID).To(Equal(originalWorkloadUID), "Workload should be reused because the Recreate upgrade did not change the gang size")
+	g.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
+	g.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
+
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
+	pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pg.UID).To(Equal(originalPodGroupUID), "PodGroup should be reused because the Recreate upgrade did not change the gang size")
 }
 
 // TestKubernetesWAS_MultiHostWorkerGroup verifies that a multi-host worker group

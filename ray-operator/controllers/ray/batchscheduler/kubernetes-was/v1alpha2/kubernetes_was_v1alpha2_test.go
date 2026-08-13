@@ -236,7 +236,7 @@ func TestCleanupOnCompletionDeletesSchedulingResourcesInDependencyOrder(t *testi
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
-func TestCleanupOnCompletionRejectsForeignPodGroupBeforeDeletingOwnedWorkload(t *testing.T) {
+func TestCleanupOnCompletionSkipsForeignPodGroupAndDeletesOwnedWorkload(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -255,17 +255,18 @@ func TestCleanupOnCompletionRejectsForeignPodGroupBeforeDeletingOwnedWorkload(t 
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
 	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "is not controlled by RayCluster")
-	assert.False(t, didCleanup)
+	require.NoError(t, err)
+	assert.True(t, didCleanup)
 
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: ownedWorkload.Name, Namespace: ownedWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
+	// The owned Workload is deleted; the same-named foreign PodGroup is left untouched.
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedWorkload.Name, Namespace: ownedWorkload.Namespace}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err))
 	podGroup := &schedulingv1alpha2.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignPodGroup.Name, Namespace: foreignPodGroup.Namespace}, podGroup))
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 }
 
-func TestCleanupOnCompletionRejectsForeignWorkloadBeforeDeletingOwnedPodGroup(t *testing.T) {
+func TestCleanupOnCompletionSkipsForeignWorkloadAndDeletesOwnedPodGroup(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -283,15 +284,16 @@ func TestCleanupOnCompletionRejectsForeignWorkloadBeforeDeletingOwnedPodGroup(t 
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(foreignWorkload, ownedPodGroup).Build()
 	scheduler := &KubernetesWASV1Alpha2Scheduler{cli: fakeClient}
 
+	// The owned PodGroup is deleted first, so cleanup reports it is waiting for the
+	// deletion to finish; the same-named foreign Workload is left untouched.
 	didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayCluster)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "is not controlled by RayCluster")
-	assert.False(t, didCleanup)
+	assert.Contains(t, err.Error(), "waiting for PodGroup")
+	assert.True(t, didCleanup)
 
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedPodGroup.Name, Namespace: ownedPodGroup.Namespace}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err))
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignWorkload.Name, Namespace: foreignWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
-	podGroup := &schedulingv1alpha2.PodGroup{}
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: ownedPodGroup.Name, Namespace: ownedPodGroup.Namespace}, podGroup))
-	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 }
 
 func TestCleanupOnCompletionWaitsForPodGroupsBeforeDeletingWorkload(t *testing.T) {
@@ -356,10 +358,11 @@ func TestSyncSchedulingResourcesRejectsForeignSameNameWorkload(t *testing.T) {
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Workload default/test-cluster is not controlled")
+	assert.Contains(t, err.Error(), "failed to create Workload default/test-cluster")
+	assert.Contains(t, err.Error(), "already exists")
 
-	// Matching desired state is not sufficient for adoption, and synchronization
-	// must not proceed to create the PodGroup.
+	// We do not adopt a same-named foreign Workload, and synchronization must not
+	// proceed to create the PodGroup.
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignWorkload.Name, Namespace: foreignWorkload.Namespace}, &schedulingv1alpha2.Workload{}))
 	getErr := fakeClient.Get(ctx, types.NamespacedName{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}, &schedulingv1alpha2.PodGroup{})
 	assert.True(t, apierrors.IsNotFound(getErr))
@@ -394,7 +397,8 @@ func TestSyncSchedulingResourcesRejectsForeignSameNamePodGroup(t *testing.T) {
 
 	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PodGroup default/test-cluster-cluster is not controlled")
+	assert.Contains(t, err.Error(), "failed to create PodGroup default/test-cluster-cluster")
+	assert.Contains(t, err.Error(), "already exists")
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignPodGroup.Name, Namespace: foreignPodGroup.Namespace}, &schedulingv1alpha2.PodGroup{}))
 }
 
@@ -845,6 +849,12 @@ func TestSchedulingSkippedWhenGangSchedulingDisabled(t *testing.T) {
 
 	rayCluster.Labels[utils.RayGangSchedulingEnabled] = "False"
 	require.Equal(t, skipReasonGangSchedulingDisabled, schedulingSkipReason(rayCluster))
+
+	rayCluster.Labels[utils.RayGangSchedulingEnabled] = "foo"
+	require.Equal(t, skipReasonGangSchedulingDisabled, schedulingSkipReason(rayCluster))
+
+	rayCluster.Labels[utils.RayGangSchedulingEnabled] = "True"
+	require.Empty(t, schedulingSkipReason(rayCluster))
 }
 
 func newTestRayCluster(workerGroups ...rayv1.WorkerGroupSpec) *rayv1.RayCluster {
