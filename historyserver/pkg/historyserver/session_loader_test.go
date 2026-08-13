@@ -15,6 +15,53 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+// defaultSessionCacheMaxBytes is DefaultSessionCacheMaxMemory expressed in bytes.
+var defaultSessionCacheMaxBytes = func() int {
+	b, err := ParseSessionCacheMaxMemory(DefaultSessionCacheMaxMemory)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}()
+
+func TestParseSessionCacheMaxMemory(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    int
+		wantErr bool
+	}{
+		{name: "binary suffix", input: "8Gi", want: 8589934592},
+		{name: "decimal suffix", input: "8G", want: 8000000000},
+		{name: "plain byte count", input: "8589934592", want: 8589934592},
+		{name: "exponent", input: "2e9", want: 2000000000},
+		{name: "fractional rounds up", input: "8.5Gi", want: 9126805504},
+		{name: "zero disables the bound", input: "0", want: 0},
+		{name: "default", input: DefaultSessionCacheMaxMemory, want: 2 << 30},
+		{name: "negative", input: "-1", wantErr: true},
+		{name: "unsupported suffix", input: "8GiB", wantErr: true},
+		{name: "not a quantity", input: "lots", wantErr: true},
+		{name: "empty", input: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseSessionCacheMaxMemory(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ParseSessionCacheMaxMemory(%q) = %d, want error", tt.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseSessionCacheMaxMemory(%q) returned unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("ParseSessionCacheMaxMemory(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 // fakeProcessor is a configurable test double for processor.
 type fakeProcessor struct {
 	calls int32
