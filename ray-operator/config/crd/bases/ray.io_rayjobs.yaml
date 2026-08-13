@@ -13296,7 +13296,7 @@ spec:
       status: {}
   - deprecated: true
     deprecationWarning: ray.io/v1alpha1 RayJob is deprecated; use ray.io/v1 RayJob.
-      v1alpha1 receives no new fields and will be removed in a future release.
+      v1alpha1 receives no new fields and will be unavailable in KubeRay 1.9.
     name: v1alpha1
     schema:
       openAPIV3Schema:
