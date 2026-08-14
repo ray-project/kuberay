@@ -5,7 +5,7 @@
 - Kind
 - Docker
 - kubectl
-- Go 1.24+
+- Go v1.26+
 
 ## Setup Steps
 

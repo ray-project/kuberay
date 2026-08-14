@@ -31,6 +31,7 @@ The History Server supports multiple storage backends:
 |---------|-------------|---------------|
 | S3/MinIO | AWS S3 or MinIO-compatible storage | Use `--storage-backend=s3` |
 | Azure Blob Storage | Microsoft Azure Blob Storage | Use `--storage-backend=azureblob` |
+| GCS | Google Cloud Storage | Use `--storage-backend=gcs` |
 | Aliyun OSS | Alibaba Cloud Object Storage Service | Use `--storage-backend=aliyunoss` |
 | Local test | For local testing and development | Use `--storage-backend=localtest` |
 
@@ -38,7 +39,7 @@ The History Server supports multiple storage backends:
 
 ### Prerequisites
 
-- Go v1.24+
+- Go v1.26+
 - Docker
 - Kind
 - kubectl
@@ -80,11 +81,17 @@ Sample configs are in the `config/` directory:
 | `azurite.yaml` | Azurite deployment for Azure Blob Storage emulation |
 | `raycluster.yaml` | Ray cluster with collector sidecar (S3/MinIO) |
 | `raycluster-azureblob.yaml` | Ray cluster with collector sidecar (Azure Blob) |
+| `raycluster-gcs.yaml` | Ray cluster with collector sidecar (GCS) |
 | `raycluster-kubernetes-auth.yaml` | Ray cluster with collector sidecar using Kubernetes token authentication (S3/MinIO) |
 | `rayjob.yaml` | Sample Ray job for testing |
+| `rayjob-gcs.yaml` | Sample Ray job for testing (GCS) |
+| `rayservice.yaml` | Sample RayService for testing |
+| `ray-data.yaml` | Sample Ray Data job for testing |
 | `historyserver.yaml` | History Server deployment (S3/MinIO) |
 | `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
+| `historyserver-gcs.yaml` | History Server deployment (GCS) |
 | `service_account.yaml` | Service account for History Server |
+| `service_account_auth_token_mode.yaml` | RBAC for History Server to read Ray auth token Secrets (auth token mode only) |
 
 ## Additional resources
 

@@ -17,7 +17,8 @@ The History Server consists of two main components:
 
 ### Prerequisites
 
-- Go 1.19 or higher
+- Kind, kubectl
+- Go v1.26+
 - Docker (for building container images)
 - Make
 
@@ -46,15 +47,15 @@ make buildhistoryserver  # Build only the history server
 To build a Docker image:
 
 ```bash
-make localimage
-```
+# Build images.
+make localimage-build
 
-This creates a Docker image named `historyserver:laster` with both binaries and necessary assets.
+# Load into kind.
+kind load docker-image collector:v0.1.0
+kind load docker-image historyserver:v0.1.0
 
-For multi-platform builds, you can use:
-
-```bash
-docker buildx build -t <image-name>:<tag> --platform linux/amd64,linux/arm64 . --push
+# Verify.
+docker exec -it kind-control-plane crictl images | grep -E 'collector|historyserver'
 ```
 
 ## Configuration
@@ -63,7 +64,7 @@ docker buildx build -t <image-name>:<tag> --platform linux/amd64,linux/arm64 . -
 
 The history server can be configured using command-line flags:
 
-- `--storage-backend`: Storage backend type (e.g., "s3", "aliyunoss", "localtest")
+- `--storage-backend`: Storage backend type (e.g., "s3", "gcs", "azureblob", "aliyunoss", "localtest")
 - `--ray-root-dir`: Root directory for Ray logs
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
@@ -74,7 +75,7 @@ The history server can be configured using command-line flags:
 The collector can be configured using command-line flags:
 
 - `--role`: Node role ("Head" or "Worker")
-- `--storage-backend`: Storage backend type (e.g., "s3", "aliyunoss")
+- `--storage-backend`: Storage backend type (e.g., "s3", "gcs", "azureblob", "aliyunoss")
 - `--ray-cluster-name`: Name of the Ray cluster
 - `--ray-cluster-namespace`: Namespace of the Ray cluster
 - `--ray-root-dir`: Root directory for Ray logs
@@ -88,8 +89,10 @@ The collector can be configured using command-line flags:
 History Server supports multiple storage backends:
 
 1. **S3/MinIO**: For AWS S3 or MinIO compatible storage
-2. **Aliyun OSS**: For Alibaba Cloud Object Storage Service
-3. **Local Test**: For local testing and development
+2. **GCS**: For Google Cloud Storage
+3. **Azure Blob Storage**: For Microsoft Azure Blob Storage
+4. **Aliyun OSS**: For Alibaba Cloud Object Storage Service
+5. **Local Test**: For local testing and development
 
 Each backend requires specific configuration parameters passed through environment variables or configuration files.
 
@@ -117,11 +120,25 @@ Each backend requires specific configuration parameters passed through environme
 
 ### Code Structure
 
-- `cmd/`: Main applications (collector and historyserver)
-- `pkg/`: Core logic for storage backends and collection
-- `pkg/collector/`: Collector-specific code
-- `pkg/storage/`: Storage backend implementations
-- `dashboard/`: Web UI files
+```text
+historyserver/
+├── cmd/
+│   ├── collector/
+│   └── historyserver/
+├── config/               # Kubernetes manifests and sample configs
+├── docs/                 # Setup and development guides
+├── html/                 # Embedded HTML templates
+├── pkg/
+│   ├── collector/
+│   ├── compression/
+│   ├── eventserver/
+│   ├── historyserver/
+│   ├── storage/          # s3, gcs, azureblob, aliyunoss, ...
+│   └── utils/
+└── test/
+    ├── e2e/
+    └── support/
+```
 
 ### Testing
 
@@ -222,5 +239,5 @@ per first-time cold-path call. Warm-path calls produce no parse log lines.
 
 ## Deployment
 
-History Server can be deployed in Kubernetes using the manifests in the `config/samples/` directory.
-Examples are provided for different storage backends including MinIO and Aliyun OSS.
+History Server can be deployed in Kubernetes using the manifests in the `config/` directory.
+Examples are provided for different storage backends including S3/MinIO, GCS, and Azure Blob.
