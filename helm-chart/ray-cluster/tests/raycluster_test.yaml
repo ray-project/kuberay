@@ -2321,3 +2321,33 @@ tests:
           path: spec.headGroupSpec.template.spec.containers[?(@.name=="ray-head")].envFrom
       - notExists:
           path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
+
+  - it: Should keep duplicate entries when common and group envFrom reference the same source
+    set:
+      common:
+        envFrom:
+          - configMapRef:
+              name: shared-config
+      head:
+        envFrom:
+          - configMapRef:
+              name: shared-config
+      worker:
+        envFrom:
+          - configMapRef:
+              name: shared-config
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.template.spec.containers[?(@.name=="ray-head")].envFrom
+          value:
+            - configMapRef:
+                name: shared-config
+            - configMapRef:
+                name: shared-config
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
+          value:
+            - configMapRef:
+                name: shared-config
+            - configMapRef:
+                name: shared-config
