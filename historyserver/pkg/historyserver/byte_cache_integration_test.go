@@ -53,7 +53,7 @@ func TestByteCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
 			return SessionStatusProcessed, richSnapshot(key), nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	routerNodes(handler)

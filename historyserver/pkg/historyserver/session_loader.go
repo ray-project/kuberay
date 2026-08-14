@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -23,16 +26,32 @@ const (
 	// DefaultSessionCacheTTL is how long a dead-session snapshot stays cached after last access.
 	// 0 disables expiry.
 	DefaultSessionCacheTTL time.Duration = 0
-	// DefaultSessionCacheMaxBytes bounds the total bytes of cached dead-session snapshots.
-	// 0 disables the byte bound.
+	// DefaultSessionCacheMaxMemory bounds the memory held by cached dead-session
+	// snapshots, as a Kubernetes quantity. "0" disables the bound.
 	//
 	// This is a soft bound on the idle resident cache, not a hard cap on process memory.
 	// Real usage can exceed it in three ways:
 	//   - add-then-evict: cache momentarily holds oldTotal + newEntry
 	//   - one large session: a single snapshot bigger than the whole budget is kept
 	//   - per-request decode: every GET unmarshals cached bytes into a full *SessionSnapshot
-	DefaultSessionCacheMaxBytes = 2 << 30
+	DefaultSessionCacheMaxMemory = "2Gi"
 )
+
+// ParseSessionCacheMaxMemory converts a Kubernetes quantity into a
+// byte count.
+func ParseSessionCacheMaxMemory(s string) (int, error) {
+	q, err := resource.ParseQuantity(s)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a valid resource quantity: %w", s, err)
+	}
+	if q.Sign() < 0 {
+		return 0, fmt.Errorf("%q cannot be negative", s)
+	}
+	if q.CmpInt64(math.MaxInt) > 0 {
+		return 0, fmt.Errorf("%q exceeds the maximum of %d bytes", s, math.MaxInt)
+	}
+	return int(q.Value()), nil
+}
 
 // processor is an interface to enable mocking SessionProcessor in tests.
 type processor interface {

@@ -48,7 +48,7 @@ spec:
         # Cache is soft-bounded at 8 GiB; 12 GiB leaves decode headroom.
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
-        - --session-cache-max-bytes=8589934592
+        - --session-cache-max-memory=8Gi
         resources:
           requests:
             cpu: "500m"

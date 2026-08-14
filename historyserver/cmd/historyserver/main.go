@@ -29,7 +29,7 @@ func main() {
 	burst := historyserver.DefaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	sessionCacheSize := historyserver.DefaultSessionCacheSize
-	sessionCacheMaxBytes := historyserver.DefaultSessionCacheMaxBytes
+	sessionCacheMaxMemory := historyserver.DefaultSessionCacheMaxMemory
 	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
 	flag.StringVar(&storageBackend, "storage-backend", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&storageRootDir, "storage-root-dir", "", "The root dir inside the bucket")
@@ -42,7 +42,7 @@ func main() {
 	flag.IntVar(&burst, "kube-api-burst", historyserver.DefaultKubeAPIBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.IntVar(&sessionCacheSize, "session-cache-size", historyserver.DefaultSessionCacheSize, "Max number of dead-session snapshots held in the LRU cache.")
-	flag.IntVar(&sessionCacheMaxBytes, "session-cache-max-bytes", historyserver.DefaultSessionCacheMaxBytes, "Soft cap on cached snapshot bytes; tune under pod memory. 0 disables the byte bound.")
+	flag.StringVar(&sessionCacheMaxMemory, "session-cache-max-memory", historyserver.DefaultSessionCacheMaxMemory, `Soft cap on memory held by cached snapshots, as a Kubernetes quantity (e.g. "1Gi"); tune under pod memory. "0" disables the bound.`)
 	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
 	flag.Parse()
 
@@ -67,8 +67,9 @@ func main() {
 	if sessionCacheSize <= 0 {
 		logrus.Fatalf("--session-cache-size must be > 0, got %d", sessionCacheSize)
 	}
-	if sessionCacheMaxBytes < 0 {
-		logrus.Fatalf("--session-cache-max-bytes must be >= 0, got %d", sessionCacheMaxBytes)
+	sessionCacheMaxBytes, err := historyserver.ParseSessionCacheMaxMemory(sessionCacheMaxMemory)
+	if err != nil {
+		logrus.Fatalf("--session-cache-max-memory %q: %v", sessionCacheMaxMemory, err)
 	}
 	if sessionCacheTTL < 0 {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
