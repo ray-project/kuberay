@@ -1,16 +1,17 @@
-# Apply with envsubst to substitute environment variables:
-#   envsubst < historyserver/config/rayjob-gcs.yaml | kubectl apply -f -
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: rayjob-historyserver-gcs
+  name: rayjob-historyserver-azureblob
   namespace: default
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
   ttlSecondsAfterFinished: 30
   rayClusterSpec:
-    rayVersion: "2.56.0"
+    # Enable Ray token authentication. Requires Ray 2.52.0+
+    # rayVersion: "2.56.0"
+    # authOptions:
+    #   mode: token
     headGroupSpec:
       rayStartParams:
         dashboard-host: 0.0.0.0
@@ -19,9 +20,8 @@ spec:
       template:
         metadata:
           labels:
-            test: rayjob-historyserver-gcs
+            test: rayjob-historyserver-azureblob
         spec:
-          serviceAccountName: historyserver
           containers:
           - env:
             - name: RAY_TMP_ROOT
@@ -39,7 +39,7 @@ spec:
             name: ray-head
             resources:
               limits:
-                cpu: "6"
+                cpu: "5"
                 memory: 10G
               requests:
                 cpu: "50m"
@@ -50,7 +50,7 @@ spec:
             - name: code-sample
               mountPath: /home/ray/samples
           - name: collector
-            image: ${COLLECTOR_IMAGE}
+            image: collector:v0.1.0
             imagePullPolicy: IfNotPresent
             env:
             - name: RAY_CLUSTER_NAME
@@ -69,8 +69,6 @@ spec:
               value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
-            - name: GCS_BUCKET
-              value: "${GCS_BUCKET}"
             # Optional; defaults to http://localhost:8265 (head only).
             # - name: RAY_DASHBOARD_ADDRESS
             #   value: "http://localhost:9265"
@@ -90,11 +88,21 @@ spec:
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              value: "rayjob-historyserver-gcs"
+              value: "rayjob-historyserver-azureblob"
             - name: STORAGE_BACKEND
-              value: "gcs"
-            - name: EVENTS_PORT
-              value: "8084"
+              value: "azureblob"
+            # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
+            - name: AZURE_STORAGE_CONTAINER
+              value: ray-historyserver
+            # Uncomment when the cluster sets `rayClusterSpec.authOptions.mode: token`; the
+            # collector needs the token to call the Dashboard.
+            # - name: RAY_AUTH_TOKEN
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: rayjob-historyserver-azureblob  # defaults to the RayCluster name
+            #       key: auth_token
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
@@ -117,9 +125,8 @@ spec:
       template:
         metadata:
           labels:
-            test: rayjob-historyserver-gcs
+            test: rayjob-historyserver-azureblob
         spec:
-          serviceAccountName: historyserver
           containers:
           - env:
             - name: RAY_TMP_ROOT
@@ -146,7 +153,7 @@ spec:
             - name: historyserver
               mountPath: *rayTmpRoot
           - name: collector
-            image: ${COLLECTOR_IMAGE}
+            image: collector:v0.1.0
             imagePullPolicy: IfNotPresent
             env:
             - name: RAY_CLUSTER_NAME
@@ -165,18 +172,26 @@ spec:
               value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
-            - name: GCS_BUCKET
-              value: "${GCS_BUCKET}"
             - name: RAY_ROLE
               value: "Worker"
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              value: "rayjob-historyserver-gcs"
+              value: "rayjob-historyserver-azureblob"
             - name: STORAGE_BACKEND
-              value: "gcs"
-            - name: EVENTS_PORT
-              value: "8084"
+              value: "azureblob"
+            # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
+            - name: AZURE_STORAGE_CONTAINER
+              value: ray-historyserver
+            # Uncomment when the cluster sets `rayClusterSpec.authOptions.mode: token`; the
+            # collector needs the token to call the Dashboard.
+            # - name: RAY_AUTH_TOKEN
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: rayjob-historyserver-azureblob  # defaults to the RayCluster name
+            #       key: auth_token
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
