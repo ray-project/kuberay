@@ -65,6 +65,12 @@ func TestRayVersionRun(t *testing.T) {
 				"Did you install it with the name \"kuberay-operator\"?\n", Version),
 		},
 		{
+			name:                "Test when the operator is hosted outside the cluster",
+			kuberayImageVersion: "hosted outside the cluster (e.g. GKE Ray Operator add-on); version not available in-cluster",
+			expected: fmt.Sprintf("kubectl ray plugin version: %s\n"+
+				"KubeRay operator version: hosted outside the cluster (e.g. GKE Ray Operator add-on); version not available in-cluster\n", Version),
+		},
+		{
 			name:                "Test when build info is included",
 			kuberayImageVersion: "v0.0.1",
 			pluginCommit:        "abcdefg",
