@@ -2,6 +2,7 @@ apiVersion: ray.io/v1
 kind: RayService
 metadata:
   name: rayservice-historyserver
+  namespace: default
 spec:
   serveConfigV2: |
     proxy_location: EveryNode

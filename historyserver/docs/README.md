@@ -78,10 +78,12 @@ Sample configs are in the `config/` directory:
 |------|-------------|
 | `minio.yaml` | MinIO deployment for S3-compatible storage |
 | `azurite.yaml` | Azurite deployment for Azure Blob Storage emulation |
-| `raycluster.yaml` | Ray cluster with collector sidecar (S3/MinIO) |
-| `raycluster-azureblob.yaml` | Ray cluster with collector sidecar (Azure Blob) |
-| `raycluster-kubernetes-auth.yaml` | Ray cluster with collector sidecar using Kubernetes token authentication (S3/MinIO) |
-| `rayjob.yaml` | Sample Ray job for testing |
+| `rayjob.yaml` | Sample RayJob with collector sidecar; cluster shuts down after the job finishes (S3/MinIO) |
+| `rayjob-azureblob.yaml` | Sample RayJob with collector sidecar (Azure Blob) |
+| `rayjob-gcs.yaml` | Sample RayJob with collector sidecar (GCS) |
+| `rayjob-kubernetes-auth.yaml` | Sample RayJob with collector sidecar using Kubernetes token authentication (S3/MinIO) |
+| `ray-data.yaml` | Sample Ray Data RayJob with collector sidecar (S3/MinIO) |
+| `rayservice.yaml` | Sample RayService with collector sidecar (S3/MinIO) |
 | `historyserver.yaml` | History Server deployment (S3/MinIO) |
 | `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
 | `service_account.yaml` | Service account for History Server |
