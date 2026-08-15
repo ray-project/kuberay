@@ -81,6 +81,7 @@ Sample configs are in the `config/` directory:
 | `rayjob.yaml` | Sample RayJob with collector sidecar; cluster shuts down after the job finishes (S3/MinIO) |
 | `rayjob-azureblob.yaml` | Sample RayJob with collector sidecar (Azure Blob) |
 | `rayjob-gcs.yaml` | Sample RayJob with collector sidecar (GCS) |
+| `rayjob-aliyunoss.yaml` | Sample RayJob with collector sidecar (Alibaba Cloud OSS via RRSA) |
 | `rayjob-kubernetes-auth.yaml` | Sample RayJob with collector sidecar using Kubernetes token authentication (S3/MinIO) |
 | `ray-data.yaml` | Sample Ray Data RayJob with collector sidecar (S3/MinIO) |
 | `rayservice.yaml` | Sample RayService with collector sidecar (S3/MinIO) |
