@@ -109,7 +109,6 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 			"--name", rayJobName,
 			"--runtime-env", runtimeEnvFilePath,
 			"--ttl-seconds-after-finished", "0",
-			"--no-wait",
 			"--head-cpu", "1",
 			"--head-memory", "2Gi",
 			"--worker-cpu", "1",
@@ -122,19 +121,6 @@ var _ = Describe("Calling ray plugin `job submit` command on Ray Job", func() {
 		Expect(err).NotTo(HaveOccurred(), string(output))
 		// Retrieve the Job ID from the output
 		cmdOutputJobID := extractRayJobID(string(output))
-
-		// TTL 0 deletes the RayCluster as soon as the RayJob finishes. Do not tail
-		// logs through a port-forward that is expected to disappear during cleanup;
-		// wait for completion through the RayJob resource instead.
-		cmd = exec.Command(
-			"kubectl", "wait",
-			"--namespace", namespace,
-			"--timeout=300s",
-			"--for", "jsonpath={.status.jobDeploymentStatus}=Complete",
-			"rayjob/"+rayJobName,
-		)
-		output, err = cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred(), string(output))
 
 		rayJob := getAndCheckRayJob(namespace, rayJobName, cmdOutputJobID, "SUCCEEDED", "Complete")
 		Expect(rayJob.Spec.TTLSecondsAfterFinished).To(Equal(int32(0)))

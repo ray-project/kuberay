@@ -1,6 +1,8 @@
 package job
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,9 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	pluginclient "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -191,6 +196,191 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestRayJobTerminalResult(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       rayv1.JobStatus
+		jobID        string
+		message      string
+		wantTerminal bool
+		wantError    string
+	}{
+		{
+			name:   "pending job is not terminal",
+			status: rayv1.JobStatusPending,
+		},
+		{
+			name:         "succeeded job is successful",
+			status:       rayv1.JobStatusSucceeded,
+			jobID:        "job-succeeded",
+			wantTerminal: true,
+		},
+		{
+			name:         "stopped job preserves existing successful behavior",
+			status:       rayv1.JobStatusStopped,
+			jobID:        "job-stopped",
+			wantTerminal: true,
+		},
+		{
+			name:         "failed job returns its message",
+			status:       rayv1.JobStatusFailed,
+			jobID:        "job-failed",
+			message:      "entrypoint failed",
+			wantTerminal: true,
+			wantError:    "job job-failed failed: entrypoint failed",
+		},
+		{
+			name:         "failed job without ID uses unknown",
+			status:       rayv1.JobStatusFailed,
+			wantTerminal: true,
+			wantError:    "job unknown failed with status FAILED",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			job := &rayv1.RayJob{
+				Status: rayv1.RayJobStatus{
+					JobStatus: tc.status,
+					JobId:     tc.jobID,
+					Message:   tc.message,
+				},
+			}
+
+			terminal, err := rayJobTerminalResult(job)
+			assert.Equal(t, tc.wantTerminal, terminal)
+			if tc.wantError == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantError)
+			}
+		})
+	}
+}
+
+func TestReconcileSubmitError(t *testing.T) {
+	const (
+		namespace = "test-namespace"
+		jobName   = "test-rayjob"
+		jobID     = "test-job-id"
+	)
+
+	tests := []struct {
+		name             string
+		usingPortForward bool
+		rayJobExists     bool
+		status           rayv1.JobStatus
+		message          string
+		wantError        string
+		wantErrorParts   []string
+		wantOriginal     bool
+		wantStderr       string
+	}{
+		{
+			name:             "port-forward with succeeded RayJob returns success",
+			usingPortForward: true,
+			rayJobExists:     true,
+			status:           rayv1.JobStatusSucceeded,
+			wantStderr:       "Ray CLI exited after RayJob test-rayjob reached status SUCCEEDED; treating the submission as successful.\n",
+		},
+		{
+			name:             "port-forward with failed RayJob returns job failure",
+			usingPortForward: true,
+			rayJobExists:     true,
+			status:           rayv1.JobStatusFailed,
+			message:          "entrypoint failed",
+			wantError:        "job test-job-id failed: entrypoint failed",
+		},
+		{
+			name:             "port-forward with running RayJob preserves submit error",
+			usingPortForward: true,
+			rayJobExists:     true,
+			status:           rayv1.JobStatusRunning,
+			wantError:        "Error occurred with Ray job submit: ray CLI exited",
+			wantOriginal:     true,
+		},
+		{
+			name:             "direct address preserves submit error without querying RayJob",
+			usingPortForward: false,
+			status:           rayv1.JobStatusSucceeded,
+			wantError:        "Error occurred with Ray job submit: ray CLI exited",
+			wantOriginal:     true,
+		},
+		{
+			name:             "RayJob get error preserves submit error and adds context",
+			usingPortForward: true,
+			wantErrorParts: []string{
+				"Error occurred with Ray job submit: ray CLI exited",
+				"failed to get RayJob test-namespace/test-rayjob while reconciling the result",
+				`rayjobs.ray.io "test-rayjob" not found`,
+			},
+			wantOriginal: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, _, stderr := genericclioptions.NewTestIOStreams()
+			submitErr := errors.New("ray CLI exited")
+
+			var k8sClient pluginclient.Client
+			if tc.usingPortForward {
+				rayClient := clienttesting.NewRayClientset()
+				if tc.rayJobExists {
+					rayClient = clienttesting.NewRayClientset(&rayv1.RayJob{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      jobName,
+							Namespace: namespace,
+						},
+						Status: rayv1.RayJobStatus{
+							JobStatus: tc.status,
+							JobId:     jobID,
+							Message:   tc.message,
+						},
+					})
+				}
+				k8sClient = pluginclient.NewClientForTesting(nil, rayClient)
+			} else {
+				// A nil Ray client makes this test panic if direct-address mode
+				// unexpectedly tries to reconcile through Kubernetes.
+				k8sClient = pluginclient.NewClientForTesting(nil, nil)
+			}
+
+			options := &SubmitJobOptions{
+				ioStreams: &testStreams,
+				namespace: namespace,
+				RayJob: &rayv1.RayJob{ObjectMeta: metav1.ObjectMeta{
+					Name:      jobName,
+					Namespace: namespace,
+				}},
+			}
+
+			err := options.reconcileSubmitError(
+				context.Background(),
+				k8sClient,
+				tc.usingPortForward,
+				submitErr,
+			)
+
+			if tc.wantError == "" && len(tc.wantErrorParts) == 0 {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				if tc.wantError != "" {
+					require.EqualError(t, err, tc.wantError)
+				}
+				for _, part := range tc.wantErrorParts {
+					assert.ErrorContains(t, err, part)
+				}
+			}
+			if tc.wantOriginal {
+				assert.ErrorIs(t, err, submitErr)
+			}
+			assert.Equal(t, tc.wantStderr, stderr.String())
 		})
 	}
 }
