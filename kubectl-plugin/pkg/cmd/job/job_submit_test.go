@@ -374,11 +374,11 @@ func TestReconcileSubmitError(t *testing.T) {
 					require.EqualError(t, err, tc.wantError)
 				}
 				for _, part := range tc.wantErrorParts {
-					assert.ErrorContains(t, err, part)
+					require.ErrorContains(t, err, part)
 				}
 			}
 			if tc.wantOriginal {
-				assert.ErrorIs(t, err, submitErr)
+				require.ErrorIs(t, err, submitErr)
 			}
 			assert.Equal(t, tc.wantStderr, stderr.String())
 		})

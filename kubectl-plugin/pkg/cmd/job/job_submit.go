@@ -630,7 +630,7 @@ func (options *SubmitJobOptions) reconcileSubmitError(
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"%w; failed to get RayJob %s/%s while reconciling the result: %v",
+			"%w; failed to get RayJob %s/%s while reconciling the result: %w",
 			wrappedSubmitErr, options.namespace, jobName, err,
 		)
 	}
