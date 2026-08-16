@@ -2,7 +2,6 @@ apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-ray-data
-  namespace: default
 spec:
   shutdownAfterJobFinishes: true
   # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.

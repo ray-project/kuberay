@@ -16,7 +16,6 @@ apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-historyserver-aliyunoss
-  namespace: default
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
@@ -196,7 +195,6 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: historyserver-aliyunoss
-  namespace: default
   annotations:
     # Replace with the RAM role created for RRSA; the ack-pod-identity-webhook uses
     # this to inject ALIBABA_CLOUD_* credential env vars into labeled pods.

@@ -4,7 +4,6 @@ apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: rayjob-historyserver-gcs
-  namespace: default
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
