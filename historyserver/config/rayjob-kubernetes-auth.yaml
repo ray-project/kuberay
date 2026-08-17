@@ -5,7 +5,8 @@ metadata:
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
-  ttlSecondsAfterFinished: 30
+  # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
+  ttlSecondsAfterFinished: 90
   rayClusterSpec:
     # enableK8sTokenAuth requires Ray 2.55.0+. authOptions.secretName must NOT be
     # set at the same time.

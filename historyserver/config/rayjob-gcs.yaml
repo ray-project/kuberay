@@ -7,7 +7,8 @@ metadata:
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
-  ttlSecondsAfterFinished: 30
+  # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
+  ttlSecondsAfterFinished: 90
   rayClusterSpec:
     rayVersion: "2.56.0"
     headGroupSpec:
