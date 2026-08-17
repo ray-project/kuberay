@@ -262,7 +262,7 @@ func TestRayJobTerminalResult(t *testing.T) {
 	}
 }
 
-func TestReconcileSubmitError(t *testing.T) {
+func TestCheckJobStatusOnSubmitError(t *testing.T) {
 	const (
 		namespace = "test-namespace"
 		jobName   = "test-rayjob"
@@ -272,25 +272,21 @@ func TestReconcileSubmitError(t *testing.T) {
 	tests := []struct {
 		name             string
 		usingPortForward bool
-		rayJobExists     bool
 		status           rayv1.JobStatus
 		message          string
 		wantError        string
 		wantErrorParts   []string
-		wantOriginal     bool
 		wantStderr       string
 	}{
 		{
 			name:             "port-forward with succeeded RayJob returns success",
 			usingPortForward: true,
-			rayJobExists:     true,
 			status:           rayv1.JobStatusSucceeded,
 			wantStderr:       "Ray CLI exited after RayJob test-rayjob reached status SUCCEEDED; treating the submission as successful.\n",
 		},
 		{
 			name:             "port-forward with failed RayJob returns job failure",
 			usingPortForward: true,
-			rayJobExists:     true,
 			status:           rayv1.JobStatusFailed,
 			message:          "entrypoint failed",
 			wantError:        "job test-job-id failed: entrypoint failed",
@@ -298,27 +294,23 @@ func TestReconcileSubmitError(t *testing.T) {
 		{
 			name:             "port-forward with running RayJob preserves submit error",
 			usingPortForward: true,
-			rayJobExists:     true,
 			status:           rayv1.JobStatusRunning,
 			wantError:        "Error occurred with Ray job submit: ray CLI exited",
-			wantOriginal:     true,
 		},
 		{
 			name:             "direct address preserves submit error without querying RayJob",
 			usingPortForward: false,
 			status:           rayv1.JobStatusSucceeded,
 			wantError:        "Error occurred with Ray job submit: ray CLI exited",
-			wantOriginal:     true,
 		},
 		{
 			name:             "RayJob get error preserves submit error and adds context",
 			usingPortForward: true,
 			wantErrorParts: []string{
 				"Error occurred with Ray job submit: ray CLI exited",
-				"failed to get RayJob test-namespace/test-rayjob while reconciling the result",
+				"failed to get RayJob test-namespace/test-rayjob while checking job status",
 				`rayjobs.ray.io "test-rayjob" not found`,
 			},
-			wantOriginal: true,
 		},
 	}
 
@@ -330,7 +322,7 @@ func TestReconcileSubmitError(t *testing.T) {
 			var k8sClient pluginclient.Client
 			if tc.usingPortForward {
 				rayClient := clienttesting.NewRayClientset()
-				if tc.rayJobExists {
+				if tc.status != "" {
 					rayClient = clienttesting.NewRayClientset(&rayv1.RayJob{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      jobName,
@@ -346,7 +338,7 @@ func TestReconcileSubmitError(t *testing.T) {
 				k8sClient = pluginclient.NewClientForTesting(nil, rayClient)
 			} else {
 				// A nil Ray client makes this test panic if direct-address mode
-				// unexpectedly tries to reconcile through Kubernetes.
+				// unexpectedly tries to check the job status through Kubernetes.
 				k8sClient = pluginclient.NewClientForTesting(nil, nil)
 			}
 
@@ -359,7 +351,7 @@ func TestReconcileSubmitError(t *testing.T) {
 				}},
 			}
 
-			err := options.reconcileSubmitError(
+			err := options.checkJobStatusOnSubmitError(
 				context.Background(),
 				k8sClient,
 				tc.usingPortForward,
@@ -376,9 +368,6 @@ func TestReconcileSubmitError(t *testing.T) {
 				for _, part := range tc.wantErrorParts {
 					require.ErrorContains(t, err, part)
 				}
-			}
-			if tc.wantOriginal {
-				require.ErrorIs(t, err, submitErr)
 			}
 			assert.Equal(t, tc.wantStderr, stderr.String())
 		})

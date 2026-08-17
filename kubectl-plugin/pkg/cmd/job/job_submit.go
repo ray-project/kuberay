@@ -541,7 +541,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 	// Wait for Ray job submit to finish.
 	err = cmd.Wait()
 	if err != nil {
-		return options.reconcileSubmitError(ctx, k8sClients, usingPortForward, err)
+		return options.checkJobStatusOnSubmitError(ctx, k8sClients, usingPortForward, err)
 	}
 	if options.noWait {
 		fmt.Printf("Ray job submitted with ID %s\n", rayJobID)
@@ -600,13 +600,13 @@ func runPortForward(
 	fmt.Printf("Port forwarding service %s\n", svcName)
 	if err := portForwardCmd.ExecuteContext(ctx); err != nil && ctx.Err() == nil {
 		// Restarting the port-forward cannot reconnect the Ray CLI's existing
-		// log stream. Let the Ray CLI exit, then reconcile its result against
-		// the RayJob status in reconcileSubmitError.
+		// log stream. Let the Ray CLI exit, then check the RayJob status in
+		// checkJobStatusOnSubmitError.
 		fmt.Fprintf(streams.ErrOut, "Port-forward to Ray dashboard ended: %v\n", err)
 	}
 }
 
-func (options *SubmitJobOptions) reconcileSubmitError(
+func (options *SubmitJobOptions) checkJobStatusOnSubmitError(
 	ctx context.Context,
 	k8sClients client.Client,
 	usingPortForward bool,
@@ -630,7 +630,7 @@ func (options *SubmitJobOptions) reconcileSubmitError(
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"%w; failed to get RayJob %s/%s while reconciling the result: %w",
+			"%w; failed to get RayJob %s/%s while checking job status: %w",
 			wrappedSubmitErr, options.namespace, jobName, err,
 		)
 	}
