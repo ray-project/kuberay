@@ -101,7 +101,7 @@ spec:
                     sudo chmod +x /usr/local/bin/runsc
             resources:
               limits:
-                memory: "48Gi"
+                memory: "12Gi"
               requests:
-                cpu: "12"
-                memory: "48Gi"
+                cpu: "4"
+                memory: "12Gi"
