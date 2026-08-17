@@ -177,13 +177,3 @@ func TestGetSchedulerFactoryKubernetesWAS(t *testing.T) {
 	require.NoError(t, err)
 	require.IsType(t, &kuberneteswas.SchedulerFactory{}, factory)
 }
-
-func TestGetSchedulerFactoryKubernetesWASRejectsOtherSchedulers(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.KubernetesWAS, true)
-
-	_, err := getSchedulerFactory(v1alpha1.Configuration{BatchScheduler: volcano.GetPluginName()})
-	require.Error(t, err)
-
-	_, err = getSchedulerFactory(v1alpha1.Configuration{EnableBatchScheduler: true})
-	require.Error(t, err)
-}

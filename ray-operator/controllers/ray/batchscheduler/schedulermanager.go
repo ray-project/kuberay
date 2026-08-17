@@ -53,12 +53,9 @@ func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration
 }
 
 func getSchedulerFactory(rayConfigs configapi.Configuration) (schedulerinterface.BatchSchedulerFactory, error) {
-	// The KubernetesWAS feature gate selects the Kubernetes WAS scheduler and is mutually
-	// exclusive with --batch-scheduler and --enable-batch-scheduler.
+	// The KubernetesWAS feature gate selects the Kubernetes WAS scheduler; ValidateBatchSchedulerConfig
+	// enforces that it is not combined with --batch-scheduler or --enable-batch-scheduler.
 	if features.Enabled(features.KubernetesWAS) {
-		if len(rayConfigs.BatchScheduler) > 0 || rayConfigs.EnableBatchScheduler {
-			return nil, fmt.Errorf("the KubernetesWAS feature gate cannot be combined with --batch-scheduler or --enable-batch-scheduler")
-		}
 		return &kuberneteswas.SchedulerFactory{}, nil
 	}
 

@@ -354,6 +354,12 @@ For user-facing documentation, see the [Kubernetes WAS guide](../docs/guidance/k
 
 ### Testing locally with Kind
 
+> **NOTE:** Change your working directory to `ray-operator` before running the commands below.
+>
+> ```bash
+> cd ray-operator
+> ```
+
 Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with `GenericWorkload` enabled on the API server and controller manager, `scheduling.k8s.io/v1alpha2` served by the API server, and `GangScheduling` enabled on kube-scheduler. The kind config uses the published `kindest/node:v1.36.1` image:
 
 Kind v0.32.0 or newer is required.

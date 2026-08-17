@@ -159,6 +159,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 		return fmt.Errorf("deleted PodGroup %s/%s before replacing stale Workload, will retry after deletion completes", podGroup.Namespace, podGroup.Name)
 	}
 
+	// PodGroup is gone or not ours; safe to delete the stale Workload.
 	if err := client.IgnoreNotFound(k.deleteWithUIDPrecondition(ctx, existing)); err != nil {
 		return fmt.Errorf("failed to delete stale Workload %s/%s: %w", existing.Namespace, existing.Name, err)
 	}
@@ -189,6 +190,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCl
 		}
 		return fmt.Errorf("PodGroup %s/%s is being deleted, will retry", existing.Namespace, existing.Name)
 	}
+	// MinCount changed; existing PodGroup is stale and must be recreated.
 	existingGang := existing.Spec.SchedulingPolicy.Gang
 	if existingGang != nil && existingGang.MinCount == desired.Spec.SchedulingPolicy.Gang.MinCount {
 		return nil

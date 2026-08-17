@@ -1,4 +1,4 @@
-package e2enativescheduling
+package e2ekuberneteswas
 
 import (
 	"fmt"
