@@ -81,18 +81,14 @@ kubectl -n minio-dev port-forward svc/minio-service 9001:9001 9000:9000
 > the next tick (see [Troubleshooting](#troubleshooting)).
 
 ```bash
-# 1. Apply the data-generating RayCluster (has the collector sidecar).
-kubectl apply -f historyserver/config/raycluster.yaml
-kubectl wait pod -l ray.io/cluster=raycluster-historyserver --for=condition=Ready=True --timeout=5m
-
-# 2. Submit the RayJob.
+# 1. Submit the RayJob (it creates its own cluster with the collector sidecar).
 kubectl apply -f historyserver/config/rayjob.yaml
 # RayJob uses status.jobStatus (not status.conditions); use a jsonpath wait until the user job succeeds.
-kubectl wait rayjob/rayjob --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
+kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 
-# 3. Delete to trigger a final event/log flush.
+# 2. Delete to trigger a final event/log flush. (Optional: the RayJob sets
+# shutdownAfterJobFinishes with a 30s TTL, so it also cleans itself up.)
 kubectl delete -f historyserver/config/rayjob.yaml
-kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
 > [!NOTE]
@@ -144,10 +140,11 @@ The result should look something like the following:
 
 ![clusters_endpoint](https://github.com/ray-project/kuberay/blob/40bf59590022c459086629e56b96444297c507d1/historyserver/docs/assets/clusters_endpoint.png)
 
-Substitute your real `<SELECTED_SESSION_ID>`:
+Substitute your real `<SELECTED_SESSION_ID>` (the URL addresses the cluster by its owning
+RayJob, so no generated cluster name is needed):
 
 ```text
-http://localhost:8265/enter_cluster/default/raycluster-historyserver/<SELECTED_SESSION_ID>
+http://localhost:8265/enter_cluster/default/rayjob/rayjob-historyserver/<SELECTED_SESSION_ID>
 ```
 
 A successful request produces output like the following:
@@ -160,20 +157,18 @@ Once set up, you can hit any endpoint via the Ray Dashboard. Take `http://localh
 
 ## Step 8: Validate the Live Path
 
-Re-apply the data-generating cluster and submit a RayJob.
+Re-submit the RayJob. Its cluster stays alive for `ttlSecondsAfterFinished` (30s)
+after the job succeeds, which leaves time to inspect the live path.
 
 ```bash
-kubectl apply -f historyserver/config/raycluster.yaml
-kubectl wait pod -l ray.io/cluster=raycluster-historyserver --for=condition=Ready=True --timeout=5m
-
 kubectl apply -f historyserver/config/rayjob.yaml
-kubectl wait rayjob/rayjob --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
+kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 ```
 
 In the browser, switch to the live session by visiting:
 
 ```text
-http://localhost:8265/enter_cluster/default/raycluster-historyserver/live
+http://localhost:8265/enter_cluster/default/rayjob/rayjob-historyserver/live
 ```
 
 The result should look like the following:
@@ -188,8 +183,7 @@ call to the live RayCluster's head dashboard service, so you see real-time state
 ## Cleanup
 
 ```bash
-kubectl delete -f historyserver/config/rayjob.yaml
-kubectl delete -f historyserver/config/raycluster.yaml
+kubectl delete -f historyserver/config/rayjob.yaml --ignore-not-found
 kubectl delete -f historyserver/config/historyserver.yaml
 kubectl delete -f historyserver/config/service_account.yaml
 kubectl delete -f historyserver/config/minio.yaml

@@ -4,6 +4,7 @@ metadata:
   labels:
     ray.io/cluster: raycluster-historyserver
   name: raycluster-historyserver
+  namespace: default
 spec:
   # Enable Ray token authentication. Requires Ray 2.52.0+
   # rayVersion: "2.56.0"
@@ -116,7 +117,10 @@ spec:
     maxReplicas: 1000
     minReplicas: 1
     numOfHosts: 1
-    rayStartParams: {}
+    # Keep one reusable Python worker so the task-log E2E can prove byte-range
+    # isolation within a single physical worker log file.
+    rayStartParams:
+      num-cpus: "1"
     replicas: 1
     template:
       metadata:

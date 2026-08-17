@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	RayClusterManifestPath = "../../config/raycluster.yaml"
+	RayClusterManifestPath = "../testdata/raycluster.yaml"
 
 	// RayVersionForTokenAuth is the minimum rayVersion the operator accepts for token auth.
 	RayVersionForTokenAuth = "2.52.0"

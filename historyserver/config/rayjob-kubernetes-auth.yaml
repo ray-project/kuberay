@@ -1,29 +1,31 @@
 apiVersion: ray.io/v1
 kind: RayJob
 metadata:
-  name: rayjob-historyserver
+  name: rayjob-historyserver-kubernetes-auth
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
   shutdownAfterJobFinishes: true
   # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
   ttlSecondsAfterFinished: 90
   rayClusterSpec:
-    # Enable Ray token authentication. Requires Ray 2.52.0+
-    # rayVersion: "2.56.0"
-    # authOptions:
-    #   mode: token
+    # enableK8sTokenAuth requires Ray 2.55.0+. authOptions.secretName must NOT be
+    # set at the same time.
+    rayVersion: '2.56.0'
+    authOptions:
+      mode: 'token'
+      enableK8sTokenAuth: true
     headGroupSpec:
       rayStartParams:
         dashboard-host: 0.0.0.0
         num-cpus: "0"
-      serviceType: ClusterIP
       template:
-        metadata:
-          labels:
-            test: rayjob-historyserver
         spec:
+          serviceAccountName: rayjob-historyserver-kubernetes-auth
           containers:
-          - env:
+          - name: ray-head
+            imagePullPolicy: IfNotPresent
+            image: rayproject/ray:2.56.0
+            env:
             - name: RAY_TMP_ROOT
               value: &rayTmpRoot /tmp/ray
             - name: RAY_enable_ray_event
@@ -34,16 +36,20 @@ spec:
               value: "http://localhost:8084/v1/events"
             - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
               value: "ALL"
-            image: rayproject/ray:2.56.0
-            imagePullPolicy: IfNotPresent
-            name: ray-head
             resources:
               limits:
                 cpu: "5"
-                memory: 10G
+                memory: "10Gi"
               requests:
                 cpu: "50m"
-                memory: 1G
+                memory: "1Gi"
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
@@ -69,21 +75,14 @@ spec:
               value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
-            # Optional; defaults to http://localhost:8265 (head only).
-            # - name: RAY_DASHBOARD_ADDRESS
-            #   value: "http://localhost:9265"
-            # Optional; defaults to 30s.
-            # - name: RAY_COLLECTOR_POLL_INTERVAL
-            #   value: "1m"
-            # Optional extras on top of the built-in endpoints (Serve, placement groups, Ray Data).
-            # Paths must match the History Server replay request URI, query string included.
-            # For example, preserve Ray Train V2 run details for a future History Server view.
-            # Requires the Ray Train workload/driver (not the collector) to set
-            # RAY_TRAIN_V2_ENABLED=1 and RAY_TRAIN_ENABLE_STATE_TRACKING=1;
-            # verify this DeveloperAPI URI when changing Ray versions.
-            # - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-            #   value: "/api/train/v2/runs/v1"
-            - name: S3DISABLE_SSL
+            # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
+            # (e.g., /api/v0/cluster_metadata) from the Ray Dashboard running in the same pod.
+            # Only the head collector uses this; worker collectors do not need it.
+            - name: RAY_DASHBOARD_ADDRESS
+              value: "http://localhost:8265"
+            - name: RAY_AUTH_MODE
+              value: "token"
+            - name: RAY_ENABLE_K8S_TOKEN_AUTH
               value: "true"
             - name: AWS_ACCESS_KEY_ID
               value: minioadmin
@@ -99,24 +98,29 @@ spec:
               value: "test"
             - name: S3FORCE_PATH_STYLE
               value: "true"
+            - name: S3DISABLE_SSL
+              value: "true"
             - name: RAY_ROLE
               value: "Head"
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              value: "rayjob-historyserver"
+              value: "rayjob-historyserver-kubernetes-auth"
             - name: STORAGE_BACKEND
               value: "s3"
-            # Uncomment when the cluster sets `rayClusterSpec.authOptions.mode: token`; the
-            # collector needs the token to call the Dashboard.
-            # - name: RAY_AUTH_TOKEN
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: rayjob-historyserver  # defaults to the RayCluster name
-            #       key: auth_token
+            resources:
+              limits:
+                cpu: "200m"
+                memory: "256Mi"
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
+            - name: ray-token
+              mountPath: /var/run/secrets/ray.io/serviceaccount
+              readOnly: true
           volumes:
           - name: historyserver
             emptyDir: {}
@@ -127,19 +131,19 @@ spec:
               - key: sample_code.py
                 path: sample_code.py
     workerGroupSpecs:
-    - groupName: cpu
-      maxReplicas: 1000
+    - replicas: 1
       minReplicas: 1
-      numOfHosts: 1
+      maxReplicas: 5
+      groupName: workergroup
       rayStartParams: {}
-      replicas: 1
       template:
-        metadata:
-          labels:
-            test: rayjob-historyserver
         spec:
+          serviceAccountName: rayjob-historyserver-kubernetes-auth
           containers:
-          - env:
+          - name: ray-worker
+            imagePullPolicy: IfNotPresent
+            image: rayproject/ray:2.56.0
+            env:
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
             - name: RAY_enable_ray_event
@@ -150,16 +154,13 @@ spec:
               value: "http://localhost:8084/v1/events"
             - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
               value: "ALL"
-            image: rayproject/ray:2.56.0
-            imagePullPolicy: IfNotPresent
-            name: ray-worker
             resources:
               limits:
                 cpu: "2"
-                memory: 2G
+                memory: "2Gi"
               requests:
                 cpu: "50m"
-                memory: 1G
+                memory: "1Gi"
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
@@ -183,6 +184,10 @@ spec:
               value: $(RAY_CLUSTER_NAME)-head-svc.$(RAY_CLUSTER_NAMESPACE).svc.cluster.local
             - name: RAY_TMP_ROOT
               value: *rayTmpRoot
+            - name: RAY_AUTH_MODE
+              value: "token"
+            - name: RAY_ENABLE_K8S_TOKEN_AUTH
+              value: "true"
             - name: AWS_ACCESS_KEY_ID
               value: minioadmin
             - name: AWS_SECRET_ACCESS_KEY
@@ -204,22 +209,84 @@ spec:
             - name: OWNER_KIND
               value: "rayjob"
             - name: OWNER_NAME
-              value: "rayjob-historyserver"
+              value: "rayjob-historyserver-kubernetes-auth"
             - name: STORAGE_BACKEND
               value: "s3"
-            # Uncomment when the cluster sets `rayClusterSpec.authOptions.mode: token`; the
-            # collector needs the token to call the Dashboard.
-            # - name: RAY_AUTH_TOKEN
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: rayjob-historyserver  # defaults to the RayCluster name
-            #       key: auth_token
+            resources:
+              limits:
+                cpu: "200m"
+                memory: "256Mi"
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
             volumeMounts:
             - name: historyserver
               mountPath: *rayTmpRoot
+            - name: ray-token
+              mountPath: /var/run/secrets/ray.io/serviceaccount
+              readOnly: true
           volumes:
           - name: historyserver
             emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rayjob-historyserver-kubernetes-auth
+---
+# The Ray Dashboard runs TokenReview/SubjectAccessReview to validate incoming
+# tokens, so the cluster's ServiceAccount needs permission to create them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-authenticator
+rules:
+- apiGroups: ["authentication.k8s.io"]
+  resources:
+  - 'tokenreviews'
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources:
+  - 'subjectaccessreviews'
+  verbs: ["create"]
+---
+# Grants the caller ray:write on rayclusters, which is what the Dashboard
+# authorizes the presented token against.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-writer
+rules:
+- apiGroups: ["ray.io"]
+  resources:
+  - 'rayclusters'
+  verbs: ["ray:write"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ray-authenticator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-authenticator
+subjects:
+- kind: ServiceAccount
+  name: rayjob-historyserver-kubernetes-auth
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rayjob-historyserver-kubernetes-auth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-writer
+subjects:
+- kind: ServiceAccount
+  name: rayjob-historyserver-kubernetes-auth
+  namespace: default
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -233,70 +300,16 @@ data:
 
     ray.init()
 
-    # --- Scenario 1: Root-level NORMAL_TASK (single call) ---
     @ray.remote(num_cpus=0.1)
     def my_task(x):
         # NOTE: Add this to ensure will produce log.out
         print(f"Processing {x}", flush=True)
         return x * 2
 
-    # --- Scenario 2: Nested tasks (parent spawns child) ---
-    # Tests lineage tree depth > 1: child_task is nested under parent_task.
-    @ray.remote(num_cpus=0.1)
-    def parent_task():
-        result = ray.get(child_task.remote())
-        return result
-
-    @ray.remote(num_cpus=0.1)
-    def child_task():
-        print("Child task", flush=True)
-        return 42
-
-    # --- Scenario 3: Multiple same-name tasks ---
-    # Tests GROUP merging in lineage: 3 calls to the same function
-    # are merged into a single GROUP node.
-    @ray.remote(num_cpus=0.1)
-    def repeated_task(x):
-        return x
-
-    # --- Scenario 4: Actor (creation + method calls) ---
-    @ray.remote(num_cpus=0.1)
-    class Counter:
-        def __init__(self):
-            self.count = 0
-
-        def increment(self):
-            self.count += 1
-            return self.count
-
-        def get_count(self):
-            return self.count
-
-    # Execute all scenarios:
     task_result = ray.get(my_task.remote(1))
     print(f"Task result: {task_result}")
 
-    nested_result = ray.get(parent_task.remote())
-    print(f"Nested result: {nested_result}")
-
-    refs = [repeated_task.remote(i) for i in range(3)]
-    results = ray.get(refs)
-    print(f"Repeated results: {results}")
-
-    counter = Counter.remote()
-    for i in range(2):
-        count = ray.get(counter.increment.remote())
-        print(f"Counter: {count}")
-    final_count = ray.get(counter.get_count.remote())
-    print(f"Final count: {final_count}")
-
     print(f"Cluster resources: {ray.cluster_resources()}")
-
-    # Create a detached placement group so it persists after the job exits.
-    # This ensures the collector captures non-empty data when polling /api/v0/placement_groups.
-    pg = placement_group([{"CPU": 0.5}], strategy="SPREAD", lifetime="detached", name="test_pg")
-    ray.get(pg.ready())
-    print(f"Placement group created: {pg.bundle_specs}")
 
     # Wait for events to flush to the collector
     time.sleep(5)
