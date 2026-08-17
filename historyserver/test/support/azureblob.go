@@ -24,7 +24,7 @@ const (
 	AzureContainerName  = "ray-historyserver"
 
 	// Azure-specific RayCluster config
-	AzureRayClusterManifestPath    = "../../config/raycluster-azureblob.yaml"
+	AzureRayClusterManifestPath    = "../testdata/raycluster-azureblob.yaml"
 	AzureHistoryServerManifestPath = "../../config/historyserver-azureblob.yaml"
 )
 

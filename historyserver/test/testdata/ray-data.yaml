@@ -3,6 +3,7 @@ kind: RayJob
 metadata:
   name: rayjob-ray-data
 spec:
+  # Self-contained: brings up its own cluster; also exercises the collector's shutdown path.
   shutdownAfterJobFinishes: true
   # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
   ttlSecondsAfterFinished: 90

@@ -48,22 +48,23 @@ kind load docker-image historyserver:v0.1.0
 kind load docker-image collector:v0.1.0
 ```
 
-### 5. Deploy Ray Cluster
+### 5. Submit Ray Job
 
-```bash
-kubectl apply -f historyserver/config/raycluster.yaml
-```
-
-### 6. Submit Ray Job
+The RayJob creates its own Ray cluster with the collector sidecar and shuts it down
+after the job finishes (`shutdownAfterJobFinishes` with a 30s TTL).
 
 ```bash
 kubectl apply -f historyserver/config/rayjob.yaml
+kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 ```
 
-### 7. Delete Ray Cluster (Trigger Log Upload)
+### 6. Wait for Cluster Shutdown (Trigger Log Upload)
+
+The cluster shuts down automatically 30s after the job finishes, which flushes logs and
+events to storage. To skip the TTL wait, delete the RayJob:
 
 ```bash
-kubectl delete -f historyserver/config/raycluster.yaml
+kubectl delete -f historyserver/config/rayjob.yaml
 ```
 
 ### 8. Create Service Account
@@ -161,7 +162,7 @@ curl "http://localhost:8080/clusters"
 
 ```bash
 SESSION="session_2026-01-11_19-38-40_146706_1"  # Replace with actual session
-curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
+curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/rayjob/rayjob-historyserver/$SESSION"
 ```
 
 ### Dead Cluster Endpoints
@@ -190,21 +191,17 @@ curl -b ~/cookies.txt "http://localhost:8080/nodes?view=summary"
 
 ```bash
 SESSION="live"
-curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
+curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/rayjob/rayjob-historyserver/$SESSION"
 ```
 
-If the command returns a "RayCluster not found" error, you need to deploy a new, live cluster before connecting:
+If the command returns a "RayCluster not found" error, you need a live cluster before
+connecting. Re-submit the sample RayJob — its cluster stays alive for the 30s TTL after
+the job finishes:
 
 ```bash
-kubectl apply -f historyserver/config/raycluster.yaml
-```
-
-Then submit a new RayJob:
-
-```sh
 kubectl apply -f historyserver/config/rayjob.yaml
 
-# If rayjob already exists, please delete it first and re-apply
+# If the RayJob already exists, please delete it first and re-apply
 # kubectl delete -f historyserver/config/rayjob.yaml
 ```
 
@@ -248,7 +245,7 @@ curl -b ~/cookies.txt "http://localhost:8080/api/cluster_status"
 kubectl apply -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
 
 # Get live session cookie. (Port-forward is required)
-curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-embed-grafana/live"
+curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster/raycluster-embed-grafana/live"
 
 # Request to prometheus health endpoint
 curl -b ~/cookies.txt http://localhost:8080/api/prometheus_health

@@ -159,26 +159,17 @@ kubectl port-forward svc/historyserver 8080:30080
 
 ### 2. Generate a Dead Session
 
-Deploy the sample RayCluster, run a deterministic workload, then delete the CR:
+Submit the sample RayJob; it creates its own cluster with the collector sidecar, runs a
+deterministic workload, and shuts the cluster down after the job finishes:
 
 ```bash
-kubectl apply -f historyserver/config/raycluster.yaml
-kubectl wait pod -l ray.io/node-type=head --for=condition=Ready --timeout=180s
+kubectl apply -f historyserver/config/rayjob.yaml
+kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 
-# Run a workload so events are written to MinIO
-kubectl exec $(kubectl get pod -l ray.io/node-type=head -o name) \
-  -c ray-head -- python -c "
-import ray
-ray.init(address='auto')
-
-@ray.remote
-def add(x, y): return x + y
-
-print('tasks:', ray.get([add.remote(i, i) for i in range(5)]))
-"
-
-# Delete the cluster — produces a 'dead' session
-kubectl delete -f historyserver/config/raycluster.yaml
+# The cluster shuts down automatically 30s after the job finishes
+# (shutdownAfterJobFinishes + ttlSecondsAfterFinished), producing a 'dead' session.
+# Delete the RayJob only to skip the TTL wait:
+kubectl delete -f historyserver/config/rayjob.yaml
 
 # Discover the session name. /clusters lists both live and dead sessions;
 # dead sessions carry the `session_*` name you'll feed into /enter_cluster.
@@ -191,7 +182,7 @@ Trigger the lazy load synchronously. Replace `<session>` with the session name f
 
 ```bash
 time curl -s -o /dev/null \
-  http://localhost:8080/enter_cluster/default/raycluster-historyserver/<session>
+  http://localhost:8080/enter_cluster/default/rayjob/rayjob-historyserver/<session>
 ```
 
 > [!NOTE]
@@ -204,7 +195,7 @@ Re-enter the same cluster:
 
 ```bash
 time curl -s -o /dev/null \
-  http://localhost:8080/enter_cluster/default/raycluster-historyserver/<session>
+  http://localhost:8080/enter_cluster/default/rayjob/rayjob-historyserver/<session>
 ```
 
 > [!NOTE]
