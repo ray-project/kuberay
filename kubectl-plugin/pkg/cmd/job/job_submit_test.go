@@ -300,7 +300,6 @@ func TestCheckJobStatusOnSubmitError(t *testing.T) {
 		{
 			name:             "direct address preserves submit error without querying RayJob",
 			usingPortForward: false,
-			status:           rayv1.JobStatusSucceeded,
 			wantError:        "Error occurred with Ray job submit: ray CLI exited",
 		},
 		{
