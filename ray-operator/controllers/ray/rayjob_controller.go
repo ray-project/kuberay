@@ -1302,7 +1302,7 @@ func clearJobStatusCheckFailureTimer(rayJob *rayv1.RayJob) bool {
 	return true
 }
 
-// reconcileHTTPModeJobNotFound handles GetJobInfo 404 in HTTP mode. If the job has not been
+// reconcileHTTPModeJobNotFound handles GetJobInfo 404 in HTTPMode. If the job has not been
 // observed on the cluster yet, this performs the initial submission. If the job was already
 // observed, the 404 means the cluster lost the job state (e.g. the head Pod was recreated),
 // so the RayJob transitions to Failed and retries are governed by spec.backoffLimit, consistent
