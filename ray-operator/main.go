@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
@@ -37,6 +39,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	pkgtls "github.com/ray-project/kuberay/ray-operator/pkg/tls"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
 
@@ -268,6 +271,16 @@ func main() {
 	restConfig.UserAgent = userAgent
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
+
+	tlsResult, err := pkgtls.Resolve(context.Background(), restConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to resolve TLS configuration")
+		os.Exit(1)
+	}
+	options.Metrics.TLSOpts = tlsResult.TLSOpts
+	options.WebhookServer = webhook.NewServer(webhook.Options{
+		TLSOpts: tlsResult.TLSOpts,
+	})
 
 	// Check if cert-manager API is available before registering the mTLS controller.
 	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
