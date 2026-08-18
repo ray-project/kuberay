@@ -86,6 +86,16 @@ const (
 	//
 	// Enables RayCluster history server collector sidecar injection (spec.historyServerOptions).
 	RayClusterHistoryServer featuregate.Feature = "RayClusterHistoryServer"
+
+	// owner: @marosset
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables the Kubernetes Workload-Aware Scheduling (WAS) batch scheduler, which gang schedules
+	// RayClusters through the in-tree scheduling.k8s.io Workload and PodGroup APIs. Enabling this gate
+	// selects the scheduler; it is mutually exclusive with --batch-scheduler and --enable-batch-scheduler.
+	// Requires a Kubernetes cluster that serves the scheduling.k8s.io API with GenericWorkload enabled.
+	KubernetesWAS featuregate.Feature = "KubernetesWAS"
 )
 
 func init() {
@@ -103,6 +113,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
+	KubernetesWAS:                    {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
