@@ -11,7 +11,7 @@ import (
 )
 
 // Self-contained; the generated cluster name is only known from the RayService status.
-const rayServiceManifestPath = "../../config/rayservice.yaml"
+const rayServiceManifestPath = "../testdata/rayservice.yaml"
 
 // ApplyRayServiceAndWaitForRunning applies the RayService and waits until it is Running.
 func ApplyRayServiceAndWaitForRunning(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayService {

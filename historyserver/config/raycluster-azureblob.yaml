@@ -2,9 +2,8 @@ apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:
-    ray.io/cluster: raycluster-historyserver
-  name: raycluster-historyserver
-  namespace: default
+    ray.io/cluster: raycluster-historyserver-azureblob
+  name: raycluster-historyserver-azureblob
 spec:
   # Enable Ray token authentication. Requires Ray 2.52.0+
   # rayVersion: "2.56.0"
@@ -18,7 +17,7 @@ spec:
     template:
       metadata:
         labels:
-          test: raycluster-historyserver
+          test: raycluster-historyserver-azureblob
       spec:
         containers:
         - env:
@@ -93,7 +92,7 @@ spec:
           # - name: RAY_AUTH_TOKEN
           #   valueFrom:
           #     secretKeyRef:
-          #       name: raycluster-historyserver  # defaults to the RayCluster name
+          #       name: raycluster-historyserver-azureblob  # defaults to the RayCluster name
           #       key: auth_token
           volumeMounts:
           - name: historyserver
@@ -111,7 +110,7 @@ spec:
     template:
       metadata:
         labels:
-          test: raycluster-historyserver
+          test: raycluster-historyserver-azureblob
       spec:
         containers:
         - env:
@@ -172,7 +171,7 @@ spec:
           # - name: RAY_AUTH_TOKEN
           #   valueFrom:
           #     secretKeyRef:
-          #       name: raycluster-historyserver  # defaults to the RayCluster name
+          #       name: raycluster-historyserver-azureblob  # defaults to the RayCluster name
           #       key: auth_token
           volumeMounts:
           - name: historyserver

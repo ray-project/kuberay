@@ -1,21 +1,24 @@
 apiVersion: ray.io/v1
-kind: RayJob
+kind: RayService
 metadata:
-  name: rayjob-ray-data
+  name: rayservice-historyserver
 spec:
-  shutdownAfterJobFinishes: true
-  # Keep the RayCluster alive long enough for the collector to gather data from the Ray node.
-  ttlSecondsAfterFinished: 90
-  entrypoint: |
-    python -c "
-    import ray
-    ray.init()
-
-    # materialize() is required: an unexecuted Dataset produces no stats.
-    ds = ray.data.range(100).map_batches(lambda batch: batch).materialize()
-    print(f'Dataset rows: {ds.count()}')
-    "
-  rayClusterSpec:
+  serveConfigV2: |
+    proxy_location: EveryNode
+    applications:
+      - name: historyserver-demo
+        route_prefix: /
+        import_path: microbenchmarks.no_ops:app_builder
+        args:
+          num_forwards: 0
+        runtime_env:
+          working_dir: https://github.com/ray-project/serve_workloads/archive/a9f184f4d9ddb7f9a578502ae106470f87a702ef.zip
+        deployments:
+          - name: NoOp
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.5
+  rayClusterConfig:
     # Head-only: worker collectors would need the generated head Service FQDN in FQ_RAY_IP.
     headGroupSpec:
       rayStartParams:
@@ -38,6 +41,15 @@ spec:
             image: rayproject/ray:2.56.0
             imagePullPolicy: IfNotPresent
             name: ray-head
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            - containerPort: 8000
+              name: serve
             resources:
               limits:
                 cpu: "5"
@@ -67,9 +79,9 @@ spec:
                   fieldPath: metadata.namespace
             # ray.io/originated-from-* labels are on the RayCluster, not the pod; must match metadata.name.
             - name: OWNER_KIND
-              value: "RayJob"
+              value: "RayService"
             - name: OWNER_NAME
-              value: "rayjob-ray-data"
+              value: "rayservice-historyserver"
             # Only used to look up this pod's Ray NodeID; the dashboard is in this pod.
             - name: FQ_RAY_IP
               value: "localhost"

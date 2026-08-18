@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	rayJobManifestPath = "../../config/rayjob.yaml"
+	rayJobManifestPath = "../testdata/rayjob.yaml"
 	// Self-contained; the generated cluster name is only known from the RayJob status.
-	rayDataManifestPath = "../../config/ray-data.yaml"
+	rayDataManifestPath = "../testdata/ray-data.yaml"
 )
 
 // ApplyRayJobAndWaitForCompletion applies a Ray job to the existing Ray cluster and waits for it to complete successfully.
