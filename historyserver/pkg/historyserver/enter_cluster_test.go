@@ -568,6 +568,7 @@ func TestIsSafeRedirectPath(t *testing.T) {
 		{"relative/path", false},
 		{"//evil.com", false},          // protocol-relative
 		{"/\\evil.com", false},         // backslash variant
+		{"/x/../\\evil.com", false},    // backslash in the middle
 		{"http://evil.com", false},     // absolute URL
 		{"https://evil.com/x", false},  // absolute URL
 		{"javascript:alert(1)", false}, // scheme, no leading slash
@@ -647,6 +648,11 @@ func TestEnterClusterRedirect(t *testing.T) {
 
 		if resp.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status 400 for unsafe redirect, got %d: %s", resp.Code, resp.Body.String())
+		}
+
+		// Cookies must not be updated when the redirect target is rejected.
+		if cookies := resp.Result().Cookies(); len(cookies) != 0 {
+			t.Errorf("Expected no cookies on rejected redirect, got %v", cookies)
 		}
 	})
 

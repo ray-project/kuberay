@@ -314,13 +314,14 @@ func routerLogical(s *ServerHandler) {
 // isSafeRedirectPath reports whether target is a safe site-local redirect
 // destination, guarding against open-redirect attacks. Only same-origin
 // absolute paths are allowed: the value must start with a single "/", must not
-// be protocol-relative ("//host") or a backslash variant ("/\host"), and must
-// not carry a URL scheme or host component.
+// be protocol-relative ("//host") or contain a backslash anywhere (browsers
+// may treat "\" as "/", e.g. "/x/../\evil.com"), and must not carry a URL
+// scheme or host component.
 func isSafeRedirectPath(target string) bool {
 	if target == "" || target[0] != '/' {
 		return false
 	}
-	if strings.HasPrefix(target, "//") || strings.HasPrefix(target, "/\\") {
+	if strings.HasPrefix(target, "//") || strings.Contains(target, "\\") {
 		return false
 	}
 	u, err := url.Parse(target)
@@ -376,6 +377,15 @@ func routerRayClusterSet(s *ServerHandler) {
 			}
 		}
 
+		// Validate the optional "redirect" target before any Set-Cookie call so
+		// an unsafe target is rejected without updating the cluster context.
+		redirect := r1.QueryParameter("redirect")
+		if redirect != "" && !isSafeRedirectPath(redirect) {
+			logrus.Warnf("Rejecting unsafe redirect target: %q", redirect)
+			r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid redirect target: %q (must be a site-local path starting with '/')", redirect))
+			return
+		}
+
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: resolvedName})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: resolvedSession})
@@ -386,12 +396,7 @@ func routerRayClusterSet(s *ServerHandler) {
 		// instead of JSON. The Set-Cookie headers above still ride along on the
 		// redirect response, so a single navigation both establishes the cluster
 		// context and lands on the dashboard (e.g. /enter_cluster/...?redirect=/#/overview).
-		if redirect := r1.QueryParameter("redirect"); redirect != "" {
-			if !isSafeRedirectPath(redirect) {
-				logrus.Warnf("Rejecting unsafe redirect target: %q", redirect)
-				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid redirect target: %q (must be a site-local path starting with '/')", redirect))
-				return
-			}
+		if redirect != "" {
 			http.Redirect(r2.ResponseWriter, r1.Request, redirect, http.StatusFound)
 			return
 		}
