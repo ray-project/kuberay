@@ -69,10 +69,11 @@ spec:
             value: "${OSS_ENDPOINT}"
           - name: STORAGE_BACKEND
             value: "aliyunoss"
-          # Root dir inside the bucket. Must match the collector's RAY_ROOT_DIR.
-          # NOTE: releases up to v1.7.0-rc.0 ignore this env var and read from the
-          # bucket root (fixed cluster-history/ prefix); master supports it.
-          - name: RAY_ROOT_DIR
+          # Root dir inside the bucket; must match the collector's STORAGE_ROOT_DIR.
+          # NOTE: images up to v1.7.0-rc.0 do not read this env var (the option was
+          # added after v1.7.0-rc.0, initially as RAY_ROOT_DIR, later renamed) and
+          # use the bucket root (fixed cluster-history/ prefix).
+          - name: STORAGE_ROOT_DIR
             value: "ray-history"
         image: ${HISTORYSERVER_IMAGE}
         imagePullPolicy: IfNotPresent
