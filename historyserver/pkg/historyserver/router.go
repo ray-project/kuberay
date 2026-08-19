@@ -1020,15 +1020,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 	// exist in the object store. We scan the storage directory under the session to discover
 	// node IDs directly so we can still read debug_state.txt.
 	if len(nodeIDs) == 0 {
-		rawEntries := s.reader.ListFiles(clusterLogPathPrefix, sessionName+"/")
-		for _, e := range rawEntries {
-			if strings.HasSuffix(e, "/") {
-				name := strings.TrimSuffix(e, "/")
-				if name != utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
-					nodeIDs = append(nodeIDs, name)
-				}
-			}
-		}
+		nodeIDs = clusterlogs.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionName)
 	}
 	successCount := 0
 

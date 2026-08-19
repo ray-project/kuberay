@@ -720,11 +720,8 @@ func (s *ServerHandler) ipToNodeId(clusterLogPathPrefix, sessionID, nodeIP strin
 
 	// Use targeted listing to find node_events directories under each node
 	var candidatePrefixes []string
-	for _, rawEntry := range s.reader.ListFiles(clusterLogPathPrefix, sessionID) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
-			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
-		}
+	for _, nodeName := range clusterlogs.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionID) {
+		candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
 	}
 
 	for _, nodeEventDirPrefix := range candidatePrefixes {
