@@ -157,11 +157,21 @@ func TestValidateTPU(t *testing.T) {
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "8x4x4"},
 			wantErr:      `unsupported TPU topology "8x4x4"`,
 		},
-		"tpu7x 16x16x16 exceeds max topology": {
+		"tpu7x 16x16x16 is valid": {
 			tpu:          "4",
 			numOfHosts:   ptr.To(int32(1024)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x16"},
-			wantErr:      `unsupported TPU topology "16x16x16"`,
+		},
+		"tpu7x 16x16x36 max topology is valid": {
+			tpu:          "4",
+			numOfHosts:   ptr.To(int32(2304)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x36"},
+		},
+		"tpu7x 16x16x40 exceeds max topology": {
+			tpu:          "4",
+			numOfHosts:   ptr.To(int32(2560)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x40"},
+			wantErr:      `unsupported TPU topology "16x16x40"`,
 		},
 		"v3-device 2x2 is valid": {
 			tpu:          "4",

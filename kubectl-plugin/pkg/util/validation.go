@@ -93,7 +93,7 @@ var supportedTPUAccelerators = map[string]tpuAccelerator{
 	"tpu7x": {
 		is3D:       true,
 		tpuPerHost: 4,
-		maxTPUs:    8 * 16 * 16,
+		maxTPUs:    16 * 16 * 36,
 	},
 	// TPU Trillium (v6e).
 	"tpu-v6e-slice": {
