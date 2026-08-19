@@ -129,6 +129,18 @@ spec:
             {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
             {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
+            {{- if and (hasKey .Values "eventForwarder") (hasKey .Values.eventForwarder "enabled") }}
+            {{- $argList = append $argList (printf "--enable-event-forwarder=%t" .Values.eventForwarder.enabled) -}}
+            {{- if .Values.eventForwarder.sources -}}
+            {{- $argList = append $argList (printf "--event-forwarder-sources=%s" (join "," .Values.eventForwarder.sources)) -}}
+            {{- end -}}
+            {{- if .Values.eventForwarder.reasons -}}
+            {{- $argList = append $argList (printf "--event-forwarder-reasons=%s" (join "," .Values.eventForwarder.reasons)) -}}
+            {{- end -}}
+            {{- if .Values.eventForwarder.types -}}
+            {{- $argList = append $argList (printf "--event-forwarder-types=%s" (join "," .Values.eventForwarder.types)) -}}
+            {{- end -}}
+            {{- end -}}
             {{- if hasKey .Values "reconcileConcurrency" -}}
             {{- $argList = append $argList (printf "--reconcile-concurrency=%v" .Values.reconcileConcurrency) -}}
             {{- end -}}
