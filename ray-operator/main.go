@@ -183,16 +183,16 @@ func main() {
 		setupLog.Info("Deprecated feature flag forced-cluster-upgrade is enabled, which has no effect.")
 	}
 
+	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {
+		exitOnError(err, "Unable to set flag gates for known features")
+	}
+	features.LogFeatureGates(setupLog)
+
 	// validate the batch scheduler configs,
 	// exit with error if the configs is invalid.
 	if err := configapi.ValidateBatchSchedulerConfig(setupLog, config); err != nil {
 		exitOnError(err, "batch scheduler configs validation failed")
 	}
-
-	if err := utilfeature.DefaultMutableFeatureGate.Set(featureGates); err != nil {
-		exitOnError(err, "Unable to set flag gates for known features")
-	}
-	features.LogFeatureGates(setupLog)
 
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
 		utilruntime.Must(gwv1.Install(scheme))
