@@ -780,6 +780,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _string array_ | ScaleGate contains a list of scaling gates blocking this worker group from<br />scaling up. When Kueue encounters a quota-exceeded error for this worker<br />group, it appends "kueue.k8s.io/quota-exceeded" to ScaleGate. The Autoscaler<br />initiates fallback behavior whenever ScaleGate is non-empty. KubeRay defines<br />this field but does not read or write it, and preserves its value across<br />reconciles. |  |  |
 
 
 #### SubmitterConfig
