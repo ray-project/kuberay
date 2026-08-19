@@ -138,6 +138,30 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	return nodes
 }
 
+// ListFilesRecursive returns all files under dir, relative to dir.
+func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+	prefix := path.Join(r.OssRootDir, clusterId, dir)
+	paginator := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
+		Bucket:    oss.Ptr(r.OssBucket),
+		Prefix:    oss.Ptr(prefix + "/"),
+		Delimiter: oss.Ptr(""),
+		MaxKeys:   100,
+	})
+
+	var objectPaths []string
+	for paginator.HasNext() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list objects under %s: %w", prefix, err)
+		}
+		for _, object := range page.Contents {
+			objectPaths = append(objectPaths, *object.Key)
+		}
+	}
+
+	return storage.RelativeFilePaths(prefix, objectPaths), nil
+}
+
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	defer func() {
 		if r := recover(); r != nil {
