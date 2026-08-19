@@ -316,8 +316,10 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			}()
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
+			dumpCPUThrottleStatsFromCgroup(test, locustHeadPod, "before warmup")
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
+			dumpCPUThrottleStatsFromCgroup(test, locustHeadPod, "after warmup")
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec")
@@ -672,8 +674,10 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				}
 			}()
 
+			dumpCPUThrottleStatsFromCgroup(test, locustHeadPod, "before warmup")
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
+			dumpCPUThrottleStatsFromCgroup(test, locustHeadPod, "after warmup")
 
 			// Phase 4: Trigger incremental upgrade (A -> B)
 			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
