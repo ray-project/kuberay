@@ -1047,7 +1047,7 @@ func TestValidateConfig(t *testing.T) {
 				WorkerGroups: []WorkerGroup{
 					{
 						TPU:        new("1"),
-						NumOfHosts: ptr.To(int32(1)),
+						NumOfHosts: new(int32(1)),
 						NodeSelectors: map[string]string{
 							util.NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice",
 							util.NodeSelectorGKETPUTopology:    "1x1",
@@ -1065,7 +1065,7 @@ func TestValidateConfig(t *testing.T) {
 				WorkerGroups: []WorkerGroup{
 					{
 						TPU:        new("1"),
-						NumOfHosts: ptr.To(int32(1)),
+						NumOfHosts: new(int32(1)),
 					},
 				},
 			},

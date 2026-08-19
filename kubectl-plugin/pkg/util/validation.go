@@ -73,10 +73,10 @@ func ValidateTPU(tpu *string, numOfHosts *int32, nodeSelector map[string]string)
 		return fmt.Errorf("TPU topology %q has %d TPUs, which is not divisible by %d TPUs per host. See %s", topology, totalTPUs, tpuPerHost, tpuDocURL)
 	}
 
-	expectedNumOfHosts := int32(int64(totalTPUs) / tpuPerHost)
-	actualNumOfHosts := int32(DefaultNumOfHosts)
+	expectedNumOfHosts := int64(totalTPUs) / tpuPerHost
+	actualNumOfHosts := int64(DefaultNumOfHosts)
 	if numOfHosts != nil {
-		actualNumOfHosts = *numOfHosts
+		actualNumOfHosts = int64(*numOfHosts)
 	}
 	if actualNumOfHosts != expectedNumOfHosts {
 		return fmt.Errorf("numOfHosts must be %d for accelerator %q with topology %q and %d TPUs per host, got %d. See %s", expectedNumOfHosts, accelerator, topology, tpuPerHost, actualNumOfHosts, tpuDocURL)

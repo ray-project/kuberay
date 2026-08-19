@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/ptr"
 )
 
 func TestValidateResourceQuantity(t *testing.T) {
@@ -44,138 +43,138 @@ func TestValidateTPU(t *testing.T) {
 	}{
 		"empty TPU without node selectors is valid": {
 			tpu:          "",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{},
 		},
 		"0 TPU without node selectors is valid": {
 			tpu:          "0",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{},
 		},
 		"1 TPU without node selectors is invalid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{},
 			wantErr:      NodeSelectorGKETPUAccelerator + " is not set",
 		},
 		"1 TPU without TPU topology node selector is invalid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice"},
 			wantErr:      NodeSelectorGKETPUTopology + " is not set",
 		},
 		"1 TPU without TPU accelerator node selector is invalid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUTopology: "1x1"},
 			wantErr:      NodeSelectorGKETPUAccelerator + " is not set",
 		},
 		"1 TPU with 0 numOfHosts is invalid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(0)),
+			numOfHosts:   new(int32(0)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
 			wantErr:      "numOfHosts cannot be 0 when using TPU",
 		},
 		"unsupported accelerator is invalid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v2", NodeSelectorGKETPUTopology: "1x1"},
 			wantErr:      `unsupported TPU accelerator "tpu-v2"`,
 		},
 		"unsupported 2D topology is invalid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v6e-slice", NodeSelectorGKETPUTopology: "3x3"},
 			wantErr:      `unsupported TPU topology "3x3"`,
 		},
 		"2D topology on 3D accelerator is invalid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "2x2"},
 			wantErr:      "requires a 3D topology",
 		},
 		"v5e 1x1 with 1 TPU and 1 host is valid": {
 			tpu:          "1",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
 		},
 		"v5e 2x4 single-host 8 TPU is valid": {
 			tpu:          "8",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "2x4"},
 		},
 		"v5e 2x4 multi-host 4 TPU is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(2)),
+			numOfHosts:   new(int32(2)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "2x4"},
 		},
 		"v6e 4x4 with wrong numOfHosts is invalid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v6e-slice", NodeSelectorGKETPUTopology: "4x4"},
 			wantErr:      "numOfHosts must be 4",
 		},
 		"v6e 4x4 with 4 TPU and 4 hosts is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(4)),
+			numOfHosts:   new(int32(4)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v6e-slice", NodeSelectorGKETPUTopology: "4x4"},
 		},
 		"v6e 16x16 with 4 TPU and 64 hosts is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(64)),
+			numOfHosts:   new(int32(64)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v6e-slice", NodeSelectorGKETPUTopology: "16x16"},
 		},
 		"v5e 1x1 with 4 TPUs per host is invalid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
 			wantErr:      "4 TPUs per host is not valid",
 		},
 		"v4 2x2x1 single-host is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "2x2x1"},
 		},
 		"v4 2x2x2 multi-host is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(2)),
+			numOfHosts:   new(int32(2)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "2x2x2"},
 		},
 		"tpu7x 4x4x4 is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(16)),
+			numOfHosts:   new(int32(16)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "4x4x4"},
 		},
 		"tpu7x 4x4x8 custom topology is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(32)),
+			numOfHosts:   new(int32(32)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "4x4x8"},
 		},
 		"tpu7x 8x4x4 violates A <= B <= C for large topologies": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(32)),
+			numOfHosts:   new(int32(32)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "8x4x4"},
 			wantErr:      `unsupported TPU topology "8x4x4"`,
 		},
 		"tpu7x 16x16x16 is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1024)),
+			numOfHosts:   new(int32(1024)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x16"},
 		},
 		"tpu7x 16x16x36 max topology is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(2304)),
+			numOfHosts:   new(int32(2304)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x36"},
 		},
 		"tpu7x 16x16x40 exceeds max topology": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(2560)),
+			numOfHosts:   new(int32(2560)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "16x16x40"},
 			wantErr:      `unsupported TPU topology "16x16x40"`,
 		},
 		"v3-device 2x2 is valid": {
 			tpu:          "4",
-			numOfHosts:   ptr.To(int32(1)),
+			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v3-device", NodeSelectorGKETPUTopology: "2x2"},
 		},
 		"nil numOfHosts defaults to 1 and is valid for single-host": {
