@@ -295,7 +295,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	return serveService, nil
 }
 
-// BuildHeadlessService builds the headless service for workers in multi-host worker groups to communicate
+// BuildHeadlessServiceForRayCluster builds the headless service for worker Pods.
+// It enables stable per-worker Pod FQDNs via hostname + subdomain, and supports
+// peer communication between multi-host workers.
 func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Service {
 	name := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	namespace := rayCluster.Namespace
@@ -318,8 +320,8 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Serv
 			ClusterIP: "None",
 			Selector:  selectorLabels,
 			Type:      corev1.ServiceTypeClusterIP,
-			// The headless worker service is used for peer communication between multi-host workers and should not be
-			// dependent on Proxy Actor placement to publish DNS addresses.
+			// Publish addresses even before Pods are Ready so peer DNS and per-Pod FQDNs
+			// are available without depending on Proxy Actor placement.
 			PublishNotReadyAddresses: true,
 		},
 	}

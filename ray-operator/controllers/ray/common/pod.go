@@ -591,6 +591,19 @@ func getEnableProbesInjection() bool {
 	return true
 }
 
+// generateWorkerHostname returns a stable DNS label for a worker Pod based on
+// its group name and RayMultiHostIndexing indices. For multi-host groups the
+// host index is included so each host in a replica gets a unique name.
+func generateWorkerHostname(groupName string, replicaIndex int, hostIndex int, numOfHosts int32) string {
+	var hostname string
+	if numOfHosts > 1 {
+		hostname = fmt.Sprintf("%s-%d-%d", groupName, replicaIndex, hostIndex)
+	} else {
+		hostname = fmt.Sprintf("%s-%d", groupName, replicaIndex)
+	}
+	return utils.CheckLabel(hostname)
+}
+
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -679,6 +692,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			podTemplate.Labels[utils.RayWorkerReplicaNameKey] = replicaGrpName
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
+
+		// Stable per-Pod FQDN via hostname + subdomain matching the headless Service.
+		// See: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-hostname-and-subdomain-field
+		podTemplate.Spec.Hostname = generateWorkerHostname(workerSpec.GroupName, replicaIndex, numHostIndex, workerSpec.NumOfHosts)
+		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 	}
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 

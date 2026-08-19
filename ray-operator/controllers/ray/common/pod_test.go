@@ -1546,17 +1546,38 @@ func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
 
 	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
 
-	worker.Template.ObjectMeta.Name = "ray-worker-test"
-	worker.NumOfHosts = 4
-	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
-	groupReplicaName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
+	expectedSubdomain := cluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 
-	// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
-	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", groupReplicaName, 0, 2)
-	assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
-	assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaNameKey], groupReplicaName)
-	assert.Equal(t, "0", podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey])
-	assert.Equal(t, "2", podTemplateSpec.Labels[utils.RayHostIndexKey])
+	t.Run("multi-host", func(t *testing.T) {
+		worker.Template.ObjectMeta.Name = "ray-worker-test"
+		worker.NumOfHosts = 4
+		podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+		groupReplicaName := utils.GenerateRayWorkerReplicaGroupName(worker.GroupName)
+
+		// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+		podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", groupReplicaName, 0, 2)
+		assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
+		assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaNameKey], groupReplicaName)
+		assert.Equal(t, "0", podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Equal(t, "2", podTemplateSpec.Labels[utils.RayHostIndexKey])
+		assert.Equal(t, "small-group-0-2", podTemplateSpec.Spec.Hostname)
+		assert.Equal(t, expectedSubdomain, podTemplateSpec.Spec.Subdomain)
+	})
+
+	t.Run("single-host", func(t *testing.T) {
+		worker.Template.ObjectMeta.Name = "ray-worker-test"
+		worker.NumOfHosts = 1
+		podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+
+		// Pass a deep copy of worker (*worker.DeepCopy()) to prevent "worker" from updating.
+		podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, *worker.DeepCopy(), podName, fqdnRayIP, "6379", "", 3, 0)
+		assert.Empty(t, podTemplateSpec.ObjectMeta.Name)
+		assert.Equal(t, "3", podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Empty(t, podTemplateSpec.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Empty(t, podTemplateSpec.Labels[utils.RayHostIndexKey])
+		assert.Equal(t, "small-group-3", podTemplateSpec.Spec.Hostname)
+		assert.Equal(t, expectedSubdomain, podTemplateSpec.Spec.Subdomain)
+	})
 }
 
 func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {

@@ -1,12 +1,14 @@
 package e2e
 
 import (
+	"maps"
 	"strconv"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -115,6 +117,53 @@ func verifyWorkerGroupIndices(t *testing.T, rayCluster *rayv1.RayCluster, worker
 	}
 }
 
+// verifyHeadlessServiceExists checks that the RayCluster headless Service exists and is headless.
+func verifyHeadlessServiceExists(t *testing.T, rayCluster *rayv1.RayCluster) {
+	test := With(t)
+	g := NewWithT(t)
+
+	expectedName := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+	svc, err := test.Client().Core().CoreV1().Services(rayCluster.Namespace).Get(test.Ctx(), expectedName, metav1.GetOptions{})
+
+	g.Expect(err).NotTo(HaveOccurred(), "Headless service %s/%s should exist", rayCluster.Namespace, expectedName)
+	g.Expect(svc.Spec.ClusterIP).To(Equal(corev1.ClusterIPNone), "Service %s should be headless", expectedName)
+	g.Expect(svc.Labels[utils.RayClusterHeadlessServiceLabelKey]).To(Equal(rayCluster.Name))
+}
+
+// verifyWorkerPodFQDNs checks that each worker Pod has hostname/subdomain matching its replica
+// (and host) index so the stable Pod FQDN can resolve via the headless Service.
+func verifyWorkerPodFQDNs(t *testing.T, rayCluster *rayv1.RayCluster, workerGroupName string, numOfHosts int) {
+	test := With(t)
+	g := NewWithT(t)
+
+	expectedSubdomain := rayCluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+	workerPods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	for _, pod := range workerPods {
+		if pod.Labels[utils.RayNodeGroupLabelKey] != workerGroupName {
+			continue
+		}
+
+		g.Expect(pod.Spec.Subdomain).To(Equal(expectedSubdomain),
+			"Pod %s subdomain should match headless service name", pod.Name)
+
+		replicaIndex := pod.Labels[utils.RayWorkerReplicaIndexKey]
+		g.Expect(replicaIndex).NotTo(BeEmpty(), "Pod %s missing replica index label", pod.Name)
+
+		var expectedHostname string
+		if numOfHosts > 1 {
+			hostIndex := pod.Labels[utils.RayHostIndexKey]
+			g.Expect(hostIndex).NotTo(BeEmpty(), "Pod %s missing host index label", pod.Name)
+			expectedHostname = workerGroupName + utils.DashSymbol + replicaIndex + utils.DashSymbol + hostIndex
+		} else {
+			expectedHostname = workerGroupName + utils.DashSymbol + replicaIndex
+		}
+		g.Expect(pod.Spec.Hostname).To(Equal(expectedHostname),
+			"Pod %s hostname should be stable from group/replica indices", pod.Name)
+	}
+}
+
 func TestRayClusterSingleHostMultiSlice(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
@@ -162,6 +211,11 @@ func TestRayClusterSingleHostMultiSlice(t *testing.T) {
 	LogWithTimestamp(t, "Verifying initial labels on single-host pods for %s/%s", rayCluster.Namespace, rayCluster.Name)
 	verifyWorkerGroupIndices(t, rayCluster, workerGroupName, 1, initialReplicas, []int{0, 1, 2})
 
+	// Verify headless service and stable worker Pod FQDNs (hostname + subdomain).
+	LogWithTimestamp(t, "Verifying headless service and worker FQDNs for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyHeadlessServiceExists(t, rayCluster)
+	verifyWorkerPodFQDNs(t, rayCluster, workerGroupName, 1)
+
 	// Manually delete the pod with replica index 1.
 	LogWithTimestamp(t, "Deleting pod with replica index 1 for %s/%s", rayCluster.Namespace, rayCluster.Name)
 	workerPods, err := GetWorkerPods(test, rayCluster)
@@ -175,6 +229,9 @@ func TestRayClusterSingleHostMultiSlice(t *testing.T) {
 		}
 	}
 	g.Expect(podToDelete).NotTo(BeNil(), "Could not find pod with replica index 1 to delete")
+	deletedPodUID := podToDelete.UID
+	deletedHostname := podToDelete.Spec.Hostname
+	deletedSubdomain := podToDelete.Spec.Subdomain
 
 	err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), podToDelete.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -190,6 +247,28 @@ func TestRayClusterSingleHostMultiSlice(t *testing.T) {
 	LogWithTimestamp(t, "Verifying labels after pod deletion and reconciliation")
 	verifyWorkerGroupIndices(t, rayCluster, workerGroupName, 1, initialReplicas, []int{0, 1, 2})
 
+	// Verify the replacement keeps the same stable FQDN (hostname/subdomain) with a new Pod UID.
+	LogWithTimestamp(t, "Verifying stable FQDN after worker recreate for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyHeadlessServiceExists(t, rayCluster)
+	verifyWorkerPodFQDNs(t, rayCluster, workerGroupName, 1)
+	g.Eventually(func(gg Gomega) {
+		pods, err := GetWorkerPods(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		var replacement *corev1.Pod
+		for i := range pods {
+			if pods[i].Labels[utils.RayWorkerReplicaIndexKey] == "1" && pods[i].DeletionTimestamp == nil {
+				replacement = &pods[i]
+				break
+			}
+		}
+
+		gg.Expect(replacement).NotTo(BeNil(), "Could not find replacement pod with replica index 1")
+		gg.Expect(replacement.UID).NotTo(Equal(deletedPodUID), "Replacement pod should be a new object")
+		gg.Expect(replacement.Spec.Hostname).To(Equal(deletedHostname), "Hostname should survive recreate")
+		gg.Expect(replacement.Spec.Subdomain).To(Equal(deletedSubdomain), "Subdomain should survive recreate")
+	}, TestTimeoutShort).Should(Succeed())
+
 	// Scale up replicas from 3 to 4.
 	const scaleUpReplicas = 4
 	LogWithTimestamp(t, "Scaling up RayCluster %s/%s from %d to %d replicas", rayCluster.Namespace, rayCluster.Name, initialReplicas, scaleUpReplicas)
@@ -204,6 +283,10 @@ func TestRayClusterSingleHostMultiSlice(t *testing.T) {
 	// Verify the new pod got the next available index, 3.
 	LogWithTimestamp(t, "Verifying labels after scale-up")
 	verifyWorkerGroupIndices(t, rayCluster, workerGroupName, 1, scaleUpReplicas, []int{0, 1, 2, 3})
+
+	// Verify FQDNs remain correct after scale-up (including new index 3).
+	LogWithTimestamp(t, "Verifying worker FQDNs after scale-up for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyWorkerPodFQDNs(t, rayCluster, workerGroupName, 1)
 }
 
 func TestRayClusterMultiHostMultiSlice(t *testing.T) {
@@ -272,6 +355,11 @@ func TestRayClusterMultiHostMultiSlice(t *testing.T) {
 	LogWithTimestamp(t, "Verifying labels after scale-down for %s/%s", rayCluster.Namespace, rayCluster.Name)
 	verifyWorkerGroupIndices(t, rayCluster, "multi-host-group", numOfHosts, scaleDownReplicas, nil)
 
+	// Verify FQDNs remain correct after scale-down.
+	LogWithTimestamp(t, "Verifying worker FQDNs after scale-down for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyHeadlessServiceExists(t, rayCluster)
+	verifyWorkerPodFQDNs(t, rayCluster, "multi-host-group", numOfHosts)
+
 	// Test scale up: Increase replicas from 1 to 3.
 	const scaleUpReplicas = 3
 	LogWithTimestamp(t, "Scaling up RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
@@ -288,15 +376,42 @@ func TestRayClusterMultiHostMultiSlice(t *testing.T) {
 	LogWithTimestamp(t, "Verifying labels after scale-up for %s/%s", rayCluster.Namespace, rayCluster.Name)
 	verifyWorkerGroupIndices(t, rayCluster, "multi-host-group", numOfHosts, scaleUpReplicas, []int{0, 1, 2})
 
+	// Verify FQDNs remain correct after scale-up.
+	LogWithTimestamp(t, "Verifying worker FQDNs after scale-up for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyHeadlessServiceExists(t, rayCluster)
+	verifyWorkerPodFQDNs(t, rayCluster, "multi-host-group", numOfHosts)
+
 	// Manually delete a single pod and verify the controller atomically re-creates the slice.
 	LogWithTimestamp(t, "Testing atomic multi-host group recreation for RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 	workerPods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
+
 	podToDelete := workerPods[0]
+	deletedReplicaName := podToDelete.Labels[utils.RayWorkerReplicaNameKey]
+	deletedReplicaIndex := podToDelete.Labels[utils.RayWorkerReplicaIndexKey]
+	deletedSubdomain := podToDelete.Spec.Subdomain
+
+	g.Expect(deletedReplicaName).NotTo(BeEmpty(), "Deleted pod should have a replica name label")
+	g.Expect(deletedReplicaIndex).NotTo(BeEmpty(), "Deleted pod should have a replica index label")
+
+	// Capture the full replica slice before delete so we can assert every host is replaced.
+	oldSliceUIDs := map[types.UID]struct{}{}
+	oldSliceHostnames := map[string]struct{}{}
+	for _, pod := range workerPods {
+		if pod.Labels[utils.RayWorkerReplicaNameKey] != deletedReplicaName {
+			continue
+		}
+		oldSliceUIDs[pod.UID] = struct{}{}
+		oldSliceHostnames[pod.Spec.Hostname] = struct{}{}
+	}
+
+	g.Expect(oldSliceUIDs).To(HaveLen(numOfHosts), "Expected %d pods in the replica slice before delete", numOfHosts)
+	g.Expect(oldSliceHostnames).To(HaveLen(numOfHosts), "Expected %d unique hostnames in the replica slice before delete", numOfHosts)
+
 	err = test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), podToDelete.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// The controller should first clean up the broken multi-host group (-4 pods), and then re-scale it up (+4 pods).
+	// The controller should first clean up the broken multi-host group (-NumOfHosts pods), and then re-scale it up (+NumOfHosts pods).
 	LogWithTimestamp(t, "Waiting for controller to reconcile multi-host group.")
 	// Reconciliation happens too quickly to catch the state where expectedPodCount-NumOfHosts, but we can test
 	// that externally deleted Pods will be re-created to satisfy the expected number.
@@ -307,4 +422,39 @@ func TestRayClusterMultiHostMultiSlice(t *testing.T) {
 	// Verify labels are still set correctly after atomic re-creation due to unhealthy Pod.
 	LogWithTimestamp(t, "Verifying labels after atomic recreation for %s/%s", rayCluster.Namespace, rayCluster.Name)
 	verifyWorkerGroupIndices(t, rayCluster, "multi-host-group", numOfHosts, scaleUpReplicas, []int{0, 1, 2})
+
+	// Verify the entire replica slice was replaced: no old UIDs remain, all hostnames return on new Pods.
+	LogWithTimestamp(t, "Verifying full replica-slice recreate and FQDNs for %s/%s", rayCluster.Namespace, rayCluster.Name)
+	verifyHeadlessServiceExists(t, rayCluster)
+	verifyWorkerPodFQDNs(t, rayCluster, "multi-host-group", numOfHosts)
+	g.Eventually(func(gg Gomega) {
+		pods, err := GetWorkerPods(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		newSlice := []corev1.Pod{}
+		for _, pod := range pods {
+			if pod.DeletionTimestamp != nil {
+				continue
+			}
+			// Match by replica index: replica name is regenerated on recreate.
+			if pod.Labels[utils.RayWorkerReplicaIndexKey] == deletedReplicaIndex &&
+				pod.Labels[utils.RayNodeGroupLabelKey] == "multi-host-group" {
+				newSlice = append(newSlice, pod)
+			}
+		}
+		gg.Expect(newSlice).To(HaveLen(numOfHosts), "Replica index %s should again have %d hosts", deletedReplicaIndex, numOfHosts)
+
+		remainingHostnames := maps.Clone(oldSliceHostnames)
+		for _, pod := range newSlice {
+			_, wasOldUID := oldSliceUIDs[pod.UID]
+
+			gg.Expect(wasOldUID).To(BeFalse(), "Pod %s still has an old slice UID %s", pod.Name, pod.UID)
+			gg.Expect(pod.Spec.Subdomain).To(Equal(deletedSubdomain), "Subdomain should survive recreate")
+
+			_, ok := remainingHostnames[pod.Spec.Hostname]
+			gg.Expect(ok).To(BeTrue(), "Pod %s has unexpected or duplicate hostname %s", pod.Name, pod.Spec.Hostname)
+			delete(remainingHostnames, pod.Spec.Hostname)
+		}
+		gg.Expect(remainingHostnames).To(BeEmpty(), "Missing hostnames from the deleted slice: %v", remainingHostnames)
+	}, TestTimeoutShort).Should(Succeed())
 }
