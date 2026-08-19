@@ -196,10 +196,10 @@ func routerAPI(s *ServerHandler) {
 		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
 
-	// Fallback route for additional polled endpoints stored in storage by the collector.
+	// Fallback route for built-in and user-configured endpoints fetched by the collector.
 	// This must be registered last because go-restful matches more specific routes first.
-	ws.Route(ws.GET("/{subpath:*}").To(s.getAdditionalEndpoint).Filter(s.CookieHandle).
-		Doc("fallback handler for additional polled endpoints stored in storage").
+	ws.Route(ws.GET("/{subpath:*}").To(s.getFetchedEndpoint).Filter(s.CookieHandle).
+		Doc("fallback handler for endpoints fetched and stored by the collector").
 		Writes(""))
 }
 
@@ -447,7 +447,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		}
 		// In auth-token mode, drop the client-supplied x-ray-authorization so it cannot bypass
 		// the server-managed token injected below.
-		if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+		if s.useAuthTokenMode && strings.EqualFold(key, utils.RayAuthHeader) {
 			continue
 		}
 		// Authorization has to be dropped in two cases. In auth-token mode, Ray only falls back to
@@ -472,7 +472,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		// so no header is needed; auth-enabled clusters without a token fail before reaching here.
 		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
 			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
-				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
+				proxyReq.Header.Set(utils.RayAuthHeader, fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}
@@ -1105,13 +1105,12 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	resp.Write(data)
 }
 
-// getAdditionalEndpoint is the fallback handler for endpoints that don't have a
-// dedicated handler. It reads the endpoint's data from storage, where the collector
-// has previously stored it via periodic polling.
-//
-// Storage key convention: the request path "/api/v0/nodes/summary" maps to
-// storage key "restful__api__v0__nodes__summary" under {sessionName}/fetched_endpoints/.
-func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restful.Response) {
+// getFetchedEndpoint handles the catch-all route registered after all explicit routes.
+// Live requests are proxied to the Ray Dashboard. For dead sessions, it replays
+// built-in and user-configured endpoints that the collector stored under
+// {sessionName}/fetched_endpoints/; known missing endpoints receive a schema-valid
+// empty response, while unknown endpoints return 404.
+func (s *ServerHandler) getFetchedEndpoint(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
@@ -1121,8 +1120,9 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	clusterLogPathPrefix := s.getClusterLogPathPrefix(req)
 
 	// Use the full request URI (path + query) for storage key lookup.
-	// The collector stores keys using the full endpoint URL from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS,
-	// which may include query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000").
+	// The collector stores keys using the full endpoint URI it polls (see the
+	// collector's poll.go), which may include query params (e.g.,
+	// "/api/v0/placement_groups?detail=1&limit=10000").
 	// RequestURI() includes query params when present, and equals URL.Path when absent.
 	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
@@ -1131,7 +1131,7 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
 		// collected (e.g., Serve was not enabled on the cluster).
-		if emptyResp := emptyResponseForEndpoint(req.Request.URL.Path); emptyResp != nil {
+		if emptyResp := missingSnapshotFallback(req.Request.URL.Path); emptyResp != nil {
 			resp.Header().Set("Content-Type", "application/json")
 			resp.Write(emptyResp)
 			return
@@ -1142,25 +1142,26 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		logrus.Errorf("Failed to read additional endpoint data for %s: %v", req.Request.URL.Path, err)
+		logrus.Errorf("Failed to read fetched endpoint data for %s: %v", req.Request.URL.Path, err)
 		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read endpoint data")
 		return
 	}
 
-	// Post-process placement_groups response to add missing fields that the frontend requires.
-	// The collector may not store "bundles" and "stats", but the frontend crashes without them.
+	// Ray 2.56 calls bundles.map() without guarding a missing value. Backfill only
+	// bundles; optional stats is already guarded by the frontend.
 	trimmedPath := strings.TrimRight(req.Request.URL.Path, "/")
 	if trimmedPath == "/api/v0/placement_groups" {
-		data = ensurePlacementGroupFields(data)
+		data = ensurePlacementGroupBundles(data)
 	}
 
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Write(data)
 }
 
-// emptyResponseForEndpoint returns a valid empty JSON response for known frontend endpoints
-// that may not have been collected. Returns nil if the endpoint is unknown.
-func emptyResponseForEndpoint(urlPath string) []byte {
+// missingSnapshotFallback returns a schema-valid empty payload for a known frontend
+// endpoint when a dead session has no stored snapshot. It returns nil for an unknown
+// path so the caller preserves the 404 response.
+func missingSnapshotFallback(urlPath string) []byte {
 	trimmed := strings.TrimRight(urlPath, "/")
 	switch trimmed {
 	// "applications" must exist so Object.values() doesn't crash. Missing http_options
@@ -1172,16 +1173,52 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 			"applications": map[string]interface{}{},
 		})
 		return data
+	case "/api/v0/placement_groups":
+		// Match Ray's empty State API response so the replayed frontend does not
+		// receive a 404 when no placement-group snapshot was stored.
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/dashboard/modules/state/state_head.py#L128-L135
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/dashboard/routes.py#L176-L213
+		// Ref: https://github.com/ray-project/ray/blob/637fd062205393b9e1929996bfe1d49bd3f8469d/python/ray/util/state/common.py#L966-L1003
+		data, _ := json.Marshal(map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                   0,
+					"num_after_truncation":    0,
+					"num_filtered":            0,
+					"result":                  []interface{}{},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		})
+		return data
 	default:
+		// No snapshot was stored for this job. Ray may return an empty response after
+		// finished dataset stats are evicted, and collection can also fail before a non-empty
+		// response is persisted, so absence does not prove the job never used Ray Data.
+		// Return the live API's empty shape.
+		// Ref: https://github.com/ray-project/ray/blob/ray-2.56.0/python/ray/data/_internal/stats.py#L844-L855
+		// Ref: https://github.com/ray-project/ray/blob/ray-2.56.0/python/ray/dashboard/modules/data/data_head.py#L135-L143
+		if jobID, ok := strings.CutPrefix(trimmed, "/api/data/datasets/"); ok &&
+			jobID != "" && !strings.Contains(jobID, "/") {
+			data, _ := json.Marshal(map[string]interface{}{
+				"datasets": []interface{}{},
+			})
+			return data
+		}
 		return nil
 	}
 }
 
-// ensurePlacementGroupFields adds missing "bundles" and "stats" fields to each placement group
-// in the response. The collector may not store these fields, but the frontend crashes without them.
-// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L32
-// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L53
-func ensurePlacementGroupFields(data []byte) []byte {
+// ensurePlacementGroupBundles backfills bundles when absent from a stored placement
+// group because Ray 2.56 reads it with an unguarded map(). Optional stats is already
+// guarded by the frontend. Serve and Ray Data otherwise replay stored payloads as-is;
+// their compatibility fallbacks apply only when no snapshot exists.
+// Ref: https://github.com/ray-project/ray/blob/ray-2.56.0/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L24-L54
+// Ref: https://github.com/ray-project/ray/blob/ray-2.56.0/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L183-L231
+func ensurePlacementGroupBundles(data []byte) []byte {
 	var response map[string]interface{}
 	if err := json.Unmarshal(data, &response); err != nil {
 		return data
@@ -1200,6 +1237,7 @@ func ensurePlacementGroupFields(data []byte) []byte {
 		return data
 	}
 
+	modified := false
 	for _, item := range resultArray {
 		pg, ok := item.(map[string]interface{})
 		if !ok {
@@ -1207,10 +1245,11 @@ func ensurePlacementGroupFields(data []byte) []byte {
 		}
 		if _, exists := pg["bundles"]; !exists {
 			pg["bundles"] = []interface{}{}
+			modified = true
 		}
-		if _, exists := pg["stats"]; !exists {
-			pg["stats"] = map[string]interface{}{}
-		}
+	}
+	if !modified {
+		return data
 	}
 
 	patched, err := json.Marshal(response)
@@ -1837,6 +1876,20 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	resp.Write(respData)
 }
 
+func formatTaskLogInfoForResponse(taskLogInfo *eventtypes.TaskLogInfo) interface{} {
+	if taskLogInfo == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"stdout_file":  taskLogInfo.StdoutFile,
+		"stderr_file":  taskLogInfo.StderrFile,
+		"stdout_start": taskLogInfo.StdoutStart,
+		"stdout_end":   taskLogInfo.StdoutEnd,
+		"stderr_start": taskLogInfo.StderrStart,
+		"stderr_end":   taskLogInfo.StderrEnd,
+	}
+}
+
 // formatTaskForResponse formats a task data result of a single task attempt for the response.
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
@@ -1898,7 +1951,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		// TODO(jiangjiawei1103): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
-		result["task_log_info"] = task.TaskLogInfo
+		result["task_log_info"] = formatTaskLogInfoForResponse(task.TaskLogInfo)
 		if task.RayErrorInfo != nil {
 			result["error_message"] = task.RayErrorInfo.ErrorMessage
 		} else {

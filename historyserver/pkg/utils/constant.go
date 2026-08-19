@@ -14,8 +14,6 @@ const (
 	RayServiceKind = "rayservice"
 	RayClusterKind = "raycluster"
 
-	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
-
 	// RayContainerIndex is the index of the Ray container in the head pod template.
 	RayContainerIndex = 0
 	// DashboardPortName is the name the ray-operator gives the dashboard port.

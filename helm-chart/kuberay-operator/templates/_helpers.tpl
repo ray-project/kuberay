@@ -70,6 +70,17 @@ FeatureGates
 {{- end }}
 {{- end }}
 
+{{/*
+Whether the KubernetesWAS feature gate is enabled in .Values.featureGates.
+*/}}
+{{- define "kuberay.kubernetesWASEnabled" -}}
+{{- range .Values.featureGates -}}
+{{- if and (eq .name "KubernetesWAS") .enabled -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+
 {{- /* Create the name of the service to use. */ -}}
 {{- define "kuberay-operator.service.name" -}}
 {{- include "kuberay-operator.fullname" . }}
@@ -392,6 +403,21 @@ rules:
   - patch
   - update
   - watch
+{{- if .kubernetesWASEnabled }}
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - podgroups
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh

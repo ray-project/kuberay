@@ -23,20 +23,23 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+const defaultDashboardAddress = "http://localhost:8265"
+
 func main() {
 	role := ""
-	runtimeClassName := ""
+	storageBackend := ""
 	rayClusterName := ""
 	rayClusterNamespace := ""
-	rayRootDir := ""
+	storageRootDir := ""
 	logBatching := 1000
-	eventsPort := 8080
+	eventsPort := 8084
 	pushInterval := time.Minute
 	ownerKind := ""
 	ownerName := ""
 	enableEventCollector := true
 	enableLogCollector := true
-	runtimeClassConfigPath := ""
+	storageBackendConfigPath := ""
+	dashboardAddress := defaultDashboardAddress
 
 	// Event collector disk-first storage flags.
 	eventDataDir := "/tmp/ray/event-data"
@@ -48,16 +51,17 @@ func main() {
 	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "Enable event collector")
 	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "Enable log collector")
 	flag.StringVar(&role, "role", "Worker", "Role of the collector node: Head or Worker")
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
+	flag.StringVar(&storageBackend, "storage-backend", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
+	flag.StringVar(&storageRootDir, "storage-root-dir", "", "The root dir inside the bucket")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
-	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "")
+	flag.IntVar(&eventsPort, "events-port", 8084, "")
+	flag.StringVar(&storageBackendConfigPath, "storage-backend-config-path", "", "")
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
+	flag.StringVar(&dashboardAddress, "ray-dashboard-address", defaultDashboardAddress, "Base URL of the Ray Dashboard; overridden by RAY_DASHBOARD_ADDRESS when set")
 
 	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
 	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
@@ -82,8 +86,8 @@ func main() {
 	if val := os.Getenv("OWNER_NAME"); val != "" {
 		ownerName = val
 	}
-	if val := os.Getenv("RAY_ROOT_DIR"); val != "" {
-		rayRootDir = val
+	if val := os.Getenv("STORAGE_ROOT_DIR"); val != "" {
+		storageRootDir = val
 	}
 	if val := os.Getenv("EVENTS_PORT"); val != "" {
 		if port, err := strconv.Atoi(val); err == nil {
@@ -110,8 +114,11 @@ func main() {
 			enableLogCollector = enabled
 		}
 	}
-	if val := os.Getenv("RUNTIME_CLASS_CONFIG_PATH"); val != "" {
-		runtimeClassConfigPath = val
+	if val := os.Getenv("STORAGE_BACKEND_CONFIG_PATH"); val != "" {
+		storageBackendConfigPath = val
+	}
+	if val := os.Getenv("RAY_DASHBOARD_ADDRESS"); val != "" {
+		dashboardAddress = val
 	}
 
 	role = strings.TrimSpace(role)
@@ -160,6 +167,8 @@ func main() {
 		}
 	}
 
+	// RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is optional: the head collector always
+	// polls its built-in endpoints, and anything listed here is polled on top.
 	var additionalEndpoints []string
 	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
 		for _, ep := range strings.Split(epStr, ",") {
@@ -170,40 +179,37 @@ func main() {
 		}
 	}
 
+	// Fall back instead of exiting: crash-looping this sidecar would take the head pod
+	// out of its Service endpoints.
 	endpointPollInterval := 30 * time.Second
-	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
-		parsed, parseErr := time.ParseDuration(intervalStr)
-		if parseErr != nil {
-			logrus.Fatalf("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: %v", parseErr)
+	if v := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			endpointPollInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_POLL_INTERVAL=%s, using default %s", v, endpointPollInterval)
 		}
-		if parsed <= 0 {
-			logrus.Fatalf("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: %s", intervalStr)
-		}
-		endpointPollInterval = parsed
 	}
 
 	jsonData := make(map[string]interface{})
-	if runtimeClassConfigPath != "" {
-		data, err := os.ReadFile(runtimeClassConfigPath)
+	if storageBackendConfigPath != "" {
+		data, err := os.ReadFile(storageBackendConfigPath)
 		if err != nil {
-			logrus.Fatalf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to read storage backend config from %s: %v", storageBackendConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			logrus.Fatalf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to parse storage backend config from %s: %v", storageBackendConfigPath, err)
 		}
 	}
 
 	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
-		runtimeClassName = val
-	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
-		runtimeClassName = val
+		storageBackend = val
 	}
-	runtimeClassName = strings.ToLower(runtimeClassName)
+	storageBackend = strings.ToLower(storageBackend)
 
 	registry := collector.GetWriterRegistry()
-	factory, ok := registry[runtimeClassName]
+	factory, ok := registry[storageBackend]
 	if !ok {
-		logrus.Fatalf("Not supported runtime class name: %s for role: %s.", runtimeClassName, role)
+		logrus.Fatalf("Not supported storage backend: %s for role: %s.", storageBackend, role)
 	}
 
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
@@ -230,7 +236,7 @@ func main() {
 	sessionName := path.Base(activeSessionDir)
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:             rayRootDir,
+		RootDir:             storageRootDir,
 		SessionDir:          activeSessionDir,
 		RayNodeName:         rayNodeId,
 		Role:                role,
@@ -238,7 +244,7 @@ func main() {
 		RayClusterNamespace: rayClusterNamespace,
 		PushInterval:        pushInterval,
 		LogBatching:         logBatching,
-		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
+		DashboardAddress:    dashboardAddress,
 		OwnerKind:           ownerKind,
 		OwnerName:           ownerName,
 
@@ -255,7 +261,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		logrus.Fatalf("Failed to create writer for runtime class name: %s for role: %s, err: %v", runtimeClassName, role, err)
+		logrus.Fatalf("Failed to create writer for storage backend: %s for role: %s, err: %v", storageBackend, role, err)
 	}
 
 	var wg sync.WaitGroup
@@ -269,7 +275,7 @@ func main() {
 		// Create and initialize EventCollector
 		go func() {
 			defer wg.Done()
-			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
+			eventCollector := eventcollector.NewEventCollector(writer, storageRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
 				DataDir:            eventDataDir,
 				RotationInterval:   eventRotationInterval,
 				MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,

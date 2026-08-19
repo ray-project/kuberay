@@ -50,19 +50,26 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
+          - name: STORAGE_BACKEND
+            value: "s3"
         image: historyserver:v0.1.0
         imagePullPolicy: IfNotPresent
-        command:
-        - historyserver
-        - --runtime-class-name=s3
-        - --ray-root-dir=log
         # Enable proxying to live RayClusters with token authentication enabled.
         # The history server reads the auth Secret and forwards requests with the
         # appropriate authorization header. Requires the RBAC in
         # service_account_auth_token_mode.yaml.
+        # command:
+        # - historyserver
         # - --use-auth-token-mode=true
         ports:
         - containerPort: 8080
+        # Cache is soft-bounded at 8 GiB; 12 GiB leaves decode headroom.
+        # The 2 GiB request keeps examples schedulable; size production requests to residency.
+        args:
+        - --session-cache-max-memory=8Gi
         resources:
-          limits:
+          requests:
             cpu: "500m"
+            memory: "2Gi"
+          limits:
+            memory: "12Gi"

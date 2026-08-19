@@ -884,6 +884,10 @@ _Appears in:_
 
 Package v1alpha1 contains API Schema definitions for the ray v1alpha1 API group
 
+Deprecated: ray.io/v1alpha1 is served for backward compatibility only, is
+frozen at its December 2023 feature set, and will be unavailable in KubeRay
+1.9. Use github.com/ray-project/kuberay/ray-operator/apis/ray/v1 instead.
+
 ### Resource Types
 - [RayCluster](#raycluster)
 - [RayJob](#rayjob)
@@ -943,6 +947,11 @@ _Appears in:_
 
 RayCluster is the Schema for the RayClusters API
 
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayClusters.
+
 
 
 
@@ -984,6 +993,11 @@ _Appears in:_
 
 
 RayJob is the Schema for the rayjobs API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayJobs.
 
 
 
@@ -1032,6 +1046,11 @@ _Appears in:_
 
 
 RayService is the Schema for the rayservices API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayServices.
 
 
 

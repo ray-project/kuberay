@@ -29,10 +29,10 @@ The History Server supports multiple storage backends:
 
 | Backend | Description | Configuration |
 |---------|-------------|---------------|
-| S3/MinIO | AWS S3 or MinIO-compatible storage | Use `--runtime-class-name=s3` |
-| Azure Blob Storage | Microsoft Azure Blob Storage | Use `--runtime-class-name=azureblob` |
-| Aliyun OSS | Alibaba Cloud Object Storage Service | Use `--runtime-class-name=aliyunoss` |
-| Local test | For local testing and development | Use `--runtime-class-name=localtest` |
+| S3/MinIO | AWS S3 or MinIO-compatible storage | Use `--storage-backend=s3` |
+| Azure Blob Storage | Microsoft Azure Blob Storage | Use `--storage-backend=azureblob` |
+| Aliyun OSS | Alibaba Cloud Object Storage Service | Use `--storage-backend=aliyunoss` |
+| Local test | For local testing and development | Use `--storage-backend=localtest` |
 
 ## Running locally
 
@@ -78,9 +78,13 @@ Sample configs are in the `config/` directory:
 |------|-------------|
 | `minio.yaml` | MinIO deployment for S3-compatible storage |
 | `azurite.yaml` | Azurite deployment for Azure Blob Storage emulation |
-| `raycluster.yaml` | Ray cluster with collector sidecar (S3/MinIO) |
-| `raycluster-azureblob.yaml` | Ray cluster with collector sidecar (Azure Blob) |
-| `rayjob.yaml` | Sample Ray job for testing |
+| `rayjob.yaml` | Sample RayJob with collector sidecar; cluster shuts down after the job finishes (S3/MinIO) |
+| `rayjob-azureblob.yaml` | Sample RayJob with collector sidecar (Azure Blob) |
+| `rayjob-gcs.yaml` | Sample RayJob with collector sidecar (GCS) |
+| `rayjob-aliyunoss.yaml` | Sample RayJob with collector sidecar (Alibaba Cloud OSS via RRSA) |
+| `rayjob-kubernetes-auth.yaml` | Sample RayJob with collector sidecar using Kubernetes token authentication (S3/MinIO) |
+| `ray-data.yaml` | Sample Ray Data RayJob with collector sidecar (S3/MinIO) |
+| `rayservice.yaml` | Sample RayService with collector sidecar (S3/MinIO) |
 | `historyserver.yaml` | History Server deployment (S3/MinIO) |
 | `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
 | `service_account.yaml` | Service account for History Server |

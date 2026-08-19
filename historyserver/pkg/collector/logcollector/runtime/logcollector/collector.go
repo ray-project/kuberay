@@ -82,22 +82,35 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	go r.PollActiveSessionChanges()
+	var periodicPollResults <-chan periodicPollResult
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
 		go r.FetchAndStoreTimezone()
-		go r.PollAdditionalEndpointsPeriodically()
+		// Driven by stop rather than ShutdownChan, which closes only after the final
+		// poll below: a tick in between would overwrite that final snapshot.
+		periodicPollResults = r.startPeriodicEndpointPolling(stop)
 	}
 
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
-	r.processSessionLatestLogs()
-	// Perform one final poll of additional endpoints before shutting down.
-	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
-	// uses ShutdownChan to cancel in-flight HTTP requests.
+
+	// Endpoint data dies with the dashboard; log files stay on disk, so poll concurrently.
+	var wg sync.WaitGroup
 	if r.IsHead {
-		r.processAdditionalEndpoints()
+		// Reuse the periodic poller's state only after it exits and transfers ownership.
+		periodicResult, joined := waitForPeriodicPollResult(periodicPollResults, periodicPollJoinTimeout)
+		if !joined {
+			logrus.Warn("Periodic endpoint poller still busy, starting the final poll anyway")
+		}
+		wg.Go(func() {
+			r.processAdditionalEndpoints(periodicResult)
+		})
 	}
+	r.processSessionLatestLogs()
+	wg.Wait()
+
+	// Signal background goroutines after the synchronous shutdown flushes complete.
 	close(r.ShutdownChan)
 
 	return nil
