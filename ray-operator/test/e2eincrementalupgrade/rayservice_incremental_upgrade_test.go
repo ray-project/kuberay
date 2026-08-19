@@ -238,7 +238,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 // 6. Create a ConfigMap with Locust runner script
 // 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
 // 8. Start Locust in a background goroutine targeting the Gateway in-cluster DNS name
-// 9. Wait for Locust to ramp up and enter the steady state
+// 9. Wait for Locust to complete a minimum number of requests, then let the load settle
 // 10. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
@@ -316,7 +316,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			}()
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
+			err = warmupLocust(test, locustHeadPod, locustWarmupMinRequests, locustWarmupSettle, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Phase 4: Trigger incremental upgrade
@@ -672,7 +672,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				}
 			}()
 
-			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
+			err = warmupLocust(test, locustHeadPod, locustWarmupMinRequests, locustWarmupSettle, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Phase 4: Trigger incremental upgrade (A -> B)

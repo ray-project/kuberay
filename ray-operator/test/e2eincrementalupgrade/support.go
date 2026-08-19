@@ -355,43 +355,49 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 }
 
 const (
-	// The lower bound of the RPS for the Locust to reach the steady state.
-	locustWarmupRPSThreshold = 400.0
-	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
-	locustWarmupStableWindowSeconds = 15
-	// The maximum duration to wait for the Locust to reach the steady state.
+	// The number of requests Locust must complete before the upgrade is triggered.
+	locustWarmupMinRequests = 2000
+	// How long to wait after load is confirmed before starting the upgrade.
+	locustWarmupSettle = 15 * time.Second
+	// The maximum duration to wait for Locust to complete locustWarmupMinRequests requests.
 	locustWarmupTimeout = 120 * time.Second
 )
 
-// warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
+// warmupLocust waits for Locust to ramp up before triggering upgrade.
 // Hence, all requests are sent to the old cluster during the warmup period.
 //
+// Readiness is measured by the number of completed requests rather than by RPS, because
+// the throughput of CI runners varies too much for one RPS threshold to hold everywhere.
+//
 // The warmup period follows these steps:
-// 1. Retrieve the index of the Requests/s column in the stats history file
+// 1. Retrieve the index of the Total Request Count column in the stats history file
 //   - Retry for cases where the stats history file is not written yet
 //
-// 2. Query the current RPS from the stats history file
+// 2. Query the number of completed requests from the stats history file
 //   - Retry for cases where the query failed
 //
-// 3. Check if the last RPS is greater than or equal to the threshold for the specified duration
-//   - Determine if the Locust has reached the steady state
+// 3. Wait for settle once minRequests requests have completed
+//   - Ensure the upgrade starts while the load is steady
 func warmupLocust(
 	test Test,
 	locustHeadPod *corev1.Pod,
-	rpsThreshold float64,
-	stableWindow int,
+	minRequests int,
+	settle time.Duration,
 	timeout time.Duration,
 ) error {
-	// rpsColIdxResult is the result of getting the index of the Requests/s column in the stats history file.
-	//   - index: the index of the Requests/s column (the valid index should be >= 0)
+	// requestsColName is the cumulative count of completed requests in the stats history file.
+	const requestsColName = "Total Request Count"
+
+	// colIdxResult is the result of getting the index of the requestsColName column in the stats history file.
+	//   - index: the index of the requestsColName column (the valid index should be >= 0)
 	//   - ready: false when the file or column is not ready, a retry is needed
-	type rpsColIdxResult struct {
+	type colIdxResult struct {
 		index int
 		ready bool
 	}
 
-	// getRpsColIdx gets the index of the Requests/s column in the stats history file.
-	getRpsColIdx := func() (rpsColIdxResult, error) {
+	// getRequestsColIdx gets the index of the requestsColName column in the stats history file.
+	getRequestsColIdx := func() (colIdxResult, error) {
 		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 			"bash", "-lc", `
 latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n 1) || exit 1
@@ -399,42 +405,41 @@ head -n1 "$latest"
 		`,
 		}, true)
 		if stderr.Len() != 0 || stdout.Len() == 0 {
-			return rpsColIdxResult{ready: false}, nil
+			return colIdxResult{ready: false}, nil
 		}
 
 		header := strings.TrimSpace(stdout.String())
 		cols := strings.Split(header, ",")
-		idx := slices.Index(cols, "Requests/s")
+		idx := slices.Index(cols, requestsColName)
 		if idx == -1 {
-			return rpsColIdxResult{}, fmt.Errorf("Requests/s column not found in stats history file")
+			return colIdxResult{}, fmt.Errorf("%s column not found in stats history file", requestsColName)
 		}
-		return rpsColIdxResult{
+		return colIdxResult{
 			index: idx,
 			ready: true,
 		}, nil
 	}
 
-	var rpsIdx int
-	var haveRpsColIdx bool
+	var requestsIdx int
+	var haveRequestsColIdx bool
 
 	ddl := time.Now().Add(timeout)
-	stableCount := 0
 	for time.Now().Before(ddl) {
-		if !haveRpsColIdx {
-			rpsColIdxRes, err := getRpsColIdx()
+		if !haveRequestsColIdx {
+			colIdxRes, err := getRequestsColIdx()
 			if err != nil {
 				return err
 			}
 
-			if !rpsColIdxRes.ready {
+			if !colIdxRes.ready {
 				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds")
 				time.Sleep(2 * time.Second)
 				continue
 			}
 
-			rpsIdx = rpsColIdxRes.index
-			haveRpsColIdx = true
-			test.T().Logf("found Requests/s column at index: %d", rpsIdx)
+			requestsIdx = colIdxRes.index
+			haveRequestsColIdx = true
+			test.T().Logf("found %s column at index: %d", requestsColName, requestsIdx)
 		}
 
 		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
@@ -444,41 +449,36 @@ head -n1 "$latest"
 		`,
 		}, true)
 		if stderr.Len() != 0 || stdout.Len() == 0 {
-			test.T().Logf("failed to query current RPS from Locust, retrying in 2 seconds: %s", stderr.String())
+			test.T().Logf("failed to query the completed request count from Locust, retrying in 2 seconds: %s", stderr.String())
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		lastStats := strings.TrimSpace(stdout.String())
 		statsSlice := strings.Split(lastStats, ",")
-		// Sometimes, we get the last stats with only 4 numbers, which leads to RPS index out of range.
+		// Sometimes, we get the last stats with only 4 numbers, which leads to the column index out of range.
 		// This is a temporary workaround. We will fix this in the future.
-		if len(statsSlice) <= rpsIdx {
-			test.T().Logf("RPS index out of range, retrying in 2 seconds")
+		if len(statsSlice) <= requestsIdx {
+			test.T().Logf("%s index out of range, retrying in 2 seconds", requestsColName)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		rps := statsSlice[rpsIdx]
-		rpsFloat, err := strconv.ParseFloat(rps, 64)
+		numRequests, err := strconv.Atoi(statsSlice[requestsIdx])
 		if err != nil {
-			test.T().Logf("failed to parse RPS, retrying in 2 seconds: %s", err.Error())
+			test.T().Logf("failed to parse %s, retrying in 2 seconds: %s", requestsColName, err.Error())
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		if rpsFloat >= rpsThreshold {
-			stableCount++
-		} else {
-			stableCount = 0
-		}
-		if stableCount >= stableWindow {
-			test.T().Logf("Locust has reached the steady state with RPS >= %.2f for %d seconds", rpsThreshold, stableWindow)
+		if numRequests >= minRequests {
+			test.T().Logf("Locust has completed %d requests (>= %d), waiting %s for the load to settle", numRequests, minRequests, settle)
+			time.Sleep(settle)
 			return nil
 		}
 
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("timeout waiting for Locust to reach the steady state with RPS >= %.2f", rpsThreshold)
+	return fmt.Errorf("timeout waiting for Locust to complete %d requests", minRequests)
 }
