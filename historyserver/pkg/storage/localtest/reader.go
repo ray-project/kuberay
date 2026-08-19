@@ -1,7 +1,9 @@
 package localtest
 
 import (
+	"context"
 	"io"
+	"path"
 	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -73,6 +75,31 @@ func (r *MockReader) ListFiles(clusterId string, dir string) []string {
 		return files
 	}
 	return []string{}
+}
+
+func (r *MockReader) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	clusterData, ok := r.data[clusterId]
+	if !ok {
+		return []string{}, nil
+	}
+
+	cleanDir := strings.Trim(path.Clean(dir), "/")
+	prefix := cleanDir + "/"
+	files := make([]string, 0, len(clusterData))
+	for fileName := range clusterData {
+		relativePath := fileName
+		found := cleanDir == "" || cleanDir == "."
+		if !found {
+			relativePath, found = strings.CutPrefix(fileName, prefix)
+		}
+		if found && relativePath != "" && !strings.HasSuffix(relativePath, "/") {
+			files = append(files, relativePath)
+		}
+	}
+	return files, nil
 }
 
 // NewReader creates a new StorageReader

@@ -18,6 +18,7 @@ package s3
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -141,6 +142,31 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	nodes := r._listFiles(prefix, "/", true)
 	// Note: clusters is not defined in this scope, removed sorting
 	return nodes
+}
+
+// ListFilesRecursive returns all files under dir, relative to dir.
+func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+	prefix := path.Join(r.S3RootDir, clusterId, dir)
+	listInput := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(r.S3Bucket),
+		Prefix:    aws.String(prefix + "/"),
+		MaxKeys:   aws.Int64(100),
+		Delimiter: aws.String(""),
+	}
+
+	var objectPaths []string
+	err := r.S3Client.ListObjectsV2PagesWithContext(ctx, listInput,
+		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+			for _, object := range page.Contents {
+				objectPaths = append(objectPaths, aws.StringValue(object.Key))
+			}
+			return true
+		})
+	if err != nil {
+		return nil, fmt.Errorf("list objects under %s: %w", prefix, err)
+	}
+
+	return storage.RelativeFilePaths(prefix, objectPaths), nil
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
