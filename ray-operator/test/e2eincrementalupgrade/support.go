@@ -356,22 +356,12 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 
 const (
 	// The lower bound of the RPS for the Locust to reach the steady state.
-	locustWarmupRPSThreshold = 350.0
+	locustWarmupRPSThreshold = 400.0
 	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
 	locustWarmupStableWindowSeconds = 15
 	// The maximum duration to wait for the Locust to reach the steady state.
 	locustWarmupTimeout = 120 * time.Second
 )
-
-// dumpCPUThrottleStatsFromCgroup logs the Locust head pod's cgroup CPU throttling stats
-// (nr_throttled / throttled_usec, or throttled_time on cgroup v1), so CI logs reveal
-// whether the load generator itself is CPU-throttled during the run.
-func dumpCPUThrottleStatsFromCgroup(test Test, locustHeadPod *corev1.Pod, label string) {
-	stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
-		"sh", "-c", "cat /sys/fs/cgroup/cpu.stat 2>/dev/null || cat /sys/fs/cgroup/cpu/cpu.stat", // check cgroup v2 and fallback to v1
-	}, true)
-	LogWithTimestamp(test.T(), "[%s] cpu.stat for %s:\n%s%s", label, locustHeadPod.Name, stdout.String(), stderr.String())
-}
 
 // warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
 // Hence, all requests are sent to the old cluster during the warmup period.
