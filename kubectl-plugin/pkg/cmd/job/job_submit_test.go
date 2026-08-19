@@ -17,19 +17,53 @@ import (
 )
 
 func TestRayJobSubmitComplete(t *testing.T) {
-	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	configFlags := genericclioptions.NewConfigFlags(true)
-	cmdFactory := cmdutil.NewFactory(configFlags)
-	fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
-	fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
-	fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
+	tests := []struct {
+		expected   *SubmitJobOptions
+		name       string
+		image      string
+		rayVersion string
+	}{
+		{
+			name:       "Custom Ray version",
+			image:      defaultImageWithTag,
+			rayVersion: "custom",
+			expected: &SubmitJobOptions{
+				image:      "rayproject/ray:custom",
+				rayVersion: "custom",
+			},
+		},
+		{
+			name:       "Custom Ray version with non-default custom image",
+			image:      "custom-image",
+			rayVersion: "custom",
+			expected: &SubmitJobOptions{
+				image:      "custom-image",
+				rayVersion: "custom",
+			},
+		},
+	}
 
-	cmd := &cobra.Command{}
-	configFlags.AddFlags(cmd.Flags())
-	err := fakeSubmitJobOptions.Complete()
-	require.NoError(t, err)
-	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
-	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
+			configFlags := genericclioptions.NewConfigFlags(true)
+			cmdFactory := cmdutil.NewFactory(configFlags)
+
+			fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
+			fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
+			fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
+			fakeSubmitJobOptions.image = tc.image
+			fakeSubmitJobOptions.rayVersion = tc.rayVersion
+
+			err := fakeSubmitJobOptions.Complete()
+
+			require.NoError(t, err)
+			assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
+			assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
+			assert.Equal(t, tc.expected.image, fakeSubmitJobOptions.image)
+			assert.Equal(t, tc.expected.rayVersion, fakeSubmitJobOptions.rayVersion)
+		})
+	}
 }
 
 func TestRayJobSubmitWithYamlValidate(t *testing.T) {
