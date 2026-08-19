@@ -1038,6 +1038,39 @@ func TestValidateConfig(t *testing.T) {
 				},
 			},
 		},
+		"valid TPU worker group": {
+			config: &RayClusterConfig{
+				Head: &Head{
+					CPU:    new("2"),
+					Memory: new("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						TPU:        new("1"),
+						NumOfHosts: new(int32(1)),
+						NodeSelectors: map[string]string{
+							util.NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice",
+							util.NodeSelectorGKETPUTopology:    "1x1",
+						},
+					},
+				},
+			},
+		},
+		"TPU worker group missing node selectors": {
+			config: &RayClusterConfig{
+				Head: &Head{
+					CPU:    new("2"),
+					Memory: new("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{
+					{
+						TPU:        new("1"),
+						NumOfHosts: new(int32(1)),
+					},
+				},
+			},
+			expectedErr: "is not set",
+		},
 	}
 
 	for name, test := range tests {

@@ -73,12 +73,18 @@ var (
 		# Create a Ray cluster with TPU in default worker group
 		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
 
-		# For more details on TPU-related node selectors like %s and %s, refer to:
+		# Create a Ray cluster with a multi-host TPU slice (4x4 requires 4 hosts)
+		kubectl ray create cluster sample-cluster --worker-tpu 4 --num-of-hosts 4 --worker-node-selectors %s=tpu-v6e-slice,%s=4x4
+
+		# Create a Ray cluster with a 3D TPU topology (2x2x2 requires 2 hosts)
+		kubectl ray create cluster sample-cluster --worker-tpu 4 --num-of-hosts 2 --worker-node-selectors %s=tpu-v4-podslice,%s=2x2x2
+
+		# For more details on TPU-related node selectors, refer to:
 		# https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
 
 		# Create a Ray cluster from a YAML configuration file
 		kubectl ray create cluster sample-cluster --file ray-cluster-config.yaml
-	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
