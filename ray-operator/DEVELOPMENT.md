@@ -260,6 +260,8 @@ Run tests on your local environment
 
 We use [elastic/crd-ref-docs](https://github.com/elastic/crd-ref-docs) to generate API reference for CRDs of KubeRay. The configuration file of `crd-ref-docs` is located at `hack/config.yaml`. Please refer to the documentation for more details.
 
+The Markdown templates in `hack/api-docs-templates` are a copy of the built-in `crd-ref-docs` Markdown templates, with one change: each type gets an explicit anchor that is qualified with its API version (for example `#rayclusterspec-v1alpha1`), and all cross-references point at those anchors. Without this, types that exist in more than one API version share a single anchor and every link in the `ray.io/v1alpha1` section resolves to the `ray.io/v1` type. When bumping the `crd-ref-docs` version, re-sync these templates with the upstream ones.
+
 Generate API refernece:
 
 ```bash
