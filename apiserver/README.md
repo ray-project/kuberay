@@ -162,8 +162,8 @@ The following steps allow you to validate the integration of the KubeRay APIServ
 
 The KubeRay APIServer supports Swagger UI. The Swagger page can be accessed at:
 
-- [localhost:31888/swagger-ui](localhost:31888/swagger-ui) for local kind deployments
-- [localhost:8888/swagger-ui](localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
+- [http://localhost:31888/swagger-ui](http://localhost:31888/swagger-ui) for local kind deployments
+- [http://localhost:8888/swagger-ui](http://localhost:8888/swagger-ui) for instances started with `make run` (development machine builds)
 - `<host name>:31888/swagger-ui` for NodePort deployments
 
 ## HTTP definition endpoints
