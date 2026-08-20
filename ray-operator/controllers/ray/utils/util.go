@@ -1216,6 +1216,8 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 // meaning the RestartPolicy for head and worker pods is no longer forced to Never
 // when autoscaler V2 is active.
 // If the version is unspecified or below 2.56.0 the original behavior (restrict to Never) applies.
+// https://github.com/ray-project/ray/pull/63764 fixes the issue we ran into here and is merged into Ray 2.56.0,
+// even though that PR was not intended to address this issue.
 func SupportsFlexibleRestartPolicy(rayVersion string) bool {
 	if rayVersion == "" {
 		return false
