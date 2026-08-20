@@ -204,8 +204,19 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 			if err = portforwardCmd.Run(); err == nil {
 				return
 			}
+
+			// The session was terminated: exec.CommandContext has already killed
+			// the port-forward child, so stop trying to reconnect.
+			if ctx.Err() != nil {
+				return
+			}
+
 			fmt.Printf("failed to port-forward: %v. Retrying in %v ...\n\n", err, reconnectDelay)
-			time.Sleep(reconnectDelay)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(reconnectDelay):
+			}
 		}
 	})
 
