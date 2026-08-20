@@ -56,6 +56,12 @@ common:
   containerEnv: []
   #  - name: BLAH
   #    value: VAL
+
+  # -- envFrom specifies sources used to populate environment variables in the main Ray head and worker containers.
+  # Common sources are rendered before group-specific sources. Referenced ConfigMaps and Secrets must already exist.
+  envFrom: []
+  # - secretRef:
+  #     name: my-env-secret
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
