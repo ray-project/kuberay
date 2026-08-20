@@ -17,8 +17,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - go install gotest.tools/gotestsum@v1.13.0 && export PATH=$$PATH:$$(go env GOPATH)/bin
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m gotestsum --junitfile $$KUBERAY_TEST_OUTPUT_DIR/junit.xml --format standard-verbose -- -timeout 30m ./test/e2e 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || TEST_EXIT_CODE=$$?
-    # Upload JUnit results to Buildkite Test Engine (best-effort, never fails the build)
-    - 'if [ -f "$$KUBERAY_TEST_OUTPUT_DIR/junit.xml" ] && [ -n "$$BUILDKITE_ANALYTICS_TOKEN" ]; then curl -sf -X POST -H "Authorization: Token token=\"$$BUILDKITE_ANALYTICS_TOKEN\"" -F "format=junit" -F "data=@$$KUBERAY_TEST_OUTPUT_DIR/junit.xml" -F "run_env[CI]=buildkite" -F "run_env[key]=$$BUILDKITE_BUILD_ID" -F "run_env[number]=$$BUILDKITE_BUILD_NUMBER" -F "run_env[job_id]=$$BUILDKITE_JOB_ID" -F "run_env[branch]=$$BUILDKITE_BRANCH" -F "run_env[commit_sha]=$$BUILDKITE_COMMIT" -F "run_env[url]=$$BUILDKITE_BUILD_URL" https://analytics-api.buildkite.com/v1/uploads || echo "Test Engine upload failed (non-fatal)"; else echo "skip Test Engine upload (no junit.xml or BUILDKITE_ANALYTICS_TOKEN)"; fi'
+    # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
     - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1; fi
     - echo "--- END:RayCluster and GCS E2E (nightly operator) tests finished"
 
