@@ -2331,11 +2331,11 @@ tests:
       head:
         envFrom:
           - configMapRef:
-              name: shared-config
+              name: shared-config-head
       worker:
         envFrom:
           - configMapRef:
-              name: shared-config
+              name: shared-config-worker
     asserts:
       - equal:
           path: spec.headGroupSpec.template.spec.containers[?(@.name=="ray-head")].envFrom
@@ -2343,11 +2343,11 @@ tests:
             - configMapRef:
                 name: shared-config
             - configMapRef:
-                name: shared-config
+                name: shared-config-head
       - equal:
           path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.containers[?(@.name=="ray-worker")].envFrom
           value:
             - configMapRef:
                 name: shared-config
             - configMapRef:
-                name: shared-config
+                name: shared-config-worker
