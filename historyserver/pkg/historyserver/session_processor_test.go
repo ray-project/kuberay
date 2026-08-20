@@ -32,6 +32,19 @@ func rayCluster(namespace, name string) *rayv1.RayCluster {
 	}
 }
 
+func rayClusterWithCondition(namespace, name string, condType rayv1.RayClusterConditionType) *rayv1.RayCluster {
+	rc := rayCluster(namespace, name)
+	rc.Status.Conditions = []metav1.Condition{
+		{
+			Type:               string(condType),
+			Status:             metav1.ConditionTrue,
+			Reason:             string(condType),
+			LastTransitionTime: metav1.Now(),
+		},
+	}
+	return rc
+}
+
 func TestIsDead(t *testing.T) {
 	const (
 		ns             = "default"
@@ -52,6 +65,16 @@ func TestIsDead(t *testing.T) {
 		{
 			name:     "RayCluster CR present -> alive",
 			cr:       rayCluster(ns, name),
+			wantDead: false,
+		},
+		{
+			name:     "RayCluster CR present and fully suspended -> dead",
+			cr:       rayClusterWithCondition(ns, name, rayv1.RayClusterSuspended),
+			wantDead: true,
+		},
+		{
+			name:     "RayCluster CR present but still suspending -> alive",
+			cr:       rayClusterWithCondition(ns, name, rayv1.RayClusterSuspending),
 			wantDead: false,
 		},
 	}

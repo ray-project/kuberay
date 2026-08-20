@@ -366,6 +366,90 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 	}
 }
 
+func TestEnterClusterSuspendedFallsBackToStorage(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+
+	// RayCluster CR is present but fully suspended (all Pods deleted): it must
+	// not be treated as live, even though the CR itself still exists.
+	scheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(scheme)
+	suspendedCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "cluster-suspended"},
+		Status: rayv1.RayClusterStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionTrue,
+					Reason: string(rayv1.RayClusterSuspended),
+				},
+			},
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(suspendedCluster).WithStatusSubresource(suspendedCluster).Build()
+	clientManager := &ClientManager{
+		clients: []client.Client{k8sClient},
+	}
+
+	mockReader := &mockStorageReader{
+		clusters: []utils.ClusterInfo{
+			{
+				Namespace:       "default",
+				Name:            "cluster-suspended",
+				SessionName:     "session_2026-04-22_10-00-00_000000_1",
+				CreateTimeStamp: 1000,
+			},
+		},
+	}
+
+	handler := &ServerHandler{
+		maxClusters:   100,
+		clientManager: clientManager,
+		reader:        mockReader,
+	}
+
+	fp := &fakeProcessor{
+		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
+		},
+	}
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+
+	routerRayClusterSet(handler)
+	container := restful.DefaultContainer
+
+	// listClusters must not surface the suspended cluster as a live entry.
+	t.Run("listClusters excludes suspended cluster from live entries", func(t *testing.T) {
+		clusters := handler.listClusters(100)
+		for _, c := range clusters {
+			if c.Name == "cluster-suspended" && c.SessionName == "live" {
+				t.Fatalf("Expected suspended cluster to be excluded from live entries, but found: %+v", c)
+			}
+		}
+	})
+
+	// Entering the cluster with "latest" must fall back to the stored dead session
+	// instead of resolving to "live" (which would proxy to a head Pod that no longer exists).
+	t.Run("enter_cluster with latest resolves to stored session, not live", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-suspended/latest", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+
+		cookies := resp.Result().Cookies()
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range cookies {
+			cookieMap[cookie.Name] = cookie
+		}
+
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_1" {
+			t.Errorf("Expected cookie %s to fall back to the stored session, got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+	})
+}
+
 func TestEnterClusterReturnsNotFoundWhenRemovedFromStorage(t *testing.T) {
 	restful.DefaultContainer = restful.NewContainer()
 
