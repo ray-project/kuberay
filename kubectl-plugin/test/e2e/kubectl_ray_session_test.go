@@ -136,13 +136,15 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 
 		Expect(err).To(HaveOccurred())
 		Expect(output).ToNot(ContainElements("fakeclustername"))
-})
-	It("should not leak the port-forward child when only the session PID is signalled", func() {		ctx, cancel := context.WithCancel(context.Background())
+	})
+
+	It("should not leak the port-forward child when only the session PID is signaled", func() {
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		cmd := exec.CommandContext(ctx, "kubectl", "ray", "session", "--namespace", namespace, "raycluster-kuberay")
 		// Run in its own process group so the deferred cleanup can kill the group
-		// without signalling the test process itself.
+		// without signaling the test process itself.
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 		err := cmd.Start()
