@@ -516,34 +516,28 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	}
 
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		// Always target the per-RayService Gateway KubeRay owns ("{name}-gateway" in
-		// the RayService namespace), never RayServiceGatewayNamespacedName — the
-		// latter now resolves to the shared Gateway when GatewayRef is set,
-		// and deleting that would tear down ingress for every other RayService on it.
-		//
-		// Targeting the owned name explicitly also cleans up an orphan left behind by
-		// switching a RayService from gatewayClassName to gatewayRef: the old
-		// "{name}-gateway" is still deleted here, while a service that only ever used
-		// gatewayRef simply has no such Gateway (Get returns NotFound).
-		ownedGatewayName := types.NamespacedName{
-			Name:      fmt.Sprintf("%s-gateway", rayServiceInstance.Name),
-			Namespace: rayServiceInstance.Namespace,
-		}
-		gateway := &gwv1.Gateway{}
-		if err := r.Get(ctx, ownedGatewayName, gateway); err == nil {
-			allDeleted = false
-			if gateway.DeletionTimestamp.IsZero() {
-				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
-				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
-					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway), string(utils.DeleteAction),
-						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
-					return false, err
+		// Only delete the Gateway when it's the per-RayService one KubeRay owns.
+		// When GatewayRef is set, RayServiceGatewayNamespacedName resolves to the
+		// shared Gateway KubeRay does not own, and deleting it would tear down
+		// ingress for every other RayService attached to it.
+		if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts == nil || opts.GatewayRef == nil {
+			ownedGatewayName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
+			gateway := &gwv1.Gateway{}
+			if err := r.Get(ctx, ownedGatewayName, gateway); err == nil {
+				allDeleted = false
+				if gateway.DeletionTimestamp.IsZero() {
+					logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
+					if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+						r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway), string(utils.DeleteAction),
+							"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
+						return false, err
+					}
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
+						"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 				}
-				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
-					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
+			} else if !errors.IsNotFound(err) {
+				return false, err
 			}
-		} else if !errors.IsNotFound(err) {
-			return false, err
 		}
 
 		httpRoute := &gwv1.HTTPRoute{}
