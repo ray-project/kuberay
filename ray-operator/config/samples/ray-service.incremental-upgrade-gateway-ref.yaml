@@ -25,12 +25,12 @@
 #   spec:
 #     gatewayClassName: istio          # or your cloud/controller GatewayClass
 #     listeners:
-#       - name: http
-#         protocol: HTTP
-#         port: 80
-#         allowedRoutes:
-#           namespaces:
-#             from: All                 # must permit routes from this RayService's namespace
+#     - name: http
+#       protocol: HTTP
+#       port: 80
+#       allowedRoutes:
+#         namespaces:
+#           from: All                  # must permit routes from this RayService's namespace
 #
 # See also ray-service.incremental-upgrade.yaml for the default (KubeRay-created
 # Gateway) variant.
