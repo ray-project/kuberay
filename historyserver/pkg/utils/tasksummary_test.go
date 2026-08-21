@@ -200,9 +200,11 @@ func TestToSummaryByLineageGroupsActorTasksUnderActorEntry(t *testing.T) {
 	assert.Equal(t, "ACTOR", actorNode.Type)
 	assert.Equal(t, &Link{Type: "actor", ID: testActorID}, actorNode.Link)
 
-	// The creation task and both method tasks live under the ACTOR entry.
+	// The creation task and both method tasks live under the ACTOR entry, ordered by
+	// sortTaskGroups: the RUNNING call first, then the creation task ahead of the other
+	// FINISHED sibling.
 	require.Len(t, actorNode.Children, 3)
-	assert.ElementsMatch(t, []string{"Counter.__init__", "increment", "get"}, nodeNames(actorNode.Children))
+	assert.Equal(t, []string{"get", "Counter.__init__", "increment"}, nodeNames(actorNode.Children))
 
 	assert.Equal(t, 0, got.TotalTasks)
 	assert.Equal(t, 2, got.TotalActorTasks)
@@ -229,12 +231,13 @@ func TestToSummaryByLineageGroupsMultipleActorsSeparately(t *testing.T) {
 
 	counter := findNode(t, got.Summary, "Counter")
 	assert.Equal(t, "actor:"+testActorID, counter.Key)
-	assert.ElementsMatch(t, []string{"Counter.__init__", "increment"}, nodeNames(counter.Children))
+	assert.Equal(t, []string{"Counter.__init__", "increment"}, nodeNames(counter.Children))
 	assert.Equal(t, map[string]int{"FINISHED": 2}, counter.StateCounts)
 
 	worker := findNode(t, got.Summary, "Worker")
 	assert.Equal(t, "actor:"+testActorID2, worker.Key)
-	assert.ElementsMatch(t, []string{"Worker.__init__", "increment", "shutdown"}, nodeNames(worker.Children))
+	// The RUNNING call sorts first, then the FAILED one, then the creation task.
+	assert.Equal(t, []string{"increment", "shutdown", "Worker.__init__"}, nodeNames(worker.Children))
 	assert.Equal(t, map[string]int{"FINISHED": 1, "RUNNING": 1, "FAILED": 1}, worker.StateCounts)
 
 	assert.Equal(t, 0, got.TotalTasks)
@@ -265,8 +268,9 @@ func TestToSummaryByLineageMergesSameClassActorsIntoGroup(t *testing.T) {
 	assert.Nil(t, group.Link)
 
 	require.Len(t, group.Children, 2)
-	assert.ElementsMatch(t,
-		[]string{"actor:" + testActorID, "actor:" + testActorID2},
+	// The actor with a RUNNING method call sorts ahead of the fully finished one.
+	assert.Equal(t,
+		[]string{"actor:" + testActorID2, "actor:" + testActorID},
 		nodeKeys(group.Children),
 	)
 
