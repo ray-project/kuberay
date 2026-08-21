@@ -51,12 +51,12 @@ func actorCreationTask(actorID, parentTaskID, className string) eventtypes.Task 
 	}
 }
 
-func actorTask(taskID, actorID, methodName string, state eventtypes.TaskStatus) eventtypes.Task {
+func actorTask(taskID, actorID, className, methodName string, state eventtypes.TaskStatus) eventtypes.Task {
 	return eventtypes.Task{
 		TaskID:        taskID,
 		TaskType:      eventtypes.ACTOR_TASK,
 		ActorTaskName: methodName,
-		ActorFunc:     pyFunc("Counter", methodName),
+		ActorFunc:     pyFunc(className, methodName),
 		ActorID:       actorID,
 		State:         state,
 	}
@@ -84,6 +84,16 @@ func nodeNames(nodes []*NestedTaskSummary) []string {
 		names = append(names, n.Name)
 	}
 	return names
+}
+
+// nodeKeys is used instead of nodeNames when the nodes share a name, e.g. two actors
+// of the same class.
+func nodeKeys(nodes []*NestedTaskSummary) []string {
+	keys := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		keys = append(keys, n.Key)
+	}
+	return keys
 }
 
 // --- Tests ---
@@ -176,8 +186,8 @@ func TestToSummaryByLineageTaskNameFallsBackToFuncName(t *testing.T) {
 func TestToSummaryByLineageGroupsActorTasksUnderActorEntry(t *testing.T) {
 	tasks := []eventtypes.Task{
 		actorCreationTask(testActorID, testDriverTaskID, "Counter"),
-		actorTask("task1", testActorID, "increment", eventtypes.FINISHED),
-		actorTask("task2", testActorID, "get", eventtypes.RUNNING),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
+		actorTask("task2", testActorID, "Counter", "get", eventtypes.RUNNING),
 	}
 	actors := []eventtypes.Actor{{ActorID: testActorID, ActorClass: "Counter"}}
 
@@ -197,6 +207,73 @@ func TestToSummaryByLineageGroupsActorTasksUnderActorEntry(t *testing.T) {
 	assert.Equal(t, 0, got.TotalTasks)
 	assert.Equal(t, 2, got.TotalActorTasks)
 	assert.Equal(t, 1, got.TotalActorScheduled)
+}
+
+func TestToSummaryByLineageGroupsMultipleActorsSeparately(t *testing.T) {
+	// Each ACTOR entry owns only its own tasks, even when two actors share a method name.
+	tasks := []eventtypes.Task{
+		actorCreationTask(testActorID, testDriverTaskID, "Counter"),
+		actorCreationTask(testActorID2, testDriverTaskID, "Worker"),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
+		actorTask("task2", testActorID2, "Worker", "increment", eventtypes.RUNNING),
+		actorTask("task3", testActorID2, "Worker", "shutdown", eventtypes.FAILED),
+	}
+	actors := []eventtypes.Actor{
+		{ActorID: testActorID, ActorClass: "Counter"},
+		{ActorID: testActorID2, ActorClass: "Worker"},
+	}
+
+	got := ToSummaryByLineage(tasks, actors)
+
+	require.Len(t, got.Summary, 2)
+
+	counter := findNode(t, got.Summary, "Counter")
+	assert.Equal(t, "actor:"+testActorID, counter.Key)
+	assert.ElementsMatch(t, []string{"Counter.__init__", "increment"}, nodeNames(counter.Children))
+	assert.Equal(t, map[string]int{"FINISHED": 2}, counter.StateCounts)
+
+	worker := findNode(t, got.Summary, "Worker")
+	assert.Equal(t, "actor:"+testActorID2, worker.Key)
+	assert.ElementsMatch(t, []string{"Worker.__init__", "increment", "shutdown"}, nodeNames(worker.Children))
+	assert.Equal(t, map[string]int{"FINISHED": 1, "RUNNING": 1, "FAILED": 1}, worker.StateCounts)
+
+	assert.Equal(t, 0, got.TotalTasks)
+	assert.Equal(t, 3, got.TotalActorTasks)
+	assert.Equal(t, 2, got.TotalActorScheduled)
+}
+
+func TestToSummaryByLineageMergesSameClassActorsIntoGroup(t *testing.T) {
+	// Two actors of the same class are same-named siblings at the root, so they collapse
+	// into a GROUP just like same-named tasks do.
+	tasks := []eventtypes.Task{
+		actorCreationTask(testActorID, testDriverTaskID, "Counter"),
+		actorCreationTask(testActorID2, testDriverTaskID, "Counter"),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
+		actorTask("task2", testActorID2, "Counter", "increment", eventtypes.RUNNING),
+	}
+	actors := []eventtypes.Actor{
+		{ActorID: testActorID, ActorClass: "Counter"},
+		{ActorID: testActorID2, ActorClass: "Counter"},
+	}
+
+	got := ToSummaryByLineage(tasks, actors)
+
+	require.Len(t, got.Summary, 1)
+	group := got.Summary[0]
+	assert.Equal(t, "GROUP", group.Type)
+	assert.Equal(t, "Counter", group.Name)
+	assert.Nil(t, group.Link)
+
+	require.Len(t, group.Children, 2)
+	assert.ElementsMatch(t,
+		[]string{"actor:" + testActorID, "actor:" + testActorID2},
+		nodeKeys(group.Children),
+	)
+
+	// The GROUP aggregates both actors' creation tasks and method calls.
+	assert.Equal(t, map[string]int{"FINISHED": 3, "RUNNING": 1}, group.StateCounts)
+	assert.Equal(t, 2, got.TotalActorTasks)
+	assert.Equal(t, 2, got.TotalActorScheduled)
 }
 
 func TestToSummaryByLineageActorNameResolution(t *testing.T) {
@@ -256,7 +333,7 @@ func TestToSummaryByLineageDerivesActorIDFromCreationTaskID(t *testing.T) {
 
 	tasks := []eventtypes.Task{
 		creation,
-		actorTask("task1", testActorID, "increment", eventtypes.FINISHED),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
 	}
 
 	got := ToSummaryByLineage(tasks, nil)
@@ -285,7 +362,7 @@ func TestToSummaryByLineageSkipsActorWithoutCreationTask(t *testing.T) {
 	// Ray's get_or_create_actor_task_group returns None when the creation task is
 	// missing, so the actor task is dropped from the tree but still counted.
 	tasks := []eventtypes.Task{
-		actorTask("task1", testActorID, "increment", eventtypes.FINISHED),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
 	}
 
 	got := ToSummaryByLineage(tasks, nil)
@@ -321,8 +398,8 @@ func TestToSummaryByLineageMergesSameNamedActorTasksIntoGroup(t *testing.T) {
 	// ACTOR entry, and the ACTOR entry must aggregate state counts through that GROUP.
 	tasks := []eventtypes.Task{
 		actorCreationTask(testActorID, testDriverTaskID, "Counter"),
-		actorTask("task1", testActorID, "increment", eventtypes.FINISHED),
-		actorTask("task2", testActorID, "increment", eventtypes.RUNNING),
+		actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED),
+		actorTask("task2", testActorID, "Counter", "increment", eventtypes.RUNNING),
 	}
 	actors := []eventtypes.Actor{{ActorID: testActorID, ActorClass: "Counter"}}
 
@@ -377,13 +454,21 @@ func TestToSummaryByLineageEmptyStateIsCountedAsNIL(t *testing.T) {
 }
 
 func TestToSummaryByLineageActorEntryTakesTimestampFromCreationTask(t *testing.T) {
-	// The ACTOR entry is synthetic, so its timestamp has to come from the creation task.
-	creation := withCreationTime(actorCreationTask(testActorID, testDriverTaskID, "Counter"), 3000)
+	// The ACTOR entry is synthetic, so its timestamp has to come from the creation task:
+	// not from an unrelated task that started earlier, and not from the actor's own later
+	// method call. Note that mergeSiblingsForTaskGroup would also pull the creation task's
+	// timestamp up into the ACTOR entry, so this pins the resulting value rather than the
+	// exact code path that produced it.
+	tasks := []eventtypes.Task{
+		withCreationTime(actorCreationTask(testActorID, testDriverTaskID, "Counter"), 3000),
+		withCreationTime(actorTask("task1", testActorID, "Counter", "increment", eventtypes.FINISHED), 7000),
+		withCreationTime(normalTask("task2", testDriverTaskID, "unrelated", eventtypes.FINISHED), 1000),
+	}
 
-	got := ToSummaryByLineage([]eventtypes.Task{creation}, nil)
+	got := ToSummaryByLineage(tasks, nil)
 
-	require.Len(t, got.Summary, 1)
-	actorNode := got.Summary[0]
+	require.Len(t, got.Summary, 2)
+	actorNode := findNode(t, got.Summary, "Counter")
 	assert.Equal(t, "ACTOR", actorNode.Type)
 	require.NotNil(t, actorNode.Timestamp)
 	assert.Equal(t, int64(3000), *actorNode.Timestamp)
