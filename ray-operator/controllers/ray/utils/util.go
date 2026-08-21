@@ -1164,7 +1164,9 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		dRef := desired.Spec.ParentRefs[i]
 
 		if string(eRef.Name) != string(dRef.Name) ||
-			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) ||
+			string(ptr.Deref(eRef.SectionName, "")) != string(ptr.Deref(dRef.SectionName, "")) ||
+			ptr.Deref(eRef.Port, 0) != ptr.Deref(dRef.Port, 0) {
 			return false
 		}
 	}
