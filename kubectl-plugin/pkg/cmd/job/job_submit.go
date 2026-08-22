@@ -594,10 +594,10 @@ func runPortForward(
 	streams *genericiooptions.IOStreams,
 	svcName string,
 ) {
-    args := []string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)}
+	args := []string{"service/" + svcName, fmt.Sprintf("%d:%d", 8265, 8265)}
 	opts := portforward.NewDefaultPortForwardOptions(*streams)
 	opts.Address = []string{"localhost"}
-	portForwardCmd := portforward.NewCmdPortForward(factory, *streams) 
+	portForwardCmd := portforward.NewCmdPortForward(factory, *streams)
 
 	fmt.Printf("Port forwarding service %s\n", svcName)
 	if err := opts.Complete(factory, portForwardCmd, args); err != nil {
