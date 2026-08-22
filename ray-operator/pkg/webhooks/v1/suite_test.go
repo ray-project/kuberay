@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1"
+	rayv1alpha1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1alpha1" //nolint:staticcheck // ray.io/v1alpha1 is still a served RayCluster version; this suite must register it to exercise the worker group removal guard there.
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
