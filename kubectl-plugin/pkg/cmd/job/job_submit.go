@@ -600,7 +600,15 @@ func runPortForward(
 	portForwardCmd := portforward.NewCmdPortForward(factory, *streams) 
 
 	fmt.Printf("Port forwarding service %s\n", svcName)
-	if err := portForwardCmd.ExecuteContext(ctx); err != nil && ctx.Err() == nil {
+	if err := opts.Complete(factory, portForwardCmd, args); err != nil {
+		fmt.Fprintf(streams.ErrOut, "Port-forward setup failed: %v\n", err)
+		return
+	}
+	if err := opts.Validate(); err != nil {
+		fmt.Fprintf(streams.ErrOut, "Port-forward validation failed: %v\n", err)
+		return
+	}
+	if err := opts.RunPortForwardContext(ctx); err != nil && ctx.Err() == nil {
 		// Restarting the port-forward cannot reconnect the Ray CLI's existing
 		// log stream. Let the Ray CLI exit, then check the RayJob status in
 		// checkJobStatusOnSubmitError.
