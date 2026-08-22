@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -343,20 +344,24 @@ func TestRayCreateClusterWarnsOnZeroWorkerReplicas(t *testing.T) {
 	cmdFactory := cmdutil.NewFactory(&genericclioptions.ConfigFlags{KubeConfig: &kubeConfig})
 
 	tests := map[string]struct {
-		config         string
-		expectedWarned bool
+		config           string
+		expectedWarnings []string
 	}{
 		"should warn when a worker group is explicitly set to 0 replicas": {
-			config:         "worker-groups:\n  - cpu: 3\n    replicas: 0\n",
-			expectedWarned: true,
+			config:           "worker-groups:\n  - cpu: 3\n    replicas: 0\n",
+			expectedWarnings: []string{`Warning: worker group "default-group" has 0 replicas and will start with no worker pods.`},
+		},
+		"should warn only about the empty group when another group has replicas": {
+			config: "worker-groups:\n  - name: cpu-workers\n    replicas: 3\n  - name: gpu-workers\n    replicas: 0\n",
+			expectedWarnings: []string{
+				`Warning: worker group "gpu-workers" has 0 replicas and will start with no worker pods.`,
+			},
 		},
 		"should not warn when the replicas are defaulted": {
-			config:         "worker-groups:\n  - cpu: 3\n",
-			expectedWarned: false,
+			config: "worker-groups:\n  - cpu: 3\n",
 		},
 		"should not warn when the autoscaler can scale the group up": {
-			config:         "autoscaler:\n  version: v2\nworker-groups:\n  - cpu: 3\n    replicas: 0\n",
-			expectedWarned: false,
+			config: "autoscaler:\n  version: v2\nworker-groups:\n  - cpu: 3\n    replicas: 0\n",
 		},
 	}
 
@@ -379,11 +384,16 @@ func TestRayCreateClusterWarnsOnZeroWorkerReplicas(t *testing.T) {
 			// 0 replicas is a valid configuration, so the command still succeeds
 			require.NoError(t, options.Run(context.Background(), k8sClients))
 
-			if tc.expectedWarned {
-				require.Contains(t, errOut.String(), `Warning: worker group "default-group" has 0 replicas`)
-			} else {
+			if len(tc.expectedWarnings) == 0 {
 				require.Empty(t, errOut.String())
+				return
 			}
+			for _, warning := range tc.expectedWarnings {
+				require.Contains(t, errOut.String(), warning)
+			}
+			// The warning is about the group, not the cluster: a group with replicas cannot be
+			// warned about, and the cluster as a whole may still get worker pods.
+			require.Len(t, strings.Split(strings.TrimSpace(errOut.String()), "\n"), len(tc.expectedWarnings))
 		})
 	}
 }

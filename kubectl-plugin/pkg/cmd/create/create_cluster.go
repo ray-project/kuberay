@@ -346,8 +346,8 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 	return nil
 }
 
-// warnOnEmptyWorkerGroups warns about worker groups that will start with no worker pods. 0 replicas
-// is valid when the autoscaler can scale the group up, so this never fails the command.
+// warnOnEmptyWorkerGroups warns about each worker group that will start with no worker pods. 0
+// replicas is valid when the autoscaler can scale the group up, so this never fails the command.
 func (options *CreateClusterOptions) warnOnEmptyWorkerGroups() {
 	if options.rayClusterConfig.Autoscaler != nil && options.rayClusterConfig.Autoscaler.Version != "" {
 		return
@@ -358,7 +358,7 @@ func (options *CreateClusterOptions) warnOnEmptyWorkerGroups() {
 			continue
 		}
 		name := ptr.Deref(workerGroup.Name, fmt.Sprintf("#%d", i))
-		fmt.Fprintf(options.ioStreams.ErrOut, "Warning: worker group %q has 0 replicas, so the cluster will start with no worker pods.\n", name)
+		fmt.Fprintf(options.ioStreams.ErrOut, "Warning: worker group %q has 0 replicas and will start with no worker pods.\n", name)
 	}
 }
 
