@@ -53,7 +53,7 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 //
 // Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
-	// Build cluster ID (clusterLogPathPrefix) used by StorageReader
+	// Build storage prefix used by StorageReader
 	clusterLogPathPrefix := clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 
 	// Get or create the JobEventMap for this cluster session
@@ -100,8 +100,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // readEventFile reads and parses a single event_*.log file (JSON Lines format).
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
-func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+func (r *LogEventReader) readEventFile(prefix, filePath string, jobEventMap *types.JobEventMap) error {
+	ioReader := r.reader.GetContent(prefix, filePath)
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}
