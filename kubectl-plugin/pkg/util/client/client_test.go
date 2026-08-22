@@ -188,9 +188,9 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 
 func TestHasRayClusterAPI(t *testing.T) {
 	tests := []struct {
-		name               string
-		resources          []*metav1.APIResourceList
-		expectedInstalled  bool
+		name              string
+		resources         []*metav1.APIResourceList
+		expectedInstalled bool
 	}{
 		{
 			name: "RayCluster API is served",
