@@ -5304,6 +5304,15 @@ spec:
                     - groupName
                     x-kubernetes-list-type: map
                 type: object
+              podFQDN:
+                properties:
+                  mode:
+                    default: DNSOnly
+                    enum:
+                    - DNSOnly
+                    - RegisterAsNodeAddress
+                    type: string
+                type: object
               rayVersion:
                 type: string
               suspend:
@@ -9311,6 +9320,11 @@ spec:
                 type: object
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: spec.podFQDN is immutable; delete and recreate the RayCluster to
+            change it
+          rule: has(self.spec.podFQDN) == has(oldSelf.spec.podFQDN) && (!has(self.spec.podFQDN)
+            || self.spec.podFQDN == oldSelf.spec.podFQDN)
     served: true
     storage: true
     subresources:

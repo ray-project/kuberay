@@ -50,6 +50,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("PodFQDNOptions"):
+		return &rayv1.PodFQDNOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
 		return &rayv1.RayClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterSpec"):

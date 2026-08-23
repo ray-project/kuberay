@@ -60,6 +60,13 @@ type RayClusterSpec struct {
 	// Requires the RayClusterMTLS feature gate on the operator.
 	// +optional
 	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
+	// PodFQDN gives each Ray pod a resolvable per-pod DNS name (FQDN) via
+	// spec.hostname + spec.subdomain and a headless Service.
+	// When nil, the feature is disabled entirely. See PodFQDNMode for the available modes.
+	// This field is immutable on RayCluster as existing pods are not updated in place, so
+	// changing it on a live cluster would leave nodes registered under mixed identities.
+	// +optional
+	PodFQDN *PodFQDNOptions `json:"podFQDN,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -80,6 +87,31 @@ type TLSOptions struct {
 	// Defaults to false when omitted. Set to true to enable mTLS.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// PodFQDNMode describes how per-pod DNS names are used.
+type PodFQDNMode string
+
+const (
+	// PodFQDNModeDNSOnly creates per-pod DNS records (pod hostname/subdomain plus the
+	// headless Service) without changing how Ray nodes register. Ray keeps using pod IPs;
+	// the FQDNs are for external consumers.
+	PodFQDNModeDNSOnly PodFQDNMode = "DNSOnly"
+	// PodFQDNModeRegisterAsNodeAddress additionally injects each pod's FQDN as the Ray
+	// --node-ip-address, so Ray nodes register and address each other by DNS name instead
+	// of pod IP.
+	// Only supports autoscaler v2, v1 matches pods to Ray nodes by IP string, which never
+	// matches an FQDN, so idle scale-down never triggers.
+	PodFQDNModeRegisterAsNodeAddress PodFQDNMode = "RegisterAsNodeAddress"
+)
+
+// PodFQDNOptions configures per-pod DNS names for Ray pods.
+type PodFQDNOptions struct {
+	// Mode selects how the per-pod FQDNs are used. Defaults to DNSOnly.
+	// +kubebuilder:validation:Enum=DNSOnly;RegisterAsNodeAddress
+	// +kubebuilder:default=DNSOnly
+	// +optional
+	Mode PodFQDNMode `json:"mode,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None
@@ -703,6 +735,7 @@ const (
 // +kubebuilder:printcolumn:name="head pod IP",type="string",JSONPath=".status.head.podIP",priority=1
 // +kubebuilder:printcolumn:name="head service IP",type="string",JSONPath=".status.head.serviceIP",priority=1
 // +genclient
+// +kubebuilder:validation:XValidation:rule="has(self.spec.podFQDN) == has(oldSelf.spec.podFQDN) && (!has(self.spec.podFQDN) || self.spec.podFQDN == oldSelf.spec.podFQDN)",message="spec.podFQDN is immutable; delete and recreate the RayCluster to change it"
 type RayCluster struct {
 	// Standard object metadata.
 	metav1.TypeMeta   `json:",inline"`

@@ -5398,6 +5398,15 @@ spec:
                             - groupName
                             x-kubernetes-list-type: map
                         type: object
+                      podFQDN:
+                        properties:
+                          mode:
+                            default: DNSOnly
+                            enum:
+                            - DNSOnly
+                            - RegisterAsNodeAddress
+                            type: string
+                        type: object
                       rayVersion:
                         type: string
                       suspend:
