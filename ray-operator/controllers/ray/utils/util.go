@@ -801,6 +801,18 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
+// IsPodFQDNEnabled returns whether per-pod DNS records (pod hostname/subdomain plus the
+// headless Service) should be created for this RayCluster, regardless of mode.
+func IsPodFQDNEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.PodFQDN != nil
+}
+
+// IsHostnameRegistrationEnabled returns whether Ray nodes should additionally register
+// with their per-pod FQDN (via --node-ip-address) instead of the pod IP.
+func IsHostnameRegistrationEnabled(spec *rayv1.RayClusterSpec) bool {
+	return IsPodFQDNEnabled(spec) && spec.PodFQDN.Mode == rayv1.PodFQDNModeRegisterAsNodeAddress
+}
+
 // IsTLSEnabled returns whether TLS is enabled for the RayCluster.
 // TLS is enabled when the RayClusterMTLS feature gate is on, spec.TLSOptions is non-nil,
 // and spec.TLSOptions.Enabled is true.

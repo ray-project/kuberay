@@ -894,18 +894,20 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 	return err
 }
 
-// Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
+// Return nil only when the headless worker service is successfully created or already exists,
+// or when the cluster needs no headless service.
 func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, instance *rayv1.RayCluster) error {
-	// Check if there are worker groups with NumOfHosts > 1 in the cluster
-	isMultiHost := false
+	// The headless service is needed for multi-host worker groups, and whenever podFQDN
+	// is enabled (every worker needs a per-pod DNS record under it).
+	needHeadlessService := utils.IsPodFQDNEnabled(&instance.Spec)
 	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
 		if workerGroup.NumOfHosts > 1 {
-			isMultiHost = true
+			needHeadlessService = true
 			break
 		}
 	}
 
-	if isMultiHost {
+	if needHeadlessService {
 		services := corev1.ServiceList{}
 		options := common.RayClusterHeadlessServiceListOptions(instance)
 

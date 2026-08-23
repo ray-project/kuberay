@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/version"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -234,6 +235,13 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// Merge K8s labels from the Pod template and the top-level `Labels` field.
 	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
+
+	// Register the head with its service DNS name instead of the pod IP.
+	if utils.IsHostnameRegistrationEnabled(&instance.Spec) {
+		if _, ok := headSpec.RayStartParams["node-ip-address"]; !ok {
+			headSpec.RayStartParams["node-ip-address"] = utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
+		}
+	}
 
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
@@ -680,6 +688,20 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
 	}
+	// Set hostname and subdomain if spec.PodFQDN is set to get per-Pod FQDN. Skip if a Subdomain
+	// is already set (e.g. TPU multi-host webhook) to avoid breaking that setup.
+	if utils.IsPodFQDNEnabled(&instance.Spec) && podTemplate.Spec.Subdomain == "" {
+		hostname := utils.CheckLabel(podName + rand.String(5)) // podName ends with "-", <= 63 chars total
+		podTemplate.Spec.Hostname = hostname
+		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+
+		// Set node-ip-address as FQDN if spec.PodFQDN.Mode is set to RegisterAsNodeAddress
+		if _, ok := workerSpec.RayStartParams["node-ip-address"]; !ok && utils.IsHostnameRegistrationEnabled(&instance.Spec) {
+			workerSpec.RayStartParams["node-ip-address"] = fmt.Sprintf("%s.%s.%s.svc.%s",
+				hostname, podTemplate.Spec.Subdomain, instance.Namespace, utils.GetClusterDomainName())
+		}
+	}
+
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
