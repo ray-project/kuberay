@@ -53,11 +53,11 @@ func ValidateTPU(tpu *string, numOfHosts *int32, nodeSelector map[string]string)
 		return fmt.Errorf("unsupported TPU accelerator %q. See %s for supported values", accelerator, tpuDocURL)
 	}
 
-	allowedTPUPerHost, err := spec.allowedTPUPerHost(topology)
+	allowed, err := spec.allowedTPUPerHost(topology)
 	if err != nil {
 		return err
 	}
-	if !slices.Contains(allowedTPUPerHost, tpuPerHost) {
+	if !slices.Contains(allowed, tpuPerHost) {
 		return fmt.Errorf("%d TPUs per host is not valid for accelerator %q with topology %q. See %s for supported values", tpuPerHost, accelerator, topology, tpuDocURL)
 	}
 
@@ -164,11 +164,11 @@ type tpuAccelerator struct {
 
 func (a tpuAccelerator) allowedTPUPerHost(topology string) ([]int64, error) {
 	if a.topologies != nil {
-		tpuPerHost, ok := a.topologies[topology]
+		allowed, ok := a.topologies[topology]
 		if !ok {
 			return nil, fmt.Errorf("unsupported TPU topology %q. See %s for supported values", topology, tpuDocURL)
 		}
-		return tpuPerHost, nil
+		return allowed, nil
 	}
 	if !a.is3D {
 		return nil, fmt.Errorf("internal error: TPU accelerator has neither 2D nor 3D topologies")

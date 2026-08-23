@@ -160,6 +160,46 @@ func TestRayCreateClusterValidate(t *testing.T) {
 			},
 			configFileContents: `image: foo`,
 		},
+		"should error when TPU node selectors are missing": {
+			opts: &CreateClusterOptions{
+				cmdFactory: cmdFactory,
+				workerTPU:  "4",
+				numOfHosts: 1,
+			},
+			expectError: "is not set",
+		},
+		"should not error when TPU validation is skipped": {
+			opts: &CreateClusterOptions{
+				cmdFactory:        cmdFactory,
+				workerTPU:         "4",
+				numOfHosts:        1,
+				skipTPUValidation: true,
+			},
+		},
+		"should error when a config file has invalid TPU config": {
+			opts: &CreateClusterOptions{
+				cmdFactory: cmdFactory,
+			},
+			configFileContents: `head:
+  cpu: "2"
+  memory: "4Gi"
+worker-groups:
+  - tpu: "1"
+`,
+			expectError: "is not set",
+		},
+		"should not error when a config file has invalid TPU config and validation is skipped": {
+			opts: &CreateClusterOptions{
+				cmdFactory:        cmdFactory,
+				skipTPUValidation: true,
+			},
+			configFileContents: `head:
+  cpu: "2"
+  memory: "4Gi"
+worker-groups:
+  - tpu: "1"
+`,
+		},
 	}
 
 	for name, tc := range tests {
@@ -199,6 +239,7 @@ func TestSwitchesIncompatibleWithConfigFilePresent(t *testing.T) {
 				"--dry-run",
 				"--wait",
 				"--timeout", "10s",
+				"--skip-tpu-validation",
 			},
 		},
 		"should error when incompatible flags are used": {
@@ -329,6 +370,24 @@ func TestNewCreateClusterCommand(t *testing.T) {
 				"--dry-run",
 			},
 		},
+		"should error when TPU validation fails": {
+			args: []string{
+				"sample-cluster",
+				"--worker-tpu", "4",
+				"--worker-node-selectors", fmt.Sprintf("%s=tpu-v6e-slice,%s=4x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
+				"--dry-run",
+			},
+			expectError: "numOfHosts must be 4",
+		},
+		"should succeed when TPU validation is skipped": {
+			args: []string{
+				"sample-cluster",
+				"--worker-tpu", "4",
+				"--worker-node-selectors", fmt.Sprintf("%s=tpu-v6e-slice,%s=4x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
+				"--skip-tpu-validation",
+				"--dry-run",
+			},
+		},
 		"should error when --file is provided with incompatible flags": {
 			args: []string{
 				"sample-cluster",
@@ -347,7 +406,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 			cmd.SetArgs(tc.args)
 
 			if tc.expectError != "" {
-				require.EqualError(t, cmd.Execute(), tc.expectError)
+				require.ErrorContains(t, cmd.Execute(), tc.expectError)
 			} else {
 				require.NoError(t, cmd.Execute())
 			}

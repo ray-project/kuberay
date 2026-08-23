@@ -49,6 +49,7 @@ type CreateClusterOptions struct {
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
+	skipTPUValidation      bool
 }
 
 var (
@@ -150,6 +151,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
+	cmd.Flags().BoolVar(&options.skipTPUValidation, "skip-tpu-validation", false, "skip TPU accelerator, topology, and numOfHosts validation")
 
 	return cmd
 }
@@ -190,7 +192,7 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 
-		if err := generation.ValidateConfig(rayClusterConfig); err != nil {
+		if err := generation.ValidateConfig(rayClusterConfig, options.skipTPUValidation); err != nil {
 			return fmt.Errorf("failed to validate config file: %w", err)
 		}
 
@@ -218,8 +220,10 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 		}
 	}
 
-	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
-		return fmt.Errorf("%w", err)
+	if !options.skipTPUValidation {
+		if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
 	}
 
 	return nil
@@ -364,12 +368,13 @@ func flagsIncompatibleWithConfigFilePresent(cmd *cobra.Command) error {
 	// Define which flags are allowed to be used with --file.
 	// These are typically flags that modify the command's behavior but not the cluster configuration.
 	allowedWithFile := map[string]bool{
-		"file":      true,
-		"context":   true,
-		"namespace": true,
-		"dry-run":   true,
-		"wait":      true,
-		"timeout":   true,
+		"file":                true,
+		"context":             true,
+		"namespace":           true,
+		"dry-run":             true,
+		"wait":                true,
+		"timeout":             true,
+		"skip-tpu-validation": true,
 	}
 
 	// Check all flags to see if any incompatible flags are set
