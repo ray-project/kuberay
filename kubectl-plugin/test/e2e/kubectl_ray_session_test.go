@@ -170,7 +170,6 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 		case <-time.After(30 * time.Second):
 			Fail("kubectl ray session did not terminate after SIGTERM")
 		}
-
 	})
 })
 
