@@ -39,6 +39,12 @@ func (m *memWriter) CreateDirectory(path string) error {
 	return nil
 }
 
+func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	require.NoError(t, json.NewEncoder(w).Encode(v))
+}
+
 func TestRunSnapshot(t *testing.T) {
 	clusterMetadata := map[string]any{
 		"result": true,
@@ -56,6 +62,9 @@ func TestRunSnapshot(t *testing.T) {
 		{"job_id": "02000000", "status": "RUNNING"},
 	}
 	datasets01 := map[string]any{"datasets": []any{map[string]any{"id": "ds1"}}}
+	tasks := map[string]any{"result": []any{}}
+	actors := []any{}
+	nodes := []any{}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -65,7 +74,7 @@ func TestRunSnapshot(t *testing.T) {
 			full = path + "?" + query
 		}
 
-		var resp interface{}
+		var resp any
 		switch {
 		case full == "/api/v0/cluster_metadata":
 			resp = clusterMetadata
@@ -77,6 +86,12 @@ func TestRunSnapshot(t *testing.T) {
 			resp = placementGroups
 		case full == "/api/jobs/":
 			resp = jobs
+		case full == "/api/v0/tasks?detail=1&limit=10000":
+			resp = tasks
+		case full == "/logical/actors":
+			resp = actors
+		case full == "/nodes":
+			resp = nodes
 		case strings.HasPrefix(path, "/api/data/datasets/"):
 			jobID := strings.TrimPrefix(path, "/api/data/datasets/")
 			if jobID == "01000000" {
@@ -89,8 +104,7 @@ func TestRunSnapshot(t *testing.T) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		writeJSON(t, w, resp)
 	}))
 	defer srv.Close()
 
@@ -107,39 +121,25 @@ func TestRunSnapshot(t *testing.T) {
 
 	sessionName := "session_2026-08-17_10-30-00_123456"
 
-	// Verify served endpoints are stored
-	assertStoredEndpoint(t, writer, "root", sessionName, "/api/v0/cluster_metadata")
-	assertStoredEndpoint(t, writer, "root", sessionName, "/timezone")
-	assertStoredEndpoint(t, writer, "root", sessionName, "/api/serve/applications/")
-	assertStoredEndpoint(t, writer, "root", sessionName, "/api/v0/placement_groups?detail=1&limit=10000")
+	assertStoredEndpoint(t, writer, sessionName, "/api/v0/cluster_metadata")
+	assertStoredEndpoint(t, writer, sessionName, "/timezone")
+	assertStoredEndpoint(t, writer, sessionName, "/api/serve/applications/")
+	assertStoredEndpoint(t, writer, sessionName, "/api/v0/placement_groups?detail=1&limit=10000")
+	assertStoredEndpoint(t, writer, sessionName, "/api/jobs/")
+	assertStoredEndpoint(t, writer, sessionName, "/api/data/datasets/01000000")
 
-	// Verify preservation endpoints are stored
-	assertStoredEndpoint(t, writer, "root", sessionName, "/api/jobs/")
-
-	// Verify per-job datasets are stored
-	assertStoredEndpoint(t, writer, "root", sessionName, "/api/data/datasets/01000000")
-
-	// Verify cluster metadata marker exists
 	markerPath := "root/cluster-metadata/raycluster/default_my-cluster/" + sessionName
 	_, markerExists := writer.files[markerPath]
 	assert.True(t, markerExists, "cluster metadata marker should exist at %s; files: %v", markerPath, keys(writer.files))
 }
 
-func TestRunSnapshotFallbackSessionName(t *testing.T) {
+func TestRunSnapshotMissingSessionInfo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch path {
+		switch r.URL.Path {
 		case "/api/v0/cluster_metadata":
-			// Return metadata without session_name
-			json.NewEncoder(w).Encode(map[string]any{"result": true, "data": map[string]any{}})
-		case "/timezone":
-			json.NewEncoder(w).Encode(map[string]any{"timezone": "UTC"})
-		case "/api/serve/applications/":
-			json.NewEncoder(w).Encode(map[string]any{})
-		case "/api/jobs/":
-			json.NewEncoder(w).Encode([]any{})
+			writeJSON(t, w, map[string]any{"result": true, "data": map[string]any{}})
 		default:
-			json.NewEncoder(w).Encode(map[string]any{})
+			writeJSON(t, w, map[string]any{})
 		}
 	}))
 	defer srv.Close()
@@ -153,32 +153,22 @@ func TestRunSnapshotFallbackSessionName(t *testing.T) {
 	}
 
 	err := Run(context.Background(), cfg, writer)
-	require.NoError(t, err)
-
-	// Verify a session name was generated (should start with "session_")
-	foundSession := false
-	for path := range writer.files {
-		if strings.Contains(path, "session_") {
-			foundSession = true
-			break
-		}
-	}
-	assert.True(t, foundSession, "should have generated a session name starting with session_")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to discover session name")
 }
 
 func TestRunSnapshotWithOwner(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch path {
+		switch r.URL.Path {
 		case "/api/v0/cluster_metadata":
-			json.NewEncoder(w).Encode(map[string]any{
+			writeJSON(t, w, map[string]any{
 				"result": true,
 				"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
 			})
 		case "/api/jobs/":
-			json.NewEncoder(w).Encode([]any{})
+			writeJSON(t, w, []any{})
 		default:
-			json.NewEncoder(w).Encode(map[string]any{})
+			writeJSON(t, w, map[string]any{})
 		}
 	}))
 	defer srv.Close()
@@ -198,12 +188,10 @@ func TestRunSnapshotWithOwner(t *testing.T) {
 
 	sessionName := "session_2026-08-17_10-30-00_123456"
 
-	// Verify the cluster metadata marker uses owner path
 	markerPath := "root/cluster-metadata/rayjob/default_my-job_my-cluster/" + sessionName
 	_, markerExists := writer.files[markerPath]
 	assert.True(t, markerExists, "cluster metadata marker with owner should exist at %s; files: %v", markerPath, keys(writer.files))
 
-	// Verify fetched_endpoints use owner path in cluster dir
 	expectedPrefix := "root/cluster-history/rayjob/default/my-job/my-cluster/" + sessionName + "/fetched_endpoints/"
 	foundFetched := false
 	for path := range writer.files {
@@ -216,8 +204,8 @@ func TestRunSnapshotWithOwner(t *testing.T) {
 }
 
 func TestRunSnapshotCancelation(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, map[string]any{
 			"result": true,
 			"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
 		})
@@ -225,7 +213,7 @@ func TestRunSnapshotCancelation(t *testing.T) {
 	defer srv.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel()
 
 	writer := newMemWriter()
 	cfg := Config{
@@ -277,8 +265,8 @@ func TestDiscoverSessionName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				json.NewEncoder(w).Encode(tt.response)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(t, w, tt.response)
 			}))
 			defer srv.Close()
 
@@ -290,16 +278,96 @@ func TestDiscoverSessionName(t *testing.T) {
 	}
 }
 
-func TestDiscoverSessionNameFallback(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestDiscoverSessionNameDashboardUnreachable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
 	defer srv.Close()
 
 	client := &http.Client{}
-	name, err := discoverSessionName(context.Background(), client, srv.URL)
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(name, "session_"), "generated session name should start with session_")
+	_, err := discoverSessionName(context.Background(), client, srv.URL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dashboard unreachable")
+}
+
+func TestDiscoverSessionNameNoSessionInfo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, map[string]any{"result": true, "data": map[string]any{}})
+	}))
+	defer srv.Close()
+
+	client := &http.Client{}
+	_, err := discoverSessionName(context.Background(), client, srv.URL)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing session_name and usable session_dir")
+}
+
+func TestRunSnapshotTotalScrapeFailure(t *testing.T) {
+	metadataCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v0/cluster_metadata" {
+			metadataCalls++
+			if metadataCalls == 1 {
+				writeJSON(t, w, map[string]any{
+					"result": true,
+					"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
+				})
+				return
+			}
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	writer := newMemWriter()
+	cfg := Config{
+		DashboardAddress:    srv.URL,
+		StorageRootDir:      "root",
+		RayClusterName:      "my-cluster",
+		RayClusterNamespace: "default",
+	}
+
+	err := Run(context.Background(), cfg, writer)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no endpoints were stored successfully")
+
+	for path := range writer.files {
+		assert.NotContains(t, path, "cluster-metadata", "no marker should be written when all endpoints fail")
+	}
+}
+
+func TestRunSnapshotLateCancelation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v0/cluster_metadata":
+			writeJSON(t, w, map[string]any{
+				"result": true,
+				"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
+			})
+		case "/api/jobs/":
+			cancel()
+			writeJSON(t, w, []any{})
+		default:
+			writeJSON(t, w, map[string]any{})
+		}
+	}))
+	defer srv.Close()
+
+	writer := newMemWriter()
+	cfg := Config{
+		DashboardAddress:    srv.URL,
+		StorageRootDir:      "root",
+		RayClusterName:      "my-cluster",
+		RayClusterNamespace: "default",
+	}
+
+	err := Run(ctx, cfg, writer)
+	require.Error(t, err)
+
+	for path := range writer.files {
+		assert.NotContains(t, path, "cluster-metadata", "no marker should be written after late cancellation")
+	}
 }
 
 func TestDedup(t *testing.T) {
@@ -312,8 +380,8 @@ func TestDedup(t *testing.T) {
 }
 
 func TestFetchAndStore(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"key":"value"}`))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"key":"value"}`))
 	}))
 	defer srv.Close()
 
@@ -324,12 +392,11 @@ func TestFetchAndStore(t *testing.T) {
 	expectedKey := "root/cluster-history/raycluster/default/my-cluster/session_2026-01-01_12-00-00_000000/fetched_endpoints/restful__api__v0__cluster_metadata"
 	data, ok := writer.files[expectedKey]
 	require.True(t, ok, "expected file at %s; files: %v", expectedKey, keys(writer.files))
-	assert.Equal(t, `{"key":"value"}`, string(data))
+	assert.JSONEq(t, `{"key":"value"}`, string(data))
 }
 
 func TestFetchAndStoreSkipsEmptyResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return empty body
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 	}))
 	defer srv.Close()
 
@@ -340,7 +407,7 @@ func TestFetchAndStoreSkipsEmptyResponse(t *testing.T) {
 }
 
 func TestFetchEndpointAuthFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer srv.Close()
@@ -350,12 +417,12 @@ func TestFetchEndpointAuthFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "authentication failed")
 }
 
-func assertStoredEndpoint(t *testing.T, writer *memWriter, rootDir, sessionName, endpoint string) {
+func assertStoredEndpoint(t *testing.T, writer *memWriter, sessionName, endpoint string) { //nolint:unparam // sessionName is conceptually variable; helper exists for readability
 	t.Helper()
 	storageKey := "restful__" + strings.ReplaceAll(strings.Trim(endpoint, "/"), "/", "__")
-	prefix := rootDir + "/cluster-history/raycluster/default/my-cluster/" + sessionName + "/fetched_endpoints/" + storageKey
-	_, ok := writer.files[prefix]
-	assert.True(t, ok, "endpoint %s should be stored at %s; files: %v", endpoint, prefix, keys(writer.files))
+	filePath := "root/cluster-history/raycluster/default/my-cluster/" + sessionName + "/fetched_endpoints/" + storageKey
+	_, ok := writer.files[filePath]
+	assert.True(t, ok, "endpoint %s should be stored at %s; files: %v", endpoint, filePath, keys(writer.files))
 }
 
 func keys(m map[string][]byte) []string {
@@ -365,4 +432,3 @@ func keys(m map[string][]byte) []string {
 	}
 	return result
 }
-
