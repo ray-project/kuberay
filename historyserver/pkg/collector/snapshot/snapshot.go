@@ -43,7 +43,10 @@ var servedEndpoints = []string{
 // handlers for these paths that currently read from event JSONL, so the
 // stored responses are not served yet but the data is preserved.
 var preservationEndpoints = []string{
-	"/api/jobs/",
+	jobsEndpoint,
+	"/api/v0/tasks?detail=1&limit=10000",
+	"/logical/actors",
+	"/nodes",
 }
 
 const (
@@ -58,8 +61,8 @@ const (
 func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 	client := &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        10,
-			IdleConnTimeout:     30 * time.Second,
+			MaxIdleConns:    10,
+			IdleConnTimeout: 30 * time.Second,
 		},
 	}
 
@@ -74,6 +77,7 @@ func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 	endpoints := dedup(servedEndpoints, preservationEndpoints, cfg.AdditionalEndpoints)
 
 	var fetchErrors []string
+	storedCount := 0
 	for _, endpoint := range endpoints {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -81,11 +85,25 @@ func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 		if err := fetchAndStore(ctx, client, cfg.DashboardAddress, endpoint, clusterDir, sessionName, writer); err != nil {
 			logrus.Warnf("Failed to fetch endpoint %s: %v", endpoint, err)
 			fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", endpoint, err))
+		} else {
+			storedCount++
 		}
 	}
 
 	if err := fetchDataDatasets(ctx, client, cfg.DashboardAddress, clusterDir, sessionName, writer); err != nil {
 		logrus.Warnf("Failed to fetch data datasets: %v", err)
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if storedCount == 0 {
+		return fmt.Errorf("snapshot failed: no endpoints were stored successfully (errors: %s)", strings.Join(fetchErrors, "; "))
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	info := utils.ClusterInfo{
@@ -111,7 +129,7 @@ func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 func discoverSessionName(ctx context.Context, client *http.Client, dashboardAddress string) (string, error) {
 	body, err := fetchEndpoint(ctx, client, dashboardAddress, "/api/v0/cluster_metadata")
 	if err != nil {
-		return generateSessionName(), nil
+		return "", fmt.Errorf("dashboard unreachable: %w", err)
 	}
 
 	var resp struct {
@@ -120,24 +138,19 @@ func discoverSessionName(ctx context.Context, client *http.Client, dashboardAddr
 			SessionDir  string `json:"session_dir"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &resp); err == nil {
-		if resp.Data.SessionName != "" {
-			return resp.Data.SessionName, nil
-		}
-		if resp.Data.SessionDir != "" {
-			name := filepath.Base(resp.Data.SessionDir)
-			if strings.HasPrefix(name, "session_") {
-				return name, nil
-			}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse cluster_metadata response: %w", err)
+	}
+	if resp.Data.SessionName != "" {
+		return resp.Data.SessionName, nil
+	}
+	if resp.Data.SessionDir != "" {
+		name := filepath.Base(resp.Data.SessionDir)
+		if strings.HasPrefix(name, "session_") {
+			return name, nil
 		}
 	}
-
-	return generateSessionName(), nil
-}
-
-func generateSessionName() string {
-	now := time.Now()
-	return fmt.Sprintf("session_%s_%06d", now.Format("2006-01-02_15-04-05"), now.Nanosecond()/1000)
+	return "", fmt.Errorf("cluster_metadata response missing session_name and usable session_dir")
 }
 
 func fetchAndStore(ctx context.Context, client *http.Client, dashboardAddress, endpoint, clusterDir, sessionName string, writer storage.StorageWriter) error {

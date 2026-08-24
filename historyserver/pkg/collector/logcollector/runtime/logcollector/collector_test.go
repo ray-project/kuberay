@@ -199,6 +199,7 @@ func TestScanAndProcess(t *testing.T) {
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
 }
+
 // TestProcessLogs_SkipSymlinks verifies that symlinks are skipped during directory scanning in prev-logs (processPrevLogsDir).
 func TestProcessLogs_SkipSymlinks(t *testing.T) {
 	baseDir, cleanup := setupRayTestEnvironment(t)

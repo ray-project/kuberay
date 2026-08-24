@@ -145,7 +145,7 @@ func main() {
 		}
 	}
 
-	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, enableEventCollector, enableLogCollector); err != nil {
+	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, enableEventCollector, enableLogCollector, mode); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
 	}
 
@@ -229,13 +229,13 @@ func main() {
 
 	switch mode {
 	case "snapshot":
-		runSnapshot(factory, jsonData, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, additionalEndpoints)
+		runSnapshot(factory, jsonData, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, additionalEndpoints)
 	case "sidecar":
-		runSidecar(factory, jsonData, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role, logBatching, eventsPort, pushInterval, enableEventCollector, enableLogCollector, additionalEndpoints, endpointPollInterval, eventDataDir, eventRotationInterval, eventMaxFileSizeMB, eventMaxDiskMB, eventCompressionEnabled)
+		runSidecar(factory, jsonData, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role, logBatching, eventsPort, pushInterval, enableEventCollector, enableLogCollector, additionalEndpoints, endpointPollInterval, eventDataDir, eventRotationInterval, eventMaxFileSizeMB, eventMaxDiskMB, eventCompressionEnabled)
 	}
 }
 
-func runSnapshot(factory func(*types.RayCollectorConfig, map[string]interface{}) (storage.StorageWriter, error), jsonData map[string]interface{}, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName string, additionalEndpoints []string) {
+func runSnapshot(factory func(*types.RayCollectorConfig, map[string]any) (storage.StorageWriter, error), jsonData map[string]any, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName string, additionalEndpoints []string) {
 	cfg := types.RayCollectorConfig{
 		RootDir:             storageRootDir,
 		RayClusterName:      rayClusterName,
@@ -247,7 +247,7 @@ func runSnapshot(factory func(*types.RayCollectorConfig, map[string]interface{})
 
 	writer, err := factory(&cfg, jsonData)
 	if err != nil {
-		logrus.Fatalf("Failed to create storage writer: %v", err)
+		logrus.Fatalf("Failed to create storage writer for backend %s: %v", storageBackend, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -276,7 +276,7 @@ func runSnapshot(factory func(*types.RayCollectorConfig, map[string]interface{})
 	}
 }
 
-func runSidecar(factory func(*types.RayCollectorConfig, map[string]interface{}) (storage.StorageWriter, error), jsonData map[string]interface{}, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role string, logBatching, eventsPort int, pushInterval time.Duration, enableEventCollector, enableLogCollector bool, additionalEndpoints []string, endpointPollInterval time.Duration, eventDataDir string, eventRotationInterval time.Duration, eventMaxFileSizeMB, eventMaxDiskMB int, eventCompressionEnabled bool) {
+func runSidecar(factory func(*types.RayCollectorConfig, map[string]any) (storage.StorageWriter, error), jsonData map[string]any, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role string, logBatching, eventsPort int, pushInterval time.Duration, enableEventCollector, enableLogCollector bool, additionalEndpoints []string, endpointPollInterval time.Duration, eventDataDir string, eventRotationInterval time.Duration, eventMaxFileSizeMB, eventMaxDiskMB int, eventCompressionEnabled bool) {
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
 	if err != nil {
 		logrus.Fatalf("Failed to get ray node id via HTTP endpoint: %v", err)
@@ -326,7 +326,7 @@ func runSidecar(factory func(*types.RayCollectorConfig, map[string]interface{}) 
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		logrus.Fatalf("Failed to create storage writer for role %s: %v", role, err)
+		logrus.Fatalf("Failed to create storage writer for backend %s, role %s: %v", storageBackend, role, err)
 	}
 
 	var wg sync.WaitGroup
@@ -373,8 +373,8 @@ func runSidecar(factory func(*types.RayCollectorConfig, map[string]interface{}) 
 	logrus.Info("Graceful shutdown complete")
 }
 
-func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector bool) error {
-	if !enableEventCollector && !enableLogCollector {
+func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector bool, mode string) error {
+	if mode == "sidecar" && !enableEventCollector && !enableLogCollector {
 		return fmt.Errorf("at least one of --enable-event-collector or --enable-log-collector must be enabled")
 	}
 	*rayClusterName = strings.TrimSpace(*rayClusterName)
