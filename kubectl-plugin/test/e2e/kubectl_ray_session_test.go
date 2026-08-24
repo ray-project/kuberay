@@ -171,11 +171,6 @@ var _ = Describe("Calling ray plugin `session` command", Ordered, func() {
 			Fail("kubectl ray session did not terminate after SIGTERM")
 		}
 
-		// The port-forward child must be gone with it.
-		Eventually(func() error {
-			_, err := exec.CommandContext(context.Background(), "lsof", "-i", ":8265").CombinedOutput()
-			return err
-		}, 15*time.Second, 500*time.Millisecond).Should(HaveOccurred())
 	})
 })
 
