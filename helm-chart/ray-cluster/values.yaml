@@ -182,6 +182,7 @@ head:
   # enableIngress tells the operator to create an Ingress for the head dashboard service.
   # The ingress class comes from the RayCluster annotations, so set it in the top-level
   # `annotations` value, for example `kubernetes.io/ingress.class: nginx`.
+  # All other RayCluster annotations are copied to the Ingress, so use them to customize ingress behavior
   # enableIngress: true
 
   # ingressOptions customizes the Ingress created when enableIngress is true.
