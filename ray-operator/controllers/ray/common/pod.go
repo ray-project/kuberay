@@ -591,6 +591,19 @@ func getEnableProbesInjection() bool {
 	return true
 }
 
+// generateWorkerHostname returns a stable DNS label for a worker Pod based on
+// its group name and replica/host indices. For multi-host groups the host index
+// is included so each host in a replica gets a unique name.
+func generateWorkerHostname(groupName string, replicaIndex int, hostIndex int, numOfHosts int32) string {
+	var hostname string
+	if numOfHosts > 1 {
+		hostname = fmt.Sprintf("%s-%d-%d", groupName, replicaIndex, hostIndex)
+	} else {
+		hostname = fmt.Sprintf("%s-%d", groupName, replicaIndex)
+	}
+	return utils.CheckLabel(hostname)
+}
+
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
@@ -670,16 +683,25 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
 
-	// Add additional labels when RayMultihostIndexing is enabled.
-	if features.Enabled(features.RayMultiHostIndexing) {
-		// The ordered replica index can be used for the single-host, multi-slice case.
+	// Assign stable replica indices for RayMultiHostIndexing and/or RayClusterWorkerFQDN.
+	if features.NeedsWorkerIndices() {
+		// The ordered replica index can be used for the single-host, multi-slice case
+		// and for stable FQDN hostnames.
 		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = strconv.Itoa(replicaIndex)
+		// Slice labels (replica name + host index) when this group has multiple hosts.
 		if workerSpec.NumOfHosts > 1 {
-			// These labels are specific to multi-host group setup and reconciliation.
 			podTemplate.Labels[utils.RayWorkerReplicaNameKey] = replicaGrpName
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
 	}
+
+	// Stable per-pod FQDN via hostname + subdomain matching the headless Service.
+	// See: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-hostname-and-subdomain-field
+	if features.Enabled(features.RayClusterWorkerFQDN) {
+		podTemplate.Spec.Hostname = generateWorkerHostname(workerSpec.GroupName, replicaIndex, numHostIndex, workerSpec.NumOfHosts)
+		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+	}
+
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)

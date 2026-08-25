@@ -96,6 +96,13 @@ const (
 	// selects the scheduler; it is mutually exclusive with --batch-scheduler and --enable-batch-scheduler.
 	// Requires a Kubernetes cluster that serves the scheduling.k8s.io API with GenericWorkload enabled.
 	KubernetesWAS featuregate.Feature = "KubernetesWAS"
+
+	// Enables stable per-worker Pod FQDNs (hostname/subdomain + headless Service).
+	// When enabled, also assigns stable per-worker replica indices for hostname
+	// uniqueness. For NumOfHosts > 1, FQDN reuses multi-host slice reconciliation
+	// (via NeedsWorkerIndices) so each host gets a unique hostname even if
+	// RayMultiHostIndexing is off.
+	RayClusterWorkerFQDN featuregate.Feature = "RayClusterWorkerFQDN"
 )
 
 func init() {
@@ -114,6 +121,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 	KubernetesWAS:                    {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterWorkerFQDN:             {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
@@ -124,6 +132,14 @@ func SetFeatureGateDuringTest(tb testing.TB, f featuregate.Feature, value bool) 
 // Enabled is helper for `utilfeature.DefaultFeatureGate.Enabled()`
 func Enabled(f featuregate.Feature) bool {
 	return utilfeature.DefaultFeatureGate.Enabled(f)
+}
+
+// NeedsWorkerIndices reports whether the operator should assign and track
+// stable per-worker replica indices, and use multi-host slice reconciliation
+// when NumOfHosts > 1. Required for RayMultiHostIndexing and for
+// RayClusterWorkerFQDN per-host hostname uniqueness.
+func NeedsWorkerIndices() bool {
+	return Enabled(RayMultiHostIndexing) || Enabled(RayClusterWorkerFQDN)
 }
 
 func LogFeatureGates(log logr.Logger) {

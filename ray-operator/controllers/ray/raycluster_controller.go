@@ -896,36 +896,37 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 
 // Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
 func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, instance *rayv1.RayCluster) error {
-	// Check if there are worker groups with NumOfHosts > 1 in the cluster
-	isMultiHost := false
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-		if workerGroup.NumOfHosts > 1 {
-			isMultiHost = true
-			break
+	// Check if Stable Worker FQDN is enabled
+	needHeadless := features.Enabled(features.RayClusterWorkerFQDN)
+
+	// If Stable Worker FQDN is not enabled, check if there are worker groups with NumOfHosts > 1 in the cluster
+	if !needHeadless {
+		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+			if workerGroup.NumOfHosts > 1 {
+				needHeadless = true
+				break
+			}
 		}
 	}
-
-	if isMultiHost {
-		services := corev1.ServiceList{}
-		options := common.RayClusterHeadlessServiceListOptions(instance)
-
-		if err := r.List(ctx, &services, options...); err != nil {
-			return err
-		}
-		// Check if there's an existing headless service in the cluster.
-		if len(services.Items) != 0 {
-			// service exists, do nothing
-			return nil
-		}
-		// Create headless tpu worker service if there's no existing one in the cluster.
-		headlessSvc := common.BuildHeadlessServiceForRayCluster(*instance)
-
-		if err := r.createService(ctx, headlessSvc, instance); err != nil {
-			return err
-		}
+	if !needHeadless {
+		return nil
 	}
 
-	return nil
+	services := corev1.ServiceList{}
+	options := common.RayClusterHeadlessServiceListOptions(instance)
+
+	if err := r.List(ctx, &services, options...); err != nil {
+		return err
+	}
+	// Check if there's an existing headless service in the cluster.
+	if len(services.Items) != 0 {
+		// service exists, do nothing
+		return nil
+	}
+	// Create headless tpu worker service if there's no existing one in the cluster.
+	headlessSvc := common.BuildHeadlessServiceForRayCluster(*instance)
+
+	return r.createService(ctx, headlessSvc, instance)
 }
 
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
@@ -1092,7 +1093,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 
-		isRayMultiHostIndexing := worker.NumOfHosts > 1 && features.Enabled(features.RayMultiHostIndexing)
+		isRayMultiHostIndexing := worker.NumOfHosts > 1 && features.NeedsWorkerIndices()
 		if isRayMultiHostIndexing {
 			if err := r.reconcileMultiHostWorkerGroup(ctx, instance, &worker, workerPods.Items); err != nil {
 				return err
@@ -1168,9 +1169,9 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 
 		logger.Info("reconcilePods", "workerReplicas", numExpectedWorkerPods, "NumOfHosts", worker.NumOfHosts, "runningPods", len(runningPods.Items), "diff", diff)
 
-		// Support replica indices for single-host, multi-slice environments.
+		// Support replica indices for single-host workers (RayMultiHostIndexing and/or RayClusterWorkerFQDN).
 		validReplicaIndices := make(map[int]bool)
-		if features.Enabled(features.RayMultiHostIndexing) {
+		if features.NeedsWorkerIndices() {
 			for _, pod := range runningPods.Items {
 				if indexStr, ok := pod.Labels[utils.RayWorkerReplicaIndexKey]; ok {
 					if index, err := strconv.Atoi(indexStr); err == nil {
@@ -1189,7 +1190,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					return fmt.Errorf("mTLS secrets not ready: %w", err)
 				}
 			}
-			if features.Enabled(features.RayMultiHostIndexing) {
+			if features.NeedsWorkerIndices() {
 				newReplicaIndex := 0
 				// create all workers of this group
 				for i := range diff {
@@ -1280,7 +1281,7 @@ func (r *RayClusterReconciler) deletePods(ctx context.Context, instance *rayv1.R
 }
 
 // reconcileMultiHostWorkerGroup handles reconciliation and Pod deletion for worker groups with NumOfHosts > 1 when
-// the RayMultihostIndexing feature is enabled. This function is responsible for:
+// NeedsWorkerIndices is true (RayMultiHostIndexing and/or RayClusterWorkerFQDN). This function is responsible for:
 // 1. Deleting incomplete or unhealthy multi-host groups atomically.
 // 2. Explicit deletes of entire multi-host groups for the autoscaler.
 // 3. Scale up/down of multi-host groups.

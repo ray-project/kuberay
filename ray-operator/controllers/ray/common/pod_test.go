@@ -1544,7 +1544,9 @@ func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	worker := cluster.Spec.WorkerGroupSpecs[0]
 
+	// Production default: indexing on, FQDN off. Slice labels are stamped; hostname/subdomain are not.
 	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, false)
 
 	worker.Template.ObjectMeta.Name = "ray-worker-test"
 	worker.NumOfHosts = 4
@@ -1557,6 +1559,99 @@ func TestDeafultWorkerPodTemplateWithReplicaGrpAndIndex(t *testing.T) {
 	assert.Equal(t, podTemplateSpec.Labels[utils.RayWorkerReplicaNameKey], groupReplicaName)
 	assert.Equal(t, "0", podTemplateSpec.Labels[utils.RayWorkerReplicaIndexKey])
 	assert.Equal(t, "2", podTemplateSpec.Labels[utils.RayHostIndexKey])
+	assert.Empty(t, podTemplateSpec.Spec.Hostname)
+	assert.Empty(t, podTemplateSpec.Spec.Subdomain)
+}
+
+// TestDefaultWorkerPodTemplateStableFQDN covers hostname/subdomain stamping vs the two
+// feature gates. FQDN-off cases assert that indexing labels can still be present while
+// per-pod DNS names stay unset (the production default).
+func TestDefaultWorkerPodTemplateStableFQDN(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	expectedSubdomain := cluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+	worker.Template.ObjectMeta.Name = "ray-worker-test"
+	podName := func(groupName string) string {
+		return cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + groupName + utils.DashSymbol + utils.FormatInt32(0)
+	}
+
+	t.Run("fqdn on, indexing off, multi-host", func(t *testing.T) {
+		// FQDN assigns replica indices itself and reuses slice labels so each host
+		// gets a unique hostname even when RayMultiHostIndexing is off.
+		features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, false)
+		features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, true)
+
+		w := worker.DeepCopy()
+		w.NumOfHosts = 4
+		groupReplicaName := utils.GenerateRayWorkerReplicaGroupName(w.GroupName)
+		pod := DefaultWorkerPodTemplate(ctx, *cluster, *w, podName(w.GroupName), fqdnRayIP, "6379", groupReplicaName, 0, 2)
+		assert.Equal(t, "small-group-0-2", pod.Spec.Hostname)
+		assert.Equal(t, expectedSubdomain, pod.Spec.Subdomain)
+		assert.Equal(t, "0", pod.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Equal(t, groupReplicaName, pod.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Equal(t, "2", pod.Labels[utils.RayHostIndexKey])
+	})
+	t.Run("fqdn on, indexing off, single-host", func(t *testing.T) {
+		// Single-host FQDN is {group}-{replicaIndex}; slice labels are not set.
+		features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, false)
+		features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, true)
+
+		w := worker.DeepCopy()
+		w.NumOfHosts = 1
+		pod := DefaultWorkerPodTemplate(ctx, *cluster, *w, podName(w.GroupName), fqdnRayIP, "6379", "", 3, 0)
+		assert.Equal(t, "small-group-3", pod.Spec.Hostname)
+		assert.Equal(t, expectedSubdomain, pod.Spec.Subdomain)
+		assert.Equal(t, "3", pod.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Empty(t, pod.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Empty(t, pod.Labels[utils.RayHostIndexKey])
+	})
+	t.Run("both off", func(t *testing.T) {
+		// Pre-indexing, pre-FQDN: no replica labels and no per-pod DNS names.
+		features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, false)
+		features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, false)
+
+		w := worker.DeepCopy()
+		w.NumOfHosts = 1
+		pod := DefaultWorkerPodTemplate(ctx, *cluster, *w, podName(w.GroupName), fqdnRayIP, "6379", "", 3, 0)
+		assert.Empty(t, pod.Spec.Hostname)
+		assert.Empty(t, pod.Spec.Subdomain)
+		assert.Empty(t, pod.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Empty(t, pod.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Empty(t, pod.Labels[utils.RayHostIndexKey])
+	})
+	t.Run("indexing on, fqdn off, single-host", func(t *testing.T) {
+		// Production default for single-host: replica index only, no hostname/subdomain.
+		features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+		features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, false)
+
+		w := worker.DeepCopy()
+		w.NumOfHosts = 1
+		pod := DefaultWorkerPodTemplate(ctx, *cluster, *w, podName(w.GroupName), fqdnRayIP, "6379", "", 3, 0)
+		assert.Empty(t, pod.Spec.Hostname)
+		assert.Empty(t, pod.Spec.Subdomain)
+		assert.Equal(t, "3", pod.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Empty(t, pod.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Empty(t, pod.Labels[utils.RayHostIndexKey])
+	})
+	t.Run("indexing on, fqdn off, multi-host", func(t *testing.T) {
+		// Production default for multi-host: slice labels only, no hostname/subdomain.
+		features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+		features.SetFeatureGateDuringTest(t, features.RayClusterWorkerFQDN, false)
+
+		w := worker.DeepCopy()
+		w.NumOfHosts = 4
+		groupReplicaName := utils.GenerateRayWorkerReplicaGroupName(w.GroupName)
+		pod := DefaultWorkerPodTemplate(ctx, *cluster, *w, podName(w.GroupName), fqdnRayIP, "6379", groupReplicaName, 0, 2)
+		assert.Empty(t, pod.Spec.Hostname)
+		assert.Empty(t, pod.Spec.Subdomain)
+		assert.Equal(t, "0", pod.Labels[utils.RayWorkerReplicaIndexKey])
+		assert.Equal(t, groupReplicaName, pod.Labels[utils.RayWorkerReplicaNameKey])
+		assert.Equal(t, "2", pod.Labels[utils.RayHostIndexKey])
+	})
 }
 
 func containerPortExists(ports []corev1.ContainerPort, containerPort int32) error {
