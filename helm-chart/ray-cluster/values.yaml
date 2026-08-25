@@ -179,6 +179,22 @@ head:
     #   annotations:
     #     prometheus.io/scrape: "true"
 
+  # enableIngress tells the operator to create an Ingress for the head dashboard service.
+  # The ingress class comes from the RayCluster annotations, so set it in the top-level
+  # `annotations` value, for example `kubernetes.io/ingress.class: nginx`.
+  # enableIngress: true
+
+  # ingressOptions customizes the Ingress created when enableIngress is true.
+  # host defaults to matching any host, path defaults to "/", pathType defaults to Prefix.
+  # ingressOptions:
+    # host: ray.example.com
+    # path: /dashboard
+    # pathType: Exact
+    # tls:
+    #   - hosts:
+    #       - ray.example.com
+    #     secretName: ray-tls
+
   # Custom pod DNS configuration
   # See https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-dns-config
   # dnsConfig:
