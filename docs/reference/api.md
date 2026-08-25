@@ -115,6 +115,7 @@ _Appears in:_
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
 | `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
 | `gatewayRef` _[GatewayReference](#gatewayreference)_ | GatewayRef attaches the HTTPRoute to an existing Gateway instead of creating one per RayService.<br />The referenced Gateway must allow HTTPRoutes from the RayService's namespace.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
+| `httpRoute` _[HTTPRouteOptions](#httprouteoptions)_ | HTTPRoute configures how the RayService's HTTPRoute matches traffic. It applies<br />with either Gateway source (GatewayClassName or GatewayRef). Scoping matters most<br />on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.<br />When omitted, the route matches all hostnames with a "/" path prefix. |  |  |
 
 
 #### CollectorOptions
@@ -264,40 +265,14 @@ _Appears in:_
 | `Retain` | RetainGCSStorageDeletionPolicy keeps the operator-managed PVC (and its data)<br />after the owning RayCluster is deleted: the operator omits the ownerReference<br />so the PVC outlives the cluster. Recover the GCS state by pointing a new<br />cluster's ClaimName at the retained PVC.<br /> |
 
 
-#### GatewayHTTPRouteOptions
-
-
-
-GatewayHTTPRouteOptions holds the HTTPRoute-level options used when attaching to
-an existing Gateway: SectionName and Port pin the HTTPRoute to a specific listener,
-and Hostnames/PathPrefix scope the route so it does not act as a catch-all that
-collides with other HTTPRoutes on a shared Gateway.
-
-
-
-_Appears in:_
-- [GatewayReference](#gatewayreference)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners.<br />Must be a valid Gateway API SectionName (an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
-| `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
-| `hostnames` _string array_ | Hostnames scope the RayService's HTTPRoute to the given hostnames on the<br />referenced Gateway. On a shared Gateway this prevents the route from acting as<br />a catch-all and colliding with other HTTPRoutes. When omitted, the route<br />matches all hostnames the Gateway's listener accepts (the previous behavior).<br />Each hostname must be a valid RFC 1123 hostname (a wildcard label like<br />"*.example.com" is allowed). |  | MaxItems: 16 <br />items:MaxLength: 253 <br />items:Pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$ <br /> |
-| `pathPrefix` _string_ | PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced<br />Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it<br />does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"<br />(match all paths, the previous behavior) when omitted. |  | MaxLength: 1024 <br />Pattern: `^/` <br /> |
-
-
 #### GatewayReference
 
 
 
-GatewayReference references an existing Gateway resource. The controller only manages
-the HTTPRoute's backend weights on the referenced Gateway; HTTPRoute holds the
-route-level options that pin the HTTPRoute to a specific listener and scope the
-traffic it claims on a shared Gateway that KubeRay does not otherwise configure.
-
-The referenced Gateway must already exist and must allow HTTPRoutes from the
-RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
-updates, or deletes the referenced Gateway.
+GatewayReference identifies the existing Gateway and listener the RayService's
+HTTPRoute attaches to. It becomes the HTTPRoute's parentRef. KubeRay never creates,
+updates, or deletes the referenced Gateway; it must already exist and must allow
+HTTPRoutes from the RayService's namespace.
 
 
 
@@ -308,7 +283,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the existing Gateway. Must be a valid Gateway resource name<br />(an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
 | `namespace` _string_ | Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.<br />Must be a valid namespace name (an RFC 1123 label). |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
-| `httpRoute` _[GatewayHTTPRouteOptions](#gatewayhttprouteoptions)_ | HTTPRoute configures the HTTPRoute KubeRay attaches to the referenced Gateway:<br />which listener it attaches to and which traffic it claims. When omitted, the<br />HTTPRoute attaches to every listener that accepts it and matches all hostnames<br />with a "/" path prefix. |  |  |
+| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners.<br />Must be a valid Gateway API SectionName (an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
+| `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
 
 
 #### GcsEmbeddedStorage
@@ -374,6 +350,24 @@ _Appears in:_
 | `externalStorageNamespace` _string_ |  |  |  |
 | `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
+
+
+#### HTTPRouteOptions
+
+
+
+HTTPRouteOptions scopes the traffic the RayService's HTTPRoute claims. It matters
+most on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
+
+
+
+_Appears in:_
+- [ClusterUpgradeOptions](#clusterupgradeoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `hostnames` _string array_ | Hostnames scope the RayService's HTTPRoute to the given hostnames. On a shared<br />Gateway this prevents the route from acting as a catch-all and colliding with<br />other HTTPRoutes. When omitted, the route matches all hostnames the Gateway's<br />listener accepts.<br />Each hostname must be a valid RFC 1123 hostname (a wildcard label like<br />"*.example.com" is allowed). |  | MaxItems: 16 <br />items:MaxLength: 253 <br />items:Pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$ <br /> |
+| `pathPrefix` _string_ | PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix<br />match). On a shared Gateway this narrows the route so it does not steal<br />unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)<br />when omitted. |  | MaxLength: 1024 <br />Pattern: `^/` <br /> |
 
 
 #### HeadGroupSpec

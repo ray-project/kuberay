@@ -81,16 +81,18 @@ type ClusterUpgradeOptions struct {
 	// Exactly one of GatewayClassName or GatewayRef must be set.
 	// +optional
 	GatewayRef *GatewayReference `json:"gatewayRef,omitempty"`
+	// HTTPRoute configures how the RayService's HTTPRoute matches traffic. It applies
+	// with either Gateway source (GatewayClassName or GatewayRef). Scoping matters most
+	// on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
+	// When omitted, the route matches all hostnames with a "/" path prefix.
+	// +optional
+	HTTPRoute *HTTPRouteOptions `json:"httpRoute,omitempty"`
 }
 
-// GatewayReference references an existing Gateway resource. The controller only manages
-// the HTTPRoute's backend weights on the referenced Gateway; HTTPRoute holds the
-// route-level options that pin the HTTPRoute to a specific listener and scope the
-// traffic it claims on a shared Gateway that KubeRay does not otherwise configure.
-//
-// The referenced Gateway must already exist and must allow HTTPRoutes from the
-// RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
-// updates, or deletes the referenced Gateway.
+// GatewayReference identifies the existing Gateway and listener the RayService's
+// HTTPRoute attaches to. It becomes the HTTPRoute's parentRef. KubeRay never creates,
+// updates, or deletes the referenced Gateway; it must already exist and must allow
+// HTTPRoutes from the RayService's namespace.
 type GatewayReference struct {
 	// Name of the existing Gateway. Must be a valid Gateway resource name
 	// (an RFC 1123 subdomain).
@@ -104,19 +106,6 @@ type GatewayReference struct {
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	Namespace string `json:"namespace,omitempty"`
-	// HTTPRoute configures the HTTPRoute KubeRay attaches to the referenced Gateway:
-	// which listener it attaches to and which traffic it claims. When omitted, the
-	// HTTPRoute attaches to every listener that accepts it and matches all hostnames
-	// with a "/" path prefix.
-	// +optional
-	HTTPRoute *GatewayHTTPRouteOptions `json:"httpRoute,omitempty"`
-}
-
-// GatewayHTTPRouteOptions holds the HTTPRoute-level options used when attaching to
-// an existing Gateway: SectionName and Port pin the HTTPRoute to a specific listener,
-// and Hostnames/PathPrefix scope the route so it does not act as a catch-all that
-// collides with other HTTPRoutes on a shared Gateway.
-type GatewayHTTPRouteOptions struct {
 	// SectionName is the name of a listener on the referenced Gateway to attach the
 	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
 	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
@@ -133,10 +122,15 @@ type GatewayHTTPRouteOptions struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port *int32 `json:"port,omitempty"`
-	// Hostnames scope the RayService's HTTPRoute to the given hostnames on the
-	// referenced Gateway. On a shared Gateway this prevents the route from acting as
-	// a catch-all and colliding with other HTTPRoutes. When omitted, the route
-	// matches all hostnames the Gateway's listener accepts (the previous behavior).
+}
+
+// HTTPRouteOptions scopes the traffic the RayService's HTTPRoute claims. It matters
+// most on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
+type HTTPRouteOptions struct {
+	// Hostnames scope the RayService's HTTPRoute to the given hostnames. On a shared
+	// Gateway this prevents the route from acting as a catch-all and colliding with
+	// other HTTPRoutes. When omitted, the route matches all hostnames the Gateway's
+	// listener accepts.
 	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
 	// "*.example.com" is allowed).
 	// +optional
@@ -144,10 +138,10 @@ type GatewayHTTPRouteOptions struct {
 	// +kubebuilder:validation:items:MaxLength=253
 	// +kubebuilder:validation:items:Pattern=`^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Hostnames []string `json:"hostnames,omitempty"`
-	// PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced
-	// Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it
-	// does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"
-	// (match all paths, the previous behavior) when omitted.
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix
+	// match). On a shared Gateway this narrows the route so it does not steal
+	// unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)
+	// when omitted.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
 	// +kubebuilder:validation:Pattern=`^/`

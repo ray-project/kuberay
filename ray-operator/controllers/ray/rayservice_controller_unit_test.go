@@ -1852,14 +1852,14 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 					StepSizePercent: &stepSize,
 					IntervalSeconds: &interval,
 					GatewayRef: &rayv1.GatewayReference{
-						Name:      sharedGateway.Name,
-						Namespace: sharedGateway.Namespace,
-						HTTPRoute: &rayv1.GatewayHTTPRouteOptions{
-							SectionName: "http",
-							Port:        new(int32(80)),
-							Hostnames:   []string{"rayservice.example.com"},
-							PathPrefix:  "/rayservice",
-						},
+						Name:        sharedGateway.Name,
+						Namespace:   sharedGateway.Namespace,
+						SectionName: "http",
+						Port:        new(int32(80)),
+					},
+					HTTPRoute: &rayv1.HTTPRouteOptions{
+						Hostnames:  []string{"rayservice.example.com"},
+						PathPrefix: "/rayservice",
 					},
 				},
 			},
@@ -1921,6 +1921,78 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 	assert.Equal(t, gwv1.ObjectName(activeServeService.Name), backend.Name)
 	require.NotNil(t, backend.Namespace)
 	assert.Equal(t, gwv1.Namespace(rsNamespace), *backend.Namespace)
+}
+
+// HTTPRoute options are decoupled from the Gateway source: hostnames/pathPrefix
+// must also scope the route when KubeRay creates the Gateway itself via
+// gatewayClassName (no GatewayRef).
+func TestCreateHTTPRouteWithHTTPRouteOptionsAndGatewayClassName(t *testing.T) {
+	ctx := context.TODO()
+	namespace := "test-ns"
+	stepSize := int32(10)
+	interval := int32(30)
+
+	activeCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rayservice-active", Namespace: namespace}}
+	// Per-RayService Gateway created by KubeRay in the RayService's namespace.
+	gateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice-gateway", Namespace: namespace}}
+	activeServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(activeCluster.Name), Namespace: namespace}}
+
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					StepSizePercent:  &stepSize,
+					IntervalSeconds:  &interval,
+					GatewayClassName: "istio",
+					HTTPRoute: &rayv1.HTTPRouteOptions{
+						Hostnames:  []string{"rayservice.example.com"},
+						PathPrefix: "/rayservice",
+					},
+				},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName:       activeCluster.Name,
+				TrafficRoutedPercent: new(int32(100)),
+				TargetCapacity:       new(int32(100)),
+			},
+		},
+	}
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+		WithRuntimeObjects(activeCluster, gateway, activeServeService, rayService).Build()
+
+	reconciler := RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: events.NewFakeRecorder(1),
+	}
+
+	route, err := reconciler.createHTTPRoute(ctx, rayService, false)
+	require.NoError(t, err)
+	require.NotNil(t, route)
+
+	// ParentRef targets the KubeRay-created Gateway; no listener pinning without GatewayRef.
+	require.Len(t, route.Spec.ParentRefs, 1)
+	parentRef := route.Spec.ParentRefs[0]
+	assert.Equal(t, gwv1.ObjectName(gateway.Name), parentRef.Name)
+	assert.Nil(t, parentRef.SectionName)
+	assert.Nil(t, parentRef.Port)
+
+	// HTTPRoute options scope the route even without GatewayRef.
+	assert.Equal(t, []gwv1.Hostname{"rayservice.example.com"}, route.Spec.Hostnames)
+	require.Len(t, route.Spec.Rules, 1)
+	require.Len(t, route.Spec.Rules[0].Matches, 1)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, "/rayservice", *route.Spec.Rules[0].Matches[0].Path.Value)
 }
 
 func TestReconcileHTTPRoute(t *testing.T) {

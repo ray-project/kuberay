@@ -5,14 +5,10 @@ package v1
 // GatewayReferenceApplyConfiguration represents a declarative configuration of the GatewayReference type for use
 // with apply.
 //
-// GatewayReference references an existing Gateway resource. The controller only manages
-// the HTTPRoute's backend weights on the referenced Gateway; HTTPRoute holds the
-// route-level options that pin the HTTPRoute to a specific listener and scope the
-// traffic it claims on a shared Gateway that KubeRay does not otherwise configure.
-//
-// The referenced Gateway must already exist and must allow HTTPRoutes from the
-// RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
-// updates, or deletes the referenced Gateway.
+// GatewayReference identifies the existing Gateway and listener the RayService's
+// HTTPRoute attaches to. It becomes the HTTPRoute's parentRef. KubeRay never creates,
+// updates, or deletes the referenced Gateway; it must already exist and must allow
+// HTTPRoutes from the RayService's namespace.
 type GatewayReferenceApplyConfiguration struct {
 	// Name of the existing Gateway. Must be a valid Gateway resource name
 	// (an RFC 1123 subdomain).
@@ -20,11 +16,15 @@ type GatewayReferenceApplyConfiguration struct {
 	// Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.
 	// Must be a valid namespace name (an RFC 1123 label).
 	Namespace *string `json:"namespace,omitempty"`
-	// HTTPRoute configures the HTTPRoute KubeRay attaches to the referenced Gateway:
-	// which listener it attaches to and which traffic it claims. When omitted, the
-	// HTTPRoute attaches to every listener that accepts it and matches all hostnames
-	// with a "/" path prefix.
-	HTTPRoute *GatewayHTTPRouteOptionsApplyConfiguration `json:"httpRoute,omitempty"`
+	// SectionName is the name of a listener on the referenced Gateway to attach the
+	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
+	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
+	// Must be a valid Gateway API SectionName (an RFC 1123 subdomain).
+	SectionName *string `json:"sectionName,omitempty"`
+	// Port is the network port of the referenced Gateway's listener to attach the
+	// HTTPRoute to. When both SectionName and Port are set, the selected listener
+	// must match both. When omitted, listener selection is not constrained by port.
+	Port *int32 `json:"port,omitempty"`
 }
 
 // GatewayReferenceApplyConfiguration constructs a declarative configuration of the GatewayReference type for use with
@@ -49,10 +49,18 @@ func (b *GatewayReferenceApplyConfiguration) WithNamespace(value string) *Gatewa
 	return b
 }
 
-// WithHTTPRoute sets the HTTPRoute field in the declarative configuration to the given value
+// WithSectionName sets the SectionName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the HTTPRoute field is set to the value of the last call.
-func (b *GatewayReferenceApplyConfiguration) WithHTTPRoute(value *GatewayHTTPRouteOptionsApplyConfiguration) *GatewayReferenceApplyConfiguration {
-	b.HTTPRoute = value
+// If called multiple times, the SectionName field is set to the value of the last call.
+func (b *GatewayReferenceApplyConfiguration) WithSectionName(value string) *GatewayReferenceApplyConfiguration {
+	b.SectionName = &value
+	return b
+}
+
+// WithPort sets the Port field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Port field is set to the value of the last call.
+func (b *GatewayReferenceApplyConfiguration) WithPort(value int32) *GatewayReferenceApplyConfiguration {
+	b.Port = &value
 	return b
 }

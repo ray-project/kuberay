@@ -34,8 +34,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.DeletionRuleApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
 		return &rayv1.DeletionStrategyApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("GatewayHTTPRouteOptions"):
-		return &rayv1.GatewayHTTPRouteOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GatewayReference"):
 		return &rayv1.GatewayReferenceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsEmbeddedStorage"):
@@ -48,6 +46,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HeadInfoApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HistoryServerOptions"):
 		return &rayv1.HistoryServerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("HTTPRouteOptions"):
+		return &rayv1.HTTPRouteOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
 		return &rayv1.IngressOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
