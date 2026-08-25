@@ -236,13 +236,17 @@ func withSuspend(suspend bool) SupportOption[rayv1ac.RayServiceSpecApplyConfigur
 }
 
 // withGatewayRef replaces gatewayClassName (KubeRay-created Gateway) with a
-// gatewayRef pointing at a pre-existing shared Gateway. gatewayClassName and
-// gatewayRef are mutually exclusive, so the class name is cleared.
+// gatewayRef pointing at a pre-existing shared Gateway, pinned to its listener
+// via sectionName. gatewayClassName and gatewayRef are mutually exclusive, so
+// the class name is cleared.
 func withGatewayRef(name, namespace string) SupportOption[rayv1ac.RayServiceSpecApplyConfiguration] {
 	return func(spec *rayv1ac.RayServiceSpecApplyConfiguration) *rayv1ac.RayServiceSpecApplyConfiguration {
 		opts := spec.UpgradeStrategy.ClusterUpgradeOptions
 		opts.GatewayClassName = nil
-		opts.WithGatewayRef(rayv1ac.GatewayReference().WithName(name).WithNamespace(namespace))
+		opts.WithGatewayRef(rayv1ac.GatewayReference().
+			WithName(name).
+			WithNamespace(namespace).
+			WithSectionName(utils.GatewayListenerPortName))
 		return spec
 	}
 }
