@@ -6,10 +6,9 @@ package v1
 // with apply.
 //
 // GatewayReference references an existing Gateway resource. The controller only manages
-// the HTTPRoute's backend weights on the referenced Gateway; SectionName and Port
-// pin the HTTPRoute to a specific listener, and Hostnames/PathPrefix scope the route
-// so it does not act as a catch-all that collides with other HTTPRoutes on a shared
-// Gateway that KubeRay does not otherwise configure.
+// the HTTPRoute's backend weights on the referenced Gateway; HTTPRoute holds the
+// route-level options that pin the HTTPRoute to a specific listener and scope the
+// traffic it claims on a shared Gateway that KubeRay does not otherwise configure.
 //
 // The referenced Gateway must already exist and must allow HTTPRoutes from the
 // RayService's namespace (its listeners' allowedRoutes). KubeRay never creates,
@@ -21,27 +20,11 @@ type GatewayReferenceApplyConfiguration struct {
 	// Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.
 	// Must be a valid namespace name (an RFC 1123 label).
 	Namespace *string `json:"namespace,omitempty"`
-	// SectionName is the name of a listener on the referenced Gateway to attach the
-	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
-	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
-	// Must be a valid Gateway API SectionName (an RFC 1123 subdomain).
-	SectionName *string `json:"sectionName,omitempty"`
-	// Port is the network port of the referenced Gateway's listener to attach the
-	// HTTPRoute to. When both SectionName and Port are set, the selected listener
-	// must match both. When omitted, listener selection is not constrained by port.
-	Port *int32 `json:"port,omitempty"`
-	// Hostnames scope the RayService's HTTPRoute to the given hostnames on the
-	// referenced Gateway. On a shared Gateway this prevents the route from acting as
-	// a catch-all and colliding with other HTTPRoutes. When omitted, the route
-	// matches all hostnames the Gateway's listener accepts (the previous behavior).
-	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
-	// "*.example.com" is allowed).
-	Hostnames []string `json:"hostnames,omitempty"`
-	// PathPrefix scopes the RayService's HTTPRoute to a path prefix on the referenced
-	// Gateway (a PathPrefix match). On a shared Gateway this narrows the route so it
-	// does not steal unmatched traffic from co-located HTTPRoutes. Defaults to "/"
-	// (match all paths, the previous behavior) when omitted.
-	PathPrefix *string `json:"pathPrefix,omitempty"`
+	// HTTPRoute configures the HTTPRoute KubeRay attaches to the referenced Gateway:
+	// which listener it attaches to and which traffic it claims. When omitted, the
+	// HTTPRoute attaches to every listener that accepts it and matches all hostnames
+	// with a "/" path prefix.
+	HTTPRoute *GatewayHTTPRouteOptionsApplyConfiguration `json:"httpRoute,omitempty"`
 }
 
 // GatewayReferenceApplyConfiguration constructs a declarative configuration of the GatewayReference type for use with
@@ -66,36 +49,10 @@ func (b *GatewayReferenceApplyConfiguration) WithNamespace(value string) *Gatewa
 	return b
 }
 
-// WithSectionName sets the SectionName field in the declarative configuration to the given value
+// WithHTTPRoute sets the HTTPRoute field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the SectionName field is set to the value of the last call.
-func (b *GatewayReferenceApplyConfiguration) WithSectionName(value string) *GatewayReferenceApplyConfiguration {
-	b.SectionName = &value
-	return b
-}
-
-// WithPort sets the Port field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Port field is set to the value of the last call.
-func (b *GatewayReferenceApplyConfiguration) WithPort(value int32) *GatewayReferenceApplyConfiguration {
-	b.Port = &value
-	return b
-}
-
-// WithHostnames adds the given value to the Hostnames field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the Hostnames field.
-func (b *GatewayReferenceApplyConfiguration) WithHostnames(values ...string) *GatewayReferenceApplyConfiguration {
-	for i := range values {
-		b.Hostnames = append(b.Hostnames, values[i])
-	}
-	return b
-}
-
-// WithPathPrefix sets the PathPrefix field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PathPrefix field is set to the value of the last call.
-func (b *GatewayReferenceApplyConfiguration) WithPathPrefix(value string) *GatewayReferenceApplyConfiguration {
-	b.PathPrefix = &value
+// If called multiple times, the HTTPRoute field is set to the value of the last call.
+func (b *GatewayReferenceApplyConfiguration) WithHTTPRoute(value *GatewayHTTPRouteOptionsApplyConfiguration) *GatewayReferenceApplyConfiguration {
+	b.HTTPRoute = value
 	return b
 }

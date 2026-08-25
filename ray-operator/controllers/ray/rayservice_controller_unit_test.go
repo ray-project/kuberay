@@ -1581,11 +1581,12 @@ func TestReconcileGatewayWithGatewayRef(t *testing.T) {
 }
 
 // Suspending a RayService that attaches to a shared Gateway via GatewayRef
-// must NOT delete that shared Gateway (KubeRay does not own it — deleting it would
-// break ingress for every other RayService on it). It must still delete the
-// KubeRay-owned per-RayService Gateway ("{name}-gateway", e.g. left behind after
-// switching from gatewayClassName to gatewayRef) and the HTTPRoute, both
-// in the RayService namespace.
+// must NOT delete any Gateway: not the shared Gateway (KubeRay does not own it —
+// deleting it would break ingress for every other RayService on it), and Gateway
+// deletion is skipped entirely when GatewayRef is set, so an orphaned
+// per-RayService Gateway (left behind after switching from gatewayClassName to
+// gatewayRef) is also preserved until the RayService itself is deleted and GC'd.
+// The KubeRay-owned HTTPRoute in the RayService namespace must still be deleted.
 func TestDeleteRayServiceOwnedResourcesPreservesExistingGateway(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
@@ -1612,7 +1613,8 @@ func TestDeleteRayServiceOwnedResourcesPreservesExistingGateway(t *testing.T) {
 		},
 	}
 	// Orphaned per-RayService Gateway left behind after switching this RayService
-	// from gatewayClassName to gatewayRef. KubeRay owns it and must clean it up.
+	// from gatewayClassName to gatewayRef. Gateway deletion is skipped when
+	// GatewayRef is set, so suspend leaves it alone.
 	ownedGateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{
 		Name:      rayService.Name + "-gateway",
 		Namespace: rsNamespace,
@@ -1644,10 +1646,11 @@ func TestDeleteRayServiceOwnedResourcesPreservesExistingGateway(t *testing.T) {
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: sharedGateway.Name, Namespace: gwNamespace}, gotGateway)
 	require.NoError(t, err, "shared Gateway must NOT be deleted on suspend when GatewayRef is set")
 
-	// The orphaned per-RayService Gateway KubeRay owns must be deleted.
+	// Gateway deletion is skipped entirely when GatewayRef is set, so even the
+	// orphaned per-RayService Gateway is preserved (GC'd with the RayService).
 	gotOwned := &gwv1.Gateway{}
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedGateway.Name, Namespace: rsNamespace}, gotOwned)
-	assert.True(t, errors.IsNotFound(err), "owned per-RayService Gateway should be deleted on suspend, got err=%v", err)
+	require.NoError(t, err, "Gateway deletion should be skipped on suspend when GatewayRef is set, got err=%v", err)
 
 	// The KubeRay-owned HTTPRoute must be deleted.
 	gotRoute := &gwv1.HTTPRoute{}
@@ -1849,12 +1852,14 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 					StepSizePercent: &stepSize,
 					IntervalSeconds: &interval,
 					GatewayRef: &rayv1.GatewayReference{
-						Name:        sharedGateway.Name,
-						Namespace:   sharedGateway.Namespace,
-						SectionName: "http",
-						Port:        new(int32(80)),
-						Hostnames:   []string{"rayservice.example.com"},
-						PathPrefix:  "/rayservice",
+						Name:      sharedGateway.Name,
+						Namespace: sharedGateway.Namespace,
+						HTTPRoute: &rayv1.GatewayHTTPRouteOptions{
+							SectionName: "http",
+							Port:        new(int32(80)),
+							Hostnames:   []string{"rayservice.example.com"},
+							PathPrefix:  "/rayservice",
+						},
 					},
 				},
 			},

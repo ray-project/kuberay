@@ -47,16 +47,19 @@ spec:
         name: shared-gateway
         # namespace defaults to this RayService's namespace when omitted.
         namespace: gateway
-        # Optional: pin the HTTPRoute to a specific listener on the shared Gateway.
-        # Omit to attach to every listener that accepts the route.
-        sectionName: http
-        port: 80
-        # Optional: scope the route on the shared Gateway so it does not act as a
-        # catch-all and collide with other HTTPRoutes. Omit hostnames to match all
-        # hosts; pathPrefix defaults to "/".
-        hostnames:
-        - rayservice.example.com
-        pathPrefix: /fruit
+        # Optional: configure the HTTPRoute KubeRay attaches to the shared Gateway.
+        # Omit httpRoute entirely to attach to every listener that accepts the
+        # route, match all hosts, and use a "/" path prefix.
+        httpRoute:
+          # Pin the HTTPRoute to a specific listener on the shared Gateway.
+          sectionName: http
+          port: 80
+          # Scope the route so it does not act as a catch-all and collide with
+          # other HTTPRoutes. Omit hostnames to match all hosts; pathPrefix
+          # defaults to "/".
+          hostnames:
+          - rayservice.example.com
+          pathPrefix: /fruit
       stepSizePercent: 10
       intervalSeconds: 30
       maxSurgePercent: 10

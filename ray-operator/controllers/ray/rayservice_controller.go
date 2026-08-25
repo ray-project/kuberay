@@ -1154,26 +1154,26 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
 	}
 
-	// Default routing: a "/" PathPrefix match and no hostnames (matches every host
-	// the listener accepts) — the original behavior for a KubeRay-created Gateway.
 	pathPrefix := "/"
 	var hostnames []gwv1.Hostname
 
-	// When attaching to a shared Gateway, GatewayRef options refine the route so it
-	// does not act as a catch-all that collides with other HTTPRoutes: SectionName/
-	// Port pin the listener, and Hostnames/PathPrefix scope which traffic it claims.
-	// For a KubeRay-created Gateway GatewayRef is nil, so the defaults above apply.
-	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
-		if opts.GatewayRef.SectionName != "" {
-			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
+	// When attaching to a shared Gateway, GatewayRef.HTTPRoute options refine the
+	// route so it does not act as a catch-all that collides with other HTTPRoutes:
+	// SectionName/Port pin the listener, and Hostnames/PathPrefix scope which traffic
+	// it claims. For a KubeRay-created Gateway GatewayRef is nil, so the defaults
+	// above apply.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil && opts.GatewayRef.HTTPRoute != nil {
+		routeOpts := opts.GatewayRef.HTTPRoute
+		if routeOpts.SectionName != "" {
+			parentRef.SectionName = new(gwv1.SectionName(routeOpts.SectionName))
 		}
-		if opts.GatewayRef.Port != nil {
-			parentRef.Port = new(*opts.GatewayRef.Port)
+		if routeOpts.Port != nil {
+			parentRef.Port = new(*routeOpts.Port)
 		}
-		if opts.GatewayRef.PathPrefix != "" {
-			pathPrefix = opts.GatewayRef.PathPrefix
+		if routeOpts.PathPrefix != "" {
+			pathPrefix = routeOpts.PathPrefix
 		}
-		for _, h := range opts.GatewayRef.Hostnames {
+		for _, h := range routeOpts.Hostnames {
 			hostnames = append(hostnames, gwv1.Hostname(h))
 		}
 	}

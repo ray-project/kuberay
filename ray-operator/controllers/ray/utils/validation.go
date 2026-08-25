@@ -741,11 +741,6 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
 	}
 
-	// The Gateway source (exactly one of gatewayClassName / gatewayRef) is
-	// enforced at admission by the CEL rule on ClusterUpgradeOptions, and
-	// GatewayRef's name/namespace are required by the CRD schema, so no controller-
-	// side check is needed here.
-
 	return nil
 }
 

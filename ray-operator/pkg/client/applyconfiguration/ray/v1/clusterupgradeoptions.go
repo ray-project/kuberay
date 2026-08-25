@@ -16,16 +16,11 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds,omitempty"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
-	// Mutually exclusive with GatewayRef: set exactly one.
+	// Exactly one of GatewayClassName or GatewayRef must be set.
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
-	// GatewayRef, when set, attaches the RayService's HTTPRoute to a
-	// pre-existing Gateway instead of creating a per-RayService Gateway. Use this
-	// when the cluster's Gateway controller only reconciles a specific shared
-	// Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-
-	// created Gateways are never programmed). When set, KubeRay skips Gateway
-	// creation and only manages the HTTPRoute's backend weights on the referenced
-	// Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace.
-	// Mutually exclusive with GatewayClassName: set exactly one.
+	// GatewayRef attaches the HTTPRoute to an existing Gateway instead of creating one per RayService.
+	// The referenced Gateway must allow HTTPRoutes from the RayService's namespace.
+	// Exactly one of GatewayClassName or GatewayRef must be set.
 	GatewayRef *GatewayReferenceApplyConfiguration `json:"gatewayRef,omitempty"`
 }
 

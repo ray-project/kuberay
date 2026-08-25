@@ -2267,10 +2267,6 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			// gatewayClassName vs gatewayRef mutual-exclusion (and the
-			// GatewayRef name/namespace requirement) is enforced at admission by the
-			// CEL rule + CRD schema, not by ValidateClusterUpgradeOptions, so this
-			// only asserts the valid gatewayRef path passes controller checks.
 			name:              "valid GatewayRef instead of GatewayClassName",
 			maxSurgePercent:   new(int32(50)),
 			stepSizePercent:   new(int32(50)),
