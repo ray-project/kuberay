@@ -516,14 +516,13 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	}
 
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		// Only delete the Gateway when it's the per-RayService one KubeRay owns.
-		// When GatewayRef is set, RayServiceGatewayNamespacedName resolves to the
-		// shared Gateway KubeRay does not own, and deleting it would tear down
-		// ingress for every other RayService attached to it.
-		if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts == nil || opts.GatewayRef == nil {
-			ownedGatewayName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
-			gateway := &gwv1.Gateway{}
-			if err := r.Get(ctx, ownedGatewayName, gateway); err == nil {
+		// Only the KubeRay-created Gateway is deleted here, and only when this
+		// RayService actually controls it — never the Gateway targeted via
+		// GatewayRef, which KubeRay does not own. This also cleans up the Gateway
+		// left behind after switching from gatewayClassName to gatewayRef.
+		gateway := &gwv1.Gateway{}
+		if err := r.Get(ctx, common.RayServiceOwnedGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
+			if metav1.IsControlledBy(gateway, rayServiceInstance) {
 				allDeleted = false
 				if gateway.DeletionTimestamp.IsZero() {
 					logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
@@ -535,9 +534,9 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
 						"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 				}
-			} else if !errors.IsNotFound(err) {
-				return false, err
 			}
+		} else if !errors.IsNotFound(err) {
+			return false, err
 		}
 
 		httpRoute := &gwv1.HTTPRoute{}
