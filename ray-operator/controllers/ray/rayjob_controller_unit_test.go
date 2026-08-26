@@ -42,12 +42,22 @@ type fakeBatchScheduler struct {
 	cleanupObject    metav1.Object
 	cleanupDidUpdate bool
 	cleanupErr       error
+	suspendCalled    bool
+	suspendObject    metav1.Object
+	suspendDidUpdate bool
+	suspendErr       error
 }
 
 func (f *fakeBatchScheduler) CleanupOnCompletion(_ context.Context, object metav1.Object) (bool, error) {
 	f.cleanupCalled = true
 	f.cleanupObject = object
 	return f.cleanupDidUpdate, f.cleanupErr
+}
+
+func (f *fakeBatchScheduler) CleanupOnSuspend(_ context.Context, object metav1.Object) (bool, error) {
+	f.suspendCalled = true
+	f.suspendObject = object
+	return f.suspendDidUpdate, f.suspendErr
 }
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
