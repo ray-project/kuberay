@@ -118,19 +118,21 @@ func crdLabelValueFor(kindLower string) string {
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
-	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
-	liveClusters, err := s.clientManager.ListRayClusters(ctx)
-	if err != nil {
-		logrus.Errorf("Failed to list live RayClusters: %v", err)
+	if s.enableLiveClusters {
+		ctx := context.Background()
+		liveClusterNames := []string{}
+		liveClusters, err := s.clientManager.ListRayClusters(ctx)
+		if err != nil {
+			logrus.Errorf("Failed to list live RayClusters: %v", err)
+		}
+		for _, liveCluster := range liveClusters {
+			liveClusterInfo := buildLiveClusterInfo(liveCluster)
+			liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
+			liveClusterNames = append(liveClusterNames, liveCluster.Name)
+		}
+		logrus.Infof("live clusters: %v", liveClusterNames)
 	}
-	for _, liveCluster := range liveClusters {
-		liveClusterInfo := buildLiveClusterInfo(liveCluster)
-		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
-		liveClusterNames = append(liveClusterNames, liveCluster.Name)
-	}
-	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
@@ -149,8 +151,14 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
 	}
 
+	// The "live" session does not exist when --enable-live-clusters are disabled. Return not-found here
+	// rather than falling through, so it is never matched against a stored session name.
+	if session == "live" && !s.enableLiveClusters {
+		return utils.ClusterInfo{}, false, nil
+	}
+
 	// Check live clusters first if applicable
-	if isLatestOrEmpty || session == "live" {
+	if s.enableLiveClusters && (isLatestOrEmpty || session == "live") {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
 			if err == nil {

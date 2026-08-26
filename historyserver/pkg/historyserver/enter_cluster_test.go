@@ -95,9 +95,10 @@ func TestEnterCluster(t *testing.T) {
 
 	// Create ServerHandler with fake sessionLoader and mockStorageReader
 	handler := &ServerHandler{
-		maxClusters:   100,
-		reader:        mockReader,
-		clientManager: clientManager,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		reader:             mockReader,
+		clientManager:      clientManager,
 	}
 
 	// Setup fake processor for sessionLoader
@@ -265,9 +266,10 @@ func TestEnterClusterLatestFromStorage(t *testing.T) {
 	}
 
 	handler := &ServerHandler{
-		maxClusters:   100,
-		reader:        mockReader,
-		clientManager: clientManager,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		reader:             mockReader,
+		clientManager:      clientManager,
 	}
 
 	fp := &fakeProcessor{
@@ -330,9 +332,10 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 	}
 
 	handler := &ServerHandler{
-		maxClusters:   100,
-		clientManager: clientManager,
-		reader:        mockReader,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		clientManager:      clientManager,
+		reader:             mockReader,
 	}
 
 	fp := &fakeProcessor{
@@ -382,9 +385,10 @@ func TestEnterClusterReturnsNotFoundWhenRemovedFromStorage(t *testing.T) {
 	}
 
 	handler := &ServerHandler{
-		maxClusters:   100,
-		reader:        mockReader,
-		clientManager: clientManager,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		reader:             mockReader,
+		clientManager:      clientManager,
 	}
 
 	fp := &fakeProcessor{
@@ -440,9 +444,10 @@ func TestEnterClusterReturnsErrorOnTransientK8sError(t *testing.T) {
 	}
 
 	handler := &ServerHandler{
-		maxClusters:   100,
-		reader:        mockReader,
-		clientManager: clientManager,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		reader:             mockReader,
+		clientManager:      clientManager,
 	}
 
 	fp := &fakeProcessor{
@@ -498,9 +503,10 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	}
 
 	handler := &ServerHandler{
-		maxClusters:   100,
-		reader:        mockReader,
-		clientManager: clientManager,
+		enableLiveClusters: true,
+		maxClusters:        100,
+		reader:             mockReader,
+		clientManager:      clientManager,
 	}
 
 	fp := &fakeProcessor{
@@ -554,4 +560,118 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 			t.Errorf("Expected cookie %s to be 'rayservice', got %v", COOKIE_OWNER_KIND_KEY, c)
 		}
 	})
+}
+
+// newDisabledLiveHandler builds a handler with live clusters off, a running RayCluster known to
+// Kubernetes, and one stored session for it.
+func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
+	t.Helper()
+
+	handler := &ServerHandler{
+		maxClusters: 100,
+		reader: &mockStorageReader{
+			clusters: []utils.ClusterInfo{{
+				Namespace:   "default",
+				Name:        "cluster-running",
+				SessionName: "session_2026-04-22_10-00-00_000000_1",
+			}},
+		},
+		clientManager: newTestClientManager(liveRayCluster("default", "cluster-running")),
+	}
+	fp := &fakeProcessor{
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+			if status == SessionStatusProcessed {
+				return status, &eventserver.SessionSnapshot{}, nil
+			}
+			return status, nil, nil
+		},
+	}
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	return handler
+}
+
+// TestListClustersOmitsLiveWhenDisabled asserts the RayCluster listing stays off the response, so a
+// server with live clusters disabled never enumerates RayClusters on a caller's behalf.
+func TestListClustersOmitsLiveWhenDisabled(t *testing.T) {
+	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+
+	for _, c := range handler.listClusters(100) {
+		if c.SessionName == "live" {
+			t.Fatalf("listClusters returned a live entry for %s/%s while live clusters are disabled", c.Namespace, c.Name)
+		}
+	}
+}
+
+// TestListClustersIncludesLiveWhenEnabled keeps the gate from silently becoming unconditional.
+func TestListClustersIncludesLiveWhenEnabled(t *testing.T) {
+	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+	handler.enableLiveClusters = true
+
+	for _, c := range handler.listClusters(100) {
+		if c.SessionName == "live" {
+			return
+		}
+	}
+	t.Fatal("listClusters returned no live entry while live clusters are enabled")
+}
+
+// TestEnterClusterLiveSessionRejectedWhenDisabled covers an explicit request for the live sentinel.
+func TestEnterClusterLiveSessionRejectedWhenDisabled(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+	routerRayClusterSet(handler)
+
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/live", nil)
+	resp := httptest.NewRecorder()
+	restful.DefaultContainer.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
+	}
+	for _, c := range resp.Result().Cookies() {
+		if c.Name == COOKIE_SESSION_NAME_KEY && c.Value == "live" {
+			t.Error("a live session cookie was handed out while live clusters are disabled")
+		}
+	}
+}
+
+// TestEnterClusterRunningClusterRejectedWhenDisabled covers the common path: the cluster is still
+// running, so its stored session has no replayable state and there is nothing to fall back to.
+func TestEnterClusterRunningClusterRejectedWhenDisabled(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+	handler := newDisabledLiveHandler(t, SessionStatusLive)
+	routerRayClusterSet(handler)
+
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+	resp := httptest.NewRecorder()
+	restful.DefaultContainer.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
+	}
+	// The frontend surfaces this body verbatim, so it has to say why rather than just "not found".
+	if !strings.Contains(resp.Body.String(), "still running") {
+		t.Errorf("expected the body to explain the cluster is still running, got %q", resp.Body.String())
+	}
+}
+
+// TestEnterClusterStoredSessionStillWorksWhenDisabled guards the blast radius: turning live clusters
+// off must not disturb replay of a cluster that has already gone away.
+func TestEnterClusterStoredSessionStillWorksWhenDisabled(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+	routerRayClusterSet(handler)
+
+	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+	resp := httptest.NewRecorder()
+	restful.DefaultContainer.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	for _, c := range resp.Result().Cookies() {
+		if c.Name == COOKIE_SESSION_NAME_KEY && c.Value != "session_2026-04-22_10-00-00_000000_1" {
+			t.Errorf("expected the stored session cookie, got %q", c.Value)
+		}
+	}
 }

@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -68,11 +69,32 @@ var HistoryServerEndpoints = []string{
 const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
 const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
 
+// HistoryServerOption customizes the History Server deployment applied by ApplyHistoryServer.
+type HistoryServerOption func(*historyServerOptions)
+
+type historyServerOptions struct {
+	extraArgs []string
+}
+
+// WithLiveClusters starts the History Server with live RayCluster support enabled. The shipped
+// manifests leave it off, matching the binary default, so any test that enters a running cluster
+// has to opt in explicitly.
+func WithLiveClusters() HistoryServerOption {
+	return func(o *historyServerOptions) {
+		o.extraArgs = append(o.extraArgs, "--enable-live-clusters=true")
+	}
+}
+
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 // If manifestPath is empty, the default HistoryServerManifestPath is used.
-func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string) {
+func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string, opts ...HistoryServerOption) {
 	if manifestPath == "" {
 		manifestPath = HistoryServerManifestPath
+	}
+
+	options := historyServerOptions{}
+	for _, apply := range opts {
+		apply(&options)
 	}
 
 	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
@@ -101,6 +123,10 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 
 	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
+	if len(options.extraArgs) > 0 {
+		patchHistoryServerArgs(test, g, namespace, options.extraArgs)
+	}
+
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
 	g.Eventually(func(gg Gomega) {
 		pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(
@@ -110,9 +136,65 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 		)
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(pods.Items).NotTo(BeEmpty())
+		// Also require the args, otherwise the pod from before patchHistoryServerArgs can report
+		// ready and let the test run against a History Server without the requested flags.
+		for _, pod := range pods.Items {
+			gg.Expect(podHasArgs(pod, options.extraArgs)).To(BeTrue(),
+				"pod %s does not carry the requested args %v", pod.Name, options.extraArgs)
+		}
 		gg.Expect(AllPodsRunningAndReady(pods.Items)).To(BeTrue())
 	}, TestTimeoutMedium).Should(Succeed())
 	LogWithTimestamp(test.T(), "HistoryServer is ready")
+}
+
+// patchHistoryServerArgs appends args to the History Server container.
+func patchHistoryServerArgs(test Test, g *WithT, namespace *corev1.Namespace, args []string) {
+	deployments, err := test.Client().Core().AppsV1().Deployments(namespace.Name).List(
+		test.Ctx(), metav1.ListOptions{LabelSelector: "app=historyserver"},
+	)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(deployments.Items).To(HaveLen(1))
+
+	deployment := deployments.Items[0]
+	g.Expect(deployment.Spec.Template.Spec.Containers).NotTo(BeEmpty())
+	container := deployment.Spec.Template.Spec.Containers[0]
+
+	merged := append(append([]string{}, container.Args...), args...)
+	patch, err := json.Marshal(map[string]any{
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []map[string]any{{
+						"name": container.Name,
+						"args": merged,
+					}},
+				},
+			},
+		},
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	_, err = test.Client().Core().AppsV1().Deployments(namespace.Name).Patch(
+		test.Ctx(), deployment.Name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Patched HistoryServer args to %v", merged)
+}
+
+// podHasArgs reports whether every arg appears on the pod's first container.
+func podHasArgs(pod corev1.Pod, args []string) bool {
+	if len(pod.Spec.Containers) == 0 {
+		return false
+	}
+	present := make(map[string]bool, len(pod.Spec.Containers[0].Args))
+	for _, arg := range pod.Spec.Containers[0].Args {
+		present[arg] = true
+	}
+	for _, arg := range args {
+		if !present[arg] {
+			return false
+		}
+	}
+	return true
 }
 
 // GetHistoryServerURL sets up port-forwarding to the history server and waits for it to be ready.

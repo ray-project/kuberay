@@ -68,6 +68,14 @@ The history server can be configured using command-line flags:
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
 - `--storage-backend-config-path`: Path to storage backend configuration file
+- `--enable-live-clusters`: Serve RayClusters that are still running by reverse-proxying to their
+  head dashboard (default: `false`)
+
+> [!WARNING]
+> The history server does not authenticate its own callers, and the RayCluster it proxies to is
+> chosen from a client-supplied cookie. Enabling `--enable-live-clusters` therefore exposes the Ray
+> Dashboard API of every RayCluster the history server can reach to anyone who can reach the history
+> server. Only turn it on where that access is already restricted by other means.
 
 ### Collector Configuration
 
@@ -171,8 +179,9 @@ kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUC
 # Delete the RayJob only to skip the TTL wait:
 kubectl delete -f historyserver/config/rayjob.yaml
 
-# Discover the session name. /clusters lists both live and dead sessions;
-# dead sessions carry the `session_*` name you'll feed into /enter_cluster.
+# Discover the session name. /clusters lists dead sessions, plus live ones when
+# --enable-live-clusters is set; dead sessions carry the `session_*` name you'll
+# feed into /enter_cluster.
 curl -sS http://localhost:8080/clusters
 ```
 
