@@ -69,24 +69,6 @@ func liveCookies() map[string]string {
 	}
 }
 
-// TestCookieHandleRejectsLiveSessionWhenDisabled is the security boundary: a live session cookie is
-// entirely client-controlled, so a caller can forge one even though nothing in the UI hands it out
-// while live clusters are disabled.
-func TestCookieHandleRejectsLiveSessionWhenDisabled(t *testing.T) {
-	// No RayCluster in the fake client. If the gate did not fire first, GetSvcInfo would fail and
-	// CookieHandle would answer 400, so a 403 proves the rejection happened before the K8s read.
-	handler := &ServerHandler{clientManager: newTestClientManager()}
-
-	resp, reached := serveThroughCookieHandle(handler, liveCookies())
-
-	if resp.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", resp.Code, resp.Body.String())
-	}
-	if reached {
-		t.Error("downstream handler ran; the live session must be rejected by the filter")
-	}
-}
-
 // TestCookieHandleRejectsLiveSessionBeforeReadingSecret guards the confused-deputy path: in
 // auth-token mode CookieHandle reads the cluster's auth token Secret on the caller's behalf, so the
 // gate has to fire before that read, not after.

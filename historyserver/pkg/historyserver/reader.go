@@ -151,7 +151,7 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
 	}
 
-	// The "live" session does not exist when --enable-live-clusters are disabled. Return not-found here
+	// The "live" session does not exist when --enable-live-clusters is disabled. Return not-found here
 	// rather than falling through, so it is never matched against a stored session name.
 	if session == "live" && !s.enableLiveClusters {
 		return utils.ClusterInfo{}, false, nil
