@@ -84,6 +84,11 @@ kubectl apply -f historyserver/config/historyserver.yaml
 kubectl port-forward svc/historyserver 8080:30080
 ```
 
+> [!IMPORTANT]
+> Access to live RayClusters is disabled by default. When disabled, `/clusters` only lists sessions
+> already flushed to storage, and `/enter_cluster/.../live` returns 404. To enable access to live
+> RayCluster, set `--enable-live-clusters=true`.
+
 #### Run History Server Outside the Kind Cluster
 
 You can also run the history server outside the Kind cluster to accelerate the development iteration and enable
@@ -101,6 +106,7 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
             "cwd": "${workspaceFolder}",
             "args": [
                 "--storage-backend=s3",
+                "--enable-live-clusters=true",
             ],
             "env": {
                 "S3_REGION": "test",
@@ -141,6 +147,7 @@ export S3DISABLE_SSL=true
 ./output/bin/historyserver \
   --storage-backend=s3 \
   --use-kubernetes-proxy=true
+  --enable-live-clusters=true
 ```
 
 ## API Endpoints

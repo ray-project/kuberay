@@ -60,8 +60,7 @@ spec:
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
         - --session-cache-max-memory=8Gi
-        # Reverse-proxy requests to running RayCluster dashboards.
-        # Off by default; enabling this exposes live RayCluster APIs.
+        # Enable access to live RayCluster through the History Server.
         # - --enable-live-clusters=true
         #
         # Enable proxying to live RayClusters with token authentication enabled.
