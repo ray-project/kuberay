@@ -105,7 +105,7 @@ kubectl apply -f historyserver/config/historyserver.yaml
 ```
 
 > [!NOTE]
-> Access to live RayCluster is off by default, so `/clusters` lists only sessions already flushed to
+> Access to live RayClusters is off by default, so `/clusters` lists only sessions already flushed to
 > storage. If you want to access live RayCluster, set `--enable-live-clusters=true` in
 > `historyserver/config/historyserver.yaml` before applying it.
 

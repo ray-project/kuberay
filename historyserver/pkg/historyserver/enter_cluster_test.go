@@ -562,8 +562,13 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	})
 }
 
-// newDisabledLiveHandler builds a handler with live clusters off, a running RayCluster known to
-// Kubernetes, and one stored session for it.
+// newDisabledLiveHandler returns a ServerHandler with --enable-live-clusters off. One cluster,
+// default/cluster-running, is known both to Kubernetes and to object storage, which is what a
+// still-running cluster looks like once its collector has flushed a session.
+//
+// status is what the session loader reports for that stored session. A real SessionProcessor would
+// always report SessionStatusLive, because the fake Kubernetes client holds the RayCluster, so a
+// fake processor is used to reach the SessionStatusProcessed path as well.
 func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
 	t.Helper()
 
@@ -590,88 +595,92 @@ func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
 	return handler
 }
 
-// TestListClustersOmitsLiveWhenDisabled asserts the RayCluster listing stays off the response, so a
-// server with live clusters disabled never enumerates RayClusters on a caller's behalf.
-func TestListClustersOmitsLiveWhenDisabled(t *testing.T) {
-	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+// TestListClusters checks which entries listClusters returns. live RayClusters are read from the
+// Kubernetes API and carry the session name "live"; they are returned only when
+// --enable-live-clusters is set.
+func TestListClusters(t *testing.T) {
+	t.Run("Omits live clusters when live access is disabled", func(t *testing.T) {
+		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
 
-	for _, c := range handler.listClusters(100) {
-		if c.SessionName == "live" {
-			t.Fatalf("listClusters returned a live entry for %s/%s while live clusters are disabled", c.Namespace, c.Name)
+		for _, c := range handler.listClusters(100) {
+			if c.SessionName == "live" {
+				t.Fatalf("listClusters returned a live entry for %s/%s while live clusters are disabled", c.Namespace, c.Name)
+			}
 		}
-	}
+	})
+
+	t.Run("Includes live clusters when live access is enabled", func(t *testing.T) {
+		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+		handler.enableLiveClusters = true
+
+		for _, c := range handler.listClusters(100) {
+			if c.SessionName == "live" {
+				return
+			}
+		}
+		t.Fatal("listClusters returned no live entry while live clusters are enabled")
+	})
 }
 
-// TestListClustersIncludesLiveWhenEnabled keeps the gate from silently becoming unconditional.
-func TestListClustersIncludesLiveWhenEnabled(t *testing.T) {
-	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
-	handler.enableLiveClusters = true
+// TestEnterClusterWithLiveClustersDisabled checks how /enter_cluster answers while
+// --enable-live-clusters is off: a request that resolves to a running cluster is refused, and one
+// that resolves to a stored session still succeeds.
+func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
+	t.Run("Explicit live session is rejected", func(t *testing.T) {
+		restful.DefaultContainer = restful.NewContainer()
+		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+		routerRayClusterSet(handler)
 
-	for _, c := range handler.listClusters(100) {
-		if c.SessionName == "live" {
-			return
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/live", nil)
+		resp := httptest.NewRecorder()
+		restful.DefaultContainer.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
 		}
-	}
-	t.Fatal("listClusters returned no live entry while live clusters are enabled")
-}
-
-// TestEnterClusterLiveSessionRejectedWhenDisabled covers an explicit request for the live sentinel.
-func TestEnterClusterLiveSessionRejectedWhenDisabled(t *testing.T) {
-	restful.DefaultContainer = restful.NewContainer()
-	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
-	routerRayClusterSet(handler)
-
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/live", nil)
-	resp := httptest.NewRecorder()
-	restful.DefaultContainer.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
-	}
-	for _, c := range resp.Result().Cookies() {
-		if c.Name == COOKIE_SESSION_NAME_KEY && c.Value == "live" {
-			t.Error("a live session cookie was handed out while live clusters are disabled")
+		for _, c := range resp.Result().Cookies() {
+			if c.Name == COOKIE_SESSION_NAME_KEY && c.Value == "live" {
+				t.Error("a live session cookie was handed out while live clusters are disabled")
+			}
 		}
-	}
-}
+	})
 
-// TestEnterClusterRunningClusterRejectedWhenDisabled covers the common path: the cluster is still
-// running, so its stored session has no replayable state and there is nothing to fall back to.
-func TestEnterClusterRunningClusterRejectedWhenDisabled(t *testing.T) {
-	restful.DefaultContainer = restful.NewContainer()
-	handler := newDisabledLiveHandler(t, SessionStatusLive)
-	routerRayClusterSet(handler)
+	t.Run("Running cluster is rejected with an explanation", func(t *testing.T) {
+		// A running cluster has no replayable state in memory, so once live access is refused there
+		// is nothing for the handler to fall back to.
+		restful.DefaultContainer = restful.NewContainer()
+		handler := newDisabledLiveHandler(t, SessionStatusLive)
+		routerRayClusterSet(handler)
 
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
-	resp := httptest.NewRecorder()
-	restful.DefaultContainer.ServeHTTP(resp, req)
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+		resp := httptest.NewRecorder()
+		restful.DefaultContainer.ServeHTTP(resp, req)
 
-	if resp.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
-	}
-	// The frontend surfaces this body verbatim, so it has to say why rather than just "not found".
-	if !strings.Contains(resp.Body.String(), "still running") {
-		t.Errorf("expected the body to explain the cluster is still running, got %q", resp.Body.String())
-	}
-}
-
-// TestEnterClusterStoredSessionStillWorksWhenDisabled guards the blast radius: turning live clusters
-// off must not disturb replay of a cluster that has already gone away.
-func TestEnterClusterStoredSessionStillWorksWhenDisabled(t *testing.T) {
-	restful.DefaultContainer = restful.NewContainer()
-	handler := newDisabledLiveHandler(t, SessionStatusProcessed)
-	routerRayClusterSet(handler)
-
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
-	resp := httptest.NewRecorder()
-	restful.DefaultContainer.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
-	}
-	for _, c := range resp.Result().Cookies() {
-		if c.Name == COOKIE_SESSION_NAME_KEY && c.Value != "session_2026-04-22_10-00-00_000000_1" {
-			t.Errorf("expected the stored session cookie, got %q", c.Value)
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", resp.Code, resp.Body.String())
 		}
-	}
+		// The frontend surfaces this body verbatim, so it has to say why rather than just "not found".
+		if !strings.Contains(resp.Body.String(), "still running") {
+			t.Errorf("expected the body to explain the cluster is still running, got %q", resp.Body.String())
+		}
+	})
+
+	t.Run("Stored session of a dead cluster still works", func(t *testing.T) {
+		restful.DefaultContainer = restful.NewContainer()
+		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
+		routerRayClusterSet(handler)
+
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+		resp := httptest.NewRecorder()
+		restful.DefaultContainer.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+		for _, c := range resp.Result().Cookies() {
+			if c.Name == COOKIE_SESSION_NAME_KEY && c.Value != "session_2026-04-22_10-00-00_000000_1" {
+				t.Errorf("expected the stored session cookie, got %q", c.Value)
+			}
+		}
+	})
 }
