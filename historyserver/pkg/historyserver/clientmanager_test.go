@@ -7,6 +7,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +40,9 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: namespace,
+			// Mirrors what the operator stamps on the Secrets it generates; the
+			// ownership check rejects Secrets that carry no tie to the cluster.
+			Labels: map[string]string{rayutils.RayClusterLabelKey: clusterName},
 		},
 		Data: map[string][]byte{AuthTokenSecretKey: []byte(secretKey)},
 	}
@@ -193,4 +197,71 @@ func TestGetSvcInfo(t *testing.T) {
 	}
 	_, err = emptyMgr.GetSvcInfo(clusterName, namespace)
 	assert.Error(t, err)
+}
+
+func TestVerifySecretOwnership(t *testing.T) {
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: "ns", UID: "cluster-uid"},
+	}
+
+	secretWith := func(labels map[string]string, refs []metav1.OwnerReference) *corev1.Secret {
+		return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Name: "s1", Namespace: "ns", Labels: labels, OwnerReferences: refs,
+		}}
+	}
+
+	tests := []struct {
+		name    string
+		secret  *corev1.Secret
+		wantErr bool
+	}{
+		{
+			name:   "operator label accepted",
+			secret: secretWith(map[string]string{rayutils.RayClusterLabelKey: "c1"}, nil),
+		},
+		{
+			name: "controller ownerReference accepted",
+			secret: secretWith(nil, []metav1.OwnerReference{
+				{Kind: "RayCluster", Name: "c1", UID: "cluster-uid"},
+			}),
+		},
+		{
+			name:    "unrelated secret rejected",
+			secret:  secretWith(nil, nil),
+			wantErr: true,
+		},
+		{
+			name:    "label pointing at another cluster rejected",
+			secret:  secretWith(map[string]string{rayutils.RayClusterLabelKey: "other"}, nil),
+			wantErr: true,
+		},
+		{
+			// A stale or forged reference reusing the name must not pass: the UID
+			// is what actually ties the Secret to this cluster instance.
+			name: "ownerReference with mismatched UID rejected",
+			secret: secretWith(nil, []metav1.OwnerReference{
+				{Kind: "RayCluster", Name: "c1", UID: "someone-else"},
+			}),
+			wantErr: true,
+		},
+		{
+			name: "ownerReference of another kind rejected",
+			secret: secretWith(nil, []metav1.OwnerReference{
+				{Kind: "Deployment", Name: "c1", UID: "cluster-uid"},
+			}),
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifySecretOwnership(tc.secret, cluster)
+			if tc.wantErr && err == nil {
+				t.Fatal("expected the secret to be rejected")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected the secret to be accepted, got %v", err)
+			}
+		})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
@@ -125,6 +126,15 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", namespace, secretName, err)
 	}
 
+	// Defence in depth: only consume a Secret that demonstrably belongs to this
+	// RayCluster. A user who can create a RayCluster can already read any
+	// Secret in the namespace via podTemplate references, so this does not close
+	// a new hole -- what it does is keep the history server from becoming an
+	// unattributable read path for arbitrary Secrets under its own identity.
+	if err := verifySecretOwnership(secret, rayCluster); err != nil {
+		return "", err
+	}
+
 	tokenBytes, exists := secret.Data[AuthTokenSecretKey]
 	if !exists {
 		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, namespace, secretName)
@@ -137,6 +147,24 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 	}
 
 	return token, nil
+}
+
+// verifySecretOwnership checks that the Secret is tied to the given RayCluster,
+// either through the label the operator stamps on the Secrets it generates or
+// through a controller ownerReference. Operator-generated Secrets carry both; a
+// Secret referenced through a user-supplied authOptions.secretName must be
+// labelled by an administrator to be usable.
+func verifySecretOwnership(secret *corev1.Secret, rayCluster *rayv1.RayCluster) error {
+	if secret.Labels[rayutils.RayClusterLabelKey] == rayCluster.Name {
+		return nil
+	}
+	for _, ref := range secret.GetOwnerReferences() {
+		if ref.Kind == "RayCluster" && ref.Name == rayCluster.Name && ref.UID == rayCluster.UID {
+			return nil
+		}
+	}
+	return fmt.Errorf("secret %s/%s is not owned by RayCluster %s: it must carry the label %s=%s or an ownerReference to the cluster",
+		secret.Namespace, secret.Name, rayCluster.Name, rayutils.RayClusterLabelKey, rayCluster.Name)
 }
 
 // GetSvcInfo looks up the cluster's head service routing info, using a short-lived cache to reduce
