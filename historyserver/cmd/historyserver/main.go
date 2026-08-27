@@ -25,6 +25,10 @@ func main() {
 	dashboardDir := ""
 	useKubernetesProxy := false
 	useAuthTokenMode := false
+	enableAuth := false
+	authCookieSecure := true
+	authCacheTTL := historyserver.DefaultAuthCacheTTL
+	authCookieMaxAge := historyserver.DefaultAuthCookieMaxAge
 	qps := historyserver.DefaultKubeAPIQPS
 	burst := historyserver.DefaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
@@ -44,6 +48,10 @@ func main() {
 	flag.IntVar(&sessionCacheSize, "session-cache-size", historyserver.DefaultSessionCacheSize, "Max number of dead-session snapshots held in the LRU cache.")
 	flag.StringVar(&sessionCacheMaxMemory, "session-cache-max-memory", historyserver.DefaultSessionCacheMaxMemory, `Soft cap on memory held by cached snapshots, as a Kubernetes quantity (e.g. "1Gi"); tune under pod memory. "0" disables the bound.`)
 	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
+	flag.BoolVar(&enableAuth, "enable-auth", false, "Authenticate users against the Kubernetes TokenReview API before serving any cluster data.")
+	flag.DurationVar(&authCacheTTL, "auth-cache-ttl", historyserver.DefaultAuthCacheTTL, "How long a successful TokenReview result stays cached. A revoked token keeps working for at most this long.")
+	flag.BoolVar(&authCookieSecure, "auth-cookie-secure", true, "Mark the auth cookie Secure. Set to false only for local plain-HTTP development.")
+	flag.DurationVar(&authCookieMaxAge, "auth-cookie-max-age", historyserver.DefaultAuthCookieMaxAge, "Lifetime of the auth cookie issued after a successful login.")
 	flag.Parse()
 
 	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
@@ -129,7 +137,13 @@ func main() {
 		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy, useAuthTokenMode)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy, useAuthTokenMode,
+		historyserver.AuthConfig{
+			Enabled:      enableAuth,
+			CacheTTL:     authCacheTTL,
+			CookieSecure: authCookieSecure,
+			CookieMaxAge: authCookieMaxAge,
+		})
 	if err != nil {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
