@@ -1655,7 +1655,7 @@ func TestDeleteRayServiceOwnedResourcesPreservesExistingGateway(t *testing.T) {
 				Kind:       "RayService",
 				Name:       rayService.Name,
 				UID:        rayService.UID,
-				Controller: ptr.To(true),
+				Controller: new(true),
 			}}
 		}
 		httpRoute := &gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{
