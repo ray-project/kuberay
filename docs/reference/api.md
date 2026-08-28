@@ -71,6 +71,7 @@ _Appears in:_
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | SecurityContext defines the security options the container should be run with.<br />If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.<br />More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/ |  |  |
 | `idleTimeoutSeconds` _integer_ | IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.<br />Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler. |  |  |
 | `noDriverTimeoutSeconds` _integer_ | NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering RayCluster deletion.<br />The autoscaler v2 tracks driver activity and, when no driver has been attached for this duration, sets the<br />`ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster. |  |  |
+| `noDriverTimeoutPolicy` _[NoDriverTimeoutPolicy](#nodrivertimeoutpolicy)_ | NoDriverTimeoutPolicy is "Delete", or "Suspend". The default policy is "Delete".<br />Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.<br />Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds. |  |  |
 | `upscalingMode` _[UpscalingMode](#upscalingmode)_ | UpscalingMode is "Conservative", "Default", or "Aggressive."<br />Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.<br />Default: Upscaling is not rate-limited.<br />Aggressive: An alias for Default; upscaling is not rate-limited.<br />It is not read by the KubeRay operator but by the Ray autoscaler. |  | Enum: [Default Aggressive Conservative] <br /> |
 | `version` _[AutoscalerVersion](#autoscalerversion)_ | Version is the version of the Ray autoscaler.<br />Setting this to v1 will explicitly use autoscaler v1.<br />Setting this to v2 will explicitly use autoscaler v2.<br />If this isn't set, the Ray version determines the autoscaler version.<br />In Ray 2.47.0 and later, the default autoscaler version is v2. It's v1 before that. |  | Enum: [v1 v2] <br /> |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ | Optional list of environment variables to set in the autoscaler container. |  |  |
@@ -484,6 +485,23 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules appended to the base policy.<br />Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress). |  |  |
 | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-policy-deny-all sample. |  |  |
+
+
+#### NoDriverTimeoutPolicy
+
+_Underlying type:_ _string_
+
+
+
+
+
+_Appears in:_
+- [AutoscalerOptions](#autoscaleroptions)
+
+| Field | Description |
+| --- | --- |
+| `Delete` |  |
+| `Suspend` |  |
 
 
 #### RayCluster

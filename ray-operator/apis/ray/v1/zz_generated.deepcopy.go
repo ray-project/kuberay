@@ -91,6 +91,11 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.NoDriverTimeoutPolicy != nil {
+		in, out := &in.NoDriverTimeoutPolicy, &out.NoDriverTimeoutPolicy
+		*out = new(NoDriverTimeoutPolicy)
+		**out = **in
+	}
 	if in.UpscalingMode != nil {
 		in, out := &in.UpscalingMode, &out.UpscalingMode
 		*out = new(UpscalingMode)
