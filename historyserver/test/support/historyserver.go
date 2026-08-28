@@ -102,9 +102,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 
 	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
-	if len(extraArgs) > 0 {
-		patchHistoryServerArgs(test, g, namespace, extraArgs)
-	}
+	appendHistoryServerArgs(test, g, namespace, extraArgs)
 
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
 	g.Eventually(func(gg Gomega) {
@@ -115,7 +113,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 		)
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(pods.Items).NotTo(BeEmpty())
-		// Also require the args, otherwise the pod from before patchHistoryServerArgs can report
+		// Also require the args, otherwise the pod from before appendHistoryServerArgs can report
 		// ready and let the test run against a History Server without the requested flags.
 		for _, pod := range pods.Items {
 			gg.Expect(podHasArgs(pod, extraArgs)).To(BeTrue(),
@@ -126,37 +124,27 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 	LogWithTimestamp(test.T(), "HistoryServer is ready")
 }
 
-// patchHistoryServerArgs appends args to the History Server container.
-func patchHistoryServerArgs(test Test, g *WithT, namespace *corev1.Namespace, args []string) {
-	deployments, err := test.Client().Core().AppsV1().Deployments(namespace.Name).List(
-		test.Ctx(), metav1.ListOptions{LabelSelector: "app=historyserver"},
-	)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(deployments.Items).To(HaveLen(1))
+// appendHistoryServerArgs appends args to the History Server.
+func appendHistoryServerArgs(test Test, g *WithT, namespace *corev1.Namespace, args []string) {
+	if len(args) == 0 {
+		return
+	}
 
-	deployment := deployments.Items[0]
-	g.Expect(deployment.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-	container := deployment.Spec.Template.Spec.Containers[0]
-
-	merged := append(append([]string{}, container.Args...), args...)
-	patch, err := json.Marshal(map[string]any{
-		"spec": map[string]any{
-			"template": map[string]any{
-				"spec": map[string]any{
-					"containers": []map[string]any{{
-						"name": container.Name,
-						"args": merged,
-					}},
-				},
-			},
-		},
-	})
+	ops := make([]map[string]any, 0, len(args))
+	for _, arg := range args {
+		ops = append(ops, map[string]any{
+			"op":    "add",
+			"path":  "/spec/template/spec/containers/0/args/-",
+			"value": arg,
+		})
+	}
+	patch, err := json.Marshal(ops)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	_, err = test.Client().Core().AppsV1().Deployments(namespace.Name).Patch(
-		test.Ctx(), deployment.Name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+		test.Ctx(), "historyserver-demo", types.JSONPatchType, patch, metav1.PatchOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Patched HistoryServer args to %v", merged)
+	LogWithTimestamp(test.T(), "Appended args %v to the HistoryServer Deployment", args)
 }
 
 // podHasArgs reports whether every arg appears on the pod's first container.
