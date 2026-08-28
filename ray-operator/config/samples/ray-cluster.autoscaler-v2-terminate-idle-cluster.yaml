@@ -22,6 +22,7 @@ spec:
     idleTimeoutSeconds: 60
     # Delete the RayCluster after no user driver has been attached for 30 seconds.
     noDriverTimeoutSeconds: 30
+    noDriverTimeoutPolicy: Delete
     imagePullPolicy: IfNotPresent
     resources:
       limits:
