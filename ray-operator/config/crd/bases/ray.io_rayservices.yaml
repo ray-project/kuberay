@@ -9431,6 +9431,10 @@ spec:
                               type: string
                             maxItems: 16
                             type: array
+                          pathPrefix:
+                            maxLength: 1024
+                            pattern: ^/
+                            type: string
                         type: object
                       intervalSeconds:
                         format: int32

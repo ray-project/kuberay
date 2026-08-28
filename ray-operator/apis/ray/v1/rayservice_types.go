@@ -138,6 +138,14 @@ type HTTPRouteOptions struct {
 	// +kubebuilder:validation:items:MaxLength=253
 	// +kubebuilder:validation:items:Pattern=`^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Hostnames []string `json:"hostnames,omitempty"`
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix
+	// match). On a shared Gateway this narrows the route so it does not steal
+	// unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)
+	// when omitted.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:Pattern=`^/`
+	PathPrefix string `json:"pathPrefix,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

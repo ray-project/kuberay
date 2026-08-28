@@ -1901,7 +1901,8 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 						Port:        new(int32(80)),
 					},
 					HTTPRoute: &rayv1.HTTPRouteOptions{
-						Hostnames: []string{"rayservice.example.com"},
+						Hostnames:  []string{"rayservice.example.com"},
+						PathPrefix: "/rayservice",
 					},
 				},
 			},
@@ -1948,10 +1949,14 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 	require.NotNil(t, parentRef.Port)
 	assert.Equal(t, gwv1.PortNumber(80), *parentRef.Port)
 
-	// Route is scoped to the requested hostnames so it does not act as a
-	// catch-all on the shared Gateway.
+	// Route is scoped to the requested hostnames and path prefix so it does not
+	// act as a catch-all on the shared Gateway.
 	assert.Equal(t, []gwv1.Hostname{"rayservice.example.com"}, route.Spec.Hostnames)
 	require.Len(t, route.Spec.Rules, 1)
+	require.Len(t, route.Spec.Rules[0].Matches, 1)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, "/rayservice", *route.Spec.Rules[0].Matches[0].Path.Value)
 
 	// Backend service references use the RayService namespace, not the Gateway's.
 	require.GreaterOrEqual(t, len(route.Spec.Rules[0].BackendRefs), 1)
@@ -1961,9 +1966,9 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 	assert.Equal(t, gwv1.Namespace(rsNamespace), *backend.Namespace)
 }
 
-// HTTPRoute options are decoupled from the Gateway source: hostnames must also
-// scope the route when KubeRay creates the Gateway itself via gatewayClassName
-// (no GatewayRef).
+// HTTPRoute options are decoupled from the Gateway source: hostnames/pathPrefix
+// must also scope the route when KubeRay creates the Gateway itself via
+// gatewayClassName (no GatewayRef).
 func TestCreateHTTPRouteWithHTTPRouteOptionsAndGatewayClassName(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -1985,7 +1990,8 @@ func TestCreateHTTPRouteWithHTTPRouteOptionsAndGatewayClassName(t *testing.T) {
 					IntervalSeconds:  &interval,
 					GatewayClassName: "istio",
 					HTTPRoute: &rayv1.HTTPRouteOptions{
-						Hostnames: []string{"rayservice.example.com"},
+						Hostnames:  []string{"rayservice.example.com"},
+						PathPrefix: "/rayservice",
 					},
 				},
 			},
@@ -2026,6 +2032,10 @@ func TestCreateHTTPRouteWithHTTPRouteOptionsAndGatewayClassName(t *testing.T) {
 	// HTTPRoute options scope the route even without GatewayRef.
 	assert.Equal(t, []gwv1.Hostname{"rayservice.example.com"}, route.Spec.Hostnames)
 	require.Len(t, route.Spec.Rules, 1)
+	require.Len(t, route.Spec.Rules[0].Matches, 1)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path)
+	require.NotNil(t, route.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, "/rayservice", *route.Spec.Rules[0].Matches[0].Path.Value)
 }
 
 func TestReconcileHTTPRoute(t *testing.T) {

@@ -15,6 +15,11 @@ type HTTPRouteOptionsApplyConfiguration struct {
 	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
 	// "*.example.com" is allowed).
 	Hostnames []string `json:"hostnames,omitempty"`
+	// PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix
+	// match). On a shared Gateway this narrows the route so it does not steal
+	// unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)
+	// when omitted.
+	PathPrefix *string `json:"pathPrefix,omitempty"`
 }
 
 // HTTPRouteOptionsApplyConfiguration constructs a declarative configuration of the HTTPRouteOptions type for use with
@@ -30,5 +35,13 @@ func (b *HTTPRouteOptionsApplyConfiguration) WithHostnames(values ...string) *HT
 	for i := range values {
 		b.Hostnames = append(b.Hostnames, values[i])
 	}
+	return b
+}
+
+// WithPathPrefix sets the PathPrefix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PathPrefix field is set to the value of the last call.
+func (b *HTTPRouteOptionsApplyConfiguration) WithPathPrefix(value string) *HTTPRouteOptionsApplyConfiguration {
+	b.PathPrefix = &value
 	return b
 }
