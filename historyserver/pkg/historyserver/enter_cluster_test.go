@@ -617,8 +617,7 @@ func TestListClusters(t *testing.T) {
 }
 
 // TestEnterClusterWithLiveClustersDisabled checks how /enter_cluster answers while
-// --enable-live-clusters is off: a request that resolves to a running cluster is refused, and one
-// that resolves to a stored session still succeeds.
+// --enable-live-clusters is off.
 func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
 	t.Run("Explicit live session is rejected", func(t *testing.T) {
 		restful.DefaultContainer = restful.NewContainer()
