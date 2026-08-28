@@ -30,6 +30,10 @@ type AutoscalerOptionsApplyConfiguration struct {
 	// The autoscaler v2 tracks driver activity and, when no driver has been attached for this duration, sets the
 	// `ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster.
 	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
+	// NoDriverTimeoutPolicy is "Delete", or "Suspend". The default policy is "Delete".
+	// Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.
+	// Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds.
+	NoDriverTimeoutPolicy *rayv1.NoDriverTimeoutPolicy `json:"noDriverTimeoutPolicy,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
@@ -105,6 +109,14 @@ func (b *AutoscalerOptionsApplyConfiguration) WithIdleTimeoutSeconds(value int32
 // If called multiple times, the NoDriverTimeoutSeconds field is set to the value of the last call.
 func (b *AutoscalerOptionsApplyConfiguration) WithNoDriverTimeoutSeconds(value int32) *AutoscalerOptionsApplyConfiguration {
 	b.NoDriverTimeoutSeconds = &value
+	return b
+}
+
+// WithNoDriverTimeoutPolicy sets the NoDriverTimeoutPolicy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NoDriverTimeoutPolicy field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithNoDriverTimeoutPolicy(value rayv1.NoDriverTimeoutPolicy) *AutoscalerOptionsApplyConfiguration {
+	b.NoDriverTimeoutPolicy = &value
 	return b
 }
 
