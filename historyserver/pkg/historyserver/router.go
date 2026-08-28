@@ -426,8 +426,10 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		logrus.Infof("Using Kubernetes API server proxy to access service %s/%s: %s",
 			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
 	} else {
-		// Connect through in-cluster service discovery.
-		targetURL = fmt.Sprintf("http://%s:%d%s", svcInfo.ServiceName, svcInfo.Port, req.Request.URL.String())
+		// Include the namespace so in-cluster DNS can resolve Services outside the
+		// History Server's namespace without assuming a particular cluster domain.
+		targetURL = fmt.Sprintf("http://%s.%s.svc:%d%s",
+			svcInfo.ServiceName, svcInfo.Namespace, svcInfo.Port, req.Request.URL.String())
 		logrus.Infof("Using in-cluster service discovery to access service %s/%s: %s",
 			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
 	}

@@ -67,11 +67,9 @@ spec:
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
         - --session-cache-max-memory=8Gi
-        # Uncomment when the History Server does NOT share a namespace with the
-        # Ray clusters it serves (the usual production layout). Live pass-through
-        # otherwise dials the head Service by short name, which does not resolve
-        # across namespaces and fails with 502; the API server proxy URL carries
-        # the namespace instead. Requires the services/proxy rule in
+        # Uncomment to route live pass-through through the Kubernetes API
+        # server instead of dialing the namespace-qualified head Service
+        # directly. Requires the services/proxy rule in
         # config/service_account.yaml.
         # - --use-kubernetes-proxy
         resources:
