@@ -23,6 +23,9 @@ const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
 
+	// EnableLiveClustersArg turns on access to live RayClusters
+	EnableLiveClustersArg = "--enable-live-clusters=true"
+
 	// Session name constants
 	LiveSessionName = "live"
 

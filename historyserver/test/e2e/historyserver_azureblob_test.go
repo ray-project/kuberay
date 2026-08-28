@@ -50,7 +50,7 @@ func TestAzureHistoryServer(t *testing.T) {
 func testAzureLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, "--enable-live-clusters=true")
+	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -87,7 +87,7 @@ func testAzureDeadClusters(test Test, g *WithT, namespace *corev1.Namespace, azu
 func testAzureLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, "--enable-live-clusters=true")
+	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
