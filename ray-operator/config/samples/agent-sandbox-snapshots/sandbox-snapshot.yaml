@@ -67,6 +67,12 @@ metadata:
   name: python-snapshot-sandbox
 spec:
   envVarsInjectionPolicy: Disallowed
+  # Unmanaged: the controller's default Managed policy only admits ingress via
+  # the sandbox-router, but this demo's Ray actors connect to the sandbox pod
+  # IP directly (use_pod_ip=True), which that policy would block on
+  # NetworkPolicy-enforcing clusters. See the base agent-sandbox sample for a
+  # hardened egress NetworkPolicy you can layer on top.
+  networkPolicyManagement: Unmanaged
   podTemplate:
     metadata:
       labels:
