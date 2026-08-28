@@ -67,6 +67,11 @@ spec:
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
         - --session-cache-max-memory=8Gi
+        # Uncomment to route live pass-through through the Kubernetes API
+        # server instead of dialing the namespace-qualified head Service
+        # directly. Requires the services/proxy rule in
+        # config/service_account.yaml.
+        # - --use-kubernetes-proxy
         resources:
           requests:
             cpu: "500m"
