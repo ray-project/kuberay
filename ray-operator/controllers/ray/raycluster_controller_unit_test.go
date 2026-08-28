@@ -3553,7 +3553,7 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 		{
 			name: "annotation true and feature enabled deletes the cluster",
 			mutate: func(c *rayv1.RayCluster) {
-				c.Spec.EnableInTreeAutoscaling = ptr.To(true)
+				c.Spec.EnableInTreeAutoscaling = new(true)
 				c.Spec.RayVersion = "2.56.0"
 				c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					Version:                ptr.To(rayv1.AutoscalerVersionV2),
@@ -3566,7 +3566,7 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 		{
 			name: "annotation true but feature disabled keeps the cluster",
 			mutate: func(c *rayv1.RayCluster) {
-				c.Spec.EnableInTreeAutoscaling = ptr.To(false)
+				c.Spec.EnableInTreeAutoscaling = new(false)
 				c.Spec.AutoscalerOptions = nil
 				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
 			},
@@ -3586,7 +3586,7 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 				WithObjects(cluster).
 				WithStatusSubresource(cluster).
 				Build()
-			recorder := record.NewFakeRecorder(10)
+			recorder := events.NewFakeRecorder(10)
 			reconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
 				Recorder:                   recorder,
