@@ -53,11 +53,10 @@ spec:
         port: 80
       # Optional: scope the traffic the HTTPRoute claims so it does not act as a
       # catch-all and collide with other HTTPRoutes on a shared Gateway. Omit
-      # hostnames to match all hosts; pathPrefix defaults to "/".
+      # hostnames to match all hosts the listener accepts.
       httpRoute:
         hostnames:
         - rayservice.example.com
-        pathPrefix: /fruit
       stepSizePercent: 10
       intervalSeconds: 30
       maxSurgePercent: 10

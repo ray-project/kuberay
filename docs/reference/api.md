@@ -367,7 +367,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `hostnames` _string array_ | Hostnames scope the RayService's HTTPRoute to the given hostnames. On a shared<br />Gateway this prevents the route from acting as a catch-all and colliding with<br />other HTTPRoutes. When omitted, the route matches all hostnames the Gateway's<br />listener accepts.<br />Each hostname must be a valid RFC 1123 hostname (a wildcard label like<br />"*.example.com" is allowed). |  | MaxItems: 16 <br />items:MaxLength: 253 <br />items:Pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$ <br /> |
-| `pathPrefix` _string_ | PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix<br />match). On a shared Gateway this narrows the route so it does not steal<br />unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)<br />when omitted. |  | MaxLength: 1024 <br />Pattern: `^/` <br /> |
 
 
 #### HeadGroupSpec
