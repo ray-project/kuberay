@@ -130,6 +130,12 @@ def main() -> int:
             for i, r in enumerate(results):
                 print(f"[turn {turn}][executor-{i}] {r['name']} (exit={r.get('exit_code')}): "
                       f"{(r.get('stdout') or r.get('error') or '').strip()}")
+                if r.get("exit_code") != 0:
+                    # Turn 1 reading /tmp is the snapshot-restore proof: a
+                    # failure here must fail the job, not just get printed.
+                    raise RuntimeError(
+                        f"turn {turn} failed on executor-{i}: {r.get('stderr') or r.get('error')}"
+                    )
 
         print("\nAll turns completed: /tmp state survived the suspend/resume cycle.")
 
