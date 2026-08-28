@@ -591,9 +591,7 @@ func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
 	return handler
 }
 
-// TestListClusters checks which entries listClusters returns. live RayClusters are read from the
-// Kubernetes API and carry the session name "live"; they are returned only when
-// --enable-live-clusters is set.
+// TestListClusters verifies live entries appear only when --enable-live-clusters is set.
 func TestListClusters(t *testing.T) {
 	t.Run("Omits live clusters when live access is disabled", func(t *testing.T) {
 		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
