@@ -23,6 +23,30 @@ metadata from Ray clusters. It has two parts:
 | [Collector setup](set_up_collector.md) | How to set up the Collector on a Kind cluster with MinIO or Azure storage |
 | [History Server setup](set_up_historyserver.md) | Quick start guide for deploying and using the History Server with API examples |
 
+## Collector image
+
+KubeRay injects the collector sidecar into Ray Pods of every RayCluster that sets
+`spec.historyServerOptions.collectorOptions`. The image is resolved in this order:
+
+1. `spec.historyServerOptions.collectorOptions.image` on the RayCluster, if set.
+2. The collector image configured on the operator, either with the `--collector-image` CLI flag,
+   the `collectorImage` field of the operator configuration file, or the `collectorImage` Helm
+   value of the `kuberay-operator` chart.
+3. `quay.io/kuberay/collector` with the tag matching the KubeRay operator version.
+
+Configuring the image on the operator keeps every RayCluster manifest free of a collector image
+tag that must be bumped on each KubeRay upgrade, and lets clusters that cannot reach `quay.io`
+or Docker Hub pull the collector from a mirror registry:
+
+```sh
+helm install kuberay-operator kuberay/kuberay-operator \
+  --set collectorImage=my-registry.io/kuberay/collector:v1.7.0
+```
+
+> [!NOTE]
+> The collector is only injected when the `RayClusterHistoryServer` feature gate is enabled on the
+> operator. See the `featureGates` value of the `kuberay-operator` chart.
+
 ## Supported storage backends
 
 The History Server supports multiple storage backends:

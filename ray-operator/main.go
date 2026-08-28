@@ -75,6 +75,7 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var collectorImage string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -108,6 +109,9 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.StringVar(&collectorImage, "collector-image", configapi.DefaultCollectorImage,
+		"The image of the History Server collector sidecar injected into Ray Pods. "+
+			"A RayCluster can override it with spec.historyServerOptions.collectorOptions.image.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -140,6 +144,7 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
+		config.CollectorImage = collectorImage
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -315,6 +320,7 @@ func main() {
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
 		DefaultPodAnnotations:    config.DefaultPodAnnotations,
 		DefaultPodLabels:         config.DefaultPodLabels,
+		CollectorImage:           config.CollectorImage,
 		CertManagerAvailable:     certManagerAvailable,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),

@@ -140,6 +140,9 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
+            {{- if .Values.collectorImage -}}
+            {{- $argList = append $argList (printf "--collector-image=%s" .Values.collectorImage) -}}
+            {{- end -}}
             {{- end -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- (printf "\n") -}}
