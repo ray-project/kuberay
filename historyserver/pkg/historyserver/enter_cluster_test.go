@@ -562,13 +562,9 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	})
 }
 
-// newDisabledLiveHandler returns a ServerHandler with --enable-live-clusters off. One cluster,
-// default/cluster-running, is known both to Kubernetes and to object storage, which is what a
-// still-running cluster looks like once its collector has flushed a session.
-//
-// status is what the session loader reports for that stored session. A real SessionProcessor would
-// always report SessionStatusLive, because the fake Kubernetes client holds the RayCluster, so a
-// fake processor is used to reach the SessionStatusProcessed path as well.
+// newDisabledLiveHandler returns a handler with live clusters disabled and a single RayCluster that
+// exists in both Kubernetes and storage. status controls what the fake session loader reports for
+// its stored session.
 func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
 	t.Helper()
 
