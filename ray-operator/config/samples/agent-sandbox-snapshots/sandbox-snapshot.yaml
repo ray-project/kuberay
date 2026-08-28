@@ -9,7 +9,6 @@
 #     SNAPSHOT_BUCKET_NAME below and grant the sandbox-snapshot-ksa
 #     ServiceAccount access to it (roles/storage.bucketViewer +
 #     roles/storage.objectUser via Workload Identity Federation).
----
 # Identity the sandbox pods run as. GKE Pod Snapshots reads/writes snapshot
 # state in Cloud Storage on behalf of this Kubernetes ServiceAccount via
 # Workload Identity Federation, so it must have IAM access to the bucket.
