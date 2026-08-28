@@ -36,7 +36,9 @@ const (
 	// driver has been attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds. The KubeRay operator
 	// deletes the RayCluster when this annotation is present.
 	NoDriverTTLExpiredAnnotationKey = "ray.io/no-driver-ttl-expired"
-
+	// Finalizer for No Driver Idle Termination
+	NoDriverIdleTerminationFinalizer = "ray.io/no-driver-idle-termination"
+	KueueManagedRayClustersAnnotaion = "kueue.x-k8s.io/elastic-job"
 	// Labels for feature RayMultihostIndexing
 	//
 	// RayWorkerReplicaNameKey label is the unique name for the replica in a specific worker group. It is made up

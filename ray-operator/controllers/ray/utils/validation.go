@@ -263,11 +263,20 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
 		}
 
+		// Default idle termination policy is "Delete"
+		policy := rayv1.DeleteIdleTerminationPolicy
+		if spec.AutoscalerOptions.NoDriverTimeoutPolicy != nil {
+			policy = *spec.AutoscalerOptions.NoDriverTimeoutPolicy
+		}
+		if annotations[KueueManagedRayClustersAnnotaion] != "" && policy == rayv1.SuspendIdleTerminationPolicy {
+			return fmt.Errorf("RayClusters Idle Termination does not work with Kueue-managed RayClusters")
+		}
+
 		rayVersion, err := version.ParseGeneric(spec.RayVersion)
 		if err != nil {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
 		}
-		minVersion := version.MustParseGeneric("2.56.0")
+		minVersion := version.MustParseGeneric("2.56.0") // TODO: use 2.59.0 instead once Ray PR is merged
 		if rayVersion.LessThan(minVersion) {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
 		}

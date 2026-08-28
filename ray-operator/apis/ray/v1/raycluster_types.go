@@ -491,6 +491,13 @@ type ScaleStrategy struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
+type NoDriverTimeoutPolicy string
+
+const (
+	DeleteIdleTerminationPolicy  NoDriverTimeoutPolicy = "Delete"
+	SuspendIdleTerminationPolicy NoDriverTimeoutPolicy = "Suspend"
+)
+
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
@@ -517,6 +524,10 @@ type AutoscalerOptions struct {
 	// `ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster.
 	// +optional
 	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
+	// NoDriverTimeoutPolicy is "Delete", or "Suspend". The default policy is "Delete".
+	// Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.
+	// Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds.
+	NoDriverTimeoutPolicy *NoDriverTimeoutPolicy `json:"noDriverTimeoutPolicy,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
