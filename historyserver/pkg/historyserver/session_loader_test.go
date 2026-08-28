@@ -1,9 +1,11 @@
 package historyserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -393,6 +395,51 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// TestSnapshotConsumers_DoNotMutateSharedSnapshot runs the snapshot consumers
+// concurrently on one cached snapshot and verifies it is unchanged afterwards.
+func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
+	key := testClusterSessionKey()
+	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
+	stored := richSnapshot(key)
+	// Store tasks out of order so an in-place sort would actually move elements.
+	slices.Reverse(stored.Tasks)
+	sl.putSnapshot(key, stored)
+	snap, ok := sl.GetSnapshot(key)
+	if !ok {
+		t.Fatal("GetSnapshot: ok=false")
+	}
+
+	// Marshal freezes an independent copy of the snapshot's state as bytes for
+	// before/after comparison.
+	before, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			utils.ApplyTaskFilters(snap.Tasks, utils.ListAPIOptions{Limit: utils.DefaultLimit})
+			getTasksTimeline(snap, "")
+			GetLastTimestamp(snap.Tasks, nil)
+			b := NewClusterStatusBuilder()
+			b.AddFailedNodesFromNodes(snap.Nodes)
+			b.AddPendingDemandsFromTasks(snap.Tasks)
+		}()
+	}
+	wg.Wait()
+
+	after, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("a snapshot consumer mutated the shared snapshot")
+	}
 }
 
 // TestGetSnapshot_LRUEviction verifies that once capacity is exceeded, the
