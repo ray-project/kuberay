@@ -3204,3 +3204,55 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 		})
 	}
 }
+
+func TestSetDefaultCollectorImage(t *testing.T) {
+	tests := []struct {
+		name           string
+		collectorImage string
+		expectedImage  string
+	}{
+		{
+			name:           "collector image is inherited from the operator when not set",
+			collectorImage: "",
+			expectedImage:  "quay.io/kuberay/collector:nightly",
+		},
+		{
+			name:           "collector image set in the RayCluster is not overridden",
+			collectorImage: "my-registry.io/kuberay/collector:v1.7.0",
+			expectedImage:  "my-registry.io/kuberay/collector:v1.7.0",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			podTemplate := corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{Name: "ray-head", Image: "rayproject/ray:latest"},
+						{Name: utils.CollectorContainerName, Image: tc.collectorImage},
+					},
+				},
+			}
+
+			SetDefaultCollectorImage(&podTemplate, "quay.io/kuberay/collector:nightly")
+
+			assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
+			assert.Equal(t, tc.expectedImage, podTemplate.Spec.Containers[1].Image)
+		})
+	}
+
+	t.Run("no-op when the collector container is not injected", func(t *testing.T) {
+		podTemplate := corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "ray-head", Image: "rayproject/ray:latest"},
+				},
+			},
+		}
+
+		SetDefaultCollectorImage(&podTemplate, "quay.io/kuberay/collector:nightly")
+
+		assert.Len(t, podTemplate.Spec.Containers, 1)
+		assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
+	})
+}

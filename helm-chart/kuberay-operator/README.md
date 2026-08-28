@@ -196,6 +196,7 @@ spec:
 | nodeEventForwarder.sources | list | `[]` | Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources. |
 | nodeEventForwarder.reasons | list | `[]` | Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons. |
 | nodeEventForwarder.types | list | `["Warning"]` | Only forward Node events with these types. Valid values are "Warning" and "Normal". Empty means all types. Note: Removing the "Warning" filter (or including "Normal") may result in a large number of noisy Normal Node events being forwarded. |
+| collectorImage | string | `""` | Default image for the History Server collector sidecar. A RayCluster can override it with `spec.historyServerOptions.collectorOptions.image`. If empty, defaults to `quay.io/kuberay/collector` with the tag matching the operator version. |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

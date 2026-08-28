@@ -82,6 +82,7 @@ func main() {
 	var nodeEventForwarderReasons string
 	var nodeEventForwarderTypes string
 	var allowedNodeLabels string
+	var collectorImage string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -126,6 +127,9 @@ func main() {
 		"Comma-separated list of event types to forward (Warning, Normal). Empty means all types.")
 	flag.StringVar(&allowedNodeLabels, "allowed-node-labels", "",
 		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through topology.labelMappings. If left empty, every mapping is rejected.")
+	flag.StringVar(&collectorImage, "collector-image", configapi.DefaultCollectorImage,
+		"The image of the History Server collector sidecar injected into Ray Pods. "+
+			"A RayCluster can override it with spec.historyServerOptions.collectorOptions.image.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -163,6 +167,7 @@ func main() {
 		config.NodeEventForwarder.Reasons = splitCommaSeparated(nodeEventForwarderReasons)
 		config.NodeEventForwarder.Types = splitCommaSeparated(nodeEventForwarderTypes)
 		config.AllowedNodeLabels = splitCommaSeparated(allowedNodeLabels)
+		config.CollectorImage = collectorImage
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -350,6 +355,7 @@ func main() {
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
 		DefaultPodAnnotations:    config.DefaultPodAnnotations,
 		DefaultPodLabels:         config.DefaultPodLabels,
+		CollectorImage:           config.CollectorImage,
 		CertManagerAvailable:     certManagerAvailable,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),

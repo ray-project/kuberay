@@ -305,6 +305,20 @@ tests:
         path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
         content: "--burst=150"
 
+  - it: Should use custom collector image when set
+    set:
+      collectorImage: my-registry.io/kuberay/collector:v1.7.0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--collector-image=my-registry.io/kuberay/collector:v1.7.0"
+
+  - it: Should not add the collector image arg when collectorImage is not set
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--collector-image="
+
   - it: Should enable Kubernetes WAS batch scheduler when the KubernetesWAS feature gate is set
     set:
       featureGates:
