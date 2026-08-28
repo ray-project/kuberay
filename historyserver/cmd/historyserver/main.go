@@ -76,10 +76,8 @@ func main() {
 	if sessionCacheTTL < 0 {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
 	}
-	// Auth-token mode only injects a token into requests proxied to a live cluster, so it is inert
-	// while live clusters are disabled. Warn instead of failing: this combination is what an
-	// existing deployment ends up with after upgrading to a release that flipped the default, and
-	// a Fatal here would turn that upgrade into a CrashLoopBackOff.
+	// Auth-token mode only affects proxied live-cluster requests. Warn rather than failing so that
+    // deployments upgrading across the default flip do not CrashLoopBackOff.
 	if useAuthTokenMode && !enableLiveClusters {
 		logrus.Warnf("--use-auth-token-mode has no effect while --enable-live-clusters=false")
 	}
