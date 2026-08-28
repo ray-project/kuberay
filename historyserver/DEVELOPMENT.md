@@ -106,8 +106,8 @@ kubectl apply -f historyserver/config/historyserver.yaml
 
 > [!NOTE]
 > Access to live RayClusters is off by default, so `/clusters` lists only sessions already flushed to
-> storage. If you want to access live RayCluster, set `--enable-live-clusters=true` in
-> `historyserver/config/historyserver.yaml` before applying it.
+> storage. If you want to access live RayClusters, uncomment the `--enable-live-clusters=true` line
+> in the container `args` of `historyserver/config/historyserver.yaml` before applying it.
 
 ## Step 6: Access the Local Ray Dashboard
 
