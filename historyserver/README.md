@@ -73,9 +73,9 @@ The history server can be configured using command-line flags:
 
 > [!WARNING]
 > The history server does not authenticate its own callers, and the RayCluster it proxies to is
-> chosen from a client-supplied cookie. Enabling `--enable-live-clusters` therefore exposes the Ray
-> Dashboard API of every RayCluster the history server can reach to anyone who can reach the history
-> server. Only turn it on where that access is already restricted by other means.
+> chosen from a client-supplied cookie. With `--enable-live-clusters` enabled, anyone who can reach
+> the history server can reach the Ray Dashboard API of every RayCluster the history server can
+> access. Only turn it on where that access is already restricted by other means.
 
 ### Collector Configuration
 
