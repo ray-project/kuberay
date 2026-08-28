@@ -69,32 +69,11 @@ var HistoryServerEndpoints = []string{
 const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
 const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
 
-// HistoryServerOption customizes the History Server deployment applied by ApplyHistoryServer.
-type HistoryServerOption func(*historyServerOptions)
-
-type historyServerOptions struct {
-	extraArgs []string
-}
-
-// WithLiveClusters starts the History Server with live RayCluster support enabled. The shipped
-// manifests leave it off, matching the binary default, so any test that enters a running cluster
-// has to opt in explicitly.
-func WithLiveClusters() HistoryServerOption {
-	return func(o *historyServerOptions) {
-		o.extraArgs = append(o.extraArgs, "--enable-live-clusters=true")
-	}
-}
-
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 // If manifestPath is empty, the default HistoryServerManifestPath is used.
-func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string, opts ...HistoryServerOption) {
+func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string, extraArgs ...string) {
 	if manifestPath == "" {
 		manifestPath = HistoryServerManifestPath
-	}
-
-	options := historyServerOptions{}
-	for _, apply := range opts {
-		apply(&options)
 	}
 
 	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
@@ -123,8 +102,8 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 
 	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
-	if len(options.extraArgs) > 0 {
-		patchHistoryServerArgs(test, g, namespace, options.extraArgs)
+	if len(extraArgs) > 0 {
+		patchHistoryServerArgs(test, g, namespace, extraArgs)
 	}
 
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
@@ -139,8 +118,8 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manife
 		// Also require the args, otherwise the pod from before patchHistoryServerArgs can report
 		// ready and let the test run against a History Server without the requested flags.
 		for _, pod := range pods.Items {
-			gg.Expect(podHasArgs(pod, options.extraArgs)).To(BeTrue(),
-				"pod %s does not carry the requested args %v", pod.Name, options.extraArgs)
+			gg.Expect(podHasArgs(pod, extraArgs)).To(BeTrue(),
+				"pod %s does not carry the requested args %v", pod.Name, extraArgs)
 		}
 		gg.Expect(AllPodsRunningAndReady(pods.Items)).To(BeTrue())
 	}, TestTimeoutMedium).Should(Succeed())

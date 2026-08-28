@@ -156,7 +156,7 @@ func TestHistoryServer(t *testing.T) {
 func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -172,7 +172,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -190,7 +190,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -207,7 +207,7 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -1014,7 +1014,7 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	// Test 1: Live cluster - streaming should work
@@ -1363,7 +1363,7 @@ func countFiles(result map[string]interface{}) int {
 func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -1730,7 +1730,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2000,7 +2000,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2094,7 +2094,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2177,7 +2177,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 // live Ray Dashboard and returns valid cluster metadata.
 func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2395,7 +2395,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2475,7 +2475,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 	endpoint := EndpointTasksSummarize
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -3196,7 +3196,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -3391,7 +3391,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 10. Delete S3 bucket to ensure test isolation
 func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	// --- Live cluster ---
@@ -3458,7 +3458,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "", WithLiveClusters())
+	ApplyHistoryServer(test, g, namespace, "", "--enable-live-clusters=true")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
