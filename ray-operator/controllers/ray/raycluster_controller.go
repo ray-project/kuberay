@@ -351,24 +351,27 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		}
 	}
 
-	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		logger.Info("RayCluster is being deleted, just ignore")
-		return ctrl.Result{}, nil
-	}
-
 	// When the cluster has had no user driver attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds,
-	// the Ray autoscaler v2 sets the `ray.io/no-driver-ttl-expired` annotation.
-	// TODO: need a more robust approach to address the security concerns instead of relying on this annotation
-	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) && instance.Annotations[utils.NoDriverTTLExpiredAnnotationKey] == "true" {
-		logger.Info("Deleting RayCluster because no user driver has been attached for longer than noDriverTimeoutSeconds",
-			"noDriverTimeoutSeconds", *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedRayClusterNoDriverTimeout),
-			"Deleting RayCluster %s/%s because no user driver has been attached for longer than noDriverTimeoutSeconds=%d",
-			instance.Namespace, instance.Name, *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
-		if err := r.Delete(ctx, instance); err != nil {
-			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, client.IgnoreNotFound(err)
+	// the Ray autoscaler v2 sets the `ray.io/no-driver-idle-termination` finalizer.
+	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) {
+		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+			if r.hasNoDriverTimeoutFinalizer(instance) {
+				logger.Info("Deleting RayCluster because no user driver has been attached for longer than noDriverTimeoutSeconds",
+					"noDriverTimeoutSeconds", *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
+					string(utils.DeletedRayClusterNoDriverTimeout), string(utils.DeleteAction),
+					"Deleting RayCluster %s/%s because no user driver has been attached for longer than noDriverTimeoutSeconds=%d",
+					instance.Namespace, instance.Name, *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+
+				// Remove finalizer to allow deletion to proceed
+				controllerutil.RemoveFinalizer(instance, utils.NoDriverIdleTerminationFinalizer)
+				if err := r.Update(ctx, instance); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+			}
+
+			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, nil
 	}
 
 	reconcileFuncs := []reconcileFunc{
@@ -2488,4 +2491,9 @@ func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, in
 		deletionAge, storageNamespace)
 
 	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
+}
+
+// hasNoDriverTimeoutFinalizer reports whether the no dirver idle termination finalizer is presented in the RayCluster
+func (r *RayClusterReconciler) hasNoDriverTimeoutFinalizer(cluster *rayv1.RayCluster) bool {
+	return controllerutil.ContainsFinalizer(cluster, utils.NoDriverIdleTerminationFinalizer)
 }
