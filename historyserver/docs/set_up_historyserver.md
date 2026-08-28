@@ -146,7 +146,7 @@ export S3DISABLE_SSL=true
 # Run the history server.
 ./output/bin/historyserver \
   --storage-backend=s3 \
-  --use-kubernetes-proxy=true
+  --use-kubernetes-proxy=true \
   --enable-live-clusters=true
 ```
 
