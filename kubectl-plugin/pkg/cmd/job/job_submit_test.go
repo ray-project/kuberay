@@ -136,10 +136,11 @@ spec:
 			require.NoError(t, err)
 
 			opts := &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
+				cmdFactory:     cmdFactory,
+				ioStreams:      &testStreams,
+				fileName:       rayJobYamlPath,
+				workingDir:     "Fake/File/Path",
+				clusterTimeout: 120,
 			}
 
 			err = opts.Validate(&cobra.Command{})
@@ -189,6 +190,7 @@ func TestRayJobSubmitWithoutYamlValidate(t *testing.T) {
 				rayjobName:              tc.rayjobName,
 				workingDir:              "Fake/File/Path",
 				ttlSecondsAfterFinished: tc.ttlSecondsAfterFinished,
+				clusterTimeout:          120,
 			}
 			err := opts.Validate(&cobra.Command{})
 			if tc.expectError != "" {
@@ -405,10 +407,11 @@ func TestRayJobSubmit_AddressValidation(t *testing.T) {
 	for _, tc := range test {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
-				rayjobName: "rayjob-sample",
-				workingDir: "Fake/File/Path",
+				cmdFactory:     cmdFactory,
+				ioStreams:      &testStreams,
+				rayjobName:     "rayjob-sample",
+				workingDir:     "Fake/File/Path",
+				clusterTimeout: 120,
 			}
 
 			cmd := &cobra.Command{}
@@ -574,10 +577,11 @@ spec:
 			require.NoError(t, err)
 
 			opts := &SubmitJobOptions{
-				cmdFactory: cmdFactory,
-				ioStreams:  &testStreams,
-				fileName:   rayJobYamlPath,
-				workingDir: "Fake/File/Path",
+				cmdFactory:     cmdFactory,
+				ioStreams:      &testStreams,
+				fileName:       rayJobYamlPath,
+				workingDir:     "Fake/File/Path",
+				clusterTimeout: 120.0,
 			}
 			cmd := &cobra.Command{}
 			cmd.Flags().Int32Var(&opts.ttlSecondsAfterFinished, "ttl-seconds-after-finished", 0, "")
