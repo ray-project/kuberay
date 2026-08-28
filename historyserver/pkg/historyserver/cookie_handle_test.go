@@ -36,7 +36,7 @@ func liveRayCluster(namespace, name string) *rayv1.RayCluster {
 }
 
 // serveThroughCookieHandle drives one request through CookieHandle and reports whether the
-// downstream handler ran. Using a real container exercises the filter exactly as the routes do.
+// downstream handler ran.
 func serveThroughCookieHandle(handler *ServerHandler, cookies map[string]string) (*httptest.ResponseRecorder, bool) {
 	reached := false
 
