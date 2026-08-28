@@ -516,10 +516,7 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	}
 
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		// Only the KubeRay-created Gateway is deleted here, and only when this
-		// RayService actually controls it — never the Gateway targeted via
-		// GatewayRef, which KubeRay does not own. This also cleans up the Gateway
-		// left behind after switching from gatewayClassName to gatewayRef.
+		// Delete only the Gateway owned by the RayService, not one referenced via GatewayRef.
 		gateway := &gwv1.Gateway{}
 		if err := r.Get(ctx, common.RayServiceOwnedGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
 			if metav1.IsControlledBy(gateway, rayServiceInstance) {
@@ -936,10 +933,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
 
-	// When a pre-existing (shared) Gateway is referenced, KubeRay does not own or
-	// create a Gateway — it only manages the HTTPRoute. Verify the referenced
-	// Gateway exists; if it is missing, record an event and return so the HTTPRoute
-	// is not attached to a non-existent Gateway.
+	// For a shared Gateway, verify it exists before managing the HTTPRoute.
 	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
 		gatewayName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
 		if err := r.Get(ctx, gatewayName, &gwv1.Gateway{}); err != nil {
@@ -1110,10 +1104,8 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
 	activeServePort := common.GetServePort(activeRayCluster)
 
-	// Serve services live in the RayService's namespace. This equals the Gateway's
-	// namespace in the default (KubeRay-created) case, but differs when attaching to
-	// a shared Gateway in another namespace (GatewayRef), so reference the
-	// RayService namespace explicitly for the backends.
+	// Serve services are in the RayService's namespace, which may differ from the
+	// Gateway's namespace when using a shared Gateway.
 	backendRefs := []gwv1.HTTPBackendRef{
 		{
 			BackendRef: gwv1.BackendRef{
@@ -1144,9 +1136,6 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		})
 	}
 
-	// The HTTPRoute lives in the RayService's namespace (so the RayService owner
-	// reference and GC work), while its ParentRef below targets the Gateway —
-	// which may be in a different namespace when using GatewayRef.
 	httpRouteName := rayServiceInstance.Name + "-httproute"
 	parentRef := gwv1.ParentReference{
 		Name:      gwv1.ObjectName(gatewayInstance.Name),
