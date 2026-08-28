@@ -55,6 +55,12 @@ type Configuration struct {
 	// MetricsAddr is the address the metrics endpoint binds to.
 	MetricsAddr string `json:"metricsAddr,omitempty"`
 
+	// CollectorImage is the image used for the History Server collector sidecar injected into
+	// Ray head and worker Pods. A RayCluster can override it with
+	// `spec.historyServerOptions.collectorOptions.image`.
+	// Defaults to the collector image matching the KubeRay operator version.
+	CollectorImage string `json:"collectorImage,omitempty"`
+
 	// WatchNamespace specifies a list of namespaces to watch for custom resources, separated by commas.
 	// If empty, all namespaces will be watched.
 	WatchNamespace string `json:"watchNamespace,omitempty"`
