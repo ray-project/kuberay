@@ -9422,20 +9422,6 @@ spec:
                         required:
                         - name
                         type: object
-                      httpRoute:
-                        properties:
-                          hostnames:
-                            items:
-                              maxLength: 253
-                              pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                              type: string
-                            maxItems: 16
-                            type: array
-                          pathPrefix:
-                            maxLength: 1024
-                            pattern: ^/
-                            type: string
-                        type: object
                       intervalSeconds:
                         format: int32
                         type: integer

@@ -81,12 +81,6 @@ type ClusterUpgradeOptions struct {
 	// Exactly one of GatewayClassName or GatewayRef must be set.
 	// +optional
 	GatewayRef *GatewayReference `json:"gatewayRef,omitempty"`
-	// HTTPRoute configures how the RayService's HTTPRoute matches traffic. It applies
-	// with either Gateway source (GatewayClassName or GatewayRef). Scoping matters most
-	// on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
-	// When omitted, the route matches all hostnames with a "/" path prefix.
-	// +optional
-	HTTPRoute *HTTPRouteOptions `json:"httpRoute,omitempty"`
 }
 
 // GatewayReference identifies the existing Gateway and listener the RayService's
@@ -122,30 +116,6 @@ type GatewayReference struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port *int32 `json:"port,omitempty"`
-}
-
-// HTTPRouteOptions scopes the traffic the RayService's HTTPRoute claims. It matters
-// most on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
-type HTTPRouteOptions struct {
-	// Hostnames scope the RayService's HTTPRoute to the given hostnames. On a shared
-	// Gateway this prevents the route from acting as a catch-all and colliding with
-	// other HTTPRoutes. When omitted, the route matches all hostnames the Gateway's
-	// listener accepts.
-	// Each hostname must be a valid RFC 1123 hostname (a wildcard label like
-	// "*.example.com" is allowed).
-	// +optional
-	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:items:MaxLength=253
-	// +kubebuilder:validation:items:Pattern=`^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
-	Hostnames []string `json:"hostnames,omitempty"`
-	// PathPrefix scopes the RayService's HTTPRoute to a path prefix (a PathPrefix
-	// match). On a shared Gateway this narrows the route so it does not steal
-	// unmatched traffic from co-located HTTPRoutes. Defaults to "/" (match all paths)
-	// when omitted.
-	// +optional
-	// +kubebuilder:validation:MaxLength=1024
-	// +kubebuilder:validation:Pattern=`^/`
-	PathPrefix string `json:"pathPrefix,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

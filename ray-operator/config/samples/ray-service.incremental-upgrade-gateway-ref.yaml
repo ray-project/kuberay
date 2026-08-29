@@ -51,13 +51,6 @@ spec:
         # Omit to attach to every listener that accepts the route.
         sectionName: http
         port: 80
-      # Optional: scope the traffic the HTTPRoute claims so it does not act as a
-      # catch-all and collide with other HTTPRoutes on a shared Gateway. Omit
-      # hostnames to match all hosts; pathPrefix defaults to "/".
-      httpRoute:
-        hostnames:
-        - rayservice.example.com
-        pathPrefix: /fruit
       stepSizePercent: 10
       intervalSeconds: 30
       maxSurgePercent: 10

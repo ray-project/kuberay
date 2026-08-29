@@ -22,11 +22,6 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// The referenced Gateway must allow HTTPRoutes from the RayService's namespace.
 	// Exactly one of GatewayClassName or GatewayRef must be set.
 	GatewayRef *GatewayReferenceApplyConfiguration `json:"gatewayRef,omitempty"`
-	// HTTPRoute configures how the RayService's HTTPRoute matches traffic. It applies
-	// with either Gateway source (GatewayClassName or GatewayRef). Scoping matters most
-	// on a shared Gateway, where an unscoped route would collide with other HTTPRoutes.
-	// When omitted, the route matches all hostnames with a "/" path prefix.
-	HTTPRoute *HTTPRouteOptionsApplyConfiguration `json:"httpRoute,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -72,13 +67,5 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value str
 // If called multiple times, the GatewayRef field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayRef(value *GatewayReferenceApplyConfiguration) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayRef = value
-	return b
-}
-
-// WithHTTPRoute sets the HTTPRoute field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the HTTPRoute field is set to the value of the last call.
-func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRoute(value *HTTPRouteOptionsApplyConfiguration) *ClusterUpgradeOptionsApplyConfiguration {
-	b.HTTPRoute = value
 	return b
 }

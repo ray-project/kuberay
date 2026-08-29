@@ -1142,28 +1142,13 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
 	}
 
-	pathPrefix := "/"
-	var hostnames []gwv1.Hostname
-
-	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil {
-		// GatewayRef pins the parentRef to a specific listener on the referenced Gateway.
-		if opts.GatewayRef != nil {
-			if opts.GatewayRef.SectionName != "" {
-				parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
-			}
-			if opts.GatewayRef.Port != nil {
-				parentRef.Port = new(*opts.GatewayRef.Port)
-			}
+	// GatewayRef pins the parentRef to a specific listener on the referenced Gateway.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.GatewayRef != nil {
+		if opts.GatewayRef.SectionName != "" {
+			parentRef.SectionName = new(gwv1.SectionName(opts.GatewayRef.SectionName))
 		}
-		// HTTPRoute options scope which traffic the route claims, with either
-		// Gateway source (GatewayClassName or GatewayRef).
-		if opts.HTTPRoute != nil {
-			if opts.HTTPRoute.PathPrefix != "" {
-				pathPrefix = opts.HTTPRoute.PathPrefix
-			}
-			for _, h := range opts.HTTPRoute.Hostnames {
-				hostnames = append(hostnames, gwv1.Hostname(h))
-			}
+		if opts.GatewayRef.Port != nil {
+			parentRef.Port = new(*opts.GatewayRef.Port)
 		}
 	}
 
@@ -1173,14 +1158,13 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			CommonRouteSpec: gwv1.CommonRouteSpec{
 				ParentRefs: []gwv1.ParentReference{parentRef},
 			},
-			Hostnames: hostnames,
 			Rules: []gwv1.HTTPRouteRule{
 				{
 					Matches: []gwv1.HTTPRouteMatch{
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: new(pathPrefix),
+								Value: ptr.To("/"),
 							},
 						},
 					},
