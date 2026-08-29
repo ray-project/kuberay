@@ -1164,7 +1164,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: ptr.To("/"),
+								Value: new("/"),
 							},
 						},
 					},
