@@ -431,7 +431,9 @@ func applyDefaults(config *RayClusterConfig) {
 		config.Head.Memory = ptr.To(util.DefaultHeadMemory)
 	}
 
-	if len(config.WorkerGroups) == 0 {
+	// A nil list means the user did not mention worker groups at all. An explicitly empty list is a
+	// head-only cluster, which is valid, so it must not be replaced with a default group.
+	if config.WorkerGroups == nil {
 		config.WorkerGroups = []WorkerGroup{{}}
 	}
 	for i := range config.WorkerGroups {

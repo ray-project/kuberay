@@ -834,25 +834,37 @@ func TestApplyDefaults(t *testing.T) {
 	})
 
 	t.Run("should not overwrite values the user already set", func(t *testing.T) {
-		result := &RayClusterConfig{
-			RayVersion: new("2.56.0"),
-			Image:      new("my-registry/my-ray:custom"),
-			Head:       &Head{CPU: new("8"), Memory: new("16Gi")},
-			WorkerGroups: []WorkerGroup{
-				{
-					Name:       new("gpu-workers"),
-					CPU:        new("4"),
-					Memory:     new("32Gi"),
-					Replicas:   new(int32(0)),
-					NumOfHosts: new(int32(4)),
+		// Both sides must be built independently: a copy of the struct would share the Head pointer
+		// and the WorkerGroups backing array that applyDefaults writes to in place.
+		build := func() *RayClusterConfig {
+			return &RayClusterConfig{
+				RayVersion: new("2.56.0"),
+				Image:      new("my-registry/my-ray:custom"),
+				Head:       &Head{CPU: new("8"), Memory: new("16Gi")},
+				WorkerGroups: []WorkerGroup{
+					{
+						Name:       new("gpu-workers"),
+						CPU:        new("4"),
+						Memory:     new("32Gi"),
+						Replicas:   new(int32(0)),
+						NumOfHosts: new(int32(4)),
+					},
 				},
-			},
+			}
 		}
-		expected := *result
+
+		result := build()
+		applyDefaults(result)
+
+		assert.Equal(t, build(), result)
+	})
+
+	t.Run("should keep an explicitly empty worker group list", func(t *testing.T) {
+		result := &RayClusterConfig{WorkerGroups: []WorkerGroup{}}
 
 		applyDefaults(result)
 
-		assert.Equal(t, &expected, result)
+		assert.Empty(t, result.WorkerGroups)
 	})
 }
 
@@ -937,6 +949,22 @@ func TestParseConfigFile(t *testing.T) {
 						Memory:     new("4Gi"),
 					},
 				},
+			},
+		},
+		// An explicitly empty list is a head-only cluster, not "the user said nothing"
+		"explicitly empty worker groups": {
+			config: `head:
+  cpu: 4
+worker-groups: []
+`,
+			expected: &RayClusterConfig{
+				RayVersion: ptr.To(util.RayVersion),
+				Image:      new(fmt.Sprintf("rayproject/ray:%s", util.RayVersion)),
+				Head: &Head{
+					CPU:    new("4"),
+					Memory: new("4Gi"),
+				},
+				WorkerGroups: []WorkerGroup{},
 			},
 		},
 		// An explicit "replicas: 0" must survive defaulting
