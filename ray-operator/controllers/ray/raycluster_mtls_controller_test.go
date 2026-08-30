@@ -190,6 +190,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	assert.Contains(t, headCert.Spec.DNSNames, "localhost")
 	assert.Contains(t, headCert.Spec.DNSNames, headFQDN)
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
+	assert.NotContains(t, headCert.Spec.IPAddresses, "::1")
 
 	// Verify worker certificate was created with correct DNS names.
 	workerCert := &certmanagerv1.Certificate{}
@@ -200,6 +201,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	require.NoError(t, err, "worker certificate should be created")
 	assert.Contains(t, workerCert.Spec.DNSNames, "localhost")
 	assert.Contains(t, workerCert.Spec.IPAddresses, "127.0.0.1")
+	assert.NotContains(t, workerCert.Spec.IPAddresses, "::1")
 
 	// Verify all resources have correct labels.
 	assert.Equal(t, cluster.Name, issuer.Labels[utils.RayClusterLabelKey])
@@ -314,7 +316,13 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
-		Status: corev1.PodStatus{PodIP: "10.244.0.5"},
+		Status: corev1.PodStatus{
+			PodIP: "10.244.0.5",
+			PodIPs: []corev1.PodIP{
+				{IP: "10.244.0.5"},
+				{IP: "2001:db8::5"},
+			},
+		},
 	}
 
 	r := newMTLSController(t, cluster, headPod)
@@ -336,7 +344,9 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	}, headCert)
 	require.NoError(t, err)
 	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
+	assert.Contains(t, headCert.Spec.IPAddresses, "2001:db8::5")
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
+	assert.Contains(t, headCert.Spec.IPAddresses, "::1")
 
 	// Simulate scale-up: add a worker pod.
 	// A finalizer is added so that a subsequent Delete call sets DeletionTimestamp
@@ -646,6 +656,35 @@ func TestCertificateNeedsUpdate(t *testing.T) {
 		IPAddresses: []string{"127.0.0.1", "10.0.0.1"},
 	}
 	assert.True(t, certificateNeedsUpdate(existing3, desired3), "different IP addresses should need update")
+}
+
+func TestNormalizeIPsAddsLoopbackForObservedFamilies(t *testing.T) {
+	tests := map[string]struct {
+		podIPs []string
+		want   []string
+	}{
+		"no Pod IP keeps the legacy IPv4 default": {
+			want: []string{"127.0.0.1"},
+		},
+		"IPv4 only": {
+			podIPs: []string{"10.0.0.1"},
+			want:   []string{"10.0.0.1", "127.0.0.1"},
+		},
+		"IPv6 only": {
+			podIPs: []string{"2001:db8::1"},
+			want:   []string{"2001:db8::1", "::1"},
+		},
+		"dual stack": {
+			podIPs: []string{"10.0.0.1", "2001:db8::1"},
+			want:   []string{"10.0.0.1", "127.0.0.1", "2001:db8::1", "::1"},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, normalizeIPs(tt.podIPs))
+		})
+	}
 }
 
 // --- checkMTLSSecretsReady tests (in main reconciler) ---

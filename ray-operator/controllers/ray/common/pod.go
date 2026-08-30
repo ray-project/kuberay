@@ -42,6 +42,16 @@ const (
 	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
 	AscendRayResourceName              = "NPU"
+	// KubeRayPodIPEnvVar is populated from status.podIP on every Ray Pod. It is
+	// used as the default advertised Ray node address and, on head Pods, to
+	// select the dashboard wildcard address family.
+	KubeRayPodIPEnvVar = "KUBERAY_POD_IP"
+	// KubeRayDashboardHostEnvVar is exported by dashboardHostSetupCommand before
+	// the generated head-node command starts.
+	KubeRayDashboardHostEnvVar = "KUBERAY_DASHBOARD_HOST"
+	// Select the wildcard matching the Ray Pod's primary address family. This
+	// runs inside the Pod because the operator may use a different IP family.
+	dashboardHostSetupCommand = `if [[ "$KUBERAY_POD_IP" == *:* ]]; then export KUBERAY_DASHBOARD_HOST="::"; else export KUBERAY_DASHBOARD_HOST="0.0.0.0"; fi`
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -289,8 +299,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// preventing the user from overriding these via the merge below.
 		//
 		// GCS address alignment: the autoscaler co-located in the head pod reaches GCS
-		// via localhost (127.0.0.1) or the head pod IP. Both are always present in the
-		// head certificate SANs — 127.0.0.1 is added unconditionally, and the pod IP
+		// via localhost (127.0.0.1/::1) or the head pod IP. The loopback matching
+		// the Pod's address family and the Pod IP are present in the certificate SANs;
 		// SAN is guaranteed by the wait-for-tls-ip-san init container (injected by
 		// configureTLS below) before any containers, including this sidecar, start.
 		// No additional RAY_ADDRESS injection is required.
@@ -502,7 +512,9 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
 	//     not sufficient because the RayJob itself fails before a retry can succeed.
 	certPath := utils.RayTLSCertMountPath + "/tls.crt"
+	caCertPath := utils.RayTLSCertMountPath + "/ca.crt"
 	waitScript := fmt.Sprintf(`CERT="%s"
+CA_CERT="%s"
 if [ -z "${POD_IP}" ]; then
   POD_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
 fi
@@ -512,13 +524,13 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
 while true; do
-  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
+  if openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}" >/dev/null 2>&1; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
   fi
   echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
   sleep 5
-done`, certPath)
+done`, certPath, caCertPath)
 
 	waitInitContainer := corev1.Container{
 		Name:            "wait-for-tls-ip-san",
@@ -915,6 +927,9 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	ulimitCmd := fmt.Sprintf("ulimit -n ${%s:-65536}", utils.RAY_START_ULIMIT_OPEN_FILES)
 	// Generate the `ray start` command.
 	rayStartCmd := generateRayStartCommand(ctx, rayNodeType, rayStartParams, pod.Spec.Containers[utils.RayContainerIndex].Resources)
+	if rayNodeType == rayv1.HeadNode && rayStartParams["dashboard-host"] == "$"+KubeRayDashboardHostEnvVar {
+		rayStartCmd = dashboardHostSetupCommand + "; " + rayStartCmd
+	}
 
 	// Check if overwrites the generated container command or not.
 	isOverwriteRayContainerCmd := false
@@ -1245,7 +1260,18 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 		}
 	}
 
-	// case 1: head   => Use LOCAL_HOST
+	// KubeRay manages this environment variable so rayStartParams can use the
+	// Pod's primary IP without trying to infer the Pod network from the
+	// operator's network namespace. In dual-stack clusters, status.podIP is the
+	// primary address selected by Kubernetes.
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: KubeRayPodIPEnvVar,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"},
+		},
+	})
+
+	// case 1: head   => Use localhost (resolved to the available IP family)
 	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
 	ip := utils.LOCAL_HOST
 	if rayNodeType == rayv1.WorkerNode {
@@ -1371,6 +1397,14 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 
 func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
 	log := ctrl.LoggerFrom(ctx)
+	// Ray's automatic node address detection can select a loopback, link-local,
+	// or secondary-interface address that other Pods cannot reach. Kubernetes
+	// already exposes the canonical primary Pod IP, so advertise it by default
+	// while preserving an explicit user override for multi-network Pods.
+	if _, ok := rayStartParams["node-ip-address"]; !ok {
+		rayStartParams["node-ip-address"] = "$" + KubeRayPodIPEnvVar
+	}
+
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {
@@ -1380,10 +1414,12 @@ func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]str
 	}
 
 	if nodeType == rayv1.HeadNode {
-		// Allow incoming connections from all network interfaces for the dashboard by default.
+		// Bind the dashboard to the wildcard for the Pod's primary IP family so
+		// the same generated command works in IPv4 and IPv6 clusters. The
+		// operator cannot infer the Ray Pod's family from its own network namespace.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
-			rayStartParams["dashboard-host"] = "0.0.0.0"
+			rayStartParams["dashboard-host"] = "$" + KubeRayDashboardHostEnvVar
 		}
 
 		// If `autoscaling-config` is not provided in the head Pod's rayStartParams, the `BASE_READONLY_CONFIG`
