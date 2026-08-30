@@ -555,3 +555,117 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 		}
 	})
 }
+
+func TestIsSafeRedirectPath(t *testing.T) {
+	cases := []struct {
+		target string
+		want   bool
+	}{
+		{"/#/overview", true},
+		{"/", true},
+		{"/clusters?foo=bar", true},
+		{"", false},
+		{"relative/path", false},
+		{"//evil.com", false},          // protocol-relative
+		{"/\\evil.com", false},         // backslash variant
+		{"/x/../\\evil.com", false},    // backslash in the middle
+		{"http://evil.com", false},     // absolute URL
+		{"https://evil.com/x", false},  // absolute URL
+		{"javascript:alert(1)", false}, // scheme, no leading slash
+	}
+	for _, tc := range cases {
+		if got := isSafeRedirectPath(tc.target); got != tc.want {
+			t.Errorf("isSafeRedirectPath(%q) = %v, want %v", tc.target, got, tc.want)
+		}
+	}
+}
+
+func TestEnterClusterRedirect(t *testing.T) {
+	restful.DefaultContainer = restful.NewContainer()
+
+	mockReader := &mockStorageReader{
+		clusters: []utils.ClusterInfo{
+			{
+				Namespace:   "default",
+				Name:        "cluster-a",
+				SessionName: "session_2026-04-22_10-00-00_000000_1",
+				OwnerKind:   "rayjob",
+				OwnerName:   "job-a",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(scheme)
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	clientManager := &ClientManager{clients: []client.Client{k8sClient}}
+
+	handler := &ServerHandler{
+		maxClusters:   100,
+		reader:        mockReader,
+		clientManager: clientManager,
+	}
+	fp := &fakeProcessor{
+		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
+		},
+	}
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	routerRayClusterSet(handler)
+	container := restful.DefaultContainer
+
+	const validSession = "session_2026-04-22_10-00-00_000000_1"
+
+	t.Run("valid redirect returns 302 with cookies preserved", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a/"+validSession+"?redirect=/%23/overview", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusFound {
+			t.Fatalf("Expected status 302, got %d: %s", resp.Code, resp.Body.String())
+		}
+		if loc := resp.Header().Get("Location"); loc != "/#/overview" {
+			t.Errorf("Expected Location '/#/overview', got %q", loc)
+		}
+
+		// Cookies must still be set on the redirect response.
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range resp.Result().Cookies() {
+			cookieMap[cookie.Name] = cookie
+		}
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != validSession {
+			t.Errorf("Expected cookie %s to be %q, got %v", COOKIE_SESSION_NAME_KEY, validSession, c)
+		}
+		if c, ok := cookieMap[COOKIE_CLUSTER_NAME_KEY]; !ok || c.Value != "cluster-a" {
+			t.Errorf("Expected cookie %s to be 'cluster-a', got %v", COOKIE_CLUSTER_NAME_KEY, c)
+		}
+	})
+
+	t.Run("unsafe redirect is rejected with 400", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a/"+validSession+"?redirect=https://evil.com", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400 for unsafe redirect, got %d: %s", resp.Code, resp.Body.String())
+		}
+
+		// Cookies must not be updated when the redirect target is rejected.
+		if cookies := resp.Result().Cookies(); len(cookies) != 0 {
+			t.Errorf("Expected no cookies on rejected redirect, got %v", cookies)
+		}
+	})
+
+	t.Run("no redirect param keeps JSON response", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a/"+validSession, nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+		if !strings.Contains(resp.Body.String(), "\"result\"") {
+			t.Errorf("Expected JSON body with result field, got %q", resp.Body.String())
+		}
+	})
+}

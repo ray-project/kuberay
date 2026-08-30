@@ -10,6 +10,7 @@ import (
 	"math"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -310,6 +311,26 @@ func routerLogical(s *ServerHandler) {
 
 }
 
+// isSafeRedirectPath reports whether target is a safe site-local redirect
+// destination, guarding against open-redirect attacks. Only same-origin
+// absolute paths are allowed: the value must start with a single "/", must not
+// be protocol-relative ("//host") or contain a backslash anywhere (browsers
+// may treat "\" as "/", e.g. "/x/../\evil.com"), and must not carry a URL
+// scheme or host component.
+func isSafeRedirectPath(target string) bool {
+	if target == "" || target[0] != '/' {
+		return false
+	}
+	if strings.HasPrefix(target, "//") || strings.Contains(target, "\\") {
+		return false
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "" && u.Host == ""
+}
+
 func routerRayClusterSet(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
@@ -356,11 +377,29 @@ func routerRayClusterSet(s *ServerHandler) {
 			}
 		}
 
+		// Validate the optional "redirect" target before any Set-Cookie call so
+		// an unsafe target is rejected without updating the cluster context.
+		redirect := r1.QueryParameter("redirect")
+		if redirect != "" && !isSafeRedirectPath(redirect) {
+			logrus.Warnf("Rejecting unsafe redirect target: %q", redirect)
+			r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid redirect target: %q (must be a site-local path starting with '/')", redirect))
+			return
+		}
+
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: resolvedName})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: resolvedSession})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_KIND_KEY, Value: resolvedClusterInfo.OwnerKind})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_NAME_KEY, Value: resolvedClusterInfo.OwnerName})
+
+		// When a "redirect" query parameter is supplied, respond with a 302 to it
+		// instead of JSON. The Set-Cookie headers above still ride along on the
+		// redirect response, so a single navigation both establishes the cluster
+		// context and lands on the dashboard (e.g. /enter_cluster/...?redirect=/#/overview).
+		if redirect != "" {
+			http.Redirect(r2.ResponseWriter, r1.Request, redirect, http.StatusFound)
+			return
+		}
 
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
@@ -380,6 +419,7 @@ func routerRayClusterSet(s *ServerHandler) {
 		Param(ws.PathParameter("namespace", "namespace")).
 		Param(ws.PathParameter("kind", "kind (raycluster, rayjob, or rayservice)")).
 		Param(ws.PathParameter("name", "name")).
+		Param(ws.QueryParameter("redirect", "optional site-local path (e.g. /#/overview); when set, respond with a 302 to it instead of JSON").DataType("string")).
 		Writes(""))
 
 	ws.Route(ws.GET("/{namespace}/{kind}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
@@ -394,6 +434,7 @@ func routerRayClusterSet(s *ServerHandler) {
 		Param(ws.PathParameter("kind", "kind (raycluster, rayjob, or rayservice)")).
 		Param(ws.PathParameter("name", "name")).
 		Param(ws.PathParameter("session", "session")).
+		Param(ws.QueryParameter("redirect", "optional site-local path (e.g. /#/overview); when set, respond with a 302 to it instead of JSON").DataType("string")).
 		Writes(""))
 
 }
