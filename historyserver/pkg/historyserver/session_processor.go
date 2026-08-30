@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -23,8 +24,8 @@ type SessionStatus int
 const (
 	// SessionStatusUnknown is the zero value, reserved as a defensive guard.
 	SessionStatusUnknown SessionStatus = iota
-	// SessionStatusLive means the RayCluster CR is still present and the
-	// session is intentionally skipped.
+	// SessionStatusLive means the RayCluster CR is still present and not
+	// suspended, so the session is intentionally skipped.
 	SessionStatusLive
 	// SessionStatusProcessed means events were ingested into EventHandler's
 	// in-memory state.
@@ -78,7 +79,7 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 	return SessionStatusProcessed, h.BuildSnapshot(session), nil
 }
 
-// isDead determines if the RayCluster CR is absent.
+// isDead determines if the RayCluster CR is absent or suspended.
 //
 // Known limit: An old session of a still-running RayCluster will be misclassified as live.
 func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
@@ -93,7 +94,16 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 	if err != nil {
 		return false, err
 	}
+	if isRayClusterSuspended(rc) {
+		return true, nil
+	}
 	return false, nil
+}
+
+// isRayClusterSuspended reports whether the controller has confirmed all Pods
+// belonging to the RayCluster are deleted (spec.suspend=true fully applied).
+func isRayClusterSuspended(rc *rayv1.RayCluster) bool {
+	return meta.IsStatusConditionTrue(rc.Status.Conditions, string(rayv1.RayClusterSuspended))
 }
 
 // isCtxCanceled checks if the error is caused by context cancellation
