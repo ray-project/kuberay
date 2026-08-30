@@ -25,6 +25,15 @@ tests:
           path: spec.rayVersion
           value: 2.52.0
 
+  - it: Should set upgradeStrategy when `upgradeStrategy.type` is set
+    set:
+      upgradeStrategy:
+        type: Recreate
+    asserts:
+      - equal:
+          path: spec.upgradeStrategy.type
+          value: Recreate
+
   - it: Should enable in-tree auto scaling when `head.enableInTreeAutoscaling` is `true`
     set:
       head:
