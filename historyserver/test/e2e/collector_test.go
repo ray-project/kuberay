@@ -137,7 +137,14 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID))
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: sessionID,
+		OwnerKind: "",
+		OwnerName: "",
+	}
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", clusterInfo))
 
 	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
 	err := test.Client().Ray().RayV1().
@@ -183,7 +190,14 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID))
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: sessionID,
+		OwnerName: "",
+		OwnerKind: "",
+	}
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", clusterInfo))
 
 	// NOTE: We use `kill 1` to simulate Kubernetes OOMKilled behavior.
 	// Before Kubernetes 1.28 (cgroups v1), if one process in a multi-process container exceeded its memory limit,
@@ -226,7 +240,14 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, dummySessionID))
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: dummySessionID,
+		OwnerName: "",
+		OwnerKind: "",
+	}
+	sessionPrefix := fmt.Sprintf("%s/", clusterlogs.SessionDir("", clusterInfo))
 
 	// Inject "leftover" logs BEFORE killing collector.
 	// This ensures files exist when collector restarts and performs its initial scan.
@@ -354,7 +375,14 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
-	sessionDir := clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: sessionID,
+		OwnerName: "",
+		OwnerKind: "",
+	}
+	sessionDir := clusterlogs.SessionDir("", clusterInfo)
 	metaKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
@@ -413,7 +441,14 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3Client *s3.S3) {
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
-	sessionDir := clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: sessionID,
+		OwnerName: "",
+		OwnerKind: "",
+	}
+	sessionDir := clusterlogs.SessionDir("", clusterInfo)
 	timezoneKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
@@ -459,7 +494,14 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	// Matches placementGroupsEndpoint in the collector's poll.go, query params included.
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
-	sessionDir := clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	clusterInfo := &utils.ClusterInfo{
+		Namespace: rayCluster.Namespace,
+		Name:      rayCluster.Name,
+		SessionName: sessionID,
+		OwnerName: "",
+		OwnerKind: "",
+	}
+	sessionDir := clusterlogs.SessionDir("", clusterInfo)
 	pgKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
@@ -705,7 +747,12 @@ func getHistoryServerJSON(g Gomega, client *http.Client, url string) []byte {
 func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayService := ApplyRayServiceAndWaitForRunning(test, g, namespace)
 	clusterName := rayService.Status.ActiveServiceStatus.RayClusterName
-	clusterPrefix := clusterlogs.Prefix("", utils.RayServiceKind, rayService.Name, namespace.Name, clusterName)
+	clusterPrefix := clusterlogs.Prefix("", &utils.ClusterInfo{
+		Namespace: namespace.Name,
+		Name:      clusterName,
+		OwnerName: rayService.Name,
+		OwnerKind: utils.RayServiceKind,
+	})
 
 	// Matches serveApplicationsEndpoint in the collector's poll.go.
 	storageKey := utils.EndpointPathToStorageKey("/api/serve/applications/")
@@ -764,7 +811,12 @@ func assertServeAppConverged(g Gomega, body []byte) {
 func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayJob := ApplyRayDataJobAndWaitForCompletion(test, g, namespace)
 	clusterName := rayJob.Status.RayClusterName
-	clusterPrefix := clusterlogs.Prefix("", utils.RayJobKind, rayJob.Name, namespace.Name, clusterName)
+	clusterPrefix := clusterlogs.Prefix("", &utils.ClusterInfo{
+		Namespace: namespace.Name,
+		Name:      clusterName,
+		OwnerName: rayJob.Name,
+		OwnerKind: utils.RayJobKind,
+	})
 
 	// "/api/data/datasets/" maps to "restful__api__data__datasets"; per-job keys append
 	// "__{job_id}", so this prefix matches every stored job.
