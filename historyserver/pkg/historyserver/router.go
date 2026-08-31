@@ -352,6 +352,12 @@ func routerRayClusterSet(s *ServerHandler) {
 			// Users might use the complete session name to enter a live cluster,
 			// so "live" sentinel is set to avoid querying empty in-memory state.
 			if live {
+				if !s.enableLiveClusters {
+					r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf(
+						"RayCluster %s/%s is still running, so session %q has no stored replay to serve; --enable-live-clusters is disabled on this History Server",
+						namespace, resolvedName, resolvedSession))
+					return
+				}
 				resolvedSession = "live"
 			}
 		}
@@ -413,7 +419,17 @@ func (s *ServerHandler) RegisterRouter() {
 }
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
-	svcInfo := req.Attribute(ATTRIBUTE_SERVICE_NAME).(ServiceInfo)
+	if !s.enableLiveClusters {
+		resp.WriteErrorString(http.StatusForbidden, "live cluster access is disabled on this History Server")
+		return
+	}
+
+	svcInfo, ok := req.Attribute(ATTRIBUTE_SERVICE_NAME).(ServiceInfo)
+	if !ok {
+		logrus.Errorf("Cannot proxy %s: head service info missing from the request context", req.Request.URL.String())
+		resp.WriteErrorString(http.StatusInternalServerError, "head service info missing from the request context")
+		return
+	}
 
 	var targetURL string
 	if s.useKubernetesProxy {
@@ -2036,6 +2052,12 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	}
 	if ownerName.Value != "" && !fs.ValidPath(ownerName.Value) {
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (owner_name=%s)", ownerName.Value))
+		return
+	}
+
+	if sessionName.Value == "live" && !s.enableLiveClusters {
+		logrus.Warnf("Rejected live session request for %s/%s: live cluster access is disabled", clusterNamespace.Value, clusterName.Value)
+		resp.WriteHeaderAndEntity(http.StatusForbidden, "live cluster access is disabled on this History Server")
 		return
 	}
 
