@@ -100,8 +100,8 @@ KubeRay contributors are welcome to join the bi-weekly KubeRay community meeting
 ## Security
 
 If you discover a potential security issue in this project, or think you may
-have discovered a security issue, we ask that you notify KubeRay Security via our
-[Slack Channel](https://ray-distributed.slack.com/archives/C02GFQ82JPM).
+have discovered a security issue, please report it according to our
+[security policy](SECURITY.md).
 Please do **not** create a public GitHub issue.
 
 ## License
