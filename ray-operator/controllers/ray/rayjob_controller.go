@@ -390,10 +390,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		// Reset the RayCluster and Ray job related status.
-		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
-		rayJobInstance.Status.RayClusterName = ""
-		rayJobInstance.Status.DashboardURL = ""
 		// Reset the Ray job related status.
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
@@ -834,6 +830,7 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
 				r.Recorder.Eventf(rayJobInstance, nil, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
+					string(utils.SuspendAction),
 					"Failed to stop Ray job %s on RayJob %s/%s: %v",
 					rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
 				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend",

@@ -371,7 +371,7 @@ var _ = Context("RayJob with suspend operation", func() {
 				WithRuntimeObjects(rayJob, rayCluster).
 				WithStatusSubresource(rayJob).
 				Build()
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler = &RayJobReconciler{
 				Client:   fakeClient,
@@ -472,7 +472,7 @@ var _ = Context("RayJob with suspend operation", func() {
 				WithRuntimeObjects(rayJob).
 				WithStatusSubresource(rayJob).
 				Build()
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler = &RayJobReconciler{
 				Client:   fakeClient,
@@ -560,7 +560,7 @@ var _ = Context("RayJob with suspend operation", func() {
 				WithRuntimeObjects(rayJob, rayCluster).
 				WithStatusSubresource(rayJob).
 				Build()
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler = &RayJobReconciler{
 				Client:   fakeClient,
