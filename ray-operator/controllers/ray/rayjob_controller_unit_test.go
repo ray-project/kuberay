@@ -16,6 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -1268,6 +1269,111 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T)
 					}
 				}
 				assert.True(t, foundEvent, "Expected event %q to be emitted", tc.expectCleanupEvent)
+			}
+		})
+	}
+}
+
+func TestReconcileRetryingReusesRayCluster(t *testing.T) {
+	tests := []struct {
+		name                  string
+		retryStrategy         rayv1.RetryRayClusterStrategy
+		expectClusterRetained bool
+	}{
+		{
+			name:                  "ReuseRayCluster keeps the RayCluster and only resubmits",
+			retryStrategy:         rayv1.ReuseRayCluster,
+			expectClusterRetained: true,
+		},
+		{
+			name:                  "RecreateRayCluster deletes the RayCluster on retry",
+			retryStrategy:         rayv1.RecreateRayCluster,
+			expectClusterRetained: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = batchv1.AddToScheme(newScheme)
+
+			rayCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-raycluster",
+					Namespace: "default",
+				},
+			}
+
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-rayjob",
+					Namespace:  "default",
+					Finalizers: []string{utils.RayJobStopJobFinalizer},
+				},
+				Spec: rayv1.RayJobSpec{
+					Entrypoint:              "echo hello",
+					SubmissionMode:          rayv1.HTTPMode,
+					RetryRayClusterStrategy: tc.retryStrategy,
+					BackoffLimit:            ptr.To[int32](1),
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "ray-head",
+											Image: "rayproject/ray:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayJobStatus{
+					JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+					RayClusterName:      "test-raycluster",
+					JobId:               "old-job-id",
+					DashboardURL:        "test-url:8265",
+					JobStatus:           rayv1.JobStatusFailed,
+				},
+			}
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob, rayCluster).
+				WithStatusSubresource(rayJob).
+				Build()
+
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: record.NewFakeRecorder(100),
+				Scheme:   newScheme,
+			}
+
+			ctx := context.Background()
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace},
+			})
+			require.NoError(t, err)
+
+			updated := &rayv1.RayJob{}
+			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}, updated))
+
+			cluster := &rayv1.RayCluster{}
+			clusterErr := fakeClient.Get(ctx, types.NamespacedName{Name: "test-raycluster", Namespace: "default"}, cluster)
+			if tc.expectClusterRetained {
+				// ReuseRayCluster keeps the RayCluster in a single pass and transitions straight to New,
+				// preserving the cluster name while clearing the job id so a fresh submission id is minted.
+				require.NoError(t, clusterErr, "RayCluster should be retained for ReuseRayCluster")
+				assert.Equal(t, rayv1.JobDeploymentStatusNew, updated.Status.JobDeploymentStatus)
+				assert.Equal(t, "test-raycluster", updated.Status.RayClusterName)
+				assert.Empty(t, updated.Status.JobId, "JobId should be cleared so a fresh submission id is minted")
+			} else {
+				// RecreateRayCluster deletes the RayCluster; the status transition to New happens on a
+				// later reconcile once the deletion is confirmed, so we only assert the cluster is gone.
+				require.True(t, apierrors.IsNotFound(clusterErr), "RayCluster should be deleted for RecreateRayCluster")
 			}
 		})
 	}
