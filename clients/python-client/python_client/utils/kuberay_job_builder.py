@@ -31,7 +31,7 @@ from typing import Optional
 import json
 
 # Import CRD-generated models (the source of truth)
-from python_client.models.generated_rayjob_models import (
+from python_client.models.generated_models import (
     RayJob, Spec, RayClusterSpec, HeadGroupSpec, WorkerGroupSpec,
     Template, Template1, Spec2, Spec4, Container, Container1,
 )
