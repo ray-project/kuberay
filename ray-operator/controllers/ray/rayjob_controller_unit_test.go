@@ -31,6 +31,8 @@ import (
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -337,6 +339,170 @@ func TestCheckIsRestartCountExceeded(t *testing.T) {
 			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
 		})
 	}
+}
+
+func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
+	reconciler := &RayJobReconciler{}
+	ctx := context.Background()
+
+	headPodWithSubmitterState := func(state corev1.ContainerState) *corev1.Pod {
+		return &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: utils.SubmitterContainerName, State: state},
+				},
+			},
+		}
+	}
+	initializingRayJob := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			Spec:   rayv1.RayJobSpec{SubmissionMode: rayv1.SidecarMode},
+			Status: rayv1.RayJobStatus{JobDeploymentStatus: rayv1.JobDeploymentStatusInitializing},
+		}
+	}
+
+	t.Run("submitter terminated non-zero is detected during Initializing -> Failed/SubmissionFailed", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.SubmissionFailed, rayJob.Status.Reason)
+	})
+
+	t.Run("submitter terminated non-zero with JobStatus already Failed -> AppFailed", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		rayJob.Status.JobStatus = rayv1.JobStatusFailed
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.AppFailed, rayJob.Status.Reason)
+	})
+
+	t.Run("submitter terminated with zero exit -> no update", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("submitter still running -> no update", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Running: &corev1.ContainerStateRunning{},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("feature gate enabled routes to restart-count check", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+		rayJob := initializingRayJob()
+		headPod := &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:                 utils.SubmitterContainerName,
+						RestartCount:         2,
+						State:                corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+					},
+				},
+			},
+		}
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+	})
+}
+
+func TestPollJobStatusForSidecarFailure(t *testing.T) {
+	ctx := context.Background()
+
+	// Use a pre-set DashboardURL so the poll does not need to resolve the head service.
+	newRayJob := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{SubmissionMode: rayv1.SidecarMode},
+			Status: rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusInitializing,
+				JobId:               "test-job-id",
+				DashboardURL:        "http://fake-dashboard:8265",
+			},
+		}
+	}
+	rayCluster := &rayv1.RayCluster{}
+
+	reconcilerWithJobStatus := func(status rayv1.JobStatus, getErr error) *RayJobReconciler {
+		fakeClient := &utils.FakeRayDashboardClient{}
+		getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+			if getErr != nil {
+				return nil, getErr
+			}
+			return &utiltypes.RayJobInfo{JobStatus: status}, nil
+		}
+		fakeClient.GetJobInfoMock.Store(&getJobInfo)
+		return &RayJobReconciler{
+			dashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
+				return fakeClient, nil
+			},
+		}
+	}
+
+	t.Run("job ran and failed -> JobStatus updated to FAILED (reason becomes AppFailed)", func(t *testing.T) {
+		reconciler := reconcilerWithJobStatus(rayv1.JobStatusFailed, nil)
+		rayJob := newRayJob()
+
+		reconciler.pollJobStatusForSidecarFailure(ctx, rayJob, rayCluster)
+
+		assert.Equal(t, rayv1.JobStatusFailed, rayJob.Status.JobStatus)
+	})
+
+	t.Run("dashboard GetJobInfo error -> JobStatus unchanged (falls back to SubmissionFailed)", func(t *testing.T) {
+		reconciler := reconcilerWithJobStatus("", errors.New("dashboard unreachable"))
+		rayJob := newRayJob()
+
+		reconciler.pollJobStatusForSidecarFailure(ctx, rayJob, rayCluster)
+
+		assert.Equal(t, rayv1.JobStatus(""), rayJob.Status.JobStatus)
+	})
+
+	t.Run("nil dashboardClientFunc -> no-op", func(t *testing.T) {
+		reconciler := &RayJobReconciler{}
+		rayJob := newRayJob()
+
+		reconciler.pollJobStatusForSidecarFailure(ctx, rayJob, rayCluster)
+
+		assert.Equal(t, rayv1.JobStatus(""), rayJob.Status.JobStatus)
+	})
+
+	t.Run("empty JobId -> no-op", func(t *testing.T) {
+		reconciler := reconcilerWithJobStatus(rayv1.JobStatusFailed, nil)
+		rayJob := newRayJob()
+		rayJob.Status.JobId = ""
+
+		reconciler.pollJobStatusForSidecarFailure(ctx, rayJob, rayCluster)
+
+		assert.Equal(t, rayv1.JobStatus(""), rayJob.Status.JobStatus)
+	})
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
