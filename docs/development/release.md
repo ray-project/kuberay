@@ -161,7 +161,7 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 ### Step 6: Publish KubeRay Helm Charts
 
 Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
-See [helm-chart.md](./helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
+See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
 
 1. **Create Release Branch (if it doesn't exist):**
     * Clone the `kuberay-helm` repository if you haven't already.
