@@ -155,7 +155,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusStopped))
 		g.Expect(rayJob.Status.JobId).To(BeEmpty())
-		g.Expect(rayJob.Status.DashboardURL).NotTo(BeEmpty())
+		g.Expect(rayJob.Status.DashboardURL).To(BeEmpty(), "DashboardURL should be cleared on suspend so resume re-checks cluster readiness")
 		g.Expect(rayJob.Status.RayClusterName).To(Equal(rayCluster.Name))
 
 		// Resume the RayJob

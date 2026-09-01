@@ -400,9 +400,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
 		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
-			// clusterSelector mode: preserve RayClusterName and DashboardURL for re-submission on resume.
+			// clusterSelector mode: preserve RayClusterName so the same cluster is reused on
+			// resume, but clear DashboardURL so that the Initializing path re-checks cluster
+			// readiness and refetches the URL before submitting.
 			// Note: BackoffLimit is rejected for clusterSelector jobs (see validation.go), so
 			// JobDeploymentStatusRetrying is unreachable here — only Suspending enters this path.
+			rayJobInstance.Status.DashboardURL = ""
 			rayJobInstance.Status.JobStatus = rayv1.JobStatusStopped
 		} else {
 			// Owned cluster mode: clear all cluster-related status since the cluster is deleted.
@@ -828,14 +831,21 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 				return false, err
 			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
-				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
-				r.Recorder.Eventf(rayJobInstance, nil, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
-					string(utils.SuspendAction),
-					"Failed to stop Ray job %s on RayJob %s/%s: %v",
-					rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
-				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend",
-					"JobId", rayJobInstance.Status.JobId, "RayJob", rayJobInstance.Namespace+"/"+rayJobInstance.Name)
-				return false, err
+				// JobId is assigned before submission, so the job may not exist on the
+				// Ray cluster yet (e.g. HTTPMode before SubmitJob, or Initializing after
+				// resume). Treat a missing job as already stopped; retry all other errors.
+				if _, infoErr := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId); infoErr != nil && errors.IsBadRequest(infoErr) {
+					logger.Info("Ray job not found on cluster during suspend, treating as already stopped",
+						"JobId", rayJobInstance.Status.JobId, "RayJob", rayJobInstance.Namespace+"/"+rayJobInstance.Name)
+				} else {
+					r.Recorder.Eventf(rayJobInstance, nil, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
+						string(utils.SuspendAction),
+						"Failed to stop Ray job %s on RayJob %s/%s: %v",
+						rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
+					logger.Error(err, "Failed to stop Ray job for clusterSelector suspend",
+						"JobId", rayJobInstance.Status.JobId, "RayJob", rayJobInstance.Namespace+"/"+rayJobInstance.Name)
+					return false, err
+				}
 			}
 		}
 		isClusterDeleted = true

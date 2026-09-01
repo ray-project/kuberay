@@ -37,6 +37,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
 type fakeFailingDashboardClient struct {
@@ -45,6 +46,20 @@ type fakeFailingDashboardClient struct {
 
 func (f *fakeFailingDashboardClient) StopJob(_ context.Context, _ string) error {
 	return fmt.Errorf("simulated StopJob failure")
+}
+
+// fakeJobNotFoundDashboardClient simulates StopJob failing because the job
+// was never submitted to the Ray cluster (e.g. HTTPMode before SubmitJob).
+type fakeJobNotFoundDashboardClient struct {
+	utils.FakeRayDashboardClient
+}
+
+func (f *fakeJobNotFoundDashboardClient) StopJob(_ context.Context, _ string) error {
+	return fmt.Errorf("simulated StopJob failure for missing job")
+}
+
+func (f *fakeJobNotFoundDashboardClient) GetJobInfo(_ context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
+	return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
 }
 
 var _ = Context("RayJob with suspend operation", func() {
@@ -426,7 +441,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			Expect(updatedRayJob.Status.RayJobStatusInfo).To(Equal(rayv1.RayJobStatusInfo{}))
 		})
 
-		It("should preserve RayClusterName and DashboardURL", func() {
+		It("should preserve RayClusterName but clear DashboardURL", func() {
 			updatedRayJob := &rayv1.RayJob{}
 			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
 				Name:      rayJob.Name,
@@ -435,7 +450,7 @@ var _ = Context("RayJob with suspend operation", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedRayJob.Status.RayClusterName).To(Equal(clusterName))
-			Expect(updatedRayJob.Status.DashboardURL).To(Equal("http://existing-cluster-head-svc:8265"))
+			Expect(updatedRayJob.Status.DashboardURL).To(BeEmpty(), "DashboardURL should be cleared so resume re-checks cluster readiness")
 		})
 	})
 
@@ -594,6 +609,106 @@ var _ = Context("RayJob with suspend operation", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedRayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusSuspending),
 				"Expected JobDeploymentStatus to remain Suspending when StopJob fails")
+		})
+	})
+
+	Describe("When a clusterSelector RayJob is in Suspending state and StopJob fails because the job was never submitted", Ordered, func() {
+		var reconciler *RayJobReconciler
+		var rayJob *rayv1.RayJob
+		var rayCluster *rayv1.RayCluster
+		namespace := "default"
+		clusterName := "existing-cluster-notfound"
+
+		BeforeAll(func() {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+			_ = batchv1.AddToScheme(newScheme)
+
+			rayCluster = &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+				Spec: rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Image: "rayproject/ray"}},
+							},
+						},
+					},
+				},
+			}
+
+			rayJob = rayJobTemplate("test-clusterselector-suspend-notfound", namespace)
+			rayJob.Spec.ClusterSelector = map[string]string{
+				utils.RayJobClusterSelectorKey: clusterName,
+			}
+			rayJob.Spec.RayClusterSpec = nil
+			rayJob.Spec.Suspend = true
+			rayJob.Spec.ShutdownAfterJobFinishes = true
+			rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+			rayJob.Status = rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusSuspending,
+				JobStatus:           rayv1.JobStatusRunning,
+				RayClusterName:      clusterName,
+				DashboardURL:        "http://existing-cluster-notfound-head-svc:8265",
+				JobId:               "never-submitted-job-id",
+			}
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob, rayCluster).
+				WithStatusSubresource(rayJob).
+				Build()
+			recorder := events.NewFakeRecorder(100)
+
+			reconciler = &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+				dashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
+					return &fakeJobNotFoundDashboardClient{}, nil
+				},
+			}
+		})
+
+		It("should reconcile without error", func() {
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred(), "Suspend should succeed when the job was never submitted")
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		})
+
+		It("should transition to Suspended with JobStatus Stopped", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusSuspended))
+			Expect(updatedRayJob.Status.JobStatus).To(Equal(rayv1.JobStatusStopped))
+		})
+
+		It("should clear DashboardURL and JobId", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobId).To(BeEmpty())
+			Expect(updatedRayJob.Status.DashboardURL).To(BeEmpty())
+			Expect(updatedRayJob.Status.RayClusterName).To(Equal(clusterName))
 		})
 	})
 })
