@@ -541,9 +541,6 @@ func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
-	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
-	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
-	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("The RayJob spec is invalid: a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 	}
