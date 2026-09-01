@@ -29,15 +29,15 @@ spec:
     deletionRules:
     - condition:
         jobDeploymentStatus: Failed
-      ttlSeconds: 30
+        ttlSeconds: 30
       policy: DeleteWorkers
     - condition:
         jobDeploymentStatus: Failed
-      ttlSeconds: 60
+        ttlSeconds: 60
       policy: DeleteCluster
     - condition:
         jobDeploymentStatus: Failed
-      ttlSeconds: 90
+        ttlSeconds: 90
       policy: DeleteSelf
     - condition:
         jobStatus: SUCCEEDED
