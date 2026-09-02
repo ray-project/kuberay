@@ -815,7 +815,7 @@ func TestBuildPod(t *testing.T) {
 }
 
 func TestGeneratedRayStartCommandEnvExpandsRuntimeVariables(t *testing.T) {
-	bash, err := exec.LookPath("bash")
+	_, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash is required to verify generated Ray start command expansion")
 	}
@@ -833,7 +833,7 @@ func TestGeneratedRayStartCommandEnvExpandsRuntimeVariables(t *testing.T) {
 			// generated value contains both shell control operators and variables that
 			// only exist after the container starts.
 			generatedCommand := "eval " + dashboardHostSetupCommand + `; printf '%s|%s' "$KUBERAY_POD_IP" "$KUBERAY_DASHBOARD_HOST"`
-			cmd := exec.Command(bash, "-c", "$"+utils.KUBERAY_GEN_RAY_START_CMD)
+			cmd := exec.CommandContext(t.Context(), "bash", "-c", "$KUBERAY_GEN_RAY_START_CMD")
 			cmd.Env = append(os.Environ(),
 				KubeRayPodIPEnvVar+"="+testCase.podIP,
 				utils.KUBERAY_GEN_RAY_START_CMD+"="+generatedCommand,
