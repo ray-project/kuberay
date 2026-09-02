@@ -22,6 +22,11 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
+	// IdleTerminate is set to true by the Ray autoscaler when the RayCluster has
+	// had no attached driver for noDriverTimeoutSeconds and the policy is
+	// Suspend. Setting it back to false resumes the RayCluster.
+	// +optional
+	IdleTerminate *bool `json:"idleTerminate,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -491,6 +496,7 @@ type ScaleStrategy struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Delete;Suspend
 type NoDriverTimeoutPolicy string
 
 const (
@@ -678,6 +684,8 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+	// RayClusterIdleTerminated indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
+	RayClusterIdleTerminated RayClusterConditionType = "RayClusterIdleTerminated"
 )
 
 // HeadInfo gives info about head

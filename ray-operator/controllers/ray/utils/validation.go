@@ -267,9 +267,12 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		policy := rayv1.DeleteIdleTerminationPolicy
 		if spec.AutoscalerOptions.NoDriverTimeoutPolicy != nil {
 			policy = *spec.AutoscalerOptions.NoDriverTimeoutPolicy
+			if policy != rayv1.DeleteIdleTerminationPolicy && policy != rayv1.SuspendIdleTerminationPolicy {
+				return fmt.Errorf("autoscalerOptions.noDriverTimeoutPolicy is invalid. Please use either %s or %s", rayv1.DeleteIdleTerminationPolicy, rayv1.SuspendIdleTerminationPolicy)
+			}
 		}
 		if annotations[KueueManagedRayClustersAnnotaion] != "" && policy == rayv1.SuspendIdleTerminationPolicy {
-			return fmt.Errorf("RayClusters Idle Termination does not work with Kueue-managed RayClusters")
+			return fmt.Errorf("RayCluster's Idle Termination does not work with Kueue-managed RayClusters")
 		}
 
 		rayVersion, err := version.ParseGeneric(spec.RayVersion)
