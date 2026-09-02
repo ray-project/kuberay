@@ -741,10 +741,6 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
 	}
 
-	if options.GatewayClassName == "" {
-		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
-	}
-
 	return nil
 }
 

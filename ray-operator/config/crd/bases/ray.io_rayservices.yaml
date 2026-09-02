@@ -9398,6 +9398,30 @@ spec:
                     properties:
                       gatewayClassName:
                         type: string
+                      gatewayRef:
+                        properties:
+                          name:
+                            maxLength: 253
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          namespace:
+                            maxLength: 63
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          port:
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          sectionName:
+                            maxLength: 253
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                        required:
+                        - name
+                        type: object
                       intervalSeconds:
                         format: int32
                         type: integer
@@ -9409,10 +9433,14 @@ spec:
                         format: int32
                         type: integer
                     required:
-                    - gatewayClassName
                     - intervalSeconds
                     - stepSizePercent
                     type: object
+                    x-kubernetes-validations:
+                    - message: Exactly one of gatewayClassName or gatewayRef must
+                        be specified
+                      rule: has(self.gatewayRef) != (has(self.gatewayClassName) &&
+                        size(self.gatewayClassName) != 0)
                   type:
                     type: string
                 type: object
