@@ -641,6 +641,11 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IdleTerminate != nil {
+		in, out := &in.IdleTerminate, &out.IdleTerminate
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ManagedBy != nil {
 		in, out := &in.ManagedBy, &out.ManagedBy
 		*out = new(string)
