@@ -8,7 +8,7 @@ import copy
 import re
 from typing import Any, Tuple
 from python_client import constants
-from python_client.models.generated_models import (
+from python_client.models.generated.raycluster import (
     HeadGroupSpec,
     WorkerGroupSpec,
     Template,
