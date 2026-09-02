@@ -11,12 +11,11 @@ This document outlines the default settings for `rayStartParams` in KubeRay.
   Binding all interfaces exposes the dashboard outside the Ray Pod, which is
   required when [ingress](https://github.com/ray-project/kuberay/blob/master/docs/guidance/ingress.md) is used.
   The Ray dashboard provides read and write access to the RayCluster; restrict access with authentication and network controls.
-  Ray versions before 2.56.0 don't fully support IPv6. Use Ray 2.56.0 or later for IPv6-only or dual-stack RayClusters.
+  Ray versions before 2.56.0 don't fully support IPv6. Use Ray 2.56.0 or later for IPv6-only RayClusters.
 
 - `--node-ip-address`: KubeRay defaults this to the Pod's primary IP from the Kubernetes Downward API (`status.podIP`).
   This prevents Ray's network auto-detection from advertising a loopback, link-local, or secondary-interface address that
-  other Ray Pods cannot reach. In a dual-stack Pod, Kubernetes defines `status.podIP` as the primary address. Users can
-  explicitly override this option when a multi-network Pod should advertise a different address.
+  other Ray Pods cannot reach. Users can explicitly override this option when a Pod should advertise a different address.
 
 - `--no-monitor` (Modification is not recommended):
   - Ray autoscaler supports various node providers such as AWS, GCP, Azure, and Kubernetes. However, the default autoscaler is not compatible with Kubernetes. Therefore, when [KubeRay autoscaling](https://github.com/ray-project/kuberay/blob/master/docs/guidance/autoscaler.md) is enabled (i.e. `EnableInTreeAutoscaling` is true), KubeRay disables the monitor process via setting `--no-monitor` to true and injects a sidecar container for KubeRay autoscaler. See [PR #13505](https://github.com/ray-project/ray/pull/13505) for more details.

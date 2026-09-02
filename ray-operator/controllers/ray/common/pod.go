@@ -1262,8 +1262,7 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 
 	// KubeRay manages this environment variable so rayStartParams can use the
 	// Pod's primary IP without trying to infer the Pod network from the
-	// operator's network namespace. In dual-stack clusters, status.podIP is the
-	// primary address selected by Kubernetes.
+	// operator's network namespace.
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name: KubeRayPodIPEnvVar,
 		ValueFrom: &corev1.EnvVarSource{

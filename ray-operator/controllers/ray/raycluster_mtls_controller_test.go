@@ -316,13 +316,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 			},
 		},
-		Status: corev1.PodStatus{
-			PodIP: "10.244.0.5",
-			PodIPs: []corev1.PodIP{
-				{IP: "10.244.0.5"},
-				{IP: "2001:db8::5"},
-			},
-		},
+		Status: corev1.PodStatus{PodIP: "2001:db8::5"},
 	}
 
 	r := newMTLSController(t, cluster, headPod)
@@ -343,10 +337,9 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
-	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
 	assert.Contains(t, headCert.Spec.IPAddresses, "2001:db8::5")
-	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 	assert.Contains(t, headCert.Spec.IPAddresses, "::1")
+	assert.NotContains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 
 	// Simulate scale-up: add a worker pod.
 	// A finalizer is added so that a subsequent Delete call sets DeletionTimestamp
@@ -362,7 +355,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 			},
 			Finalizers: []string{"test/hold"},
 		},
-		Status: corev1.PodStatus{PodIP: "10.244.0.6"},
+		Status: corev1.PodStatus{PodIP: "2001:db8::6"},
 	}
 	require.NoError(t, r.Create(ctx, workerPod))
 
@@ -374,8 +367,8 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
-	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
-	assert.NotContains(t, headCert.Spec.IPAddresses, "10.244.0.6",
+	assert.Contains(t, headCert.Spec.IPAddresses, "2001:db8::5")
+	assert.NotContains(t, headCert.Spec.IPAddresses, "2001:db8::6",
 		"head cert should not include worker pod IPs")
 
 	workerCert := &certmanagerv1.Certificate{}
@@ -384,7 +377,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 		Namespace: "default",
 	}, workerCert)
 	require.NoError(t, err)
-	assert.Contains(t, workerCert.Spec.IPAddresses, "10.244.0.6",
+	assert.Contains(t, workerCert.Spec.IPAddresses, "2001:db8::6",
 		"worker cert should be updated with the new worker pod IP after scale-up")
 
 	// Simulate scale-down: deleting the pod while the finalizer is still present causes
@@ -400,7 +393,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 		Namespace: "default",
 	}, workerCert)
 	require.NoError(t, err)
-	assert.NotContains(t, workerCert.Spec.IPAddresses, "10.244.0.6",
+	assert.NotContains(t, workerCert.Spec.IPAddresses, "2001:db8::6",
 		"worker cert should not include IP of a terminating pod after scale-down")
 }
 
@@ -673,10 +666,6 @@ func TestNormalizeIPsAddsLoopbackForObservedFamilies(t *testing.T) {
 		"IPv6 only": {
 			podIPs: []string{"2001:db8::1"},
 			want:   []string{"2001:db8::1", "::1"},
-		},
-		"dual stack": {
-			podIPs: []string{"10.0.0.1", "2001:db8::1"},
-			want:   []string{"10.0.0.1", "127.0.0.1", "2001:db8::1", "::1"},
 		},
 	}
 

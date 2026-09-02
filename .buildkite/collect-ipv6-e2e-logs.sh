@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Best-effort diagnostics for the IPv6 and dual-stack E2E steps. This script is
+# Best-effort diagnostics for the IPv6-only E2E step. This script is
 # called only after a test failure, so every collection command is allowed to
 # fail without hiding the original go test exit status.
 set +e

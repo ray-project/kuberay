@@ -439,13 +439,7 @@ func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv
 			pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			continue
 		}
-		if len(pod.Status.PodIPs) > 0 {
-			for _, podIP := range pod.Status.PodIPs {
-				podIPs = append(podIPs, podIP.IP)
-			}
-		} else if pod.Status.PodIP != "" {
-			// PodIP is retained as a fallback for older Kubernetes API servers
-			// and unit-test objects that don't populate PodIPs.
+		if pod.Status.PodIP != "" {
 			podIPs = append(podIPs, pod.Status.PodIP)
 		}
 	}

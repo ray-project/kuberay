@@ -18,7 +18,7 @@ func TestRayClusterIPv6(t *testing.T) {
 	if os.Getenv("KUBERAY_TEST_IPV6") != "true" {
 		t.Skip("set KUBERAY_TEST_IPV6=true to run the IPv6-only cluster test")
 	}
-	testRayClusterIPFamilies(t, "raycluster-ipv6", NewRayClusterSpec(), false, true, false)
+	testRayClusterIPv6(t, "raycluster-ipv6", NewRayClusterSpec(), false)
 }
 
 func TestRayClusterTLSIPv6(t *testing.T) {
@@ -31,22 +31,13 @@ func TestRayClusterTLSIPv6(t *testing.T) {
 		t.Fatal("cert-manager CRDs are required for the dedicated IPv6 mTLS test")
 	}
 
-	testRayClusterIPFamilies(t, "raycluster-tls-ipv6", NewRayClusterSpecWithMTLS(), false, true, true)
+	testRayClusterIPv6(t, "raycluster-tls-ipv6", NewRayClusterSpecWithMTLS(), true)
 }
 
-func TestRayClusterDualStack(t *testing.T) {
-	if os.Getenv("KUBERAY_TEST_DUAL_STACK") != "true" {
-		t.Skip("set KUBERAY_TEST_DUAL_STACK=true to run the dual-stack cluster test")
-	}
-	testRayClusterIPFamilies(t, "raycluster-dual-stack", NewRayClusterSpec(), true, true, false)
-}
-
-func testRayClusterIPFamilies(
+func testRayClusterIPv6(
 	t *testing.T,
 	clusterName string,
 	spec *rayv1ac.RayClusterSpecApplyConfiguration,
-	wantIPv4 bool,
-	wantIPv6 bool,
 	wantTLSInit bool,
 ) {
 	t.Helper()
@@ -75,19 +66,15 @@ func testRayClusterIPFamilies(
 	primaryPodIPs := make([]string, 0, len(pods))
 	for _, pod := range pods {
 		primaryPodIPs = append(primaryPodIPs, pod.Status.PodIP)
-		hasIPv4 := false
-		hasIPv6 := false
+		primaryIP := net.ParseIP(pod.Status.PodIP)
+		g.Expect(primaryIP).NotTo(BeNil(), "Pod %s has invalid primary IP %q", pod.Name, pod.Status.PodIP)
+		g.Expect(primaryIP.To4()).To(BeNil(), "Pod %s primary IP should be IPv6, got %q", pod.Name, pod.Status.PodIP)
+		g.Expect(pod.Status.PodIPs).NotTo(BeEmpty(), "Pod %s should report an IPv6 address", pod.Name)
 		for _, podIP := range pod.Status.PodIPs {
 			ip := net.ParseIP(podIP.IP)
 			g.Expect(ip).NotTo(BeNil(), "Pod %s has invalid IP %q", pod.Name, podIP.IP)
-			if ip.To4() != nil {
-				hasIPv4 = true
-			} else {
-				hasIPv6 = true
-			}
+			g.Expect(ip.To4()).To(BeNil(), "Pod %s should be IPv6-only, got %q", pod.Name, podIP.IP)
 		}
-		g.Expect(hasIPv4).To(Equal(wantIPv4), "Pod %s IPv4 availability", pod.Name)
-		g.Expect(hasIPv6).To(Equal(wantIPv6), "Pod %s IPv6 availability", pod.Name)
 
 		if wantTLSInit {
 			assertTLSIPSanInitContainerCompleted(g, &pod)
