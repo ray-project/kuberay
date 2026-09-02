@@ -602,6 +602,9 @@ func getEnableProbesInjection() bool {
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
+	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
+	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
+	podTemplate.ObjectMeta.Name = ""
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
@@ -664,9 +667,6 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
-	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
-	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
-	podTemplate.ObjectMeta.Name = ""
 
 	// Update rayStartParams with top-level Resources for worker group.
 	updateRayStartParamsResources(ctx, workerSpec.RayStartParams, workerSpec.Resources)
@@ -691,14 +691,18 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	// Set hostname and subdomain if spec.PodFQDN is set to get per-Pod FQDN. Skip if a Subdomain
 	// is already set (e.g. TPU multi-host webhook) to avoid breaking that setup.
 	if utils.IsPodFQDNEnabled(&instance.Spec) && podTemplate.Spec.Subdomain == "" {
-		hostname := utils.CheckLabel(podName + rand.String(5)) // podName ends with "-", <= 63 chars total
-		podTemplate.Spec.Hostname = hostname
+		// We want to make the Hostname the same as the Pod name for easier debugging. Therefore we need
+		// to generate the suffix here instead of using GenerateName. A name collision will fail with
+		// AlreadyExists in createWorkerPod, and the next reconcile retries with a new suffix.
+		podTemplate.Name = podName + rand.String(5) // podName ends with "-", <= 63 chars total
+		podTemplate.GenerateName = ""
+		podTemplate.Spec.Hostname = podTemplate.Name
 		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
 
 		// Set node-ip-address as FQDN if spec.PodFQDN.Mode is set to RegisterAsNodeAddress
 		if _, ok := workerSpec.RayStartParams["node-ip-address"]; !ok && utils.IsHostnameRegistrationEnabled(&instance.Spec) {
 			workerSpec.RayStartParams["node-ip-address"] = fmt.Sprintf("%s.%s.%s.svc.%s",
-				hostname, podTemplate.Spec.Subdomain, instance.Namespace, utils.GetClusterDomainName())
+				podTemplate.Name, podTemplate.Spec.Subdomain, instance.Namespace, utils.GetClusterDomainName())
 		}
 	}
 
