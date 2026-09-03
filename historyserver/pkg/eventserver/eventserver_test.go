@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -1096,8 +1097,48 @@ func TestNormalizeActorIDsToHex(t *testing.T) {
 	}
 }
 
+func TestGetAllRayEventFiles(t *testing.T) {
+	const clusterID = "cluster-history/raycluster/ns/cluster"
+	mock := newLogEventMockReader()
+	mock.addDir(clusterID, "session1/node-a/job_events/job-1", []string{
+		"job-1-2026-01-01-00.gz",
+		"not-an-event.txt",
+	})
+	mock.addDir(clusterID, "session1", []string{"job-1-2026-01-01-00.gz"})
+	mock.addDir(clusterID, "session1/node-a/node_events", []string{"node-a-2026-01-01-00.gz"})
+	mock.addDir(clusterID, "session1/node-a/logs", []string{"worker-2026-01-01-00.gz"})
+	mock.addDir(clusterID, "session1/node-a/job_events/job-1/nested", []string{"nested-2026-01-01-00.gz"})
+
+	h := NewEventHandler(mock)
+	got, err := h.getAllRayEventFiles(context.Background(), utils.ClusterInfo{
+		Name:        "cluster",
+		Namespace:   "ns",
+		SessionName: "session1",
+	})
+	require.NoError(t, err)
+	want := []string{
+		"session1/node-a/job_events/job-1/job-1-2026-01-01-00.gz",
+		"session1/node-a/node_events/node-a-2026-01-01-00.gz",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("getAllRayEventFiles() returned diff (-want +got):\n%s", diff)
+	}
+	assert.Equal(t, []listFilesCall{{clusterID: clusterID, dir: "session1"}}, mock.recursiveListCalls)
+}
+
 func TestProcessSingleSession(t *testing.T) {
 	clusterInfo := utils.ClusterInfo{Name: "cluster", Namespace: "ns", SessionName: "session1"}
+
+	t.Run("returns recursive listing errors", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.recursiveListErr = errors.New("storage listing failed")
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "storage listing failed")
+	})
 
 	t.Run("returns error when every listed file fails I/O", func(t *testing.T) {
 		mock := newLogEventMockReader()

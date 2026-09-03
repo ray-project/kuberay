@@ -134,6 +134,29 @@ func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string 
 	return fileList
 }
 
+// ListFilesRecursive returns all files under directory, relative to directory.
+func (h *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId string, directory string) ([]string, error) {
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/")
+	query := &gstorage.Query{Prefix: pathPrefix + "/"}
+	fileIterator := h.StorageClient.Bucket(h.GCSBucket).Objects(ctx, query)
+
+	var objectPaths []string
+	for {
+		attrs, err := fileIterator.Next()
+		if err == gIterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list objects in bucket %q under %s: %w", h.GCSBucket, pathPrefix, err)
+		}
+		if attrs.Name != "" {
+			objectPaths = append(objectPaths, attrs.Name)
+		}
+	}
+
+	return storage.RelativeFilePaths(pathPrefix, objectPaths), nil
+}
+
 // List will return a list of ClusterInfo
 func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
