@@ -38,7 +38,6 @@ const (
 	NoDriverTTLExpiredAnnotationKey = "ray.io/no-driver-ttl-expired"
 	// Finalizer for No Driver Idle Termination
 	NoDriverIdleTerminationFinalizer = "ray.io/no-driver-idle-termination"
-	KueueManagedRayClustersAnnotaion = "kueue.x-k8s.io/elastic-job"
 	// Labels for feature RayMultihostIndexing
 	//
 	// RayWorkerReplicaNameKey label is the unique name for the replica in a specific worker group. It is made up
