@@ -255,8 +255,16 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.ServiceAccountName = utils.CheckName(utils.GetHeadGroupServiceAccountName(&instance))
 		// Use the same image as Ray head container by default.
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
+		// Under mTLS the autoscaler must dial GCS by the head service DNS name so the TLS
+		// handshake matches the head certificate's DNS SAN; by default it would use the pod IP.
+		// Requires a Ray version whose `ray kuberay-autoscaler` accepts --gcs-address.
+		// TODO: put the Ray version here
+		gcsAddress := ""
+		if utils.IsTLSEnabled(&instance.Spec) {
+			gcsAddress = fmt.Sprintf("%s:%s", utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace), headPort)
+		}
 		// inject autoscaler container into head pod
-		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage, gcsAddress)
 
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
@@ -266,13 +274,6 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
 		// validateTLSOptions rejects forbidden TLS env vars in autoscalerOptions.env,
 		// preventing the user from overriding these via the merge below.
-		//
-		// GCS address alignment: the autoscaler co-located in the head pod reaches GCS
-		// via localhost (127.0.0.1) or the head pod IP. Both are always present in the
-		// head certificate SANs — 127.0.0.1 is added unconditionally, and the pod IP
-		// SAN is guaranteed by the wait-for-tls-ip-san init container (injected by
-		// configureTLS below) before any containers, including this sidecar, start.
-		// No additional RAY_ADDRESS injection is required.
 		if utils.IsTLSEnabled(&instance.Spec) {
 			SetContainerTLSConfig(&autoscalerContainer)
 		}
@@ -471,77 +472,6 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 		}
 		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
 	}
-
-	// Workers register with their FQDN and share a static wildcard-DNS certificate, so only
-	// the head needs to wait for its pod IP SAN.
-	if rayNodeType == rayv1.WorkerNode {
-		return
-	}
-
-	// Prepend an init container that waits until cert-manager has added the head pod's IP to
-	// the certificate as an IP SAN. The autoscaler sidecar reaches GCS via the pod IP, so GCS
-	// must not start before the cert lists it.
-	certPath := utils.RayTLSCertMountPath + "/tls.crt"
-	waitScript := fmt.Sprintf(`CERT="%s"
-if [ -z "${POD_IP}" ]; then
-  POD_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
-fi
-if ! command -v openssl >/dev/null 2>&1; then
-  echo "openssl not found; cannot verify IP SAN" >&2
-  exit 1
-fi
-echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
-while true; do
-  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
-    echo "TLS cert now includes IP SAN for ${POD_IP}"
-    exit 0
-  fi
-  echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
-  sleep 5
-done`, certPath)
-
-	waitInitContainer := corev1.Container{
-		Name:            "wait-for-tls-ip-san",
-		Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
-		ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-		Command:         []string{"sh", "-c"},
-		Args:            []string{waitScript},
-		SecurityContext: podTemplate.Spec.Containers[utils.RayContainerIndex].SecurityContext.DeepCopy(),
-		Env: []corev1.EnvVar{
-			{
-				Name: "POD_IP",
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{
-						FieldPath: "status.podIP",
-					},
-				},
-			},
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      utils.RayTLSVolumeName,
-				MountPath: utils.RayTLSCertMountPath,
-				ReadOnly:  true,
-			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("50m"),
-				corev1.ResourceMemory: resource.MustParse("64Mi"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("50m"),
-				corev1.ResourceMemory: resource.MustParse("64Mi"),
-			},
-		},
-	}
-	// Prepend so it runs before wait-gcs-ready; skip if already present.
-	for i := range podTemplate.Spec.InitContainers {
-		if podTemplate.Spec.InitContainers[i].Name == "wait-for-tls-ip-san" {
-			return
-		}
-	}
-	podTemplate.Spec.InitContainers = append([]corev1.Container{waitInitContainer}, podTemplate.Spec.InitContainers...)
 }
 
 // SetContainerTLSConfig adds TLS environment variables and volume mount to a container.
@@ -956,14 +886,18 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	return pod
 }
 
-// BuildAutoscalerContainer builds a Ray autoscaler container which can be appended to the head pod.
-func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
+// BuildAutoscalerContainer builds the Ray autoscaler sidecar. A non-empty gcsAddress is passed as
+// --gcs-address so the autoscaler dials GCS there instead of the head pod IP.
+func BuildAutoscalerContainer(autoscalerImage string, gcsAddress string) corev1.Container {
 	// autoscalerStartCmd is the command KubeRay generates to start the autoscaler process.
 	// It is stored in the KUBERAY_GEN_AUTOSCALER_START_CMD environment variable so that users
 	// who override Args via AutoscalerOptions can still reference the generated command, e.g.:
 	//   args: ["ulimit -n 65536; $KUBERAY_GEN_AUTOSCALER_START_CMD"]
 	// This mirrors the KUBERAY_GEN_RAY_START_CMD pattern for Ray head/worker containers.
 	autoscalerStartCmd := "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)"
+	if gcsAddress != "" {
+		autoscalerStartCmd += " --gcs-address=" + gcsAddress
+	}
 
 	container := corev1.Container{
 		Name:            AutoscalerContainerName,

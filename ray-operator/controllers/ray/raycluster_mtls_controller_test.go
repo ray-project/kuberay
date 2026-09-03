@@ -301,7 +301,9 @@ func TestMTLSController_ReconcileIssuer(t *testing.T) {
 	}
 }
 
-func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
+// TestMTLSController_CertsDoNotTrackPodIPs verifies that neither certificate picks up pod IPs:
+// every client reaches the head by its service FQDN and workers by their per-pod FQDN.
+func TestMTLSController_CertsDoNotTrackPodIPs(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
@@ -328,15 +330,14 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	_, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	// Verify head certificate includes the head pod IP only.
 	headCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
-	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
-	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
+	assert.Equal(t, []string{"127.0.0.1"}, headCert.Spec.IPAddresses,
+		"head cert is static and must not track the head pod IP")
 
 	// Simulate scale-up: add a worker pod. Neither certificate should pick up its IP.
 	workerPod := &corev1.Pod{
@@ -360,9 +361,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
-	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
-	assert.NotContains(t, headCert.Spec.IPAddresses, "10.244.0.6",
-		"head cert should not include worker pod IPs")
+	assert.Equal(t, []string{"127.0.0.1"}, headCert.Spec.IPAddresses)
 
 	workerCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{

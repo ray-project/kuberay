@@ -10,7 +10,6 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1815,14 +1814,6 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 
 	// Only keep the Ray container in the Redis cleanup Job.
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
-
-	// Remove the wait-for-tls-ip-san init container if present. The cleanup pod's IP is
-	// never added to the head certificate SANs (the mTLS controller only tracks running
-	// Ray pods), so the init container would block for the full timeout and then fail,
-	// preventing Redis cleanup from running at all.
-	pod.Spec.InitContainers = slices.DeleteFunc(pod.Spec.InitContainers, func(c corev1.Container) bool {
-		return c.Name == "wait-for-tls-ip-san"
-	})
 
 	pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 	pod.Spec.Containers[utils.RayContainerIndex].Args = []string{
