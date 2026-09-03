@@ -435,6 +435,8 @@ spec:
                     type: object
                   enableInTreeAutoscaling:
                     type: boolean
+                  enablePodFQDN:
+                    type: boolean
                   gcsFaultToleranceOptions:
                     properties:
                       backend:
