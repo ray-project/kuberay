@@ -212,7 +212,14 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := clusterlogs.LogsDir(r.RootDir, r.OwnerKind, r.OwnerName, r.RayClusterNamespace, r.RayClusterName, sessionID, nodeID)
+	var clusterInfo = &utils.ClusterInfo{
+		Name:         r.RayClusterName,
+		OwnerKind:    r.OwnerKind,
+		OwnerName:    r.OwnerName,
+		Namespace:    r.RayClusterNamespace,
+		SessionName: sessionID,
+	}
+	logDir := clusterlogs.LogsDir(r.RootDir, clusterInfo, nodeID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -649,7 +656,14 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := clusterlogs.LogsDir(r.RootDir, r.OwnerKind, r.OwnerName, r.RayClusterNamespace, r.RayClusterName, sessionID, nodeID)
+	var clusterInfo = &utils.ClusterInfo{
+		Name:         r.RayClusterName,
+		OwnerKind:    r.OwnerKind,
+		OwnerName:    r.OwnerName,
+		Namespace:    r.RayClusterNamespace,
+		SessionName: sessionID,
+	}
+	logDir := clusterlogs.LogsDir(r.RootDir, clusterInfo, nodeID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
