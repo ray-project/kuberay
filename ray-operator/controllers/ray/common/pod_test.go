@@ -1537,21 +1537,35 @@ func TestDefaultWorkerPodTemplateWithName(t *testing.T) {
 }
 
 func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	ctx := context.Background()
 
 	tests := map[string]struct {
-		presetSubdomain string
-		clusterName     string
-		enablePodFQDN   bool
-		expectPerPodDNS bool
+		userNodeIPAddress  string
+		presetSubdomain    string
+		clusterName        string
+		enablePodFQDN      bool
+		tlsEnabled         bool
+		expectPerPodDNS    bool
+		expectNodeIPIsFQDN bool
 	}{
 		"disabled": {},
-		"enabled": {
+		"enablePodFQDN only creates DNS records without touching Ray": {
 			enablePodFQDN:   true,
 			expectPerPodDNS: true,
 		},
+		"mTLS implies per-pod DNS and registers the FQDN": {
+			tlsEnabled:         true,
+			expectPerPodDNS:    true,
+			expectNodeIPIsFQDN: true,
+		},
+		"mTLS keeps user node-ip-address": {
+			tlsEnabled:        true,
+			userNodeIPAddress: "1.2.3.4",
+			expectPerPodDNS:   true,
+		},
 		"skipped when subdomain is preset": {
-			enablePodFQDN:   true,
+			tlsEnabled:      true,
 			presetSubdomain: "tpu-webhook-svc",
 		},
 		"long cluster name stays within 63 chars": {
@@ -1567,24 +1581,30 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 			if tc.enablePodFQDN {
 				cluster.Spec.EnablePodFQDN = new(true)
 			}
+			if tc.tlsEnabled {
+				cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+			}
 			if tc.clusterName != "" {
 				cluster.Name = tc.clusterName
 			}
 			worker := *cluster.Spec.WorkerGroupSpecs[0].DeepCopy()
 			worker.Template.Spec.Subdomain = tc.presetSubdomain
+			if tc.userNodeIPAddress != "" {
+				worker.RayStartParams["node-ip-address"] = tc.userNodeIPAddress
+			}
 			podName := utils.PodName(fmt.Sprintf("%s-%s", cluster.Name, worker.GroupName), rayv1.WorkerNode, true)
 			fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 
+			// worker.RayStartParams is a map, so the node-ip-address written by DefaultWorkerPodTemplate is visible here.
 			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
-
-			// Ray keeps using pod IPs; per-pod DNS is for external consumers only.
-			assert.NotContains(t, worker.RayStartParams, "node-ip-address")
+			nodeIPAddress := worker.RayStartParams["node-ip-address"]
 
 			if !tc.expectPerPodDNS {
 				assert.Empty(t, podTemplateSpec.Name)
 				assert.Equal(t, podName, podTemplateSpec.GenerateName)
 				assert.Empty(t, podTemplateSpec.Spec.Hostname)
 				assert.Equal(t, tc.presetSubdomain, podTemplateSpec.Spec.Subdomain)
+				assert.Empty(t, nodeIPAddress)
 				return
 			}
 
@@ -1594,7 +1614,18 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 			assert.Len(t, podTemplateSpec.Name, len(podName)+5)
 			assert.LessOrEqual(t, len(podTemplateSpec.Name), 63)
 			assert.Equal(t, podTemplateSpec.Name, podTemplateSpec.Spec.Hostname)
-			assert.Equal(t, cluster.Name+utils.DashSymbol+utils.HeadlessServiceSuffix, podTemplateSpec.Spec.Subdomain)
+			subdomain := cluster.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+			assert.Equal(t, subdomain, podTemplateSpec.Spec.Subdomain)
+
+			switch {
+			case tc.expectNodeIPIsFQDN:
+				expected := fmt.Sprintf("%s.%s.%s.svc.%s", podTemplateSpec.Name, subdomain, cluster.Namespace, utils.GetClusterDomainName())
+				assert.Equal(t, expected, nodeIPAddress)
+			case tc.userNodeIPAddress != "":
+				assert.Equal(t, tc.userNodeIPAddress, nodeIPAddress)
+			default:
+				assert.Empty(t, nodeIPAddress)
+			}
 		})
 	}
 }
@@ -2751,6 +2782,12 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	podName := "test-head"
 	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
+	// Local clients must dial the head service FQDN (a DNS SAN), not loopback, which Ray
+	// would rewrite to the pod IP.
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	pod := BuildPod(ctx, podTemplate, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
+	checkContainerEnv(t, pod.Spec.Containers[utils.RayContainerIndex], utils.RAY_ADDRESS, fqdnRayIP+":6379")
+
 	// Auto-generate mode mounts the cert-manager head secret.
 	var tlsVolume *corev1.Volume
 	for i := range podTemplate.Spec.Volumes {
@@ -2850,12 +2887,14 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
 	assert.True(t, tlsMount.ReadOnly)
 
-	// wait-for-tls-ip-san must be the first init container on worker pods. GCS connects back
-	// to each worker's raylet using the worker's pod IP; if the cert doesn't yet list that IP
-	// the TLS handshake fails and GCS marks the worker dead, causing the RayJob to fail.
-	require.NotEmpty(t, podTemplate.Spec.InitContainers, "worker pod should have init containers")
-	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
-		"wait-for-tls-ip-san must be the first init container on worker pods")
+	// Workers register with their per-pod FQDN, which the wildcard DNS SAN covers, so they
+	// neither wait for an IP SAN nor need one.
+	for _, c := range podTemplate.Spec.InitContainers {
+		assert.NotEqual(t, "wait-for-tls-ip-san", c.Name, "worker pods should not wait for an IP SAN")
+	}
+	assert.Equal(t, podTemplate.Name, podTemplate.Spec.Hostname)
+	expectedNodeIP := fmt.Sprintf("%s.%s-%s.%s.svc.%s", podTemplate.Name, cluster.Name, utils.HeadlessServiceSuffix, cluster.Namespace, utils.GetClusterDomainName())
+	assert.Equal(t, expectedNodeIP, worker.RayStartParams["node-ip-address"])
 
 	// wait-gcs-ready should exist and have TLS config.
 	var gcsReadyContainer *corev1.Container

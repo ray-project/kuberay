@@ -1098,13 +1098,16 @@ func TestReconcileHeadService(t *testing.T) {
 }
 
 func TestReconcileHeadlessService(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	tests := map[string]struct {
 		numOfHosts    int32
 		enablePodFQDN bool
+		tlsEnabled    bool
 		expectService bool
 	}{
 		"multi-host worker group":         {numOfHosts: 4, expectService: true},
 		"single-host with enablePodFQDN":  {numOfHosts: 1, enablePodFQDN: true, expectService: true},
+		"single-host with mTLS":           {numOfHosts: 1, tlsEnabled: true, expectService: true},
 		"single-host without per-pod DNS": {numOfHosts: 1, expectService: false},
 	}
 
@@ -1113,8 +1116,12 @@ func TestReconcileHeadlessService(t *testing.T) {
 			setupTest(t)
 			testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = tc.numOfHosts
 			testRayCluster.Spec.EnablePodFQDN = nil
+			testRayCluster.Spec.TLSOptions = nil
 			if tc.enablePodFQDN {
 				testRayCluster.Spec.EnablePodFQDN = new(true)
+			}
+			if tc.tlsEnabled {
+				testRayCluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 			}
 			cluster := testRayCluster.DeepCopy()
 

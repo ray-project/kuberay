@@ -44,11 +44,10 @@ type RayClusterSpecApplyConfiguration struct {
 	// the operator enables mTLS using cert-manager to provision and manage certificates.
 	// Requires the RayClusterMTLS feature gate on the operator.
 	TLSOptions *TLSOptionsApplyConfiguration `json:"tlsOptions,omitempty"`
-	// EnablePodFQDN gives each worker pod a stable DNS name
-	// <pod-name>.<cluster>-headless.<namespace>.svc.<cluster-domain> via spec.hostname,
-	// spec.subdomain and a headless Service. Ray itself keeps using pod IPs.
-	// Immutable: existing pods are not updated in place, so changing it on a live cluster
-	// would leave nodes registered under mixed identities.
+	// EnablePodFQDN creates per-pod DNS records (pod hostname/subdomain plus the
+	// headless Service) for worker pods without changing how Ray nodes register.
+	// Ray keeps using pod IPs. Implied when mTLS is enabled, in which case Ray nodes
+	// register with their FQDN instead.
 	EnablePodFQDN *bool `json:"enablePodFQDN,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`

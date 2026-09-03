@@ -236,6 +236,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
 
+	// Under mTLS the head registers with its service DNS name so workers match its DNS SAN.
+	if _, ok := headSpec.RayStartParams["node-ip-address"]; !ok && utils.IsTLSEnabled(&instance.Spec) {
+		headSpec.RayStartParams["node-ip-address"] = utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
+	}
+
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -467,14 +472,15 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
 	}
 
-	// Prepend an init container that waits until cert-manager has added the pod's IP to the
-	// certificate as an IP SAN. Required for both head and worker pods:
-	//   - Head: ensures the cert has the pod IP before GCS starts, so the autoscaler sidecar
-	//     and connecting workers are not hit by a TLS SAN mismatch on first connection.
-	//   - Worker: GCS (on the head) connects back to each worker's raylet using the worker's
-	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
-	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
-	//     not sufficient because the RayJob itself fails before a retry can succeed.
+	// Workers register with their FQDN and share a static wildcard-DNS certificate, so only
+	// the head needs to wait for its pod IP SAN.
+	if rayNodeType == rayv1.WorkerNode {
+		return
+	}
+
+	// Prepend an init container that waits until cert-manager has added the head pod's IP to
+	// the certificate as an IP SAN. The autoscaler sidecar reaches GCS via the pod IP, so GCS
+	// must not start before the cert lists it.
 	certPath := utils.RayTLSCertMountPath + "/tls.crt"
 	waitScript := fmt.Sprintf(`CERT="%s"
 if [ -z "${POD_IP}" ]; then
@@ -691,6 +697,12 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.GenerateName = ""
 		podTemplate.Spec.Hostname = podTemplate.Name
 		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
+
+		// Under mTLS the worker registers with its FQDN so the head can match the wildcard DNS SAN.
+		if _, ok := workerSpec.RayStartParams["node-ip-address"]; !ok && utils.IsTLSEnabled(&instance.Spec) {
+			workerSpec.RayStartParams["node-ip-address"] = fmt.Sprintf("%s.%s.%s.svc.%s",
+				podTemplate.Name, podTemplate.Spec.Subdomain, instance.Namespace, utils.GetClusterDomainName())
+		}
 	}
 
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
@@ -1231,9 +1243,12 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 		}
 	}
 
-	// case 1: head   => Use LOCAL_HOST
+	// case 1: head   => Use LOCAL_HOST. Under TLS use fqdnRayIP instead.
 	// case 2: worker => Use fqdnRayIP (fully qualified domain name)
 	ip := utils.LOCAL_HOST
+	if utils.EnvVarExists(utils.RAY_USE_TLS, container.Env) {
+		ip = fqdnRayIP
+	}
 	if rayNodeType == rayv1.WorkerNode {
 		ip = fqdnRayIP
 		container.Env = append(container.Env,
