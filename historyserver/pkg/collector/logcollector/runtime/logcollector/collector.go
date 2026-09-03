@@ -44,7 +44,12 @@ type RayLogHandler struct {
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
+	RotatedLogScanInterval time.Duration
 	mu                     sync.RWMutex
+	// rotatedMu serializes rotated log uploads so the periodic scan, shutdown
+	// and prev-logs paths cannot upload one generation twice.
+	rotatedMu       sync.Mutex
+	rotatedUploaded map[string]struct{}
 }
 
 func (r *RayLogHandler) GetRayNodeName() string {
@@ -82,6 +87,12 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	go r.PollActiveSessionChanges()
+
+	rotatedScanStopped := make(chan struct{})
+	go func() {
+		defer close(rotatedScanStopped)
+		r.scanRotatedLogs(stop)
+	}()
 	var periodicPollResults <-chan periodicPollResult
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
@@ -107,6 +118,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 			r.processAdditionalEndpoints(periodicResult)
 		})
 	}
+	// Join the scanner before the final collection so no scan outlives the collector.
+	<-rotatedScanStopped
 	r.processSessionLatestLogs()
 	wg.Wait()
 
@@ -180,6 +193,10 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 
 		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
 		if !info.Type().IsRegular() {
+			return nil
+		}
+
+		if r.collectRotatedLog(path, logsDir, sessionID, nodeID) {
 			return nil
 		}
 
@@ -606,6 +623,10 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
 		if !info.Type().IsRegular() {
+			return nil
+		}
+
+		if r.collectRotatedLog(path, logsDir, sessionID, nodeID) {
 			return nil
 		}
 

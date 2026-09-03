@@ -78,6 +78,11 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 		eventsDir := path.Join(clusterlogs.RelLogsDir(clusterInfo.SessionName, nodeID), "events")
 		eventFileNames := r.reader.ListFiles(clusterLogPathPrefix, eventsDir)
 		for _, fileName := range eventFileNames {
+			// Rotated generations are collected for log retrieval only: they carry no
+			// ordering relative to the active file, so they stay out of event ingestion.
+			if utils.IsRotatedLogName(fileName) {
+				continue
+			}
 			if !strings.HasPrefix(fileName, "event_") || !strings.HasSuffix(fileName, ".log") {
 				continue
 			}
