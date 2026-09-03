@@ -33,9 +33,19 @@ const (
 	// Real usage can exceed it in three ways:
 	//   - add-then-evict: cache momentarily holds oldTotal + newEntry
 	//   - one large session: a single snapshot bigger than the whole budget is kept
-	//   - size proxy: entries are measured by JSON length, which undercounts the live Go object graph
+	//   - size proxy: entries are charged JSON length * sessionSnapshotHeapFactor, an estimate of the live heap
 	DefaultSessionCacheMaxMemory = "2Gi"
+	// sessionSnapshotHeapFactor scales a snapshot's JSON length to its live Go heap.
+	// Measured at 1.1x to 2.1x on a small sample of real Ray events; 2.5 leaves
+	// margin for real-world data.
+	// Ref: https://github.com/ray-project/kuberay/pull/5208#discussion_r3890261932
+	sessionSnapshotHeapFactor = 2.5
 )
+
+// estimateHeapBytes approximates the live heap of a snapshot from its JSON length.
+func estimateHeapBytes(jsonLen int) int {
+	return int(float64(jsonLen) * sessionSnapshotHeapFactor)
+}
 
 // ParseSessionCacheMaxMemory converts a Kubernetes quantity into a
 // byte count.
@@ -58,7 +68,7 @@ type processor interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
-// cacheEntry is a cached snapshot plus its JSON size for the byte budget.
+// cacheEntry is a cached snapshot plus its estimated heap size for the byte budget.
 type cacheEntry struct {
 	snap *eventserver.SessionSnapshot
 	size int
@@ -183,7 +193,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 	}
 }
 
-// putSnapshot caches a snapshot. It is marshaled once only to measure its size.
+// putSnapshot caches a snapshot. It is marshaled once only to estimate its size.
 func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) error {
 	encoded, err := json.Marshal(snap)
 	if err != nil {
@@ -193,7 +203,7 @@ func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cache.Add(clusterSessionKey, cacheEntry{snap: snap, size: len(encoded)})
+	s.cache.Add(clusterSessionKey, cacheEntry{snap: snap, size: estimateHeapBytes(len(encoded))})
 	s.evictToByteBudget()
 	return nil
 }

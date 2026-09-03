@@ -504,7 +504,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 
 	// Budget large enough for one richSnapshot but not two.
 	enc1, _ := json.Marshal(s1)
-	maxBytes := len(enc1) + 1
+	maxBytes := estimateHeapBytes(len(enc1)) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
 	sl.putSnapshot(olderKey, s1)

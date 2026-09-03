@@ -63,12 +63,10 @@ spec:
         # - --use-auth-token-mode=true
         ports:
         - containerPort: 8080
-        args:
-        # We store Go structs in the cache but estimate their size by JSON length, and the actual heap size can be ~2.5x the estimate.
-        # Set the cache soft bound to 4 GiB. The worst-case usage is 4 GiB * 2.5 = 10 GiB, leaving ~2 GiB of the 12 GiB limit as headroom.
-        # Ref for the estimate: https://github.com/ray-project/kuberay/pull/5208#discussion_r3890261932
-        - --session-cache-max-memory=4Gi
+        # Cache is soft-bounded at 8 GiB; 12 GiB leaves headroom for cold loads, responses, and GC.
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
+        args:
+        - --session-cache-max-memory=8Gi
         resources:
           requests:
             cpu: "500m"
