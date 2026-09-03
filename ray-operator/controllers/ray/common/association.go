@@ -217,3 +217,19 @@ func RayServiceHTTPRouteNamespacedName(rayService *rayv1.RayService) types.Names
 		Namespace: rayService.Namespace,
 	}
 }
+
+func RayServiceGatewayLabels(rayService *rayv1.RayService) map[string]string {
+	return map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: rayService.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+	}
+}
+
+func IsGatewayResourceOwnedByRayService(obj metav1.Object, rayService *rayv1.RayService) bool {
+	if metav1.IsControlledBy(obj, rayService) {
+		return true
+	}
+	labels := obj.GetLabels()
+	return labels[utils.RayOriginatedFromCRNameLabelKey] == rayService.Name &&
+		labels[utils.RayOriginatedFromCRDLabelKey] == utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
+}
