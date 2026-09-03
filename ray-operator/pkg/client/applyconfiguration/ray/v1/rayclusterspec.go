@@ -44,12 +44,12 @@ type RayClusterSpecApplyConfiguration struct {
 	// the operator enables mTLS using cert-manager to provision and manage certificates.
 	// Requires the RayClusterMTLS feature gate on the operator.
 	TLSOptions *TLSOptionsApplyConfiguration `json:"tlsOptions,omitempty"`
-	// PodFQDN gives each Ray pod a resolvable per-pod DNS name (FQDN) via
-	// spec.hostname + spec.subdomain and a headless Service.
-	// When nil, the feature is disabled entirely. See PodFQDNMode for the available modes.
-	// This field is immutable on RayCluster as existing pods are not updated in place, so
-	// changing it on a live cluster would leave nodes registered under mixed identities.
-	PodFQDN *PodFQDNOptionsApplyConfiguration `json:"podFQDN,omitempty"`
+	// EnablePodFQDN gives each worker pod a stable DNS name
+	// <pod-name>.<cluster>-headless.<namespace>.svc.<cluster-domain> via spec.hostname,
+	// spec.subdomain and a headless Service. Ray itself keeps using pod IPs.
+	// Immutable: existing pods are not updated in place, so changing it on a live cluster
+	// would leave nodes registered under mixed identities.
+	EnablePodFQDN *bool `json:"enablePodFQDN,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -158,11 +158,11 @@ func (b *RayClusterSpecApplyConfiguration) WithTLSOptions(value *TLSOptionsApply
 	return b
 }
 
-// WithPodFQDN sets the PodFQDN field in the declarative configuration to the given value
+// WithEnablePodFQDN sets the EnablePodFQDN field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the PodFQDN field is set to the value of the last call.
-func (b *RayClusterSpecApplyConfiguration) WithPodFQDN(value *PodFQDNOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
-	b.PodFQDN = value
+// If called multiple times, the EnablePodFQDN field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithEnablePodFQDN(value bool) *RayClusterSpecApplyConfiguration {
+	b.EnablePodFQDN = &value
 	return b
 }
 

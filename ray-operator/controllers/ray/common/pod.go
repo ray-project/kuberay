@@ -236,13 +236,6 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
 
-	// Register the head with its service DNS name instead of the pod IP.
-	if utils.IsHostnameRegistrationEnabled(&instance.Spec) {
-		if _, ok := headSpec.RayStartParams["node-ip-address"]; !ok {
-			headSpec.RayStartParams["node-ip-address"] = utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
-		}
-	}
-
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -688,8 +681,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
 	}
-	// Set hostname and subdomain if spec.PodFQDN is set to get per-Pod FQDN. Skip if a Subdomain
-	// is already set (e.g. TPU multi-host webhook) to avoid breaking that setup.
+	// Set hostname and subdomain to get a per-Pod FQDN. Skip if a Subdomain is already set
+	// (e.g. TPU multi-host webhook) to avoid breaking that setup.
 	if utils.IsPodFQDNEnabled(&instance.Spec) && podTemplate.Spec.Subdomain == "" {
 		// We want to make the Hostname the same as the Pod name for easier debugging. Therefore we need
 		// to generate the suffix here instead of using GenerateName. A name collision will fail with
@@ -698,12 +691,6 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.GenerateName = ""
 		podTemplate.Spec.Hostname = podTemplate.Name
 		podTemplate.Spec.Subdomain = instance.Name + utils.DashSymbol + utils.HeadlessServiceSuffix
-
-		// Set node-ip-address as FQDN if spec.PodFQDN.Mode is set to RegisterAsNodeAddress
-		if _, ok := workerSpec.RayStartParams["node-ip-address"]; !ok && utils.IsHostnameRegistrationEnabled(&instance.Spec) {
-			workerSpec.RayStartParams["node-ip-address"] = fmt.Sprintf("%s.%s.%s.svc.%s",
-				podTemplate.Name, podTemplate.Spec.Subdomain, instance.Namespace, utils.GetClusterDomainName())
-		}
 	}
 
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)

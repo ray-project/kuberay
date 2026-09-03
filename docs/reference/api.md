@@ -485,39 +485,6 @@ _Appears in:_
 | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-policy-deny-all sample. |  |  |
 
 
-#### PodFQDNMode
-
-_Underlying type:_ _string_
-
-PodFQDNMode describes how per-pod DNS names are used.
-
-
-
-_Appears in:_
-- [PodFQDNOptions](#podfqdnoptions)
-
-| Field | Description |
-| --- | --- |
-| `DNSOnly` | PodFQDNModeDNSOnly creates per-pod DNS records (pod hostname/subdomain plus the<br />headless Service) without changing how Ray nodes register. Ray keeps using pod IPs;<br />the FQDNs are for external consumers.<br /> |
-| `RegisterAsNodeAddress` | PodFQDNModeRegisterAsNodeAddress additionally injects each pod's FQDN as the Ray<br />--node-ip-address, so Ray nodes register and address each other by DNS name instead<br />of pod IP.<br />Only supports autoscaler v2, v1 matches pods to Ray nodes by IP string, which never<br />matches an FQDN, so idle scale-down never triggers.<br /> |
-
-
-#### PodFQDNOptions
-
-
-
-PodFQDNOptions configures per-pod DNS names for Ray pods.
-
-
-
-_Appears in:_
-- [RayClusterSpec](#rayclusterspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `mode` _[PodFQDNMode](#podfqdnmode)_ | Mode selects how the per-pod FQDNs are used. Defaults to DNSOnly. | DNSOnly | Enum: [DNSOnly RegisterAsNodeAddress] <br /> |
-
-
 #### RayCluster
 
 
@@ -564,7 +531,7 @@ _Appears in:_
 | `historyServerOptions` _[HistoryServerOptions](#historyserveroptions)_ | HistoryServerOptions used for history server related configuration |  |  |
 | `networkPolicy` _[NetworkPolicyConfig](#networkpolicyconfig)_ | NetworkPolicy specifies optional configuration for network isolation.<br />When set, separate NetworkPolicies are created for head and worker pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic.<br />Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via Head/Worker EgressRules or the cluster will fail to start. |  |  |
 | `tlsOptions` _[TLSOptions](#tlsoptions)_ | TLSOptions specifies optional TLS encryption settings for the RayCluster.<br />If omitted or Enabled is false, TLS is disabled. When Enabled is true,<br />the operator enables mTLS using cert-manager to provision and manage certificates.<br />Requires the RayClusterMTLS feature gate on the operator. |  |  |
-| `podFQDN` _[PodFQDNOptions](#podfqdnoptions)_ | PodFQDN gives each Ray pod a resolvable per-pod DNS name (FQDN) via<br />spec.hostname + spec.subdomain and a headless Service.<br />When nil, the feature is disabled entirely. See PodFQDNMode for the available modes.<br />This field is immutable on RayCluster as existing pods are not updated in place, so<br />changing it on a live cluster would leave nodes registered under mixed identities. |  |  |
+| `enablePodFQDN` _boolean_ | EnablePodFQDN gives each worker pod a stable DNS name<br /><pod-name>.<cluster>-headless.<namespace>.svc.<cluster-domain> via spec.hostname,<br />spec.subdomain and a headless Service. Ray itself keeps using pod IPs.<br />Immutable: existing pods are not updated in place, so changing it on a live cluster<br />would leave nodes registered under mixed identities. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |

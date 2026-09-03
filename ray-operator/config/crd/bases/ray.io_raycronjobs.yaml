@@ -434,6 +434,8 @@ spec:
                         type: object
                       enableInTreeAutoscaling:
                         type: boolean
+                      enablePodFQDN:
+                        type: boolean
                       gcsFaultToleranceOptions:
                         properties:
                           backend:
@@ -5397,15 +5399,6 @@ spec:
                             x-kubernetes-list-map-keys:
                             - groupName
                             x-kubernetes-list-type: map
-                        type: object
-                      podFQDN:
-                        properties:
-                          mode:
-                            default: DNSOnly
-                            enum:
-                            - DNSOnly
-                            - RegisterAsNodeAddress
-                            type: string
                         type: object
                       rayVersion:
                         type: string

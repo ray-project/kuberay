@@ -340,6 +340,8 @@ spec:
                 type: object
               enableInTreeAutoscaling:
                 type: boolean
+              enablePodFQDN:
+                type: boolean
               gcsFaultToleranceOptions:
                 properties:
                   backend:
@@ -5304,15 +5306,6 @@ spec:
                     - groupName
                     x-kubernetes-list-type: map
                 type: object
-              podFQDN:
-                properties:
-                  mode:
-                    default: DNSOnly
-                    enum:
-                    - DNSOnly
-                    - RegisterAsNodeAddress
-                    type: string
-                type: object
               rayVersion:
                 type: string
               suspend:
@@ -9321,10 +9314,10 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - message: spec.podFQDN is immutable; delete and recreate the RayCluster to
-            change it
-          rule: has(self.spec.podFQDN) == has(oldSelf.spec.podFQDN) && (!has(self.spec.podFQDN)
-            || self.spec.podFQDN == oldSelf.spec.podFQDN)
+        - message: spec.enablePodFQDN is immutable; delete and recreate the RayCluster
+            to change it
+          rule: has(self.spec.enablePodFQDN) == has(oldSelf.spec.enablePodFQDN) &&
+            (!has(self.spec.enablePodFQDN) || self.spec.enablePodFQDN == oldSelf.spec.enablePodFQDN)
     served: true
     storage: true
     subresources:

@@ -3,23 +3,11 @@ kind: RayCluster
 metadata:
   name: raycluster-pod-fqdn
 spec:
-  # podFQDN gives each Ray pod a resolvable per-pod DNS name (immutable field):
-  #   <hostname>.<cluster-name>-headless.<namespace>.svc.<cluster-domain>
-  # Modes:
-  #   DNSOnly               - (default) only create per-pod DNS records; Ray keeps
-  #                           registering with pod IPs.
-  #   RegisterAsNodeAddress - also inject the FQDN as `--node-ip-address`, so Ray
-  #                           nodes register by DNS name instead of pod IP.
-  podFQDN:
-    mode: RegisterAsNodeAddress
+  # enablePodFQDN gives each worker pod a resolvable per-pod DNS name (immutable field):
+  #   <pod-name>.<cluster-name>-headless.<namespace>.svc.<cluster-domain>
+  # The pod name equals the hostname. Ray keeps registering with pod IPs.
+  enablePodFQDN: true
   enableInTreeAutoscaling: true
-  # RegisterAsNodeAddress requires autoscaler v2 (the default for Ray >= 2.47).
-  # v1 matches pods to Ray nodes by IP string, which never matches an FQDN:
-  # scale-up still works, but idle scale-down never triggers, leaking worker pods.
-  # DNSOnly works with both versions.
-  # autoscalerOptions:
-  #   version: v2
-  #   idleTimeoutSeconds: 60
   rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams:
