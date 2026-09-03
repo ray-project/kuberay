@@ -22,6 +22,11 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
+	// IdleTerminate is set to true by the Ray autoscaler when the RayCluster has
+	// had no attached driver for noDriverTimeoutSeconds and the policy is
+	// Suspend. Setting it back to false resumes the RayCluster.
+	// +optional
+	IdleTerminate *bool `json:"idleTerminate,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -491,6 +496,14 @@ type ScaleStrategy struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Delete;Suspend
+type NoDriverTimeoutPolicy string
+
+const (
+	DeleteIdleTerminationPolicy  NoDriverTimeoutPolicy = "Delete"
+	SuspendIdleTerminationPolicy NoDriverTimeoutPolicy = "Suspend"
+)
+
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
@@ -512,6 +525,15 @@ type AutoscalerOptions struct {
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering RayCluster deletion.
+	// The autoscaler v2 tracks driver activity and, when no driver has been attached for this duration, sets the
+	// `ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster.
+	// +optional
+	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
+	// NoDriverTimeoutPolicy is "Delete", or "Suspend". The default policy is "Delete".
+	// Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.
+	// Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds.
+	NoDriverTimeoutPolicy *NoDriverTimeoutPolicy `json:"noDriverTimeoutPolicy,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
@@ -662,6 +684,8 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+	// RayClusterIdleTerminated indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
+	RayClusterIdleTerminated RayClusterConditionType = "RayClusterIdleTerminated"
 )
 
 // HeadInfo gives info about head

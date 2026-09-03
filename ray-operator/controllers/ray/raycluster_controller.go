@@ -351,9 +351,27 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		}
 	}
 
-	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		logger.Info("RayCluster is being deleted, just ignore")
-		return ctrl.Result{}, nil
+	// When the cluster has had no user driver attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds,
+	// the Ray autoscaler v2 sets the `ray.io/no-driver-idle-termination` finalizer.
+	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) {
+		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+			if r.hasNoDriverTimeoutFinalizer(instance) {
+				logger.Info("Deleting RayCluster because no user driver has been attached for longer than noDriverTimeoutSeconds",
+					"noDriverTimeoutSeconds", *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
+					string(utils.DeletedRayClusterNoDriverTimeout), string(utils.DeleteAction),
+					"Deleting RayCluster %s/%s because no user driver has been attached for longer than noDriverTimeoutSeconds=%d",
+					instance.Namespace, instance.Name, *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+
+				// Remove finalizer to allow deletion to proceed
+				controllerutil.RemoveFinalizer(instance, utils.NoDriverIdleTerminationFinalizer)
+				if err := r.Update(ctx, instance); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+			}
+
+			return ctrl.Result{}, nil
+		}
 	}
 
 	reconcileFuncs := []reconcileFunc{
@@ -941,7 +959,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if suspendStatus == rayv1.RayClusterSuspending ||
-		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
+		(!statusConditionGateEnabled && utils.IsRayClusterSuspendOrIdleTerminate(instance)) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection), string(utils.DeleteAction),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
@@ -960,7 +978,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return nil // stop reconcilePods because the cluster is suspended.
 		}
 		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
-		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+		if utils.IsRayClusterSuspendOrIdleTerminate(instance) {
 			return nil // stop reconcilePods because the cluster is going to suspend.
 		}
 	}
@@ -2075,14 +2093,18 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Reason: string(rayv1.RayClusterSuspending),
 					Status: metav1.ConditionFalse,
 				})
+				suspendReason := rayv1.RayClusterSuspended
+				if instance.Spec.IdleTerminate != nil && *instance.Spec.IdleTerminate {
+					suspendReason = rayv1.RayClusterIdleTerminated
+				}
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
-					Reason: string(rayv1.RayClusterSuspended),
+					Reason: string(suspendReason),
 					Status: metav1.ConditionTrue,
 				})
 			}
 		case rayv1.RayClusterSuspended:
-			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
+			if !utils.IsRayClusterSuspendOrIdleTerminate(instance) {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
 					Reason: string(rayv1.RayClusterSuspended),
@@ -2095,7 +2117,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 				Reason: string(rayv1.RayClusterSuspended),
 				Status: metav1.ConditionFalse,
 			})
-			if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
+			if utils.IsRayClusterSuspendOrIdleTerminate(instance) {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspending),
 					Reason: string(rayv1.RayClusterSuspending),
@@ -2111,7 +2133,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 	}
 
-	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
+	if utils.IsRayClusterSuspendOrIdleTerminate(instance) && len(runtimePods.Items) == 0 {
+		// TODO: this looks like it should be replaced by meta.SetStatusCondition()
 		newInstance.Status.State = rayv1.Suspended
 	}
 
@@ -2473,4 +2496,9 @@ func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, in
 		deletionAge, storageNamespace)
 
 	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
+}
+
+// hasNoDriverTimeoutFinalizer reports whether the no dirver idle termination finalizer is presented in the RayCluster
+func (r *RayClusterReconciler) hasNoDriverTimeoutFinalizer(cluster *rayv1.RayCluster) bool {
+	return controllerutil.ContainsFinalizer(cluster, utils.NoDriverIdleTerminationFinalizer)
 }

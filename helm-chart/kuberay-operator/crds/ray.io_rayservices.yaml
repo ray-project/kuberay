@@ -187,6 +187,14 @@ spec:
                         type: string
                       imagePullPolicy:
                         type: string
+                      noDriverTimeoutPolicy:
+                        enum:
+                        - Delete
+                        - Suspend
+                        type: string
+                      noDriverTimeoutSeconds:
+                        format: int32
+                        type: integer
                       resources:
                         properties:
                           claims:
@@ -4710,6 +4718,8 @@ spec:
                             type: object
                         type: object
                     type: object
+                  idleTerminate:
+                    type: boolean
                   managedBy:
                     type: string
                     x-kubernetes-validations:

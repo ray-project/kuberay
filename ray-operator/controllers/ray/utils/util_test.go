@@ -1104,6 +1104,51 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	}
 }
 
+func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
+	tests := map[string]struct {
+		spec     *rayv1.RayClusterSpec
+		expected bool
+	}{
+		"should be false when spec is nil": {
+			spec:     nil,
+			expected: false,
+		},
+		"should be false when autoscaling is disabled": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(false),
+				AutoscalerOptions:       &rayv1.AutoscalerOptions{NoDriverTimeoutSeconds: new(int32(600))},
+			},
+			expected: false,
+		},
+		"should be false when autoscaler options is nil": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+			},
+			expected: false,
+		},
+		"should be false when noDriverTimeoutSeconds is unset": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions:       &rayv1.AutoscalerOptions{},
+			},
+			expected: false,
+		},
+		"should be true when autoscaling is enabled and noDriverTimeoutSeconds is set": {
+			spec: &rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions:       &rayv1.AutoscalerOptions{NoDriverTimeoutSeconds: new(int32(600))},
+			},
+			expected: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsNoDriverTimeoutTerminationEnabled(tc.spec))
+		})
+	}
+}
+
 func TestIsAutoscalingV2Enabled(t *testing.T) {
 	tests := map[string]struct {
 		spec     *rayv1.RayClusterSpec

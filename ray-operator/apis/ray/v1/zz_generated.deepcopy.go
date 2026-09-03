@@ -86,6 +86,16 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.NoDriverTimeoutSeconds != nil {
+		in, out := &in.NoDriverTimeoutSeconds, &out.NoDriverTimeoutSeconds
+		*out = new(int32)
+		**out = **in
+	}
+	if in.NoDriverTimeoutPolicy != nil {
+		in, out := &in.NoDriverTimeoutPolicy, &out.NoDriverTimeoutPolicy
+		*out = new(NoDriverTimeoutPolicy)
+		**out = **in
+	}
 	if in.UpscalingMode != nil {
 		in, out := &in.UpscalingMode, &out.UpscalingMode
 		*out = new(UpscalingMode)
@@ -628,6 +638,11 @@ func (in *RayClusterSpec) DeepCopyInto(out *RayClusterSpec) {
 	}
 	if in.Suspend != nil {
 		in, out := &in.Suspend, &out.Suspend
+		*out = new(bool)
+		**out = **in
+	}
+	if in.IdleTerminate != nil {
+		in, out := &in.IdleTerminate, &out.IdleTerminate
 		*out = new(bool)
 		**out = **in
 	}
