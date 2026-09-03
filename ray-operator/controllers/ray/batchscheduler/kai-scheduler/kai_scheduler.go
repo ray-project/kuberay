@@ -75,6 +75,11 @@ func (k *KaiScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (
 	return false, nil
 }
 
+func (k *KaiScheduler) CleanupOnSuspend(_ context.Context, _ metav1.Object) (bool, error) {
+	// KaiScheduler doesn't need cleanup
+	return false, nil
+}
+
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
 	return &KaiScheduler{}, nil
 }

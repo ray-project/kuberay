@@ -85,6 +85,11 @@ func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnCompletion(ctx context.Context
 	return k.deleteSchedulingResources(ctx, rayCluster)
 }
 
+func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnSuspend(_ context.Context, _ metav1.Object) (bool, error) {
+	// The Workload and PodGroup reserve nothing without Pods and are reused on resume.
+	return false, nil
+}
+
 // The methods below adapt this package to kuberneteswas.Provider.
 
 func (p *Provider) GroupVersion() schema.GroupVersion {
