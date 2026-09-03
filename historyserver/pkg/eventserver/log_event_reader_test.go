@@ -185,17 +185,21 @@ func TestReadEventFile(t *testing.T) {
 }
 
 func TestReadLogEvents(t *testing.T) {
-	t.Run("reads events from multiple nodes, skips non-event files", func(t *testing.T) {
+	t.Run("reads events from multiple nodes, skips non-event and rotated files", func(t *testing.T) {
 		mock := newLogEventMockReader()
 
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/", "node2/", "stray_file.txt"})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events", []string{"event_GCS.log", "debug.log"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events",
+			[]string{"event_GCS.log", "debug.log", "event_GCS.rotated.4390125-65376.log"})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/logs/events", []string{"event_RAYLET.log"})
 
 		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"from node1","timestamp":"1770635700"}`+"\n")
 		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node2/logs/events/event_RAYLET.log",
 			`{"event_id":"e2","source_type":"RAYLET","severity":"WARNING","message":"from node2","timestamp":"1770635800"}`+"\n")
+		// A collected rotated generation of event_GCS.log; ingesting it would add e3.
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events/event_GCS.rotated.4390125-65376.log",
+			`{"event_id":"e3","source_type":"GCS","severity":"INFO","message":"rotated generation","timestamp":"1770635600"}`+"\n")
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()
@@ -205,7 +209,7 @@ func TestReadLogEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		events := store.GetAllEvents("cluster_ns_session1")
-		assert.Len(t, events["global"], 2, "should read events from both nodes")
+		assert.Len(t, events["global"], 2, "should read events from both nodes, skipping non-event and rotated files")
 	})
 
 	t.Run("handles empty cluster with no nodes", func(t *testing.T) {

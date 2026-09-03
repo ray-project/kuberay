@@ -489,6 +489,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterLogPathPrefix, sessionID, n
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
 	for _, file := range files {
+		// A rotated generation is never the canonical stream for a pid.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasSuffix(file, pidSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -706,6 +710,11 @@ func (s *ServerHandler) findWorkerLogFile(clusterLogPathPrefix, sessionID, nodeI
 	workerSuffix := fmt.Sprintf(".%s", suffix)
 
 	for _, file := range files {
+		// A worker stream can span several rotated generations, so none of them is
+		// the canonical file a task or actor lookup should resolve to.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasPrefix(file, workerPrefix) && strings.HasSuffix(file, workerSuffix) {
 			return nodeIDHex, file, nil
 		}
