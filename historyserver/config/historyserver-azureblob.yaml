@@ -45,7 +45,7 @@ spec:
         - --storage-backend=azureblob
         ports:
         - containerPort: 8080
-        # Cache is soft-bounded at 8 GiB; 12 GiB leaves decode headroom.
+        # Cache is soft-bounded at 8 GiB; 12 GiB leaves headroom for cold loads, responses, and GC.
         # The 2 GiB request keeps examples schedulable; size production requests to residency.
         args:
         - --session-cache-max-memory=8Gi

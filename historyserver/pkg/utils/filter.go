@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -178,7 +179,8 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 		return []eventtypes.Task{}, 0
 	}
 
-	// Sort tasks by task_id and task_attempt.
+	// The caller's slice may be a shared cached snapshot; never sort it in place.
+	tasks = slices.Clone(tasks)
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].TaskID < tasks[j].TaskID || (tasks[i].TaskID == tasks[j].TaskID && tasks[i].TaskAttempt < tasks[j].TaskAttempt)
 	})
