@@ -143,14 +143,14 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- end }}
 {{- end }}
 
-{{- /* Create the name of the event forwarder cluster role to use. */ -}}
-{{- define "kuberay-operator.eventForwarderClusterRole.name" -}}
-{{- include "kuberay-operator.fullname" . -}}-event-forwarder
+{{- /* Create the name of the node event forwarder cluster role to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderClusterRole.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
 {{- end -}}
 
-{{- /* Create the name of the event forwarder cluster role binding to use. */ -}}
-{{- define "kuberay-operator.eventForwarderClusterRoleBinding.name" -}}
-{{- include "kuberay-operator.fullname" . -}}-event-forwarder
+{{- /* Create the name of the node event forwarder cluster role binding to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderClusterRoleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
 {{- end -}}
 
 {{- /* Create the name of the leader election role to use. */ -}}

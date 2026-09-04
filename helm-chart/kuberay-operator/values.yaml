@@ -163,9 +163,11 @@ featureGates:
   enabled: false
 - name: RayClusterHistoryServer
   enabled: false
+- name: RayNodeEventForwarder
+  enabled: false
 
-# Configurations for KubeRay event forwarder controller.
-eventForwarder:
+# Configurations for KubeRay node event forwarder controller.
+nodeEventForwarder:
   # -- Whether KubeRay operator should forward Kubernetes Node events to Ray custom resources.
   enabled: false
   # -- Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources.

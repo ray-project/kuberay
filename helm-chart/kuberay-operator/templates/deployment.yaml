@@ -129,16 +129,16 @@ spec:
             {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
             {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
-            {{- if and (hasKey .Values "eventForwarder") (hasKey .Values.eventForwarder "enabled") }}
-            {{- $argList = append $argList (printf "--enable-event-forwarder=%t" .Values.eventForwarder.enabled) -}}
-            {{- if .Values.eventForwarder.sources -}}
-            {{- $argList = append $argList (printf "--event-forwarder-sources=%s" (join "," .Values.eventForwarder.sources)) -}}
+            {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
+            {{- $argList = append $argList (printf "--enable-node-event-forwarder=%t" .Values.nodeEventForwarder.enabled) -}}
+            {{- if .Values.nodeEventForwarder.sources -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-sources=%s" (join "," .Values.nodeEventForwarder.sources)) -}}
             {{- end -}}
-            {{- if .Values.eventForwarder.reasons -}}
-            {{- $argList = append $argList (printf "--event-forwarder-reasons=%s" (join "," .Values.eventForwarder.reasons)) -}}
+            {{- if .Values.nodeEventForwarder.reasons -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-reasons=%s" (join "," .Values.nodeEventForwarder.reasons)) -}}
             {{- end -}}
-            {{- if .Values.eventForwarder.types -}}
-            {{- $argList = append $argList (printf "--event-forwarder-types=%s" (join "," .Values.eventForwarder.types)) -}}
+            {{- if .Values.nodeEventForwarder.types -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-types=%s" (join "," .Values.nodeEventForwarder.types)) -}}
             {{- end -}}
             {{- end -}}
             {{- if hasKey .Values "reconcileConcurrency" -}}

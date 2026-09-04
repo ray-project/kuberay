@@ -63,18 +63,18 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 			(*out)[key] = val
 		}
 	}
-	if in.EventForwarderSources != nil {
-		in, out := &in.EventForwarderSources, &out.EventForwarderSources
+	if in.NodeEventForwarderSources != nil {
+		in, out := &in.NodeEventForwarderSources, &out.NodeEventForwarderSources
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.EventForwarderReasons != nil {
-		in, out := &in.EventForwarderReasons, &out.EventForwarderReasons
+	if in.NodeEventForwarderReasons != nil {
+		in, out := &in.NodeEventForwarderReasons, &out.NodeEventForwarderReasons
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.EventForwarderTypes != nil {
-		in, out := &in.EventForwarderTypes, &out.EventForwarderTypes
+	if in.NodeEventForwarderTypes != nil {
+		in, out := &in.NodeEventForwarderTypes, &out.NodeEventForwarderTypes
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

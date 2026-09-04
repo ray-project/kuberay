@@ -154,7 +154,7 @@ func NewEventForwarderReconciler(mgr manager.Manager, options EventForwarderOpti
 
 	return &EventForwarderReconciler{
 		Client:    mgr.GetClient(),
-		Recorder:  mgr.GetEventRecorder("kuberay-event-forwarder"),
+		Recorder:  mgr.GetEventRecorder("kuberay-node-event-forwarder"),
 		filter:    newEventFilter(options),
 		forwarded: make(map[types.NamespacedName]forwardedRecord),
 	}, nil
@@ -188,12 +188,12 @@ func (r *EventForwarderReconciler) SetupWithManager(mgr ctrl.Manager, reconcileC
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("event-forwarder").
+		Named("node-event-forwarder").
 		For(&corev1.Event{}, builder.WithPredicates(forwardable)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
-				logger := ctrl.Log.WithName("controllers").WithName("EventForwarder")
+				logger := ctrl.Log.WithName("controllers").WithName("NodeEventForwarder")
 				if request != nil {
 					logger = logger.WithValues("Event", request.NamespacedName)
 				}

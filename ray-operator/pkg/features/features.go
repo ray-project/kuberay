@@ -96,6 +96,13 @@ const (
 	// selects the scheduler; it is mutually exclusive with --batch-scheduler and --enable-batch-scheduler.
 	// Requires a Kubernetes cluster that serves the scheduling.k8s.io API with GenericWorkload enabled.
 	KubernetesWAS featuregate.Feature = "KubernetesWAS"
+
+	// owner: @richabanker
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables selective forwarding of Kubernetes Node infrastructure events to Ray custom resources.
+	RayNodeEventForwarder featuregate.Feature = "RayNodeEventForwarder"
 )
 
 func init() {
@@ -114,6 +121,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 	KubernetesWAS:                    {Default: false, PreRelease: featuregate.Alpha},
+	RayNodeEventForwarder:            {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

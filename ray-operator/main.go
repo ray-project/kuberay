@@ -76,10 +76,10 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
-	var enableEventForwarder bool
-	var eventForwarderSources string
-	var eventForwarderReasons string
-	var eventForwarderTypes string
+	var enableNodeEventForwarder bool
+	var nodeEventForwarderSources string
+	var nodeEventForwarderReasons string
+	var nodeEventForwarderTypes string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -93,7 +93,8 @@ func main() {
 		&watchNamespace,
 		"watch-namespace",
 		"",
-		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.")
+		"Specify a list of namespaces to watch for custom resources, separated by commas. If left empty, all namespaces will be watched.",
+	)
 	flag.BoolVar(&forcedClusterUpgrade, "forced-cluster-upgrade", false,
 		"(Deprecated) Forced cluster upgrade flag")
 	flag.StringVar(&logFile, "log-file-path", "",
@@ -113,13 +114,13 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
-	flag.BoolVar(&enableEventForwarder, "enable-event-forwarder", false,
-		"Enable the Selective Event Forwarder, which re-emits Kubernetes Node events onto the Ray custom resources whose Pods run on the affected node.")
-	flag.StringVar(&eventForwarderSources, "event-forwarder-sources", "",
+	flag.BoolVar(&enableNodeEventForwarder, "enable-node-event-forwarder", false,
+		"Enable the Selective Node Event Forwarder, which re-emits Kubernetes Node events onto the Ray custom resources whose Pods run on the affected node.")
+	flag.StringVar(&nodeEventForwarderSources, "node-event-forwarder-sources", "",
 		"Comma-separated list of event sources to forward Node events from, e.g. node-problem-detector. Empty means all sources.")
-	flag.StringVar(&eventForwarderReasons, "event-forwarder-reasons", "",
+	flag.StringVar(&nodeEventForwarderReasons, "node-event-forwarder-reasons", "",
 		"Comma-separated list of event reasons to forward, e.g. XIDError,KernelDeadlock. Empty means all reasons.")
-	flag.StringVar(&eventForwarderTypes, "event-forwarder-types", "",
+	flag.StringVar(&nodeEventForwarderTypes, "node-event-forwarder-types", "",
 		"Comma-separated list of event types to forward (Warning, Normal). Empty defaults to Warning only.")
 
 	opts := k8szap.Options{
@@ -153,10 +154,10 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
-		config.EnableEventForwarder = enableEventForwarder
-		config.EventForwarderSources = splitCommaSeparated(eventForwarderSources)
-		config.EventForwarderReasons = splitCommaSeparated(eventForwarderReasons)
-		config.EventForwarderTypes = splitCommaSeparated(eventForwarderTypes)
+		config.EnableNodeEventForwarder = enableNodeEventForwarder
+		config.NodeEventForwarderSources = splitCommaSeparated(nodeEventForwarderSources)
+		config.NodeEventForwarderReasons = splitCommaSeparated(nodeEventForwarderReasons)
+		config.NodeEventForwarderTypes = splitCommaSeparated(nodeEventForwarderTypes)
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -264,7 +265,7 @@ func main() {
 	// These labels are provided to the manager cache as selectors for Job and Pod resources.
 	selectorsByObject, err := managercache.K8sControllerRuntimeCacheSelectors()
 	exitOnError(err, "unable to build manager cache ByObject")
-	if config.EnableEventForwarder {
+	if features.Enabled(features.RayNodeEventForwarder) && config.EnableNodeEventForwarder {
 		// Scope the Event informer server-side to Node events only; without this
 		// the event forwarder's watch would receive every Event in the cluster.
 		selectorsByObject[&corev1.Event{}] = managercache.EventForwarderCacheByObject()
@@ -380,23 +381,25 @@ func main() {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 
-	if config.EnableEventForwarder {
-		setupLog.Info("Event forwarder is enabled, starting EventForwarder controller",
-			"sources", config.EventForwarderSources, "reasons", config.EventForwarderReasons, "types", config.EventForwarderTypes)
+	if features.Enabled(features.RayNodeEventForwarder) && config.EnableNodeEventForwarder {
+		setupLog.Info("RayNodeEventForwarder is enabled, starting EventForwarder controller",
+			"sources", config.NodeEventForwarderSources, "reasons", config.NodeEventForwarderReasons, "types", config.NodeEventForwarderTypes)
 		if config.WatchNamespace != "" {
-			setupLog.Info("Event forwarder watches Kubernetes Events in all namespaces despite watchNamespace being set; "+
+			setupLog.Info("Node event forwarder watches Kubernetes Events in all namespaces despite watchNamespace being set; "+
 				"the operator's ServiceAccount needs cluster-scoped get/list/watch on core Events",
 				"watchNamespace", config.WatchNamespace)
 		}
 		eventForwarderOptions := ray.EventForwarderOptions{
-			Sources: config.EventForwarderSources,
-			Reasons: config.EventForwarderReasons,
-			Types:   config.EventForwarderTypes,
+			Sources: config.NodeEventForwarderSources,
+			Reasons: config.NodeEventForwarderReasons,
+			Types:   config.NodeEventForwarderTypes,
 		}
 		eventForwarder, err := ray.NewEventForwarderReconciler(mgr, eventForwarderOptions)
 		exitOnError(err, "unable to create controller", "controller", "EventForwarder")
 		exitOnError(eventForwarder.SetupWithManager(mgr, config.ReconcileConcurrency),
 			"unable to setup controller", "controller", "EventForwarder")
+	} else {
+		setupLog.Info("RayNodeEventForwarder or enableNodeEventForwarder is disabled, skipping EventForwarder controller setup")
 	}
 
 	if features.Enabled(features.RayClusterNetworkPolicy) {

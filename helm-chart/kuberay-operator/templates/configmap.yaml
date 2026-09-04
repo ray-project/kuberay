@@ -20,19 +20,19 @@ data:
     {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
     enableMetrics: {{ .Values.metrics.enabled }}
     {{- end }}
-    {{- if and (hasKey .Values "eventForwarder") (hasKey .Values.eventForwarder "enabled") }}
-    enableEventForwarder: {{ .Values.eventForwarder.enabled }}
-    {{- if .Values.eventForwarder.sources }}
-    eventForwarderSources:
-    {{- toYaml .Values.eventForwarder.sources | nindent 4 }}
+    {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
+    enableNodeEventForwarder: {{ .Values.nodeEventForwarder.enabled }}
+    {{- if .Values.nodeEventForwarder.sources }}
+    nodeEventForwarderSources:
+    {{- toYaml .Values.nodeEventForwarder.sources | nindent 4 }}
     {{- end }}
-    {{- if .Values.eventForwarder.reasons }}
-    eventForwarderReasons:
-    {{- toYaml .Values.eventForwarder.reasons | nindent 4 }}
+    {{- if .Values.nodeEventForwarder.reasons }}
+    nodeEventForwarderReasons:
+    {{- toYaml .Values.nodeEventForwarder.reasons | nindent 4 }}
     {{- end }}
-    {{- if .Values.eventForwarder.types }}
-    eventForwarderTypes:
-    {{- toYaml .Values.eventForwarder.types | nindent 4 }}
+    {{- if .Values.nodeEventForwarder.types }}
+    nodeEventForwarderTypes:
+    {{- toYaml .Values.nodeEventForwarder.types | nindent 4 }}
     {{- end }}
     {{- end }}
     {{- if hasKey .Values "reconcileConcurrency" }}

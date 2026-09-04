@@ -6,11 +6,21 @@ or "kube-system"). That needs a ClusterRole even for a singleNamespaceInstall,
 where the operator is otherwise granted namespaced Roles only. Without it the
 Event informer never syncs and the operator fails to start.
 */ -}}
-{{- if and .Values.rbacEnable .Values.eventForwarder.enabled }}
+{{- $nodeEventForwarderConfigEnabled := false -}}
+{{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") -}}
+  {{- $nodeEventForwarderConfigEnabled = .Values.nodeEventForwarder.enabled -}}
+{{- end -}}
+{{- $featureGateEnabled := false -}}
+{{- range .Values.featureGates -}}
+  {{- if eq .name "RayNodeEventForwarder" -}}
+    {{- $featureGateEnabled = .enabled -}}
+  {{- end -}}
+{{- end -}}
+{{- if and .Values.rbacEnable $nodeEventForwarderConfigEnabled $featureGateEnabled }}
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "kuberay-operator.eventForwarderClusterRole.name" . }}
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRole.name" . }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
 rules:
@@ -26,7 +36,7 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "kuberay-operator.eventForwarderClusterRoleBinding.name" . }}
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRoleBinding.name" . }}
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
 subjects:
@@ -36,5 +46,5 @@ subjects:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "kuberay-operator.eventForwarderClusterRole.name" . }}
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRole.name" . }}
 {{- end }}
