@@ -30,7 +30,7 @@ tests:
               - update
               - watch
 
-  - it: Should include scheduling.k8s.io RBAC rules for Kubernetes WAS v1alpha2
+  - it: Should include scheduling.k8s.io RBAC rules for Kubernetes WAS v1alpha3
     set:
       singleNamespaceInstall: true
       crNamespacedRbacEnable: true

@@ -1,4 +1,4 @@
-package v1alpha2
+package v1alpha3
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,7 +24,6 @@ import (
 	kuberneteswas "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was"
 	batchschedulerutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	schedulingv1alpha2 "github.com/ray-project/kuberay/ray-operator/internal/scheduling/v1alpha2"
 )
 
 const (
@@ -38,20 +38,20 @@ const (
 	skipReasonAutoscaling            = "autoscaling is not yet supported"
 )
 
-type KubernetesWASV1Alpha2Scheduler struct {
+type KubernetesWASV1Alpha3Scheduler struct {
 	cli client.Client
 }
 
-// Provider implements kuberneteswas.Provider for scheduling.k8s.io/v1alpha2.
+// Provider implements kuberneteswas.Provider for scheduling.k8s.io/v1alpha3.
 type Provider struct{}
 
 func init() {
 	kuberneteswas.RegisterProvider(&Provider{})
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) Name() string { return kuberneteswas.GetPluginName() }
+func (k *KubernetesWASV1Alpha3Scheduler) Name() string { return kuberneteswas.GetPluginName() }
 
-func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
+func (k *KubernetesWASV1Alpha3Scheduler) DoBatchSchedulingOnSubmission(ctx context.Context, object metav1.Object) error {
 	rayCluster, ok := object.(*rayv1.RayCluster)
 	if !ok {
 		return nil
@@ -66,7 +66,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) DoBatchSchedulingOnSubmission(ctx conte
 	return k.syncSchedulingResources(ctx, rayCluster)
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
+func (k *KubernetesWASV1Alpha3Scheduler) AddMetadataToChildResource(_ context.Context, parent metav1.Object, child metav1.Object, _ string) {
 	rayCluster, ok := parent.(*rayv1.RayCluster)
 	if !ok || schedulingSkipReason(rayCluster) != "" {
 		return
@@ -77,7 +77,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) AddMetadataToChildResource(_ context.Co
 	setSchedulingGroup(child, clusterPodGroupName(rayCluster.Name))
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
+func (k *KubernetesWASV1Alpha3Scheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
 	rayCluster, ok := object.(*rayv1.RayCluster)
 	if !ok {
 		return false, nil
@@ -88,29 +88,29 @@ func (k *KubernetesWASV1Alpha2Scheduler) CleanupOnCompletion(ctx context.Context
 // The methods below adapt this package to kuberneteswas.Provider.
 
 func (p *Provider) GroupVersion() schema.GroupVersion {
-	return schedulingv1alpha2.SchemeGroupVersion
+	return schedulingv1alpha3.SchemeGroupVersion
 }
 
 func (p *Provider) Available(config *rest.Config) error {
-	return schedulingV1alpha2Available(config)
+	return schedulingV1alpha3Available(config)
 }
 
 func (p *Provider) AddToScheme(scheme *runtime.Scheme) {
-	utilruntime.Must(schedulingv1alpha2.AddToScheme(scheme))
+	utilruntime.Must(schedulingv1alpha3.AddToScheme(scheme))
 }
 
 func (p *Provider) NewScheduler(cli client.Client) schedulerinterface.BatchScheduler {
-	return &KubernetesWASV1Alpha2Scheduler{cli: cli}
+	return &KubernetesWASV1Alpha3Scheduler{cli: cli}
 }
 
 func (p *Provider) ConfigureReconciler(b *builder.Builder) *builder.Builder {
-	return b.Owns(&schedulingv1alpha2.Workload{}).
-		Owns(&schedulingv1alpha2.PodGroup{})
+	return b.Owns(&schedulingv1alpha3.Workload{}).
+		Owns(&schedulingv1alpha3.PodGroup{})
 }
 
-// v1alpha2 scheduling resources are immutable, so stale resources are deleted
-// in dependency order and recreated on later reconciles.
-func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
+// Preserve the existing reconciliation behavior by deleting stale resources in
+// dependency order and recreating them on later reconciles.
+func (k *KubernetesWASV1Alpha3Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
 	workload, podGroup, err := k.buildSchedulingResources(rayCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build scheduling resources for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
@@ -121,8 +121,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncSchedulingResources(ctx context.Con
 	return k.syncPodGroup(ctx, rayCluster, podGroup)
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha2.Workload) error {
-	existing := &schedulingv1alpha2.Workload{}
+func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.Workload) error {
+	existing := &schedulingv1alpha3.Workload{}
 	found, err := k.getSchedulingResource(ctx, "Workload", client.ObjectKeyFromObject(desired), existing)
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 	// Delete the runtime PodGroup before deleting the immutable Workload it
 	// references. A later reconcile recreates the Workload before the PodGroup.
 	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
-	podGroup := &schedulingv1alpha2.PodGroup{}
+	podGroup := &schedulingv1alpha3.PodGroup{}
 	if found, err := k.getSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup); err != nil {
 		return err
 	} else if found && metav1.IsControlledBy(podGroup, rayCluster) {
@@ -166,8 +166,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncWorkload(ctx context.Context, rayCl
 	return fmt.Errorf("deleted stale Workload %s/%s, will retry after deletion completes", existing.Namespace, existing.Name)
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha2.PodGroup) error {
-	existing := &schedulingv1alpha2.PodGroup{}
+func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.PodGroup) error {
+	existing := &schedulingv1alpha3.PodGroup{}
 	found, err := k.getSchedulingResource(ctx, "PodGroup", client.ObjectKeyFromObject(desired), existing)
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) syncPodGroup(ctx context.Context, rayCl
 	return fmt.Errorf("deleted stale PodGroup %s/%s, will retry after deletion completes", existing.Namespace, existing.Name)
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) deletePodGroup(ctx context.Context, podGroup *schedulingv1alpha2.PodGroup) (bool, error) {
+func (k *KubernetesWASV1Alpha3Scheduler) deletePodGroup(ctx context.Context, podGroup *schedulingv1alpha3.PodGroup) (bool, error) {
 	// Kubernetes uses this finalizer to protect a PodGroup while Pods still
 	// reference it. KubeRay removes it before explicitly deleting an owned
 	// PodGroup because replacement or cleanup may occur before those Pods
@@ -230,16 +230,16 @@ func (k *KubernetesWASV1Alpha2Scheduler) deletePodGroup(ctx context.Context, pod
 }
 
 // buildClusterSchedulingPolicy gang schedules the head and all desired workers.
-func buildClusterSchedulingPolicy(rayCluster *rayv1.RayCluster) schedulingv1alpha2.PodGroupSchedulingPolicy {
+func buildClusterSchedulingPolicy(rayCluster *rayv1.RayCluster) schedulingv1alpha3.PodGroupSchedulingPolicy {
 	minCount := int32(1) + utils.CalculateDesiredReplicas(rayCluster)
-	return schedulingv1alpha2.PodGroupSchedulingPolicy{
-		Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: minCount},
+	return schedulingv1alpha3.PodGroupSchedulingPolicy{
+		Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: minCount},
 	}
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) buildSchedulingResources(rayCluster *rayv1.RayCluster) (*schedulingv1alpha2.Workload, *schedulingv1alpha2.PodGroup, error) {
+func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *rayv1.RayCluster) (*schedulingv1alpha3.Workload, *schedulingv1alpha3.PodGroup, error) {
 	policy := buildClusterSchedulingPolicy(rayCluster)
-	workload := &schedulingv1alpha2.Workload{
+	workload := &schedulingv1alpha3.Workload{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
 			Namespace: rayCluster.Namespace,
@@ -247,21 +247,21 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildSchedulingResources(rayCluster *ra
 				utils.RayClusterLabelKey: rayCluster.Name,
 			},
 		},
-		Spec: schedulingv1alpha2.WorkloadSpec{
+		Spec: schedulingv1alpha3.WorkloadSpec{
 			// ControllerRef is a back-reference to the owning RayCluster for tooling; it is
 			// distinct from the owner reference set via SetControllerReference (used for GC).
-			ControllerRef: &schedulingv1alpha2.TypedLocalObjectReference{
+			ControllerRef: &schedulingv1alpha3.TypedLocalObjectReference{
 				APIGroup: rayv1.GroupVersion.Group,
 				Kind:     "RayCluster",
 				Name:     rayCluster.Name,
 			},
-			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{{
+			PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{{
 				Name:             clusterPodGroupTemplateName,
 				SchedulingPolicy: policy,
 			}},
 		},
 	}
-	podGroup := &schedulingv1alpha2.PodGroup{
+	podGroup := &schedulingv1alpha3.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterPodGroupName(rayCluster.Name),
 			Namespace: rayCluster.Namespace,
@@ -269,12 +269,10 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildSchedulingResources(rayCluster *ra
 				utils.RayClusterLabelKey: rayCluster.Name,
 			},
 		},
-		Spec: schedulingv1alpha2.PodGroupSpec{
-			PodGroupTemplateRef: &schedulingv1alpha2.PodGroupTemplateReference{
-				Workload: &schedulingv1alpha2.WorkloadPodGroupTemplateReference{
-					WorkloadName:         rayCluster.Name,
-					PodGroupTemplateName: clusterPodGroupTemplateName,
-				},
+		Spec: schedulingv1alpha3.PodGroupSpec{
+			WorkloadRef: &schedulingv1alpha3.WorkloadReference{
+				WorkloadName: rayCluster.Name,
+				TemplateName: clusterPodGroupTemplateName,
 			},
 			SchedulingPolicy: policy,
 		},
@@ -288,8 +286,8 @@ func (k *KubernetesWASV1Alpha2Scheduler) buildSchedulingResources(rayCluster *ra
 	return workload, podGroup, nil
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
-	podGroup := &schedulingv1alpha2.PodGroup{}
+func (k *KubernetesWASV1Alpha3Scheduler) deleteSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
+	podGroup := &schedulingv1alpha3.PodGroup{}
 	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
 	podGroupFound, err := k.getSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup)
 	if err != nil {
@@ -298,7 +296,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.C
 	// Only act on resources we own; a same-named foreign object is ignored.
 	podGroupExists := podGroupFound && metav1.IsControlledBy(podGroup, rayCluster)
 
-	workload := &schedulingv1alpha2.Workload{}
+	workload := &schedulingv1alpha3.Workload{}
 	workloadKey := client.ObjectKey{Name: rayCluster.Name, Namespace: rayCluster.Namespace}
 	workloadFound, err := k.getSchedulingResource(ctx, "Workload", workloadKey, workload)
 	if err != nil {
@@ -333,7 +331,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) deleteSchedulingResources(ctx context.C
 	return didDelete, nil
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) getSchedulingResource(ctx context.Context, kind string, key client.ObjectKey, object client.Object) (bool, error) {
+func (k *KubernetesWASV1Alpha3Scheduler) getSchedulingResource(ctx context.Context, kind string, key client.ObjectKey, object client.Object) (bool, error) {
 	if err := k.cli.Get(ctx, key, object); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
@@ -343,7 +341,7 @@ func (k *KubernetesWASV1Alpha2Scheduler) getSchedulingResource(ctx context.Conte
 	return true, nil
 }
 
-func (k *KubernetesWASV1Alpha2Scheduler) deleteWithUIDPrecondition(ctx context.Context, object client.Object) error {
+func (k *KubernetesWASV1Alpha3Scheduler) deleteWithUIDPrecondition(ctx context.Context, object client.Object) error {
 	uid := object.GetUID()
 	return k.cli.Delete(ctx, object, client.Preconditions{UID: &uid})
 }
@@ -360,7 +358,7 @@ func schedulingSkipReason(rayCluster *rayv1.RayCluster) string {
 	return ""
 }
 
-func isWorkloadStale(existing, desired *schedulingv1alpha2.Workload) bool {
+func isWorkloadStale(existing, desired *schedulingv1alpha3.Workload) bool {
 	if len(existing.Spec.PodGroupTemplates) != 1 {
 		return true
 	}
@@ -384,7 +382,7 @@ func setSchedulingGroup(obj metav1.Object, podGroupName string) {
 	}
 }
 
-func schedulingV1alpha2Available(config *rest.Config) error {
+func schedulingV1alpha3Available(config *rest.Config) error {
 	if config == nil {
 		return nil
 	}
@@ -392,8 +390,8 @@ func schedulingV1alpha2Available(config *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create discovery client: %w", err)
 	}
-	if _, err := discoveryClient.ServerResourcesForGroupVersion(schedulingv1alpha2.SchemeGroupVersion.String()); err != nil {
-		return fmt.Errorf("scheduling.k8s.io/v1alpha2 API is not available: %w", err)
+	if _, err := discoveryClient.ServerResourcesForGroupVersion(schedulingv1alpha3.SchemeGroupVersion.String()); err != nil {
+		return fmt.Errorf("scheduling.k8s.io/v1alpha3 API is not available: %w", err)
 	}
 	return nil
 }

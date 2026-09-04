@@ -108,8 +108,8 @@ test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
 	go test -timeout 30m -v $(WHAT)
 
-test-e2e-kubernetes-was-v1alpha2: WHAT ?= ./test/e2ekuberneteswas
-test-e2e-kubernetes-was-v1alpha2: manifests fmt vet ## Run e2e Kubernetes WAS v1alpha2 tests.
+test-e2e-kubernetes-was-v1alpha3: WHAT ?= ./test/e2ekuberneteswas
+test-e2e-kubernetes-was-v1alpha3: manifests fmt vet ## Run e2e Kubernetes WAS v1alpha3 tests.
 	go test -timeout 30m -v $(WHAT)
 
 sync: helm api-docs
@@ -172,9 +172,9 @@ deploy-with-override: manifests kustomize ## Deploy controller with test-only fe
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/overlays/test-overrides | kubectl apply --server-side=true -f -
 
-deploy-kubernetes-was-v1alpha2: manifests kustomize ## Deploy controller with Kubernetes WAS v1alpha2 batch scheduler enabled (requires K8s 1.36+).
+deploy-kubernetes-was-v1alpha3: manifests kustomize ## Deploy controller with Kubernetes WAS v1alpha3 batch scheduler enabled (requires K8s 1.37+).
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
-	$(KUSTOMIZE) build config/overlays/kubernetes-was-v1alpha2 | kubectl apply --server-side=true -f -
+	$(KUSTOMIZE) build config/overlays/kubernetes-was-v1alpha3 | kubectl apply --server-side=true -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
