@@ -78,6 +78,8 @@ helm uninstall raycluster
 | nameOverride | string | `"kuberay"` | String to partially override release name. |
 | fullnameOverride | string | `""` | String to fully override release name. |
 | imagePullSecrets | list | `[]` | Secrets with credentials to pull images from a private registry |
+| upgradeStrategy | object | `{}` | Recreate all Pods on RayCluster spec change. Intended for GitOps; running workloads are lost. |
+| authOptions | object | `{}` | Token authentication for the RayCluster. |
 | gcsFaultTolerance.enabled | bool | `false` |  |
 | common.containerEnv | list | `[]` | containerEnv specifies environment variables for the Ray head and worker containers. Follows standard K8s container env schema. |
 | head.initContainers | list | `[]` | Init containers to add to the head pod |

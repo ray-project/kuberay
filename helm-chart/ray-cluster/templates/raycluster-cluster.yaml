@@ -20,6 +20,14 @@ spec:
   autoscalerOptions:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- with .Values.upgradeStrategy }}
+  upgradeStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.authOptions }}
+  authOptions:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   {{- if .Values.gcsFaultTolerance.enabled }}
   gcsFaultToleranceOptions:
     redisAddress: {{ .Values.gcsFaultTolerance.redisAddress | quote }}
