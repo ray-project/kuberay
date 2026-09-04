@@ -36,6 +36,9 @@ const (
 	podNodeNameIndexField = "spec.nodeName"
 	// nodeInvolvedObjectKind is the involvedObject.kind of the source Events we forward.
 	nodeInvolvedObjectKind = "Node"
+	// leadershipWaitInterval is how long to wait before requeueing an event if
+	// Start has not yet recorded the leadership acquisition timestamp.
+	leadershipWaitInterval = 100 * time.Millisecond
 )
 
 // EventForwarderOptions configures which Node Events are forwarded.
@@ -105,18 +108,41 @@ type EventForwarderReconciler struct {
 
 	filter eventFilter
 
+	mu sync.Mutex
 	// startedAt is used to skip Events last observed before this controller
-	// started, which the informer would otherwise replay on its initial list.
+	// started or acquired leadership, which the informer would otherwise
+	// replay on its initial list or HA failover.
 	// A recurrence of an old Event bumps its count and last-observed time, so
 	// recurring faults still get forwarded.
 	startedAt time.Time
 
-	mu sync.Mutex
 	// forwarded tracks, per source Event object, the occurrence that was last
 	// forwarded. Keyed by object name so entries can be dropped when the API
 	// server expires the Event (default TTL is 1h), keeping the map bounded by
 	// the number of live Node Events.
 	forwarded map[types.NamespacedName]forwardedRecord
+}
+
+// NeedLeaderElection ensures Start is only called after this replica wins leader election.
+func (r *EventForwarderReconciler) NeedLeaderElection() bool {
+	return true
+}
+
+// Start records the exact timestamp when this replica acquired leadership, ensuring
+// that cached Events predating leadership (informer replays from standby mode) are skipped.
+func (r *EventForwarderReconciler) Start(ctx context.Context) error {
+	r.mu.Lock()
+	r.startedAt = time.Now().Truncate(time.Second)
+	r.mu.Unlock()
+
+	<-ctx.Done()
+	return nil
+}
+
+func (r *EventForwarderReconciler) getStartedAt() (time.Time, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.startedAt, !r.startedAt.IsZero()
 }
 
 // NewEventForwarderReconciler returns a new EventForwarderReconciler or an error
@@ -130,13 +156,16 @@ func NewEventForwarderReconciler(mgr manager.Manager, options EventForwarderOpti
 		Client:    mgr.GetClient(),
 		Recorder:  mgr.GetEventRecorder("kuberay-event-forwarder"),
 		filter:    newEventFilter(options),
-		startedAt: time.Now(),
 		forwarded: make(map[types.NamespacedName]forwardedRecord),
 	}, nil
 }
 
 // SetupWithManager registers the Pod spec.nodeName field index and the Event watch.
 func (r *EventForwarderReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
+	if err := mgr.Add(r); err != nil {
+		return err
+	}
+
 	// The cache cannot serve a MatchingFields List unless the field is indexed;
 	// without this the List in Reconcile returns an error, not empty results.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{},
@@ -201,7 +230,14 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 	if src.InvolvedObject.Kind != nodeInvolvedObjectKind || !r.filter.matches(src) {
 		return ctrl.Result{}, nil
 	}
-	if eventLastObserved(src).Before(r.startedAt) {
+	startedAt, leadershipRecorded := r.getStartedAt()
+	// On HA failover, controller workers and Start() run concurrently upon leadership acquisition.
+	// If a worker reconciles an event from the warm cache before Start() records the leadership timestamp,
+	// requeue briefly so we do not evaluate event freshness against an uninitialized startedAt.
+	if !leadershipRecorded {
+		return ctrl.Result{RequeueAfter: leadershipWaitInterval}, nil
+	}
+	if eventLastObserved(src).Before(startedAt) {
 		return ctrl.Result{}, nil
 	}
 	if !r.shouldForward(request.NamespacedName, src) {

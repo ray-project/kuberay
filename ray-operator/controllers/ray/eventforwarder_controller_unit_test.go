@@ -527,3 +527,21 @@ func reconcileForwarderEvent(t *testing.T, r *EventForwarderReconciler, eventNam
 	})
 	require.NoError(t, err)
 }
+
+func TestEventForwarder_RequeuesBeforeLeadershipRecorded(t *testing.T) {
+	recorder := &capturingRecorder{}
+	r := newEventForwarder(t, recorder, EventForwarderOptions{},
+		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
+		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		warningNodeEvent("evt-1", "node-1"),
+	)
+	// Zero out startedAt to simulate HA standby state before Start() runs
+	r.startedAt = time.Time{}
+
+	res, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "evt-1", Namespace: "default"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{RequeueAfter: leadershipWaitInterval}, res)
+	assert.Empty(t, recorder.events, "no events should be emitted before leadership is recorded")
+}
