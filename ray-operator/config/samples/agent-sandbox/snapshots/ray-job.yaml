@@ -3,7 +3,7 @@ kind: RayJob
 metadata:
   name: agent-sandbox-snapshot-demo
 spec:
-  entrypoint: python ray-operator/config/samples/agent-sandbox-snapshots/sandboxed_snapshot_execution.py
+  entrypoint: python ray-operator/config/samples/agent-sandbox/snapshots/sandboxed_snapshot_execution.py
   runtimeEnvYAML: |
     pip:
       - k8s-agent-sandbox==1.0.0
