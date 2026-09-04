@@ -280,6 +280,11 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	if len(targets) == 0 {
+		// All RayClusters referenced by pods on this node have already been deleted.
+		return ctrl.Result{}, nil
+	}
+
 	// The affected Node is attached as the related object so a reader of the
 	// forwarded Event can get back to the source of the fault.
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName, UID: src.InvolvedObject.UID}}
@@ -412,6 +417,9 @@ func eventLastObserved(e *corev1.Event) time.Time {
 	}
 	if e.EventTime.Time.After(t) {
 		t = e.EventTime.Time
+	}
+	if t.IsZero() {
+		t = e.FirstTimestamp.Time
 	}
 	if t.IsZero() {
 		t = e.CreationTimestamp.Time

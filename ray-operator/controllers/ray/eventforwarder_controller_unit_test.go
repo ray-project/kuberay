@@ -27,9 +27,9 @@ func TestEventForwarder_OneEventPerClusterAcrossPods(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-b", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
-		rayPodOnNode("a-worker", "default", "cluster-a", "node-1"),
-		rayPodOnNode("b-head", "default", "cluster-b", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
+		rayPodOnNode("a-worker", "cluster-a"),
+		rayPodOnNode("b-head", "cluster-b"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -51,9 +51,9 @@ func TestEventForwarder_OneEventPerClusterAcrossPods(t *testing.T) {
 func TestEventForwarder_ForwardsToOwningRayJob(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "default", "job-a"),
+		rayJobCluster("job-a-raycluster", "job-a"),
 		&rayv1.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
-		rayPodOnNode("a-worker", "default", "job-a-raycluster", "node-1"),
+		rayPodOnNode("a-worker", "job-a-raycluster"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -69,10 +69,10 @@ func TestEventForwarder_ForwardsToOwningRayJobOnceAcrossPods(t *testing.T) {
 	// for the RayCluster and the RayJob, not two.
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "default", "job-a"),
+		rayJobCluster("job-a-raycluster", "job-a"),
 		&rayv1.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "job-a-raycluster", "node-1"),
-		rayPodOnNode("a-worker", "default", "job-a-raycluster", "node-1"),
+		rayPodOnNode("a-head", "job-a-raycluster"),
+		rayPodOnNode("a-worker", "job-a-raycluster"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -88,8 +88,8 @@ func TestEventForwarder_SkipsMissingOwningRayJob(t *testing.T) {
 	// already gone: the RayCluster must still receive the Event.
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "default", "job-a"),
-		rayPodOnNode("a-worker", "default", "job-a-raycluster", "node-1"),
+		rayJobCluster("job-a-raycluster", "job-a"),
+		rayPodOnNode("a-worker", "job-a-raycluster"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -102,7 +102,7 @@ func TestEventForwarder_SkipsDeletedRayCluster(t *testing.T) {
 	// Pods outlive their RayCluster briefly during deletion.
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -115,7 +115,7 @@ func TestEventForwarder_RelatesForwardedEventToNode(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -136,7 +136,7 @@ func TestEventForwarder_TruncatesLongMessages(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		evt,
 	)
 
@@ -176,7 +176,7 @@ func TestEventForwarderOptions_Validate(t *testing.T) {
 func TestEventForwarder_SkipsNodesWithoutRayPods(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-2", "node-2"), // event for a node with no Ray pods
 	)
 
@@ -189,7 +189,7 @@ func TestEventForwarder_ResyncDoesNotReforward(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 
@@ -203,7 +203,7 @@ func TestEventForwarder_CountBumpReforwards(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 	ctx := context.Background()
@@ -228,7 +228,7 @@ func TestEventForwarder_NewUIDUnderSameNameForwards(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 	ctx := context.Background()
@@ -252,7 +252,7 @@ func TestEventForwarder_ForgetsDeletedEvents(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 	ctx := context.Background()
@@ -328,7 +328,7 @@ func TestEventForwarder_Filters(t *testing.T) {
 			recorder := &capturingRecorder{}
 			r := newEventForwarder(t, recorder, tc.options,
 				&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-				rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+				rayPodOnNode("a-head", "cluster-a"),
 				evt,
 			)
 
@@ -351,7 +351,7 @@ func TestEventForwarder_SkipsEventsObservedBeforeStart(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		legacyOld, newStyleOld,
 	)
 	// startedAt is now; both events predate it and are informer replays.
@@ -373,7 +373,7 @@ func TestEventForwarder_RecurrenceOfOldEventForwards(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		evt,
 	)
 	r.startedAt = time.Now()
@@ -390,7 +390,7 @@ func TestEventForwarder_IgnoresNonNodeEvents(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		podEvent,
 	)
 
@@ -452,26 +452,26 @@ func forwarderScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func rayPodOnNode(name, namespace, cluster, node string) *corev1.Pod {
+func rayPodOnNode(name, cluster string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: "default",
 			Labels:    map[string]string{utils.RayClusterLabelKey: cluster},
 		},
-		Spec: corev1.PodSpec{NodeName: node},
+		Spec: corev1.PodSpec{NodeName: "node-1"},
 	}
 }
 
-// rayJobCluster returns a RayCluster labelled the way the RayJob controller
+// rayJobCluster returns a RayCluster labeled the way the RayJob controller
 // labels the cluster it creates (see constructRayClusterForRayJob). Note that
 // these labels live on the RayCluster only; they are never copied onto its Pods,
 // so rayPodOnNode deliberately does not carry them.
-func rayJobCluster(name, namespace, rayJob string) *rayv1.RayCluster {
+func rayJobCluster(name, rayJob string) *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: "default",
 			Labels: map[string]string{
 				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
 				utils.RayOriginatedFromCRNameLabelKey: rayJob,
@@ -532,7 +532,7 @@ func TestEventForwarder_RequeuesBeforeLeadershipRecorded(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "default", "cluster-a", "node-1"),
+		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-1", "node-1"),
 	)
 	// Zero out startedAt to simulate HA standby state before Start() runs

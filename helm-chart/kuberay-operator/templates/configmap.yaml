@@ -22,6 +22,7 @@ data:
     {{- end }}
     {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
     enableNodeEventForwarder: {{ .Values.nodeEventForwarder.enabled }}
+    {{- if .Values.nodeEventForwarder.enabled }}
     {{- if .Values.nodeEventForwarder.sources }}
     nodeEventForwarderSources:
     {{- toYaml .Values.nodeEventForwarder.sources | nindent 4 }}
@@ -33,6 +34,7 @@ data:
     {{- if .Values.nodeEventForwarder.types }}
     nodeEventForwarderTypes:
     {{- toYaml .Values.nodeEventForwarder.types | nindent 4 }}
+    {{- end }}
     {{- end }}
     {{- end }}
     {{- if hasKey .Values "reconcileConcurrency" }}

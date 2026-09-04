@@ -131,6 +131,7 @@ spec:
             {{- end -}}
             {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
             {{- $argList = append $argList (printf "--enable-node-event-forwarder=%t" .Values.nodeEventForwarder.enabled) -}}
+            {{- if .Values.nodeEventForwarder.enabled }}
             {{- if .Values.nodeEventForwarder.sources -}}
             {{- $argList = append $argList (printf "--node-event-forwarder-sources=%s" (join "," .Values.nodeEventForwarder.sources)) -}}
             {{- end -}}
@@ -139,6 +140,7 @@ spec:
             {{- end -}}
             {{- if .Values.nodeEventForwarder.types -}}
             {{- $argList = append $argList (printf "--node-event-forwarder-types=%s" (join "," .Values.nodeEventForwarder.types)) -}}
+            {{- end -}}
             {{- end -}}
             {{- end -}}
             {{- if hasKey .Values "reconcileConcurrency" -}}
