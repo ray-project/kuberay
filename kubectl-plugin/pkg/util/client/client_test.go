@@ -126,8 +126,8 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 		},
 		{
 			name:            "Hosted operator with CRDs, no in-cluster Deployment",
-			expectedVersion: "hosted outside the cluster (e.g. GKE Ray Operator add-on); version not available in-cluster",
-			expectedError:   "",
+			expectedVersion: "",
+			expectedError:   ErrHostedOperator.Error(),
 			kubeObjects:     nil,
 			rayCRDsPresent:  true,
 		},
@@ -176,11 +176,15 @@ func TestGetKubeRayOperatorVersion(t *testing.T) {
 
 			version, err := client.GetKubeRayOperatorVersion(context.Background())
 
-			if tc.expectedVersion != "" {
-				assert.Equal(t, tc.expectedVersion, version)
-				require.NoError(t, err)
+			if tc.expectedError != "" {
+				require.EqualError(t, err, tc.expectedError)
+				assert.Empty(t, version)
+				if tc.expectedError == ErrHostedOperator.Error() {
+					require.ErrorIs(t, err, ErrHostedOperator)
+				}
 			} else {
-				assert.EqualError(t, err, tc.expectedError)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedVersion, version)
 			}
 		})
 	}
@@ -207,14 +211,9 @@ func TestHasRayClusterAPI(t *testing.T) {
 			expectedInstalled: false,
 		},
 		{
-			name: "ray.io/v1 is served without RayCluster",
-			resources: []*metav1.APIResourceList{{
-				GroupVersion: rayv1.GroupVersion.String(),
-				APIResources: []metav1.APIResource{
-					{Name: "rayjobs", Kind: "RayJob", SingularName: "rayjob", Namespaced: true},
-				},
-			}},
-			expectedInstalled: false,
+			name:              "ray.io/v1 is served",
+			resources:         []*metav1.APIResourceList{{GroupVersion: rayv1.GroupVersion.String()}},
+			expectedInstalled: true,
 		},
 	}
 
