@@ -4137,6 +4137,65 @@ func TestBuildPodsWithoutDefaultPodMetadata(t *testing.T) {
 	assert.NotContains(t, workerPod.Labels, "fleet")
 }
 
+func TestBuildPodsCollectorImage(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+
+	const operatorCollectorImage = "my-registry.io/kuberay/collector:v1.7.0"
+
+	tests := []struct {
+		clusterCollectorImage *string
+		name                  string
+		expectedImage         string
+	}{
+		{
+			name:                  "collector image falls back to the operator configuration",
+			clusterCollectorImage: nil,
+			expectedImage:         operatorCollectorImage,
+		},
+		{
+			name:                  "collector image in the RayCluster takes precedence",
+			clusterCollectorImage: new("quay.io/kuberay/collector:nightly"),
+			expectedImage:         "quay.io/kuberay/collector:nightly",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := rayClusterTemplate("raycluster-collector-image", "default")
+			cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+			cluster.Spec.WorkerGroupSpecs[0].RayStartParams = map[string]string{}
+			cluster.Spec.HistoryServerOptions = &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{
+					Image: tc.clusterCollectorImage,
+				},
+			}
+
+			reconciler := &RayClusterReconciler{
+				Client:  clientFake.NewClientBuilder().Build(),
+				Scheme:  scheme.Scheme,
+				options: RayClusterReconcilerOptions{CollectorImage: operatorCollectorImage},
+			}
+
+			headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+			assert.Equal(t, tc.expectedImage, collectorContainerImage(t, headPod))
+
+			workerPod := reconciler.buildWorkerPod(context.Background(), *cluster, cluster.Spec.WorkerGroupSpecs[0], "", 0, 0)
+			assert.Equal(t, tc.expectedImage, collectorContainerImage(t, workerPod))
+		})
+	}
+}
+
+func collectorContainerImage(t *testing.T, pod corev1.Pod) string {
+	t.Helper()
+	for _, container := range pod.Spec.Containers {
+		if container.Name == utils.CollectorContainerName {
+			return container.Image
+		}
+	}
+	t.Fatalf("collector container %q not found in Pod %s", utils.CollectorContainerName, pod.Name)
+	return ""
+}
+
 func TestReconcileIngressKubernetesSkipsUnownedIngress(t *testing.T) {
 	setupTest(t)
 

@@ -164,6 +164,13 @@ featureGates:
 - name: RayClusterHistoryServer
   enabled: false
 
+# -- Image of the History Server collector sidecar injected into Ray Pods of RayClusters that set
+# `spec.historyServerOptions.collectorOptions`. A RayCluster can override it with
+# `spec.historyServerOptions.collectorOptions.image`. If empty, the operator uses
+# `quay.io/kuberay/collector` with the tag matching the operator version. Set this to mirror the
+# collector image in your own registry, for example `my-registry.io/kuberay/collector:v1.7.0`.
+collectorImage: ""
+
 # Configurations for KubeRay operator metrics.
 metrics:
   # -- Whether KubeRay operator should emit control plane metrics.
