@@ -591,9 +591,6 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 	// First upload attempt fails, scheduling a backoff retry.
 	writer.failNext = true
 
-	ec.consumerWG.Add(1)
-	go ec.compressionUploadWorker()
-
 	task := rotationTask{
 		path:        jsonlPath,
 		category:    categoryNodeEvents,
@@ -602,12 +599,18 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
 		size:        int64(len(payload)),
 	}
-	ec.rotationQueue <- task
 
-	// Wait until the worker has consumed the injected failure, so the retry
-	// goroutine exists before shutdown begins.
-	require.Eventually(t, func() bool { return !writer.failPending() },
-		2*time.Second, 10*time.Millisecond)
+	// Drive the first attempt synchronously so retryProcess has registered
+	// the backoff goroutine on consumerWG before shutdown begins.
+	// failPending() flips false inside WriteFile, before that registration.
+	ec.processRotatedFile(task)
+	require.False(t, writer.failPending(), "first attempt should consume the injected failure")
+	require.Empty(t, writer.fileKeys(), "first attempt must not have uploaded")
+
+	// Start the worker so shutdown can close the queue and wait for the
+	// consumer, matching the production pipeline.
+	ec.consumerWG.Add(1)
+	go ec.compressionUploadWorker()
 
 	// Run's real shutdown sequence. Closing stopProducers cuts the retry's
 	// backoff short and triggers its final attempt.
