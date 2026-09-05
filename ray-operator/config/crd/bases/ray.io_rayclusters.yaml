@@ -5325,6 +5325,7 @@ spec:
                 items:
                   properties:
                     groupName:
+                      maxLength: 63
                       type: string
                     idleTimeoutSeconds:
                       format: int32
@@ -9194,10 +9195,17 @@ spec:
                   - minReplicas
                   - template
                   type: object
+                maxItems: 100
                 type: array
             required:
             - headGroupSpec
             type: object
+            x-kubernetes-validations:
+            - message: workerGroupSpecs entries cannot be removed; scale the group
+                to zero replicas or suspend it instead
+              rule: '!has(oldSelf.workerGroupSpecs) || oldSelf.workerGroupSpecs.all(oldGroup,
+                has(self.workerGroupSpecs) && self.workerGroupSpecs.exists(newGroup,
+                newGroup.groupName == oldGroup.groupName))'
           status:
             properties:
               availableWorkerReplicas:
@@ -13656,6 +13664,7 @@ spec:
                 items:
                   properties:
                     groupName:
+                      maxLength: 63
                       type: string
                     maxReplicas:
                       default: 2147483647
@@ -17505,10 +17514,17 @@ spec:
                   - rayStartParams
                   - template
                   type: object
+                maxItems: 100
                 type: array
             required:
             - headGroupSpec
             type: object
+            x-kubernetes-validations:
+            - message: workerGroupSpecs entries cannot be removed; scale the group
+                to zero replicas or suspend it instead
+              rule: '!has(oldSelf.workerGroupSpecs) || oldSelf.workerGroupSpecs.all(oldGroup,
+                has(self.workerGroupSpecs) && self.workerGroupSpecs.exists(newGroup,
+                newGroup.groupName == oldGroup.groupName))'
           status:
             properties:
               availableWorkerReplicas:
