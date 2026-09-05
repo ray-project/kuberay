@@ -1056,6 +1056,64 @@ func TestBuildPod_WithEnableK8sTokenAuth_InitContainer(t *testing.T) {
 	}
 }
 
+func TestDefaultWorkerPodTemplate_InitContainerResourceDefaults(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+
+	var gcsReady *corev1.Container
+	for i := range podTemplateSpec.Spec.InitContainers {
+		if podTemplateSpec.Spec.InitContainers[i].Name == "wait-gcs-ready" {
+			gcsReady = &podTemplateSpec.Spec.InitContainers[i]
+			break
+		}
+	}
+	require.NotNil(t, gcsReady, "wait-gcs-ready init container should be present")
+	assert.Equal(t, resource.MustParse("256Mi"), gcsReady.Resources.Limits[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("256Mi"), gcsReady.Resources.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("200m"), gcsReady.Resources.Limits[corev1.ResourceCPU])
+}
+
+func TestDefaultWorkerPodTemplate_GcsReadyOptionsOverride(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.GcsReadyOptions = &rayv1.GcsReadyOptions{
+		Resources: &corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		},
+	}
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+
+	var gcsReady *corev1.Container
+	for i := range podTemplateSpec.Spec.InitContainers {
+		if podTemplateSpec.Spec.InitContainers[i].Name == "wait-gcs-ready" {
+			gcsReady = &podTemplateSpec.Spec.InitContainers[i]
+			break
+		}
+	}
+	require.NotNil(t, gcsReady, "wait-gcs-ready init container should be present")
+	assert.Equal(t, resource.MustParse("2Gi"), gcsReady.Resources.Limits[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("1Gi"), gcsReady.Resources.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("500m"), gcsReady.Resources.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("500m"), gcsReady.Resources.Requests[corev1.ResourceCPU])
+}
+
 func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()

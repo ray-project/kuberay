@@ -681,6 +681,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 				},
 			},
 		}
+		// Override the wait-gcs-ready init container's resources if GcsReadyOptions is set.
+		if instance.Spec.GcsReadyOptions != nil && instance.Spec.GcsReadyOptions.Resources != nil {
+			initContainer.Resources = *instance.Spec.GcsReadyOptions.Resources
+		}
 		podTemplate.Spec.InitContainers = append(podTemplate.Spec.InitContainers, initContainer)
 	}
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
