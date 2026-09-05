@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -69,8 +68,10 @@ var HistoryServerEndpoints = []string{
 
 // HistoryServerEndpointPrometheusHealth and HistoryServerEndpointGrafanaHealth are standalone constants
 // because it requires some additional dependencies.
-const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
-const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
+const (
+	HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
+	HistoryServerEndpointGrafanaHealth    = "/api/grafana_health"
+)
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 // If manifestPath is empty, the default HistoryServerManifestPath is used.
@@ -174,12 +175,12 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 	// Wait for port-forward to be ready
 	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
 	g.Eventually(func() error {
-		resp, err := http.Get(historyServerURL + "/readz")
+		resp, err := HTTPGet(test.Ctx(), http.DefaultClient, historyServerURL+"/readz")
 		if err != nil {
 			return err
 		}
 		defer func() {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}()
 		if resp.StatusCode != http.StatusOK {
@@ -207,7 +208,7 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 
 	// Check an empty S3 bucket is automatically created.
 	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
+		Bucket: new(S3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -217,7 +218,6 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 // PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
 func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
-
 	InstallGrafanaAndPrometheus(test, g)
 
 	additionalEnvs := map[string]string{
@@ -238,7 +238,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 
 	// Check an empty S3 bucket is automatically created.
 	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
+		Bucket: new(S3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -247,8 +247,8 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
 // If headNode is true, it iterates over all nodes and returns the one with isHeadNode == true.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
-	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
+func GetOneOfNodeID(test Test, g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -262,7 +262,7 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, head
 
 	data := result["data"].(map[string]any)
 	summary := data["summary"].([]any)
-	g.Expect(len(summary)).To(BeNumerically(">", 0))
+	g.Expect(summary).ToNot(BeEmpty())
 
 	// Both live and dead clusters return a flat array of node objects.
 	if !headNode {
@@ -295,8 +295,8 @@ func getRayletFromNode(g *WithT, node any) map[string]any {
 // GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
 // The history server returns actors from the in-memory ClusterActorMap, which is populated
 // by the Event Handler processing events from S3.
-func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+func GetOneOfActorID(test Test, g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+EndpointLogicalActors)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -314,7 +314,7 @@ func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) str
 
 	actors, ok := data["actors"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
-	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+	g.Expect(actors).ToNot(BeEmpty(), "should have at least one actor")
 
 	// Get the first actor ID from the map
 	for actorID := range actors {
@@ -331,14 +331,14 @@ func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Clien
 
 	g.Eventually(func(gg Gomega) {
 		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp, err := client.Get(logFileURL)
+		resp, err := HTTPGet(test.Ctx(), client, logFileURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 		body, err := io.ReadAll(resp.Body)
 		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(len(body)).To(BeNumerically(">", 0))
+		gg.Expect(body).ToNot(BeEmpty())
 	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Log file endpoint returned content successfully")
@@ -351,10 +351,10 @@ func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http
 	for _, malicious := range maliciousPaths {
 		g.Eventually(func(gg Gomega) {
 			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				io.Copy(io.Discard, resp.Body)
+				_, _ = io.Copy(io.Discard, resp.Body)
 				resp.Body.Close()
 			}()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
@@ -379,8 +379,8 @@ func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName 
 }
 
 // GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
-func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + "/api/jobs/")
+func GetOneOfJobID(test Test, g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/api/jobs/")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -388,7 +388,7 @@ func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) strin
 	var jobs []map[string]any
 	err = json.Unmarshal(body, &jobs)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
+	g.Expect(jobs).ToNot(BeEmpty(), "expected at least one job from /api/jobs/")
 	for _, j := range jobs {
 		if jid, ok := j["job_id"].(string); ok && jid != "" {
 			return jid

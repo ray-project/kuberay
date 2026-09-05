@@ -14,18 +14,18 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
-	"github.com/sirupsen/logrus"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -259,10 +259,10 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py
 	categorized := categorizeLogFiles(matchedFiles)
 
-	ret := map[string]interface{}{
+	ret := map[string]any{
 		"result": true,
 		"msg":    "",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"result": categorized,
 		},
 	}
@@ -728,8 +728,7 @@ func (s *ServerHandler) ipToNodeId(clusterLogPathPrefix, sessionID, nodeIP strin
 	// Use targeted listing to find node_events directories under each node
 	var candidatePrefixes []string
 	for _, rawEntry := range s.reader.ListFiles(clusterLogPathPrefix, sessionID) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
+		if nodeName, ok := strings.CutSuffix(rawEntry, "/"); ok {
 			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
 		}
 	}
@@ -797,7 +796,7 @@ func (s *ServerHandler) searchNodeIDHexInEventFile(clusterLogPathPrefix, filePat
 			continue
 		}
 
-		nodeDefEvent, ok := event["nodeDefinitionEvent"].(map[string]interface{})
+		nodeDefEvent, ok := event["nodeDefinitionEvent"].(map[string]any)
 		if !ok {
 			continue
 		}

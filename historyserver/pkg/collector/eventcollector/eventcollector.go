@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -222,7 +223,7 @@ func (ec *EventCollector) UpdateNodeID(newNodeID string) {
 	}
 	logrus.Infof("Node ID changed from %s to %s, rotating active files", ec.currentNodeID, newNodeID)
 	ec.currentNodeID = newNodeID
-	ec.rotateAllFilesLocked()
+	_ = ec.rotateAllFilesLocked()
 }
 
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
@@ -241,9 +242,13 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	ws.Route(ws.POST("/events").To(ec.PersistEvents))
 	restful.Add(ws)
 
+	server := &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		logrus.Infof("Starting event collector on port %d", port)
-		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		logrus.Fatal(server.ListenAndServe())
 	}()
 
 	ec.producersWG.Add(1)
@@ -324,7 +329,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	var eventDatas []map[string]interface{}
+	var eventDatas []map[string]any
 	if err := json.Unmarshal(body, &eventDatas); err != nil {
 		logrus.Errorf("Failed to unmarshal event: %v", err)
 		resp.WriteError(http.StatusBadRequest, err)
@@ -450,7 +455,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 // - NODE_* events → "node_events"
 // - others with a jobID → "job_events/{jobID}"
 // - fallback → "node_events" (matches previous behavior)
-func (ec *EventCollector) categorize(eventData map[string]interface{}) string {
+func (ec *EventCollector) categorize(eventData map[string]any) string {
 	if isNodeEvent(eventData) {
 		return categoryNodeEvents
 	}
@@ -902,12 +907,17 @@ func (ec *EventCollector) resumePendingFiles() {
 	jsonlFiles := make(map[string]pendingFile) // keyed by full path
 
 	_ = filepath.Walk(clusterRoot, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
+			logrus.Warnf("Skipping %s while resuming pending files: %v", p, err)
+			return nil
+		}
+		if info.IsDir() {
 			return nil
 		}
 
 		rel, err := filepath.Rel(clusterRoot, p)
 		if err != nil {
+			logrus.Warnf("Skipping %s while resuming pending files: %v", p, err)
 			return nil
 		}
 
@@ -936,7 +946,9 @@ func (ec *EventCollector) resumePendingFiles() {
 		switch {
 		case strings.HasSuffix(name, ".tmp"):
 			// A crash mid-compression leaves a partial gzip under a .tmp name. Drop it here.
-			if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			//
+			// TODO: make this removal symlink-safe.
+			if err := os.Remove(p); err != nil && !os.IsNotExist(err) { //nolint:gosec // G122: symlink TOCTOU
 				logrus.Warnf("Failed to remove partial gzip %s: %v", p, err)
 			} else {
 				ec.totalDiskUsed.Add(-info.Size())
@@ -1010,23 +1022,18 @@ func (ec *EventCollector) underDiskPressure() bool {
 }
 
 // isNodeEvent checks if event is node-related.
-func isNodeEvent(eventData map[string]interface{}) bool {
+func isNodeEvent(eventData map[string]any) bool {
 	eventType, ok := eventData["eventType"].(string)
 	if !ok {
 		return false
 	}
-	for _, nodeEvent := range nodeEventType {
-		if eventType == nodeEvent {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(nodeEventType, eventType)
 }
 
 // getJobID extracts a jobId from known nested event payloads.
-func getJobID(eventData map[string]interface{}) string {
+func getJobID(eventData map[string]any) string {
 	for _, eventType := range eventTypesWithJobID {
-		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
+		if nestedEvent, ok := eventData[eventType].(map[string]any); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
 				id := fmt.Sprintf("%v", jobID)
 				// Payload job IDs arrive base64-encoded (e.g. "AQAAAA=="). Normalize to hex for safe path validation.

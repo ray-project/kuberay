@@ -59,7 +59,7 @@ func TestAzureBlobCollector(t *testing.T) {
 func testAzureBlobUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 
-	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace)
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -77,14 +77,14 @@ func testAzureBlobUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 
 	verifyAzureBlobSessionDirs(test, g, azureClient, sessionPrefix, headNodeID, workerNodeID)
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 }
 
 // testAzureBlobSeparatesFilesBySession verifies that logs and node_events are successfully uploaded to Azure Blob after the ray-head container is restarted.
 func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 
-	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace)
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -97,7 +97,7 @@ func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	verifySessionDirectoriesExist(test, g, rayCluster, sessionID)
 	verifyAzureBlobSessionDirs(test, g, azureClient, sessionPrefix, headNodeID, workerNodeID)
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 }
 
 // testAzureBlobResumesUploadsOnRestart verifies that the Collector scans and resumes uploads from the prev-logs directory on startup.
@@ -195,7 +195,7 @@ func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Node directory should be cleaned from prev-logs")
 	}, TestTimeoutMedium).Should(Succeed())
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 }
 
 // verifyAzureBlobSessionDirs verifies file contents in logs/, node_events/, and job_events/ directories.
@@ -220,32 +220,6 @@ func verifyAzureBlobSessionDirs(test Test, g *WithT, azureClient *azblob.Client,
 
 		assertAllEventTypesCovered(test, gg, events)
 	}, TestTimeoutMedium).Should(Succeed())
-}
-
-func listAzureBlobDirectories(containerClient *container.Client, prefix string) ([]string, error) {
-	pager := containerClient.NewListBlobsHierarchyPager("/", &container.ListBlobsHierarchyOptions{
-		Prefix: &prefix,
-	})
-
-	var directories []string
-	for pager.More() {
-		resp, err := pager.NextPage(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to list Azure Blob directories under %s: %w", prefix, err)
-		}
-
-		for _, blobPrefix := range resp.Segment.BlobPrefixes {
-			if blobPrefix.Name == nil {
-				continue
-			}
-			dirName := strings.TrimSuffix(strings.TrimPrefix(*blobPrefix.Name, prefix), "/")
-			if dirName != "" {
-				directories = append(directories, dirName)
-			}
-		}
-	}
-
-	return directories, nil
 }
 
 func loadRayEventsFromAzureBlob(containerClient *container.Client, prefix string) ([]rayEvent, error) {

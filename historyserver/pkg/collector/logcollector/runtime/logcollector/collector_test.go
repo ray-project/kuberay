@@ -12,6 +12,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -53,7 +54,7 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 	baseDir := filepath.Join("/tmp", "ray-test-"+t.Name())
 
 	// Create base directory
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		t.Fatalf("Failed to create base dir: %v", err)
 	}
 
@@ -61,10 +62,10 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 	prevLogsDir := filepath.Join(baseDir, "prev-logs")
 	persistLogsDir := filepath.Join(baseDir, "persist-complete-logs")
 
-	if err := os.MkdirAll(prevLogsDir, 0755); err != nil {
+	if err := os.MkdirAll(prevLogsDir, 0o755); err != nil {
 		t.Fatalf("Failed to create prev-logs dir: %v", err)
 	}
-	if err := os.MkdirAll(persistLogsDir, 0755); err != nil {
+	if err := os.MkdirAll(persistLogsDir, 0o755); err != nil {
 		t.Fatalf("Failed to create persist-complete-logs dir: %v", err)
 	}
 
@@ -78,11 +79,11 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 // createTestLogFile creates a test log file with given content
 func createTestLogFile(t *testing.T, path string, content string) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("Failed to create directory %s: %v", dir, err)
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("Failed to write file %s: %v", path, err)
 	}
 }
@@ -199,6 +200,7 @@ func TestScanAndProcess(t *testing.T) {
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
 }
+
 // TestProcessLogs_SkipSymlinks verifies that symlinks are skipped during directory scanning in prev-logs (processPrevLogsDir).
 func TestProcessLogs_SkipSymlinks(t *testing.T) {
 	baseDir, cleanup := setupRayTestEnvironment(t)
@@ -389,7 +391,7 @@ func TestNodeIDRefresh(t *testing.T) {
 				}
 			}`, nodeID)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(resp))
+			_, _ = w.Write([]byte(resp))
 			return
 		}
 		http.NotFound(w, r)

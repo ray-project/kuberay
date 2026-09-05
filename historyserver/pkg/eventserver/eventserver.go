@@ -533,8 +533,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	// Check candidate prefixes under each node (<sessionName>/<nodeName>/job_events/)
 	var candidatePrefixes []string
 	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
+		if nodeName, ok := strings.CutSuffix(rawEntry, "/"); ok {
 			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelJobEventsDir(clusterInfo.SessionName, nodeName, "")+"/")
 		}
 	}
@@ -564,8 +563,7 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	// Check candidate prefixes under each node (<sessionName>/<nodeName>/node_events/)
 	var candidatePrefixes []string
 	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
+		if nodeName, ok := strings.CutSuffix(rawEntry, "/"); ok {
 			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(clusterInfo.SessionName, nodeName)+"/")
 		}
 	}
@@ -986,7 +984,7 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 	}
 
 	// Convert events to ProfileEventRaw format
-	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
+	rawEvents := make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
 	for _, e := range profileData.ProfileEvents.Events {
 		startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
 		if err != nil {
@@ -1063,7 +1061,7 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 		// Extract func_or_class_name from extraData if available
 		for _, e := range rawEvents {
 			if strings.HasPrefix(e.EventName, taskPrefix) && e.ExtraData != "" {
-				var extra map[string]interface{}
+				var extra map[string]any
 				if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
 					if name, ok := extra["name"].(string); ok && name != "" {
 						// For actor methods, name might be just "increment" or "get_count"
