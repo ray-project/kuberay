@@ -71,11 +71,11 @@ func EnsureS3Client(t *testing.T) *s3.S3 {
 // NewS3Client creates a new S3 client.
 func NewS3Client(endpoint string) (*s3.S3, error) {
 	sess, err := session.NewSession(&aws.Config{
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("e2e-test"),
+		Endpoint:         new(endpoint),
+		Region:           new("e2e-test"),
 		Credentials:      credentials.NewStaticCredentials(MinioUsername, MinioSecret, ""),
-		DisableSSL:       aws.Bool(true),
-		S3ForcePathStyle: aws.Bool(true),
+		DisableSSL:       new(true),
+		S3ForcePathStyle: new(true),
 	})
 	if err != nil {
 		return nil, err
@@ -84,12 +84,12 @@ func NewS3Client(endpoint string) (*s3.S3, error) {
 }
 
 // DeleteS3Bucket deletes the S3 bucket. Note that objects under the bucket should be deleted first.
-func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
+func DeleteS3Bucket(test Test, s3Client *s3.S3) {
 	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", S3BucketName)
 
 	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
-		Bucket: aws.String(S3BucketName),
-	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		Bucket: new(S3BucketName),
+	}, func(page *s3.ListObjectsV2Output, _ bool) bool {
 		if len(page.Contents) == 0 {
 			return false
 		}
@@ -102,10 +102,10 @@ func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 		}
 
 		_, err := s3Client.DeleteObjects(&s3.DeleteObjectsInput{
-			Bucket: aws.String(S3BucketName),
+			Bucket: new(S3BucketName),
 			Delete: &s3.Delete{
 				Objects: objectsToDelete,
-				Quiet:   aws.Bool(true),
+				Quiet:   new(true),
 			},
 		})
 		if err != nil {
@@ -120,7 +120,7 @@ func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 	}
 
 	_, err = s3Client.DeleteBucket(&s3.DeleteBucketInput{
-		Bucket: aws.String(S3BucketName),
+		Bucket: new(S3BucketName),
 	})
 	if err != nil {
 		test.T().Logf("Failed to delete bucket %s: %v (this is OK if bucket doesn't exist)", S3BucketName, err)
@@ -135,9 +135,9 @@ func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 // which are the jobID directories under job_events/.
 func ListS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
 	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-		Bucket:    aws.String(bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
+		Bucket:    new(bucket),
+		Prefix:    new(prefix),
+		Delimiter: new("/"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)

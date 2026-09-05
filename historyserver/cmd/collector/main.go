@@ -171,7 +171,7 @@ func main() {
 	// polls its built-in endpoints, and anything listed here is polled on top.
 	var additionalEndpoints []string
 	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
-		for _, ep := range strings.Split(epStr, ",") {
+		for ep := range strings.SplitSeq(epStr, ",") {
 			ep = strings.TrimSpace(ep)
 			if ep != "" {
 				additionalEndpoints = append(additionalEndpoints, ep)
@@ -190,9 +190,9 @@ func main() {
 		}
 	}
 
-	jsonData := make(map[string]interface{})
+	jsonData := make(map[string]any)
 	if storageBackendConfigPath != "" {
-		data, err := os.ReadFile(storageBackendConfigPath)
+		data, err := os.ReadFile(storageBackendConfigPath) //nolint:gosec // G703: path comes from the --storage-backend-config-path flag, not from request input
 		if err != nil {
 			logrus.Fatalf("Failed to read storage backend config from %s: %v", storageBackendConfigPath, err)
 		}
@@ -271,10 +271,8 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	if enableEventCollector {
-		wg.Add(1)
 		// Create and initialize EventCollector
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			eventCollector := eventcollector.NewEventCollector(writer, storageRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, ownerKind, ownerName, eventcollector.Options{
 				DataDir:            eventDataDir,
 				RotationInterval:   eventRotationInterval,
@@ -284,17 +282,17 @@ func main() {
 			})
 			eventCollector.Run(stop, eventsPort)
 			logrus.Info("Event collector shutdown")
-		}()
+		})
 	}
 
 	if enableLogCollector {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			logCollector := runtime.NewCollector(&globalConfig, writer)
-			logCollector.Run(stop)
+			if err := logCollector.Run(stop); err != nil {
+				logrus.Errorf("Log collector exited with error: %v", err)
+			}
 			logrus.Info("Log collector shutdown")
-		}()
+		})
 	}
 
 	<-sigChan

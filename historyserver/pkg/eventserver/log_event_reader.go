@@ -14,16 +14,18 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 // maxLineLengthLimit is the maximum line length for event files.
@@ -62,8 +64,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	// Find candidate nodes under {sessionName}/
 	var nodeIDs []string
 	for _, entry := range r.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(entry, "/") {
-			nodeID := strings.TrimSuffix(entry, "/")
+		if nodeID, ok := strings.CutSuffix(entry, "/"); ok {
 			if nodeID != "" {
 				nodeIDs = append(nodeIDs, nodeID)
 			}
@@ -116,10 +117,10 @@ func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *
 		line, n, tooLong, err := readLineWithLimit(br, maxLineLengthLimit)
 
 		// No remaining data — clean EOF with nothing left to process
-		if err == io.EOF && n == 0 {
+		if errors.Is(err, io.EOF) && n == 0 {
 			break
 		}
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("error reading %s at line %d: %w", filePath, lineNum+1, err)
 		}
 
@@ -136,7 +137,7 @@ func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *
 		}
 
 		// EOF after processing the last partial line (file didn't end with '\n')
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
@@ -173,14 +174,14 @@ func readLineWithLimit(br *bufio.Reader, limit int) (line []byte, n int, tooLong
 		// If tooLong, we keep looping to drain remaining bytes until '\n' or EOF,
 		// but do not accumulate them.
 
-		switch e {
-		case nil:
+		switch {
+		case e == nil:
 			// Found '\n' — full line complete.
 			return buf, n, tooLong, nil
-		case bufio.ErrBufferFull:
+		case errors.Is(e, bufio.ErrBufferFull):
 			// Fragment filled the internal buffer but no '\n' yet — keep reading.
 			continue
-		case io.EOF:
+		case errors.Is(e, io.EOF):
 			// Stream ended. frag may contain the last partial line without '\n'.
 			return buf, n, tooLong, io.EOF
 		default:

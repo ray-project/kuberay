@@ -34,7 +34,10 @@ func DecompressStream(dst io.Writer, src io.Reader) error {
 		}
 	}()
 
-	_, err = io.Copy(dst, r)
+	// TODO: bound the decompressed size. The gzip streams this package reads come
+	// from the history server's own object store, written by its collectors, so a
+	// bomb needs bucket write access.
+	_, err = io.Copy(dst, r) //nolint:gosec // G110: decompression bomb, see the TODO above
 	return err
 }
 

@@ -37,7 +37,8 @@ func GetContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 }
 
 func PortForwardService(test Test, g *WithT, namespace, serviceName string, port int) {
-	kubectlCmd := exec.Command(
+	kubectlCmd := exec.CommandContext(
+		test.Ctx(),
 		"kubectl",
 		"-n", namespace,
 		"port-forward",
@@ -58,7 +59,7 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 // InstallGrafanaAndPrometheus installs Grafana and Prometheus in the cluster for testing.
 func InstallGrafanaAndPrometheus(test Test, g *WithT) {
 	test.T().Cleanup(func() {
-		cleanCMD := exec.Command("kubectl", "delete", "ns", "prometheus-system")
+		cleanCMD := exec.CommandContext(test.Ctx(), "kubectl", "delete", "ns", "prometheus-system")
 		output, err := cleanCMD.CombinedOutput()
 		if err != nil {
 			LogWithTimestamp(test.T(), "Failed to clean up Prometheus and Grafana installation with %v because %s",

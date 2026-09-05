@@ -49,7 +49,7 @@ func TestAzureHistoryServer(t *testing.T) {
 
 func testAzureLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
-	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace)
 	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
@@ -60,13 +60,13 @@ func testAzureLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, azu
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 	LogWithTimestamp(test.T(), "Azure live clusters E2E test completed successfully")
 }
 
 func testAzureDeadClusters(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
-	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace)
 
 	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
 
@@ -80,13 +80,13 @@ func testAzureDeadClusters(test Test, g *WithT, namespace *corev1.Namespace, azu
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 	LogWithTimestamp(test.T(), "Azure dead clusters E2E test completed successfully")
 }
 
 func testAzureLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
-	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace)
 	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath, EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
@@ -94,7 +94,7 @@ func testAzureLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 
 	test.T().Run("should return log content", func(t *testing.T) {
 		VerifyLogFileEndpointReturnsContent(test, NewWithT(t), client, historyServerURL, nodeID)
@@ -104,13 +104,13 @@ func testAzureLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.
 		VerifyLogFileEndpointRejectsPathTraversal(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 	LogWithTimestamp(test.T(), "Azure log file endpoint tests completed")
 }
 
 func testAzureLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
-	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace)
 
 	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
 
@@ -123,7 +123,7 @@ func testAzureLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 
 	test.T().Run("should return log content from Azure Blob", func(t *testing.T) {
 		VerifyLogFileEndpointReturnsContent(test, NewWithT(t), client, historyServerURL, nodeID)
@@ -133,6 +133,6 @@ func testAzureLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.
 		VerifyLogFileEndpointRejectsPathTraversal(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
-	DeleteAzureBlobContainer(test, g, azureClient)
+	DeleteAzureBlobContainer(test, azureClient)
 	LogWithTimestamp(test.T(), "Azure dead cluster log file endpoint tests completed")
 }

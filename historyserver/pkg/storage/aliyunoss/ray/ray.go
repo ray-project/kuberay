@@ -49,8 +49,8 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 	if !isExist {
 		logrus.Infof("Begin to create oss dir %s ...", objectDir)
 		_, err = r.OssClient.PutObject(ctx, &oss.PutObjectRequest{
-			Bucket: oss.Ptr(r.OssBucket),
-			Key:    oss.Ptr(objectDir),
+			Bucket: new(r.OssBucket),
+			Key:    new(objectDir),
 			Body:   bytes.NewReader([]byte("")),
 		})
 		if err != nil {
@@ -64,8 +64,8 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 
 func (r *RayLogsHandler) Append(file string, reader io.Reader, appendPosition int64) (nextPod int64, err error) {
 	result, err := r.OssClient.AppendObject(context.TODO(), &oss.AppendObjectRequest{
-		Bucket:   oss.Ptr(r.OssBucket),
-		Key:      oss.Ptr(file),
+		Bucket:   new(r.OssBucket),
+		Key:      new(file),
 		Position: &appendPosition,
 		Body:     reader,
 	})
@@ -78,8 +78,8 @@ func (r *RayLogsHandler) Append(file string, reader io.Reader, appendPosition in
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	_, err := r.OssClient.PutObject(context.TODO(), &oss.PutObjectRequest{
-		Bucket: oss.Ptr(r.OssBucket),
-		Key:    oss.Ptr(file),
+		Bucket: new(r.OssBucket),
+		Key:    new(file),
 		Body:   reader,
 	})
 	return err
@@ -90,9 +90,9 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	files := []string{}
 
 	p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
-		Bucket:    oss.Ptr(r.OssBucket),
-		Prefix:    oss.Ptr(prefix + "/"),
-		Delimiter: oss.Ptr(delimiter),
+		Bucket:    new(r.OssBucket),
+		Prefix:    new(prefix + "/"),
+		Delimiter: new(delimiter),
 		MaxKeys:   100,
 	})
 
@@ -152,9 +152,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 
 	getClusters := func() {
 		p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
-			Bucket:    oss.Ptr(r.OssBucket),
-			Prefix:    oss.Ptr(prefix),
-			Delimiter: oss.Ptr(""),
+			Bucket:    new(r.OssBucket),
+			Prefix:    new(prefix),
+			Delimiter: new(""),
 			MaxKeys:   100,
 		})
 
@@ -186,8 +186,8 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	fullPath := path.Join(r.OssRootDir, clusterId, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
-		Bucket: oss.Ptr(r.OssBucket),
-		Key:    oss.Ptr(fullPath),
+		Bucket: new(r.OssBucket),
+		Key:    new(fullPath),
 	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
@@ -198,8 +198,8 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
 				result, err = r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
-					Bucket: oss.Ptr(r.OssBucket),
-					Key:    oss.Ptr(f),
+					Bucket: new(r.OssBucket),
+					Key:    new(f),
 				})
 				if err != nil {
 					logrus.Errorf("Failed to get object %s: %v", f, err)
@@ -224,14 +224,14 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	return bytes.NewReader(data)
 }
 
-func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+func NewReader(c *types.RayHistoryServerConfig, jd map[string]any) (storage.StorageReader, error) {
 	config := &config{}
 	config.completeHSConfig(c, jd)
 
 	return New(config)
 }
 
-func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
+func NewWriter(c *types.RayCollectorConfig, jd map[string]any) (storage.StorageWriter, error) {
 	config := &config{}
 	config.complete(c, jd)
 

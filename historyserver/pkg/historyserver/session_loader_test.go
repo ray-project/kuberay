@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -64,19 +66,19 @@ func TestParseSessionCacheMaxMemory(t *testing.T) {
 
 // fakeProcessor is a configurable test double for processor.
 type fakeProcessor struct {
-	calls int32
+	calls atomic.Int32
 	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
 func (f *fakeProcessor) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
-	atomic.AddInt32(&f.calls, 1)
+	f.calls.Add(1)
 	if f.fn == nil {
 		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	}
 	return f.fn(ctx, info)
 }
 
-func (f *fakeProcessor) callCount() int32 { return atomic.LoadInt32(&f.calls) }
+func (f *fakeProcessor) callCount() int32 { return f.calls.Load() }
 
 func (f *fakeProcessor) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)) {
 	f.fn = fn
@@ -94,7 +96,7 @@ func newTestLoader(t *testing.T, p processor, cfg loaderTestConfig) *SessionLoad
 	if cacheSize <= 0 {
 		cacheSize = DefaultSessionCacheSize
 	}
-	return NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize, cfg.maxBytes, cfg.cacheTTL)
+	return NewSessionLoader(context.Background(), p, DefaultSessionProcessTimeout, cacheSize, cfg.maxBytes, cfg.cacheTTL)
 }
 
 func testClusterInfo() utils.ClusterInfo {
@@ -182,7 +184,7 @@ func TestLoadSession_ProcessorError(t *testing.T) {
 		const n = 5
 		var wg sync.WaitGroup
 		errs := make([]error, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
@@ -283,7 +285,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	}
 
 	// Subsequent calls: fast path, processor must NOT be invoked again.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := sl.LoadSession(context.Background(), info); err != nil {
 			t.Fatalf("fast path LoadSession #%d: %v", i, err)
 		}
@@ -300,7 +302,7 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
 	stored := testSnapshot(key)
-	sl.putSnapshot(key, stored)
+	require.NoError(t, sl.putSnapshot(key, stored))
 
 	got, ok := sl.GetSnapshot(key)
 	if !ok {
@@ -327,8 +329,8 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	fresh.Tasks = []eventtypes.Task{{TaskID: "fresh-task"}}
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	sl.putSnapshot(key, stale)
-	sl.putSnapshot(key, fresh)
+	require.NoError(t, sl.putSnapshot(key, stale))
+	require.NoError(t, sl.putSnapshot(key, fresh))
 
 	got, ok := sl.GetSnapshot(key)
 	if !ok {
@@ -345,25 +347,21 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	key := testClusterSessionKey()
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	sl.putSnapshot(key, richSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, richSnapshot(key)))
 
 	const goroutines = 50
 	var wg sync.WaitGroup
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			if err := sl.putSnapshot(key, richSnapshot(key)); err != nil {
 				t.Errorf("putSnapshot: %v", err)
 			}
-		}()
+		})
 	}
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			mine, ok := sl.GetSnapshot(key)
 			if !ok {
 				t.Errorf("GetSnapshot: unexpected miss")
@@ -387,7 +385,7 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 			if _, ok := fresh.Jobs["injected"]; ok {
 				t.Errorf("Jobs map leaked across requests")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -416,10 +414,10 @@ func TestGetSnapshot_LRUEviction(t *testing.T) {
 	k3 := testClusterSessionKeyFor("session_2026-04-22_12-00-00_000000_1")
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 2})
-	sl.putSnapshot(k1, testSnapshot(k1))
-	sl.putSnapshot(k2, testSnapshot(k2))
+	require.NoError(t, sl.putSnapshot(k1, testSnapshot(k1)))
+	require.NoError(t, sl.putSnapshot(k2, testSnapshot(k2)))
 	// Third session evicts the first (LRU).
-	sl.putSnapshot(k3, testSnapshot(k3))
+	require.NoError(t, sl.putSnapshot(k3, testSnapshot(k3)))
 
 	requireSnapshotCached(t, sl, k1, false)
 	requireSnapshotCached(t, sl, k2, true)
@@ -433,7 +431,7 @@ func TestGetSnapshot_TTLExpiry(t *testing.T) {
 
 	const ttl = 30 * time.Millisecond
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheTTL: ttl})
-	sl.putSnapshot(key, testSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, testSnapshot(key)))
 
 	requireSnapshotCached(t, sl, key, true)
 
@@ -448,7 +446,7 @@ func TestGetSnapshot_SlidingTTLRenewal(t *testing.T) {
 
 	const ttl = 30 * time.Millisecond
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheTTL: ttl})
-	sl.putSnapshot(key, testSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, testSnapshot(key)))
 
 	deadline := time.Now().Add(100 * time.Millisecond)
 	for time.Now().Before(deadline) {
@@ -473,8 +471,8 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 	maxBytes := len(enc1) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
-	sl.putSnapshot(olderKey, s1)
-	sl.putSnapshot(newerKey, richSnapshot(newerKey))
+	require.NoError(t, sl.putSnapshot(olderKey, s1))
+	require.NoError(t, sl.putSnapshot(newerKey, richSnapshot(newerKey)))
 
 	requireSnapshotCached(t, sl, olderKey, false)
 	requireSnapshotCached(t, sl, newerKey, true)
@@ -488,7 +486,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 func TestCache_ByteBudgetKeepsOversizedSoleEntry(t *testing.T) {
 	key := testClusterSessionKey()
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: 1})
-	sl.putSnapshot(key, richSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, richSnapshot(key)))
 
 	requireSnapshotCached(t, sl, key, true)
 	if entries, total := sl.cache.Len(), sl.totalBytes(); entries != 1 || total <= sl.maxBytes {
