@@ -1,0 +1,53 @@
+{{- /*
+The node event forwarder lists and watches Kubernetes Events in every namespace, not
+just the watched ones: Events involving cluster-scoped objects like Nodes are
+recorded in namespaces the operator may not otherwise watch (typically "default"
+or "kube-system").
+For standard cluster-scoped installs, the base ClusterRole in role.yaml already
+grants cluster-wide events permissions. This template creates a dedicated ClusterRole
+specifically for singleNamespaceInstall, where the operator is otherwise granted
+namespaced Roles only. Without it, the Event informer never syncs and the operator
+fails to start.
+*/ -}}
+{{- $nodeEventForwarderConfigEnabled := false -}}
+{{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") -}}
+  {{- $nodeEventForwarderConfigEnabled = .Values.nodeEventForwarder.enabled -}}
+{{- end -}}
+{{- $featureGateEnabled := false -}}
+{{- range .Values.featureGates -}}
+  {{- if eq .name "RayNodeEventForwarder" -}}
+    {{- $featureGateEnabled = .enabled -}}
+  {{- end -}}
+{{- end -}}
+{{- if and .Values.rbacEnable $nodeEventForwarderConfigEnabled $featureGateEnabled .Values.singleNamespaceInstall }}
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRole.name" . }}
+  labels:
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRoleBinding.name" . }}
+  labels:
+    {{- include "kuberay-operator.labels" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kuberay-operator.serviceAccount.name" . }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "kuberay-operator.nodeEventForwarderClusterRole.name" . }}
+{{- end }}
