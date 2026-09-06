@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // --- Test-local mock reader for LogEventReader tests ---

@@ -136,42 +136,42 @@ func newTestCollector(t *testing.T, writer *mockWriter, opts Options) *EventColl
 // ---------- Pure helper function tests ----------
 
 func TestIsNodeEvent(t *testing.T) {
-	assert.True(t, isNodeEvent(map[string]interface{}{"eventType": "NODE_LIFECYCLE_EVENT"}))
-	assert.True(t, isNodeEvent(map[string]interface{}{"eventType": "NODE_DEFINITION_EVENT"}))
-	assert.False(t, isNodeEvent(map[string]interface{}{"eventType": "TASK_DEFINITION_EVENT"}))
-	assert.False(t, isNodeEvent(map[string]interface{}{}))
+	assert.True(t, isNodeEvent(map[string]any{"eventType": "NODE_LIFECYCLE_EVENT"}))
+	assert.True(t, isNodeEvent(map[string]any{"eventType": "NODE_DEFINITION_EVENT"}))
+	assert.False(t, isNodeEvent(map[string]any{"eventType": "TASK_DEFINITION_EVENT"}))
+	assert.False(t, isNodeEvent(map[string]any{}))
 }
 
 func TestGetJobID(t *testing.T) {
 	// Payload job IDs arrive base64-encoded and are normalized to hex.
-	evt := map[string]interface{}{
-		"driverJobLifecycleEvent": map[string]interface{}{"jobId": "AQAAAA=="},
+	evt := map[string]any{
+		"driverJobLifecycleEvent": map[string]any{"jobId": "AQAAAA=="},
 	}
 	assert.Equal(t, "01000000", getJobID(evt))
 
-	evt2 := map[string]interface{}{
-		"taskDefinitionEvent": map[string]interface{}{"jobId": 7},
+	evt2 := map[string]any{
+		"taskDefinitionEvent": map[string]any{"jobId": 7},
 	}
 	assert.Equal(t, "7", getJobID(evt2))
 
-	assert.Equal(t, "", getJobID(map[string]interface{}{}))
-	assert.Equal(t, "", getJobID(map[string]interface{}{"taskDefinitionEvent": map[string]interface{}{}}))
+	assert.Empty(t, getJobID(map[string]any{}))
+	assert.Empty(t, getJobID(map[string]any{"taskDefinitionEvent": map[string]any{}}))
 }
 
 func TestCategorize(t *testing.T) {
 	ec := &EventCollector{}
 	assert.Equal(t, categoryNodeEvents,
-		ec.categorize(map[string]interface{}{"eventType": "NODE_LIFECYCLE_EVENT"}))
+		ec.categorize(map[string]any{"eventType": "NODE_LIFECYCLE_EVENT"}))
 
 	assert.Equal(t, path.Join(categoryJobPrefix, "job-1"),
-		ec.categorize(map[string]interface{}{
+		ec.categorize(map[string]any{
 			"eventType":           "TASK_DEFINITION_EVENT",
-			"taskDefinitionEvent": map[string]interface{}{"jobId": "job-1"},
+			"taskDefinitionEvent": map[string]any{"jobId": "job-1"},
 		}))
 
 	// fallback: neither node event nor recognizable jobID → node_events
 	assert.Equal(t, categoryNodeEvents,
-		ec.categorize(map[string]interface{}{"eventType": "UNKNOWN"}))
+		ec.categorize(map[string]any{"eventType": "UNKNOWN"}))
 }
 
 func TestSanitizeFileComponent(t *testing.T) {
@@ -290,7 +290,7 @@ func callPersistEvents(t *testing.T, ec *EventCollector, body []byte) *httptest.
 func TestPersistEvents_AppendsJSONLToDisk(t *testing.T) {
 	ec := newTestCollector(t, newMockWriter(), Options{CompressionEnabled: true})
 
-	events := []map[string]interface{}{
+	events := []map[string]any{
 		{
 			"eventId":     "e1",
 			"eventType":   "NODE_LIFECYCLE_EVENT",
@@ -300,7 +300,7 @@ func TestPersistEvents_AppendsJSONLToDisk(t *testing.T) {
 		{
 			"eventId":   "e2",
 			"eventType": "TASK_DEFINITION_EVENT",
-			"taskDefinitionEvent": map[string]interface{}{
+			"taskDefinitionEvent": map[string]any{
 				"jobId": "job-1",
 			},
 			"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
@@ -324,7 +324,7 @@ func TestPersistEvents_AppendsJSONLToDisk(t *testing.T) {
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimRight(string(nodeBytes), "\n"), "\n")
 	require.Len(t, lines, 1)
-	var m map[string]interface{}
+	var m map[string]any
 	require.NoError(t, json.Unmarshal([]byte(lines[0]), &m))
 	assert.Equal(t, "e1", m["eventId"])
 
@@ -345,7 +345,7 @@ func TestPersistEvents_SessionChangeRotates(t *testing.T) {
 	go ec.compressionUploadWorker()
 	defer ec.shutdown()
 
-	first := []map[string]interface{}{{
+	first := []map[string]any{{
 		"eventId":     "s1",
 		"eventType":   "NODE_LIFECYCLE_EVENT",
 		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
@@ -354,7 +354,7 @@ func TestPersistEvents_SessionChangeRotates(t *testing.T) {
 	body, _ := json.Marshal(first)
 	callPersistEvents(t, ec, body)
 
-	second := []map[string]interface{}{{
+	second := []map[string]any{{
 		"eventId":     "s2",
 		"eventType":   "NODE_LIFECYCLE_EVENT",
 		"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
@@ -552,7 +552,7 @@ func TestPersistEvents_WriteFailureEvictsWedgedWriter(t *testing.T) {
 	state.writer = bufio.NewWriterSize(state.file, 1)
 
 	event := func(id string) []byte {
-		body, merr := json.Marshal([]map[string]interface{}{{
+		body, merr := json.Marshal([]map[string]any{{
 			"eventId":     id,
 			"eventType":   "NODE_LIFECYCLE_EVENT",
 			"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),

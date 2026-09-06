@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/emicklei/go-restful/v3"
+
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
@@ -51,7 +52,7 @@ func ParseOptionsFromReq(req *restful.Request) (ListAPIOptions, error) {
 		ExcludeDriver: true,
 	}
 
-	parse := func(key string, opt interface{}) error {
+	parse := func(key string, opt any) error {
 		val := req.QueryParameter(key)
 		if val == "" {
 			return nil
@@ -195,7 +196,7 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 func filterTasks(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
 	filteredTasks := make([]eventtypes.Task, 0)
 	for _, task := range tasks {
-		predicateFunc, _ := PredicateMap[filter.FilterPredicate]
+		predicateFunc := PredicateMap[filter.FilterPredicate]
 
 		fieldValue := task.GetFilterableFieldValue(filter.FilterKey)
 		if predicateFunc(fieldValue, filter.FilterValue) {

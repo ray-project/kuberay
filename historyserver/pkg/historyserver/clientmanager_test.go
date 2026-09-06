@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +13,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 func TestGetAuthTokenForCluster(t *testing.T) {
@@ -96,7 +97,7 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeDisabled})
 	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
-	assert.Equal(t, "", token)
+	assert.Empty(t, token)
 
 	// Non-existent cluster should error (spec is read fresh from K8s)
 	_, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, "not-exists")

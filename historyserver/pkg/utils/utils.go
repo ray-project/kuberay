@@ -16,8 +16,9 @@ import (
 	"time"
 	"unicode"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 const (
@@ -86,7 +87,7 @@ func IsSessionDirActive(sessionDir string) bool {
 
 func GetSessionDir() (string, error) {
 	var lastErr error
-	for i := 0; i < 12; i++ {
+	for range 12 {
 		symlinkPath := GetRaySessionLatestPath()
 		resolvedPath, resolveErr := filepath.EvalSymlinks(symlinkPath)
 		if resolveErr != nil {
@@ -134,7 +135,7 @@ func MoveSessionLogsToPrevLogs(sessionDir, nodeID string) error {
 	}
 
 	dest := filepath.Join(GetTmpRayRoot(), "prev-logs", sessionName, nodeID)
-	if err := os.MkdirAll(dest, 0755); err != nil {
+	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination path %s: %w", dest, err)
 	}
 
@@ -219,8 +220,8 @@ func FetchCurrentNodeID() (string, error) {
 	}
 	addr := rayheadAddr
 	scheme := "http://"
-	if strings.HasPrefix(addr, "https://") {
-		scheme, addr = "https://", strings.TrimPrefix(addr, "https://")
+	if after, ok := strings.CutPrefix(addr, "https://"); ok {
+		scheme, addr = "https://", after
 	}
 	addr = strings.TrimPrefix(addr, "http://")
 	if !strings.Contains(addr, ":") {
@@ -268,7 +269,7 @@ func FetchCurrentNodeID() (string, error) {
 func GetNodeRayIDWithFQIP() (string, error) {
 	var lastErr error
 	// Retry loop waiting for Ray Head to become ready. 12 times so the total timeout is 60 seconds
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		nodeID, err := FetchCurrentNodeID()
 		if err == nil {
 			return nodeID, nil

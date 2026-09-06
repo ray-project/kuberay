@@ -64,19 +64,19 @@ func TestParseSessionCacheMaxMemory(t *testing.T) {
 
 // fakeProcessor is a configurable test double for processor.
 type fakeProcessor struct {
-	calls int32
+	calls atomic.Int32
 	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
 func (f *fakeProcessor) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
-	atomic.AddInt32(&f.calls, 1)
+	f.calls.Add(1)
 	if f.fn == nil {
 		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	}
 	return f.fn(ctx, info)
 }
 
-func (f *fakeProcessor) callCount() int32 { return atomic.LoadInt32(&f.calls) }
+func (f *fakeProcessor) callCount() int32 { return f.calls.Load() }
 
 func (f *fakeProcessor) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)) {
 	f.fn = fn
@@ -182,7 +182,7 @@ func TestLoadSession_ProcessorError(t *testing.T) {
 		const n = 5
 		var wg sync.WaitGroup
 		errs := make([]error, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
@@ -283,7 +283,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	}
 
 	// Subsequent calls: fast path, processor must NOT be invoked again.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := sl.LoadSession(context.Background(), info); err != nil {
 			t.Fatalf("fast path LoadSession #%d: %v", i, err)
 		}
@@ -350,20 +350,16 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	const goroutines = 50
 	var wg sync.WaitGroup
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			if err := sl.putSnapshot(key, richSnapshot(key)); err != nil {
 				t.Errorf("putSnapshot: %v", err)
 			}
-		}()
+		})
 	}
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			mine, ok := sl.GetSnapshot(key)
 			if !ok {
 				t.Errorf("GetSnapshot: unexpected miss")
@@ -387,7 +383,7 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 			if _, ok := fresh.Jobs["injected"]; ok {
 				t.Errorf("Jobs map leaked across requests")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

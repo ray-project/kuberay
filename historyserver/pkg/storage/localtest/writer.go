@@ -50,6 +50,6 @@ func (w *MockWriter) HasDirectory(path string) bool {
 }
 
 // NewWriter creates a new StorageWriter
-func NewWriter(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
+func NewWriter(c *types.RayHistoryServerConfig, jd map[string]any) (storage.StorageWriter, error) {
 	return NewMockWriter(), nil
 }

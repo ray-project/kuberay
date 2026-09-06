@@ -17,11 +17,10 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/ray-project/kuberay/ray-operator/test/support"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 // ansiEscapePattern matches ANSI escape sequences (same pattern as in reader.go)
@@ -342,7 +341,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			}
 
 			if tc.expectedStatus == http.StatusOK {
-				g.Expect(len(body)).To(BeNumerically(">", 0))
+				g.Expect(body).ToNot(BeEmpty())
 			}
 		})
 	}
@@ -440,7 +439,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid pid and node_id, got %d: %s", resp.StatusCode, string(body))
-		g.Expect(len(body)).To(BeNumerically(">", 0))
+		g.Expect(body).ToNot(BeEmpty())
 
 		// Test missing node_id
 		url = fmt.Sprintf("%s%s?pid=%d", historyServerURL, EndpointLogsFile, pid)
@@ -471,7 +470,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		// For live cluster, the request is proxied to Ray Dashboard
 		// The dashboard should be able to resolve node_ip to node_id
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid node_ip, got %d: %s", resp.StatusCode, string(body))
-		g.Expect(len(body)).To(BeNumerically(">", 0))
+		g.Expect(body).ToNot(BeEmpty())
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -646,7 +645,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
 
 			if tc.expectedStatus == http.StatusOK {
-				g.Expect(len(body)).To(BeNumerically(">", 0))
+				g.Expect(body).ToNot(BeEmpty())
 			}
 		})
 	}
@@ -713,7 +712,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		body, err := io.ReadAll(resp.Body)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(len(body)).To(BeNumerically(">", 0))
+		g.Expect(body).ToNot(BeEmpty())
 		LogWithTimestamp(test.T(), "attempt_number=0 returned %d bytes", len(body))
 
 		// attempt_number=1 should fail as retry log doesn't exist for normal execution
@@ -828,7 +827,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid node_ip, got %d: %s", resp.StatusCode, string(body))
-		g.Expect(len(body)).To(BeNumerically(">", 0))
+		g.Expect(body).ToNot(BeEmpty())
 
 		// Test that node_ip and node_id point to the same node (should return same content)
 		urlWithNodeID := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, savedNodeID, filename)
@@ -837,7 +836,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		bodyWithNodeID, _ := io.ReadAll(resp2.Body)
 		resp2.Body.Close()
 		g.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
-		g.Expect(len(body)).To(Equal(len(bodyWithNodeID)), "node_ip and node_id should return same content")
+		g.Expect(body).To(HaveLen(len(bodyWithNodeID)), "node_ip and node_id should return same content")
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -859,25 +858,25 @@ func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL strin
 	body, err := io.ReadAll(resp.Body)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Extract task_id from response
 	// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
-	data, ok := result["data"].(map[string]interface{})
+	data, ok := result["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
-	dataResult, ok := data["result"].(map[string]interface{})
+	dataResult, ok := data["result"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "data should have 'result' field")
 
-	tasks, ok := dataResult["result"].([]interface{})
+	tasks, ok := dataResult["result"].([]any)
 	g.Expect(ok).To(BeTrue(), "result should have 'result' array")
-	g.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
+	g.Expect(tasks).ToNot(BeEmpty(), "should have at least one task")
 
 	// Find all non-actor tasks with node_id
 	for _, t := range tasks {
-		task, ok := t.(map[string]interface{})
+		task, ok := t.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -905,7 +904,7 @@ func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL strin
 		}
 	}
 
-	g.Expect(len(taskIDs)).To(BeNumerically(">", 0), "should have at least one eligible task")
+	g.Expect(taskIDs).ToNot(BeEmpty(), "should have at least one eligible task")
 
 	return taskIDs
 }
@@ -923,25 +922,25 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	body, err := io.ReadAll(resp.Body)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Extract actorId from response
 	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
-	data, ok := result["data"].(map[string]interface{})
+	data, ok := result["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
-	actors, ok := data["actors"].(map[string]interface{})
+	actors, ok := data["actors"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
-	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+	g.Expect(actors).ToNot(BeEmpty(), "should have at least one actor")
 
 	// Find all actors
 	for actorID := range actors {
 		actorIDs = append(actorIDs, actorID)
 	}
 
-	g.Expect(len(actorIDs)).To(BeNumerically(">", 0), "should have at least one eligible actor")
+	g.Expect(actorIDs).ToNot(BeEmpty(), "should have at least one eligible actor")
 
 	return actorIDs
 }
@@ -958,24 +957,24 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 	body, err := io.ReadAll(resp.Body)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
-	data, ok := result["data"].(map[string]interface{})
+	data, ok := result["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
-	dataResult, ok := data["result"].(map[string]interface{})
+	dataResult, ok := data["result"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "data should have 'result' field")
 
-	tasks, ok := dataResult["result"].([]interface{})
+	tasks, ok := dataResult["result"].([]any)
 	g.Expect(ok).To(BeTrue(), "result should have 'result' array")
-	g.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
+	g.Expect(tasks).ToNot(BeEmpty(), "should have at least one task")
 
 	// Find a task with valid worker_pid and node_id
 	for _, t := range tasks {
-		task, ok := t.(map[string]interface{})
+		task, ok := t.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -1133,7 +1132,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 		// events/*RAYLET* should match only event_RAYLET.log in the events/ subdirectory.
 		g.Expect(result).To(HaveLen(1), "Should only have one category, got: %v", result)
-		internalFiles, _ := result["internal"].([]interface{})
+		internalFiles, _ := result["internal"].([]any)
 		g.Expect(internalFiles).To(ConsistOf("event_RAYLET.log"), "events/*RAYLET* should match exactly event_RAYLET.log")
 		LogWithTimestamp(t, "glob=events/*RAYLET* correctly returned %d file", len(internalFiles))
 	})
@@ -1160,7 +1159,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		totalFiles := countFiles(result)
 		g.Expect(totalFiles).To(BeNumerically(">", 0), "glob=*dashboard* should match at least one file, got: %v", result)
 		for category, files := range result {
-			fileList, _ := files.([]interface{})
+			fileList, _ := files.([]any)
 			for _, f := range fileList {
 				g.Expect(f.(string)).To(ContainSubstring("dashboard"),
 					"Each file matched by *dashboard* should contain 'dashboard', got %q in category %q", f, category)
@@ -1227,7 +1226,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 		// raylet* matches only raylet.out and raylet.err, so only the "raylet" category should be present.
 		g.Expect(result).To(HaveLen(1), "Should only have the 'raylet' category, got: %v", result)
-		rayletFiles, _ := result["raylet"].([]interface{})
+		rayletFiles, _ := result["raylet"].([]any)
 		g.Expect(rayletFiles).To(ConsistOf("raylet.out", "raylet.err"),
 			"raylet* should match exactly raylet.out and raylet.err")
 		LogWithTimestamp(t, "glob=raylet* correctly returned %d raylet files", len(rayletFiles))
@@ -1275,7 +1274,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 		// events/event_JOBS* maps to the "internal" category; no other category should be present.
 		g.Expect(result).To(HaveLen(1), "Should only have the 'internal' category, got: %v", result)
-		internalFiles, _ := result["internal"].([]interface{})
+		internalFiles, _ := result["internal"].([]any)
 		g.Expect(internalFiles).To(ConsistOf("event_JOBS.log"), "glob=events/event_JOBS* should match exactly event_JOBS.log")
 		LogWithTimestamp(t, "glob=events/event_JOBS* correctly returned %d file", len(internalFiles))
 	})
@@ -1304,7 +1303,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 		// Every returned file must end with .out regardless of which category it falls into.
 		for category, files := range result {
-			fileList, _ := files.([]interface{})
+			fileList, _ := files.([]any)
 			for _, f := range fileList {
 				g.Expect(f.(string)).To(HaveSuffix(".out"),
 					"All files matched by **/*.out should end with .out, got %q in category %q", f, category)
@@ -1320,16 +1319,16 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 // parseLogsResponse parses the /api/v0/logs response body and returns the categorized
 // file map from data.result. Returns nil on any parse failure.
-func parseLogsResponse(body []byte) map[string]interface{} {
-	var resp map[string]interface{}
+func parseLogsResponse(body []byte) map[string]any {
+	var resp map[string]any
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil
 	}
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		return nil
 	}
-	result, ok := data["result"].(map[string]interface{})
+	result, ok := data["result"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -1337,10 +1336,10 @@ func parseLogsResponse(body []byte) map[string]interface{} {
 }
 
 // countFiles counts the total number of file entries across all categories in the result map.
-func countFiles(result map[string]interface{}) int {
+func countFiles(result map[string]any) int {
 	total := 0
 	for _, v := range result {
-		if files, ok := v.([]interface{}); ok {
+		if files, ok := v.([]any); ok {
 			total += len(files)
 		}
 	}
@@ -1497,7 +1496,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 		gg.Expect(err).NotTo(HaveOccurred())
 
 		// Should have at least some events
-		gg.Expect(len(events)).To(BeNumerically(">", 0), "Timeline should have at least one event")
+		gg.Expect(events).ToNot(BeEmpty(), "Timeline should have at least one event")
 
 		// Verify all the job_id are same
 		if jobID != "" {
@@ -1617,7 +1616,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 			gg.Expect(result["msg"]).To(Equal("All actors fetched."))
 
 			// Verify data.actors exists and is a map
@@ -1625,7 +1624,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			actors, ok := data["actors"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
-			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+			gg.Expect(actors).ToNot(BeEmpty(), "should have at least one actor")
 
 			// Verify actor schema matches formatActorForResponse format
 			for _, actorData := range actors {
@@ -1665,7 +1664,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
 
 			// Verify data.detail exists and contains actorId
@@ -1704,7 +1703,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(false))
+			gg.Expect(result["result"]).To(BeFalse())
 			gg.Expect(result["msg"]).To(Equal("Actor not found."))
 		}, TestTimeoutShort).Should(Succeed())
 	})
@@ -2199,11 +2198,11 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
 			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
 
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		err = json.Unmarshal(body, &metadata)
 		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
 		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
-		data, ok := metadata["data"].(map[string]interface{})
+		data, ok := metadata["data"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("rayVersion"))
 		gg.Expect(data).To(HaveKey("pythonVersion"))
@@ -2229,7 +2228,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	g.Eventually(func(gg Gomega) {
 		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
 			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(metaKey),
+			Key:    new(metaKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
@@ -2268,11 +2267,11 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
 			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
 
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		err = json.Unmarshal(body, &metadata)
 		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
 		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
-		data, ok := metadata["data"].(map[string]interface{})
+		data, ok := metadata["data"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("rayVersion"))
 		gg.Expect(data).To(HaveKey("pythonVersion"))
@@ -2313,7 +2312,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	g.Eventually(func(gg Gomega) {
 		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
 			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
+			Key:    new(pgKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
@@ -2353,7 +2352,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
 			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
 
-		var response map[string]interface{}
+		var response map[string]any
 		err = json.Unmarshal(body, &response)
 		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
 		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
@@ -2362,14 +2361,14 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
 		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
 		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
-		data, ok := response["data"].(map[string]interface{})
+		data, ok := response["data"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
-		resultObj, ok := data["result"].(map[string]interface{})
+		resultObj, ok := data["result"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
 		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
 
-		pgList, ok := resultObj["result"].([]interface{})
+		pgList, ok := resultObj["result"].([]any)
 		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
 		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
 		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
@@ -2602,7 +2601,6 @@ func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.
 		gg.Expect(body).To(MatchJSON(fmt.Sprintf(HistoryServerGrafanaHealthResponse, RayGrafanaIframeHost, sessionID)))
 		LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 	}, TestTimeoutShort).Should(Succeed())
-
 }
 
 // verifyHistoryServerPrometheusHealthEndpoint tests the /api/prometheus_health endpoint
@@ -2623,7 +2621,7 @@ func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *ht
 		var result map[string]any
 		err = json.Unmarshal(body, &result)
 		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(result["result"]).To(Equal(true), "Response should have result=true")
+		gg.Expect(result["result"]).To(BeTrue(), "Response should have result=true")
 		gg.Expect(result["msg"]).To(ContainSubstring("prometheus running"), "Response message should contain 'prometheus running'")
 		LogWithTimestamp(test.T(), "Endpoint %s returned status %d with valid response", endpoint, resp.StatusCode)
 	}, TestTimeoutShort).Should(Succeed())
@@ -2694,7 +2692,7 @@ func getAllEligibleJobIDs(g *WithT, client *http.Client, historyServerURL string
 		}
 		jobIDs = append(jobIDs, jobID)
 	}
-	g.Expect(len(jobIDs)).To(BeNumerically(">", 0), "should have at least one eligible job ID")
+	g.Expect(jobIDs).ToNot(BeEmpty(), "should have at least one eligible job ID")
 
 	return jobIDs
 }
@@ -2800,7 +2798,7 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 
 	// Both live and dead clusters now return a flat array of node summaries.
 	// Dead cluster uses the latest snapshot per node to match the Ray Dashboard API format.
-	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
+	g.Expect(summary).To(HaveLen(2), "Should have 2 node summaries (one head node and one worker node)")
 	for _, nodeSummary := range summary {
 		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
 		g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
@@ -2814,7 +2812,7 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 
 	// Both live and dead clusters return {nodeId: string} format.
 	// Dead cluster uses the latest resource string per node.
-	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
+	g.Expect(nodeLogicalResources).To(HaveLen(2), "Should have 2 resource strings (one head node and one worker node)")
 	for nodeId, resourceString := range nodeLogicalResources {
 		g.Expect(nodeId).NotTo(BeEmpty())
 		g.Expect(resourceString).NotTo(BeEmpty())
@@ -2899,7 +2897,7 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
 
 	// At least one entry in node_id_to_summary.
-	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+	g.Expect(nodeIDToSummary).ToNot(BeEmpty(), "should have at least one node_id_to_summary entry")
 
 	// Verify each TaskSummaries entry.
 	for key, summaryVal := range nodeIDToSummary {
@@ -2918,7 +2916,7 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 		// Verify summary is an array with at least one entry.
 		summary, ok := taskSummaries["summary"].([]any)
 		g.Expect(ok).To(BeTrue(), "'summary' should be an array")
-		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+		g.Expect(summary).ToNot(BeEmpty(), "should have at least one summary entry")
 
 		// Verify each NestedTaskSummary node (schema check).
 		for _, entry := range summary {
@@ -2985,7 +2983,7 @@ func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
 	// Verify state_counts is a map with at least one entry.
 	stateCounts, ok := node["state_counts"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
-	g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+	g.Expect(stateCounts).ToNot(BeEmpty(), "should have at least one state count")
 
 	// Verify type is one of the known node types.
 	nodeType, ok := node["type"].(string)
@@ -3122,7 +3120,7 @@ func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]
 	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
 
 	// At least one entry in node_id_to_summary.
-	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+	g.Expect(nodeIDToSummary).ToNot(BeEmpty(), "should have at least one node_id_to_summary entry")
 
 	// Verify each TaskSummariesByFuncName entry.
 	for key, summaryVal := range nodeIDToSummary {
@@ -3141,7 +3139,7 @@ func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]
 		// Verify summary is a map (func_name mode uses map, unlike lineage which uses array).
 		summary, ok := taskSummaries["summary"].(map[string]any)
 		g.Expect(ok).To(BeTrue(), "'summary' should be a map")
-		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+		g.Expect(summary).ToNot(BeEmpty(), "should have at least one summary entry")
 
 		// Verify each TaskSummaryPerFuncOrClassName entry.
 		for funcName, entryVal := range summary {
@@ -3165,7 +3163,7 @@ func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]
 			// state_counts should be a map with at least one entry.
 			stateCounts, ok := entry["state_counts"].(map[string]any)
 			g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
-			g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+			g.Expect(stateCounts).ToNot(BeEmpty(), "should have at least one state count")
 		}
 	}
 
@@ -3219,7 +3217,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 
 			// Verify data.events exists
 			data, ok := result["data"].(map[string]any)
@@ -3285,7 +3283,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 			gg.Expect(result["msg"]).To(Equal("All events fetched."))
 
 			// Verify data.events exists (may be empty if no events were collected)
@@ -3329,7 +3327,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
 
 			data, ok := result["data"].(map[string]any)
@@ -3357,7 +3355,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 			var result map[string]any
 			err = json.Unmarshal(body, &result)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["result"]).To(BeTrue())
 			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
 
 			data, ok := result["data"].(map[string]any)

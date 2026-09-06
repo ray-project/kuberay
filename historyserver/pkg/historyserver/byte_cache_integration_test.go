@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/emicklei/go-restful/v3"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"

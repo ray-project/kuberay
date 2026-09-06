@@ -229,7 +229,7 @@ func TestFormatTaskForResponseTaskLogInfo(t *testing.T) {
 	}}
 
 	response := formatTaskForResponse(task, true)
-	assert.Equal(t, map[string]interface{}{
+	assert.Equal(t, map[string]any{
 		"stdout_file":  "worker.out",
 		"stderr_file":  "worker.err",
 		"stdout_start": int64(10),

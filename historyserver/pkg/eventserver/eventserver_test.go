@@ -1010,7 +1010,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 	}
 
 	// Simulate 10 hourly reprocessing cycles
-	for cycle := 0; cycle < 10; cycle++ {
+	for cycle := range 10 {
 		err := h.storeEvent(testClusterName, eventMap)
 		if err != nil {
 			t.Fatalf("Cycle %d: storeEvent() error = %v", cycle, err)

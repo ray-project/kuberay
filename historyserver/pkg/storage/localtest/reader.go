@@ -76,6 +76,6 @@ func (r *MockReader) ListFiles(clusterId string, dir string) []string {
 }
 
 // NewReader creates a new StorageReader
-func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+func NewReader(c *types.RayHistoryServerConfig, jd map[string]any) (storage.StorageReader, error) {
 	return NewMockReader(), nil
 }

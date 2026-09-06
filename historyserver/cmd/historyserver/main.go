@@ -77,7 +77,7 @@ func main() {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
 	}
 	// Auth-token mode only affects proxied live-cluster requests. Warn rather than failing so that
-    // deployments upgrading across the default flip do not CrashLoopBackOff.
+	// deployments upgrading across the default flip do not CrashLoopBackOff.
 	if useAuthTokenMode && !enableLiveClusters {
 		logrus.Warnf("--use-auth-token-mode has no effect while --enable-live-clusters=false")
 	}
@@ -92,7 +92,7 @@ func main() {
 		logrus.Fatalf("Failed to create client manager: %v", err)
 	}
 
-	jsonData := make(map[string]interface{})
+	jsonData := make(map[string]any)
 	if storageBackendConfigPath != "" {
 		data, err := os.ReadFile(storageBackendConfigPath)
 		if err != nil {
@@ -141,12 +141,10 @@ func main() {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		handler.Run(stop)
 		logrus.Info("HTTP server shutdown complete")
-	}()
+	})
 
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
