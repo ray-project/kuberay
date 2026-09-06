@@ -81,10 +81,7 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	}
 
 	// We don't defer close here since the close function acts as finalizing the write.
-	if err := writer.Close(); err != nil {
-		return err
-	}
-	return nil
+	return writer.Close()
 }
 
 // ListFiles will return all files within the directory.

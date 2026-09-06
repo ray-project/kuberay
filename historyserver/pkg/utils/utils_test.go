@@ -221,7 +221,7 @@ func TestGetSessionDir_Symlinks(t *testing.T) {
 		t.Fatalf("failed to create sockets dir: %v", err)
 	}
 	socketPath := filepath.Join(socketDir, "raylet")
-	listener, err := net.Listen("unix", socketPath)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", socketPath)
 	if err != nil {
 		t.Fatalf("failed to listen on unix socket: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestGetSessionDir_FatalError_FailsFast(t *testing.T) {
 
 	// Create a file (not a directory)
 	filePath := filepath.Join(tmpDir, "file")
-	if err := os.WriteFile(filePath, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0o600); err != nil {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
@@ -314,7 +314,7 @@ func TestGetSessionDir_WaitsForActive(t *testing.T) {
 	// Start a goroutine that will create the active raylet socket after a short delay (e.g., 2 seconds).
 	go func() {
 		time.Sleep(2 * time.Second)
-		listener, err := net.Listen("unix", socketPath)
+		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", socketPath)
 		if err == nil {
 			t.Cleanup(func() {
 				listener.Close()
@@ -351,7 +351,7 @@ func TestMoveLeftoverSessionLogs(t *testing.T) {
 	if err := os.MkdirAll(priorLogsDir, 0o755); err != nil {
 		t.Fatalf("failed to create prior logs dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(priorLogsDir, "raylet.out"), []byte("prior logs"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(priorLogsDir, "raylet.out"), []byte("prior logs"), 0o600); err != nil {
 		t.Fatalf("failed to write prior log file: %v", err)
 	}
 
@@ -362,7 +362,7 @@ func TestMoveLeftoverSessionLogs(t *testing.T) {
 	if err := os.MkdirAll(activeLogsDir, 0o755); err != nil {
 		t.Fatalf("failed to create active logs dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(activeLogsDir, "raylet.out"), []byte("active logs"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(activeLogsDir, "raylet.out"), []byte("active logs"), 0o600); err != nil {
 		t.Fatalf("failed to write active log file: %v", err)
 	}
 

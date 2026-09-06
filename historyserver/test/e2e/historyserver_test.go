@@ -275,9 +275,9 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		}, http.StatusOK},
 
 		// Missing mandatory parameters
-		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"missing node_id and node_ip", func(u, _ string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
 		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
+		{"missing both", func(u, _ string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
 		{"invalid lines (string)", func(u, n string) string {
@@ -297,8 +297,8 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"file not found", func(u, n string) string {
 			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
 		}, http.StatusInternalServerError},
-		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusInternalServerError},
-		{"node_ip invalid (non-existent)", func(u, n string) string {
+		{"task_id invalid (not found)", func(u, _ string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusInternalServerError},
+		{"node_ip invalid (non-existent)", func(u, _ string) string {
 			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
 		}, http.StatusInternalServerError},
 		{"pid invalid (string)", func(u, n string) string { return fmt.Sprintf("%s%s?pid=abc&node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
@@ -315,7 +315,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"traversal ../../secret", func(u, n string) string {
 			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
 		}, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string {
+		{"traversal in node_id", func(u, _ string) string {
 			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
 		}, http.StatusBadRequest},
 	}
@@ -328,7 +328,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			resp, err := client.Get(url)
 			g.Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				io.Copy(io.Discard, resp.Body)
+				_, _ = io.Copy(io.Discard, resp.Body)
 				resp.Body.Close()
 			}()
 
@@ -375,10 +375,9 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 				successCount++
 				LogWithTimestamp(t, "Task %s succeeded, returned %d bytes", taskID, len(body))
 				break
-			} else {
-				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 			}
+			lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
+			LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
@@ -414,10 +413,9 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 				successCount++
 				LogWithTimestamp(t, "Actor %s succeeded, returned %d bytes", actorID, len(body))
 				break
-			} else {
-				lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
 			}
+			lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
+			LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
@@ -577,9 +575,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		}, http.StatusOK},
 
 		// Missing mandatory parameters
-		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"missing node_id and node_ip", func(u, _ string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
 		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
+		{"missing both", func(u, _ string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
 		{"invalid lines (string)", func(u, n string) string {
@@ -597,11 +595,11 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"invalid suffix", func(u, n string) string {
 			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
 		}, http.StatusBadRequest},
-		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusBadRequest},
+		{"task_id invalid (not found)", func(u, _ string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusBadRequest},
 		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusNotFound},
 
 		// node_ip parameter tests
-		{"node_ip invalid (non-existent)", func(u, n string) string {
+		{"node_ip invalid (non-existent)", func(u, _ string) string {
 			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
 		}, http.StatusNotFound},
 
@@ -616,7 +614,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"traversal ../../secret", func(u, n string) string {
 			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
 		}, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string {
+		{"traversal in node_id", func(u, _ string) string {
 			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
 		}, http.StatusBadRequest},
 	}
@@ -629,7 +627,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			resp, err := client.Get(url)
 			g.Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				io.Copy(io.Discard, resp.Body)
+				_, _ = io.Copy(io.Discard, resp.Body)
 				resp.Body.Close()
 			}()
 
@@ -755,10 +753,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 				successCount++
 				LogWithTimestamp(t, "Task %s succeeded, returned %d bytes", taskID, len(body))
 				break
-			} else {
-				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 			}
+			lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
+			LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
@@ -794,10 +791,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 				successCount++
 				LogWithTimestamp(t, "Actor %s succeeded, returned %d bytes", actorID, len(body))
 				break
-			} else {
-				lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
 			}
+			lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
+			LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
@@ -1818,7 +1814,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 		resp, err := client.Get(url)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer func() {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}()
 
@@ -2780,7 +2776,7 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
 // Both live and dead clusters now return the same format (flat array of latest snapshots).
 // isLive is kept for signature compatibility but no longer affects validation.
-func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
+func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, _ bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
 	g.Expect(nodesResp).To(HaveKeyWithValue("msg", Equal("Node summary fetched.")))
@@ -2824,7 +2820,7 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
 // Both live and dead clusters now return the same format (single object with latest snapshot).
 // isLive is kept for signature compatibility but no longer affects validation.
-func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
+func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, _ bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
 	g.Expect(nodeResp).To(HaveKeyWithValue("msg", Equal("Node details fetched.")))
@@ -2841,7 +2837,7 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.
-func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
+func verifyNodeSummarySchema(_ Test, g *WithT, nodeSummary map[string]any) {
 	for _, field := range []string{"now", "hostname", "ip", "raylet"} {
 		g.Expect(nodeSummary).To(HaveKey(field))
 	}
@@ -2920,7 +2916,7 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 
 		// Verify each NestedTaskSummary node (schema check).
 		for _, entry := range summary {
-			verifyNestedTaskSummarySchema(test, g, entry)
+			verifyNestedTaskSummarySchema(g, entry)
 		}
 
 		// Verify lineage tree structural properties produced by rayjob.yaml scenarios.
@@ -2969,7 +2965,7 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 
 // verifyNestedTaskSummarySchema recursively verifies the schema of a NestedTaskSummary node
 // in the lineage tree, including all children.
-func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
+func verifyNestedTaskSummarySchema(g *WithT, entry any) {
 	node, ok := entry.(map[string]any)
 	g.Expect(ok).To(BeTrue(), "NestedTaskSummary should be a map")
 
@@ -2994,7 +2990,7 @@ func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
 	children, ok := node["children"].([]any)
 	g.Expect(ok).To(BeTrue(), "'children' should be an array")
 	for _, child := range children {
-		verifyNestedTaskSummarySchema(test, g, child)
+		verifyNestedTaskSummarySchema(g, child)
 	}
 
 	// Verify link if present (optional field, absent on GROUP nodes).
@@ -3056,10 +3052,7 @@ func collectLineageStats(entry any, stats *lineageStats) {
 
 	// Check 5: GROUP link should be null.
 	if nodeType == "GROUP" {
-		link, exists := node["link"]
-		if !exists || link == nil {
-			// link is absent or null — correct
-		} else {
+		if link, exists := node["link"]; exists && link != nil {
 			stats.groupLinkAlwaysNull = false
 		}
 	}
@@ -3171,7 +3164,7 @@ func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]
 }
 
 // verifyNodesHostNameListSchema verifies that the /nodes?view=hostNameList response is valid according to the API schema.
-func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
+func verifyNodesHostNameListSchema(_ Test, g *WithT, nodesResp map[string]any, _ bool) {
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
 	g.Expect(nodesResp).To(HaveKeyWithValue("msg", Equal("Node hostname list fetched.")))
 	g.Expect(nodesResp).To(HaveKey("data"))
@@ -3468,7 +3461,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
 
 	test.T().Run("should proxy /api/cluster_status to live clusters", func(_ *testing.T) {
-		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(_ Test, g *WithT, data map[string]any) {
 			g.Expect(data).To(HaveKeyWithValue("result", true))
 			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
 			g.Expect(data).To(HaveKey("data"))
@@ -3476,7 +3469,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	})
 
 	test.T().Run("should proxy for /api/cluster_status?format=1", func(_ *testing.T) {
-		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(_ Test, g *WithT, data map[string]any) {
 			g.Expect(data).To(HaveKeyWithValue("result", true))
 			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
 			g.Expect(data).To(HaveKey("data"))
@@ -3523,7 +3516,7 @@ func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
 
 	test.T().Run("should return cluster status with /api/cluster_status", func(_ *testing.T) {
-		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(_ Test, g *WithT, data map[string]any) {
 			g.Expect(data).To(HaveKeyWithValue("result", true))
 			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
 			g.Expect(data).To(HaveKey("data"))
@@ -3531,7 +3524,7 @@ func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	})
 
 	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(_ *testing.T) {
-		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(_ Test, g *WithT, data map[string]any) {
 			g.Expect(data).To(HaveKeyWithValue("result", true))
 			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
 			g.Expect(data).To(HaveKey("data"))

@@ -288,7 +288,9 @@ func main() {
 	if enableLogCollector {
 		wg.Go(func() {
 			logCollector := runtime.NewCollector(&globalConfig, writer)
-			logCollector.Run(stop)
+			if err := logCollector.Run(stop); err != nil {
+				logrus.Errorf("Log collector exited with error: %v", err)
+			}
 			logrus.Info("Log collector shutdown")
 		})
 	}

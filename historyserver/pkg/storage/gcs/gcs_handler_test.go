@@ -76,7 +76,9 @@ func TestCreateDirectory(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			handler.CreateDirectory(tc.path)
+			if err := handler.CreateDirectory(tc.path); err != nil {
+				t.Fatalf("CreateDirectory(%q) failed: %v", tc.path, err)
+			}
 
 			_, err := server.GetObject(bucketName, tc.expectedObj)
 			if err != nil {

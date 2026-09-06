@@ -100,7 +100,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	}
 
 	err := r.S3Client.ListObjectsV2Pages(listInput,
-		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		func(page *s3.ListObjectsV2Output, _ bool) bool {
 			logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 				prefix+"/", len(page.Contents), len(page.CommonPrefixes))
 
@@ -133,8 +133,8 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	prefix := path.Join(r.S3RootDir, clusterId, dir)
 
 	defer func() {
-		if recover := recover(); recover != nil {
-			fmt.Println("Recovered from panic:", recover)
+		if rec := recover(); rec != nil {
+			fmt.Println("Recovered from panic:", rec)
 		}
 	}()
 
@@ -146,8 +146,8 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	defer func() {
-		if recover := recover(); recover != nil {
-			fmt.Println("Recovered from panic:", recover)
+		if rec := recover(); rec != nil {
+			fmt.Println("Recovered from panic:", rec)
 		}
 	}()
 
@@ -165,7 +165,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		}
 
 		err := r.S3Client.ListObjectsV2Pages(listInput,
-			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+			func(page *s3.ListObjectsV2Output, _ bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 					prefix, len(page.Contents), len(page.CommonPrefixes))
 

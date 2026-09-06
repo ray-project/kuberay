@@ -84,12 +84,12 @@ func NewS3Client(endpoint string) (*s3.S3, error) {
 }
 
 // DeleteS3Bucket deletes the S3 bucket. Note that objects under the bucket should be deleted first.
-func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
+func DeleteS3Bucket(test Test, _ *WithT, s3Client *s3.S3) {
 	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", S3BucketName)
 
 	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: new(S3BucketName),
-	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	}, func(page *s3.ListObjectsV2Output, _ bool) bool {
 		if len(page.Contents) == 0 {
 			return false
 		}

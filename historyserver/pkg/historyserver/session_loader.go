@@ -73,7 +73,7 @@ type SessionLoader struct {
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize, cacheMaxBytes int, cacheTTL time.Duration) *SessionLoader {
+func NewSessionLoader(serverCtx context.Context, p processor, processTimeout time.Duration, cacheSize, cacheMaxBytes int, cacheTTL time.Duration) *SessionLoader {
 	return &SessionLoader{
 		processor:      p,
 		cache:          expirable.NewLRU[string, []byte](cacheSize, nil, cacheTTL),

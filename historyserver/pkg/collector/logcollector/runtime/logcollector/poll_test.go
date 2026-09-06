@@ -573,7 +573,7 @@ func TestPeriodicPollingCancelsInFlightRequestOnShutdown(t *testing.T) {
 	enteredCh := make(chan struct{})
 	release := make(chan struct{})
 	defer close(release)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		entered.Do(func() { close(enteredCh) })
 		<-release
 	}))

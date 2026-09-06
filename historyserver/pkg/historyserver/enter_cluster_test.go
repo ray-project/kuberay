@@ -30,11 +30,11 @@ func (m *mockStorageReader) List() []utils.ClusterInfo {
 	return m.clusters
 }
 
-func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+func (m *mockStorageReader) GetContent(_, _ string) io.Reader {
 	return strings.NewReader("")
 }
 
-func (m *mockStorageReader) ListFiles(clusterId string, dir string) []string {
+func (m *mockStorageReader) ListFiles(_, _ string) []string {
 	return nil
 }
 
@@ -104,7 +104,7 @@ func TestEnterCluster(t *testing.T) {
 
 	// Setup fake processor for sessionLoader
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			if info.SessionName == "session_2026-04-22_10-00-00_000000_1" {
 				return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 			}
@@ -114,7 +114,7 @@ func TestEnterCluster(t *testing.T) {
 			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	// Register actual router
 	routerRayClusterSet(handler)
@@ -139,7 +139,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter existing single-session cluster with explicit session (Successful Dead Session Loading)", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a/session_2026-04-22_10-00-00_000000_1", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-a/session_2026-04-22_10-00-00_000000_1", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -159,7 +159,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with session that is actually live maps to live sentinel", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-c/session_2026-04-22_10-00-00_000000_2_live", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-c/session_2026-04-22_10-00-00_000000_2_live", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -180,7 +180,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with invalid session name format rejects request", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-d/invalid-session-name", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-d/invalid-session-name", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -189,7 +189,7 @@ func TestEnterCluster(t *testing.T) {
 		}
 	})
 	t.Run("Enter cluster with 'latest' keyword resolves to newest session in the list", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-b/latest", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-b/latest", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -216,7 +216,7 @@ func TestEnterCluster(t *testing.T) {
 	})
 
 	t.Run("Enter cluster with no session parameter defaults to latest", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-b", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-b", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -274,17 +274,17 @@ func TestEnterClusterLatestFromStorage(t *testing.T) {
 	}
 
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-refresh/latest", nil)
+	req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-refresh/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -340,17 +340,17 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 	}
 
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusLive, nil, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-prioritize-live/latest", nil)
+	req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-prioritize-live/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -393,17 +393,17 @@ func TestEnterClusterReturnsNotFoundWhenRemovedFromStorage(t *testing.T) {
 	}
 
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
 	// Call enter_cluster with "latest"
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-removed-from-storage/latest", nil)
+	req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-removed-from-storage/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -418,7 +418,7 @@ type errorClient struct {
 	err error
 }
 
-func (c *errorClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+func (c *errorClient) Get(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 	return c.err
 }
 
@@ -452,17 +452,17 @@ func TestEnterClusterReturnsErrorOnTransientK8sError(t *testing.T) {
 	}
 
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
 	// Request "latest" when K8s returns transient error
-	req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-transient-err/latest", nil)
+	req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-transient-err/latest", nil)
 	resp := httptest.NewRecorder()
 	container.ServeHTTP(resp, req)
 
@@ -511,17 +511,17 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	}
 
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	routerRayClusterSet(handler)
 	container := restful.DefaultContainer
 
 	t.Run("Enter RayJob by owner name without session defaults to latest", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/rayjob/my-job", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/rayjob/my-job", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -542,7 +542,7 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	})
 
 	t.Run("Enter RayService by owner name with specific session", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/rayservice/my-service/session_2026-04-22_10-00-00_000000_2", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/rayservice/my-service/session_2026-04-22_10-00-00_000000_2", nil)
 		resp := httptest.NewRecorder()
 		container.ServeHTTP(resp, req)
 
@@ -588,7 +588,7 @@ func newDisabledLiveHandler(t *testing.T, status SessionStatus) *ServerHandler {
 			return status, nil, nil
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(context.Background(), fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, defaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 	return handler
 }
 
@@ -625,7 +625,7 @@ func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
 		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
 		routerRayClusterSet(handler)
 
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/live", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-running/live", nil)
 		resp := httptest.NewRecorder()
 		restful.DefaultContainer.ServeHTTP(resp, req)
 
@@ -646,7 +646,7 @@ func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
 		handler := newDisabledLiveHandler(t, SessionStatusLive)
 		routerRayClusterSet(handler)
 
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
 		resp := httptest.NewRecorder()
 		restful.DefaultContainer.ServeHTTP(resp, req)
 
@@ -664,7 +664,7 @@ func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
 		handler := newDisabledLiveHandler(t, SessionStatusProcessed)
 		routerRayClusterSet(handler)
 
-		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/enter_cluster/default/raycluster/cluster-running/latest", nil)
 		resp := httptest.NewRecorder()
 		restful.DefaultContainer.ServeHTTP(resp, req)
 

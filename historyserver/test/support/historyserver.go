@@ -180,7 +180,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 			return err
 		}
 		defer func() {
-			io.Copy(io.Discard, resp.Body)
+			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}()
 		if resp.StatusCode != http.StatusOK {
@@ -354,7 +354,7 @@ func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http
 			resp, err := client.Get(url)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				io.Copy(io.Discard, resp.Body)
+				_, _ = io.Copy(io.Discard, resp.Body)
 				resp.Body.Close()
 			}()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -94,7 +96,7 @@ func newTestLoader(t *testing.T, p processor, cfg loaderTestConfig) *SessionLoad
 	if cacheSize <= 0 {
 		cacheSize = DefaultSessionCacheSize
 	}
-	return NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize, cfg.maxBytes, cfg.cacheTTL)
+	return NewSessionLoader(context.Background(), p, DefaultSessionProcessTimeout, cacheSize, cfg.maxBytes, cfg.cacheTTL)
 }
 
 func testClusterInfo() utils.ClusterInfo {
@@ -300,7 +302,7 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
 	stored := testSnapshot(key)
-	sl.putSnapshot(key, stored)
+	require.NoError(t, sl.putSnapshot(key, stored))
 
 	got, ok := sl.GetSnapshot(key)
 	if !ok {
@@ -327,8 +329,8 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	fresh.Tasks = []eventtypes.Task{{TaskID: "fresh-task"}}
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	sl.putSnapshot(key, stale)
-	sl.putSnapshot(key, fresh)
+	require.NoError(t, sl.putSnapshot(key, stale))
+	require.NoError(t, sl.putSnapshot(key, fresh))
 
 	got, ok := sl.GetSnapshot(key)
 	if !ok {
@@ -345,7 +347,7 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	key := testClusterSessionKey()
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	sl.putSnapshot(key, richSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, richSnapshot(key)))
 
 	const goroutines = 50
 	var wg sync.WaitGroup
@@ -412,10 +414,10 @@ func TestGetSnapshot_LRUEviction(t *testing.T) {
 	k3 := testClusterSessionKeyFor("session_2026-04-22_12-00-00_000000_1")
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 2})
-	sl.putSnapshot(k1, testSnapshot(k1))
-	sl.putSnapshot(k2, testSnapshot(k2))
+	require.NoError(t, sl.putSnapshot(k1, testSnapshot(k1)))
+	require.NoError(t, sl.putSnapshot(k2, testSnapshot(k2)))
 	// Third session evicts the first (LRU).
-	sl.putSnapshot(k3, testSnapshot(k3))
+	require.NoError(t, sl.putSnapshot(k3, testSnapshot(k3)))
 
 	requireSnapshotCached(t, sl, k1, false)
 	requireSnapshotCached(t, sl, k2, true)
@@ -429,7 +431,7 @@ func TestGetSnapshot_TTLExpiry(t *testing.T) {
 
 	const ttl = 30 * time.Millisecond
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheTTL: ttl})
-	sl.putSnapshot(key, testSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, testSnapshot(key)))
 
 	requireSnapshotCached(t, sl, key, true)
 
@@ -444,7 +446,7 @@ func TestGetSnapshot_SlidingTTLRenewal(t *testing.T) {
 
 	const ttl = 30 * time.Millisecond
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheTTL: ttl})
-	sl.putSnapshot(key, testSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, testSnapshot(key)))
 
 	deadline := time.Now().Add(100 * time.Millisecond)
 	for time.Now().Before(deadline) {
@@ -469,8 +471,8 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 	maxBytes := len(enc1) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
-	sl.putSnapshot(olderKey, s1)
-	sl.putSnapshot(newerKey, richSnapshot(newerKey))
+	require.NoError(t, sl.putSnapshot(olderKey, s1))
+	require.NoError(t, sl.putSnapshot(newerKey, richSnapshot(newerKey)))
 
 	requireSnapshotCached(t, sl, olderKey, false)
 	requireSnapshotCached(t, sl, newerKey, true)
@@ -484,7 +486,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 func TestCache_ByteBudgetKeepsOversizedSoleEntry(t *testing.T) {
 	key := testClusterSessionKey()
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: 1})
-	sl.putSnapshot(key, richSnapshot(key))
+	require.NoError(t, sl.putSnapshot(key, richSnapshot(key)))
 
 	requireSnapshotCached(t, sl, key, true)
 	if entries, total := sl.cache.Len(), sl.totalBytes(); entries != 1 || total <= sl.maxBytes {

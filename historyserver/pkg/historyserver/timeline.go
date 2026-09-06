@@ -122,7 +122,7 @@ func getTasksTimeline(snap *eventserver.SessionSnapshot, jobID string) []eventty
 			// Parse extraData for additional fields
 			var extraData map[string]any
 			if profEvent.ExtraData != "" {
-				json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
+				_ = json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
 			}
 
 			// Determine task_id and func_or_class_name

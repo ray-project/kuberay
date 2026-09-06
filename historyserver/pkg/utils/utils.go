@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -77,7 +78,7 @@ const (
 // IsSessionDirActive checks if the raylet socket is running. Connection means raylet is active.
 func IsSessionDirActive(sessionDir string) bool {
 	socketPath := filepath.Join(sessionDir, "sockets", "raylet")
-	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
+	conn, err := (&net.Dialer{Timeout: 1 * time.Second}).DialContext(context.Background(), "unix", socketPath)
 	if err == nil {
 		conn.Close()
 		return true
@@ -234,7 +235,7 @@ func FetchCurrentNodeID() (string, error) {
 	endpoint := fmt.Sprintf("%s%s/api/v0/nodes?limit=10000", scheme, strings.TrimRight(addr, "/"))
 	client := &http.Client{Timeout: 1 * time.Second}
 
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", err
 	}

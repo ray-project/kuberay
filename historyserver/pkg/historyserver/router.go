@@ -261,7 +261,7 @@ func routerAPI(s *ServerHandler) {
 // 	}).Writes(""))
 // }
 
-func routerHealthz(s *ServerHandler) {
+func routerHealthz(_ *ServerHandler) {
 	http.HandleFunc("/readz", func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
@@ -276,7 +276,7 @@ func routerHealthz(s *ServerHandler) {
 	})
 }
 
-func routerSelectCluster(s *ServerHandler) {
+func routerSelectCluster(_ *ServerHandler) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Serving cluster selector page: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/html")
@@ -446,7 +446,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	}
 
 	// Create a new request to the target URL.
-	proxyReq, err := http.NewRequest(req.Request.Method, targetURL, req.Request.Body)
+	proxyReq, err := http.NewRequestWithContext(req.Request.Context(), req.Request.Method, targetURL, req.Request.Body)
 	if err != nil {
 		logrus.Errorf("Failed to create proxy request: %v", err)
 		resp.WriteError(http.StatusInternalServerError, err)
@@ -516,7 +516,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	}
 }
 
-func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response) {
+func (s *ServerHandler) getClusters(_ *restful.Request, resp *restful.Response) {
 	clusters := s.listClusters(s.maxClusters)
 	resp.WriteAsJson(clusters)
 }

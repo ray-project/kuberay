@@ -183,7 +183,7 @@ func TestSanitizeFileComponent(t *testing.T) {
 func TestGzipFile(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "in.txt")
-	require.NoError(t, os.WriteFile(src, []byte("hello world\nhello world\n"), 0o644))
+	require.NoError(t, os.WriteFile(src, []byte("hello world\nhello world\n"), 0o600))
 	dst := src + ".gz"
 
 	require.NoError(t, gzipFile(src, dst))
@@ -200,10 +200,10 @@ func TestGzipFile(t *testing.T) {
 
 func TestDirSize(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("12345"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a"), []byte("12345"), 0o600))
 	sub := filepath.Join(dir, "sub")
 	require.NoError(t, os.Mkdir(sub, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(sub, "b"), []byte("abcdefg"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "b"), []byte("abcdefg"), 0o600))
 
 	size, err := dirSize(dir)
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestRotateFileLocked_EmptyFileIsDropped(t *testing.T) {
 
 func callPersistEvents(t *testing.T, ec *EventCollector, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/events", bytes.NewReader(body))
+	httpReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/events", bytes.NewReader(body))
 	httpReq.Header.Set("Content-Type", restful.MIME_JSON)
 	rec := httptest.NewRecorder()
 
@@ -433,7 +433,7 @@ func TestProcessRotatedFile_GzipsAndUploadsThenCleansUp(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
 	payload := []byte(`{"eventId":"a"}` + "\n" + `{"eventId":"b"}` + "\n")
-	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o600))
 	ec.totalDiskUsed.Store(int64(len(payload)))
 
 	task := rotationTask{
@@ -473,7 +473,7 @@ func TestProcessRotatedFile_NoCompressionUsesJSONLExtension(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
 	payload := []byte(`{"eventId":"a"}` + "\n")
-	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o600))
 
 	task := rotationTask{
 		path:        jsonlPath,
@@ -508,7 +508,7 @@ func TestProcessRotatedFile_PrecompressedSkipsGzip(t *testing.T) {
 	_, err := gw.Write(payload)
 	require.NoError(t, err)
 	require.NoError(t, gw.Close())
-	require.NoError(t, os.WriteFile(gzPath, buf.Bytes(), 0o644))
+	require.NoError(t, os.WriteFile(gzPath, buf.Bytes(), 0o600))
 
 	task := rotationTask{
 		path:        gzPath,
@@ -586,7 +586,7 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
 	payload := []byte(`{"eventId":"a"}` + "\n")
-	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o600))
 
 	// First upload attempt fails, scheduling a backoff retry.
 	writer.failNext = true
@@ -632,10 +632,10 @@ func TestResumePendingFiles_DropsPartialGzipKeepsSource(t *testing.T) {
 
 	payload := []byte(`{"eventId":"a"}` + "\n")
 	jsonlPath := filepath.Join(dir, "node-1_123.jsonl")
-	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o644))
+	require.NoError(t, os.WriteFile(jsonlPath, payload, 0o600))
 	// Truncated gzip, the way a crash mid-compression leaves it.
 	tmpPath := jsonlPath + ".gz.tmp"
-	require.NoError(t, os.WriteFile(tmpPath, []byte("\x1f\x8b\x08trunc"), 0o644))
+	require.NoError(t, os.WriteFile(tmpPath, []byte("\x1f\x8b\x08trunc"), 0o600))
 
 	ec.resumePendingFiles()
 

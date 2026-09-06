@@ -125,7 +125,7 @@ func main() {
 	defer serverCancel()
 
 	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
-	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheMaxBytes, sessionCacheTTL)
+	sessionLoader := historyserver.NewSessionLoader(serverCtx, processor, sessionProcessTimeout, sessionCacheSize, sessionCacheMaxBytes, sessionCacheTTL)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
@@ -142,7 +142,9 @@ func main() {
 	}
 
 	wg.Go(func() {
-		handler.Run(stop)
+		if err := handler.Run(stop); err != nil {
+			logrus.Errorf("HTTP server exited with error: %v", err)
+		}
 		logrus.Info("HTTP server shutdown complete")
 	})
 

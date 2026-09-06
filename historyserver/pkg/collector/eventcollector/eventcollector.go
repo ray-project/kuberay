@@ -223,7 +223,9 @@ func (ec *EventCollector) UpdateNodeID(newNodeID string) {
 	}
 	logrus.Infof("Node ID changed from %s to %s, rotating active files", ec.currentNodeID, newNodeID)
 	ec.currentNodeID = newNodeID
-	ec.rotateAllFilesLocked()
+	if err := ec.rotateAllFilesLocked(); err != nil {
+		logrus.Errorf("Failed to rotate active files after node ID change: %v", err)
+	}
 }
 
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
