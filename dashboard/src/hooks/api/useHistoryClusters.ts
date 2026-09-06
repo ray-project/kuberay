@@ -3,6 +3,14 @@ import { historyServerFetcher } from "@/utils/fetch";
 import type { HistoryClusterInfoList } from "@/types/historyserver";
 import { config } from "@/utils/constants";
 
+// The history server's /enter_cluster route takes a {kind} segment
+// (raycluster, rayjob, or rayservice; see historyserver/pkg/historyserver/router.go).
+// Every entry returned by GET /clusters represents a RayCluster resource -
+// OwnerKind/OwnerName on that response describe the RayJob/RayService that
+// *owns* the cluster, not the kind of the entry itself - so this is always
+// "raycluster" here.
+const HISTORY_CLUSTER_KIND = "raycluster";
+
 const isClusterScopedHistoryKey = (key: unknown) =>
   typeof key === "string" &&
   (key === "/api/v0/tasks" ||
@@ -24,7 +32,7 @@ export const useHistoryClusters = (refreshInterval: number = 5000) => {
   ) => {
     const proxyEndpoint = (await config.getHistoryServerUrl()).proxyEndpoint;
     const res = await fetch(
-      `${proxyEndpoint}/enter_cluster/${encodeURIComponent(namespace)}/${encodeURIComponent(cluster)}/${encodeURIComponent(sessionName)}`,
+      `${proxyEndpoint}/enter_cluster/${encodeURIComponent(namespace)}/${HISTORY_CLUSTER_KIND}/${encodeURIComponent(cluster)}/${encodeURIComponent(sessionName)}`,
       { method: "GET", credentials: "include" },
     );
 
