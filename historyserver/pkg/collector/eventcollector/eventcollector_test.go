@@ -647,7 +647,7 @@ func TestResumePendingFiles_DropsPartialGzipKeepsSource(t *testing.T) {
 
 	select {
 	case task := <-ec.rotationQueue:
-		assert.Equal(t, jsonlPath, task.path)
+		assert.Equal(t, jsonlPath, task.path) //nolint:testifylint // encoded-compare false positive: jsonlPath is a filesystem path, not a JSON document.
 	default:
 		t.Fatal("expected the .jsonl to be enqueued for upload")
 	}
