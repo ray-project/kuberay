@@ -80,6 +80,7 @@ helm uninstall raycluster
 | imagePullSecrets | list | `[]` | Secrets with credentials to pull images from a private registry |
 | gcsFaultTolerance.enabled | bool | `false` |  |
 | common.containerEnv | list | `[]` | containerEnv specifies environment variables for the Ray head and worker containers. Follows standard K8s container env schema. |
+| common.envFrom | list | `[]` | envFrom specifies sources used to populate environment variables in the main Ray head and worker containers. Common sources are rendered before group-specific sources. Referenced ConfigMaps and Secrets must already exist. |
 | head.initContainers | list | `[]` | Init containers to add to the head pod |
 | head.labels | object | `{}` | Labels for the head pod |
 | head.serviceAccountName | string | `""` |  |
