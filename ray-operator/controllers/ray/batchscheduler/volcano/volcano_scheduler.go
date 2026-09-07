@@ -61,13 +61,14 @@ func (v *VolcanoBatchScheduler) DoBatchSchedulingOnSubmission(ctx context.Contex
 
 // handleRayCluster calculates the PodGroup MinMember and MinResources for a RayCluster
 func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster *rayv1.RayCluster) error {
-	// Check if this RayCluster is created by a RayJob, if so, skip PodGroup creation
+	// A RayCluster created by a RayJob does not own its PodGroup. The RayJob creates it
+	// from the same cluster template and updates it during the supported RayJob lifecycle.
 	if crdType, ok := raycluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok && crdType == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
 		return nil
 	}
 
 	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
-	subGroupPolicy := calculateSubGroupPolicy(&raycluster.Spec)
+	subGroupPolicy := calculateSubGroupPolicy(raycluster, &raycluster.Spec)
 
 	_, err := v.syncPodGroup(ctx, raycluster, minMember, totalResource, subGroupPolicy)
 	return err
@@ -81,7 +82,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 
 	var totalResourceList []corev1.ResourceList
 	minMember, totalResource := v.calculatePodGroupParams(rayJob.Spec.RayClusterSpec)
-	subGroupPolicy := calculateSubGroupPolicy(rayJob.Spec.RayClusterSpec)
+	subGroupPolicy := calculateSubGroupPolicy(rayJob, rayJob.Spec.RayClusterSpec)
 	totalResourceList = append(totalResourceList, totalResource)
 
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
@@ -215,8 +216,15 @@ func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.Ra
 // calculateSubGroupPolicy maps every required logical Ray replica to a Volcano subgroup.
 // A subgroup contains NumOfHosts Pods, and MinSubGroups follows the same autoscaling or
 // effective desired replica semantics used to calculate the PodGroup's global MinMember.
-func calculateSubGroupPolicy(rayClusterSpec *rayv1.RayClusterSpec) []volcanoschedulingv1beta1.SubGroupPolicySpec {
-	if !features.Enabled(features.RayMultiHostIndexing) {
+func calculateSubGroupPolicy(owner metav1.Object, rayClusterSpec *rayv1.RayClusterSpec) []volcanoschedulingv1beta1.SubGroupPolicySpec {
+	if !features.Enabled(features.VolcanoSubGroupPolicy) || !features.Enabled(features.RayMultiHostIndexing) {
+		return nil
+	}
+
+	// The existing top-level topology labels apply topology constraints to the entire PodGroup.
+	// Generating per-replica subgroups without copying that policy would change those semantics.
+	// Keep the existing behavior until per-worker-group topology configuration is defined.
+	if _, topologyConfigured := owner.GetLabels()[NetworkTopologyModeLabelKey]; topologyConfigured {
 		return nil
 	}
 
@@ -251,7 +259,7 @@ func calculateSubGroupPolicy(rayClusterSpec *rayv1.RayClusterSpec) []volcanosche
 		} else {
 			minSubGroups = utils.GetWorkerGroupDesiredReplicas(workerGroupSpec) / numOfHosts
 		}
-		if minSubGroups < 1 {
+		if minSubGroups < 0 {
 			continue
 		}
 
@@ -387,7 +395,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		clusterMinMembers, clusterMinResources := v.calculatePodGroupParams(&cluster.Spec)
 		minMembers = clusterMinMembers
 		totalResourceList = append(totalResourceList, clusterMinResources)
-		subGroupPolicy = calculateSubGroupPolicy(&cluster.Spec)
+		subGroupPolicy = calculateSubGroupPolicy(rayJob, &cluster.Spec)
 	}
 
 	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMembers, utils.SumResourceList(totalResourceList), subGroupPolicy)
