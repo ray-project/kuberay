@@ -216,8 +216,9 @@ func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.Ra
 // calculateSubGroupPolicy maps every required logical Ray replica to a Volcano subgroup.
 // A subgroup contains NumOfHosts Pods, and MinSubGroups follows the same autoscaling or
 // effective desired replica semantics used to calculate the PodGroup's global MinMember.
+// Pre-v1.14 Volcano CRDs prune this field and retain the legacy global PodGroup settings.
 func calculateSubGroupPolicy(owner metav1.Object, rayClusterSpec *rayv1.RayClusterSpec) []volcanoschedulingv1beta1.SubGroupPolicySpec {
-	if !features.Enabled(features.VolcanoSubGroupPolicy) || !features.Enabled(features.RayMultiHostIndexing) {
+	if !features.Enabled(features.RayMultiHostIndexing) {
 		return nil
 	}
 

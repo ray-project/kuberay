@@ -34,14 +34,6 @@ const (
 	// Enables multi-host worker indexing
 	RayMultiHostIndexing featuregate.Feature = "RayMultiHostIndexing"
 
-	// owner: @OneSizeFitsQuorum
-	// rep: https://github.com/ray-project/kuberay/issues/4656
-	// alpha: v1.7
-	//
-	// Enables automatic Volcano SubGroupPolicy generation from Ray worker replica semantics.
-	// Requires Volcano v1.15.2+ and RayMultiHostIndexing.
-	VolcanoSubGroupPolicy featuregate.Feature = "VolcanoSubGroupPolicy"
-
 	// owner: @ryanaoleary
 	// rep: https://github.com/ray-project/enhancements/pull/58
 	// alpha: v1.5
@@ -114,7 +106,6 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions:       {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:             {Default: true, PreRelease: featuregate.Beta},
 	RayMultiHostIndexing:             {Default: true, PreRelease: featuregate.Beta},
-	VolcanoSubGroupPolicy:            {Default: false, PreRelease: featuregate.Alpha},
 	RayServiceIncrementalUpgrade:     {Default: true, PreRelease: featuregate.Beta},
 	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},

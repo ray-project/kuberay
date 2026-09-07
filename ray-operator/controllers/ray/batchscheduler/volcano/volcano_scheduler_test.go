@@ -23,6 +23,30 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
+// legacyVolcanoClient simulates an API server using a pre-v1.14 Volcano CRD,
+// whose structural schema prunes the unknown spec.subGroupPolicy field.
+type legacyVolcanoClient struct {
+	client.Client
+}
+
+func (c *legacyVolcanoClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if podGroup, ok := obj.(*volcanoschedulingv1beta1.PodGroup); ok {
+		legacyPodGroup := podGroup.DeepCopy()
+		legacyPodGroup.Spec.SubGroupPolicy = nil
+		return c.Client.Create(ctx, legacyPodGroup, opts...)
+	}
+	return c.Client.Create(ctx, obj, opts...)
+}
+
+func (c *legacyVolcanoClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if podGroup, ok := obj.(*volcanoschedulingv1beta1.PodGroup); ok {
+		legacyPodGroup := podGroup.DeepCopy()
+		legacyPodGroup.Spec.SubGroupPolicy = nil
+		return c.Client.Update(ctx, legacyPodGroup, opts...)
+	}
+	return c.Client.Update(ctx, obj, opts...)
+}
+
 func createTestRayCluster(numOfHosts int32) rayv1.RayCluster {
 	headSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -159,7 +183,6 @@ func createTestRayJob(numOfHosts int32) rayv1.RayJob {
 }
 
 func TestCreatePodGroupForRayCluster(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
 	a := assert.New(t)
 
 	cluster := createTestRayCluster(1)
@@ -191,7 +214,6 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 }
 
 func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
 	a := assert.New(t)
 
 	cluster := createTestRayCluster(2)
@@ -293,7 +315,6 @@ func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
 }
 
 func TestCreatePodGroupForRayJob(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
 	a := assert.New(t)
 	ctx := context.Background()
 
@@ -525,8 +546,6 @@ func TestCalculatePodGroupParams(t *testing.T) {
 }
 
 func TestCalculateSubGroupPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
-
 	t.Run("autoscaling uses each active worker group's minimum logical replicas", func(t *testing.T) {
 		cluster := createTestRayCluster(1)
 		cluster.Spec.EnableInTreeAutoscaling = new(true)
@@ -629,13 +648,6 @@ func TestCalculateSubGroupPolicy(t *testing.T) {
 		assert.Nil(t, calculateSubGroupPolicy(&cluster, &cluster.Spec))
 	})
 
-	t.Run("Volcano subgroup policy feature gate disabled omits subgroup policy", func(t *testing.T) {
-		features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, false)
-		cluster := createTestRayCluster(2)
-
-		assert.Nil(t, calculateSubGroupPolicy(&cluster, &cluster.Spec))
-	})
-
 	t.Run("top-level network topology preserves legacy behavior", func(t *testing.T) {
 		cluster := createTestRayClusterWithLabels(map[string]string{
 			NetworkTopologyModeLabelKey: "soft",
@@ -646,7 +658,6 @@ func TestCalculateSubGroupPolicy(t *testing.T) {
 }
 
 func TestSyncPodGroup_SubGroupPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
 	ctx := context.Background()
 	cluster := createTestRayCluster(2)
 	cluster.Spec.WorkerGroupSpecs[0].GroupName = "gpu-group"
@@ -676,6 +687,37 @@ func TestSyncPodGroup_SubGroupPolicy(t *testing.T) {
 	didUpdate, err := scheduler.syncPodGroup(ctx, &cluster, minMember, totalResource, calculateSubGroupPolicy(&cluster, &cluster.Spec))
 	require.NoError(t, err)
 	assert.False(t, didUpdate)
+}
+
+func TestSyncPodGroup_OlderVolcanoCRDPrunesSubGroupPolicy(t *testing.T) {
+	ctx := context.Background()
+	cluster := createTestRayCluster(2)
+	cluster.Spec.WorkerGroupSpecs[0].GroupName = "gpu-group"
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(scheme))
+	require.NoError(t, volcanoschedulingv1beta1.AddToScheme(scheme))
+	fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+	scheduler := &VolcanoBatchScheduler{cli: &legacyVolcanoClient{Client: fakeCli}}
+
+	// A pre-v1.14 CRD drops SubGroupPolicy but still accepts the PodGroup and
+	// preserves the existing global gang-scheduling fields.
+	require.NoError(t, scheduler.handleRayCluster(ctx, &cluster))
+
+	podGroup := &volcanoschedulingv1beta1.PodGroup{}
+	podGroupKey := client.ObjectKey{Namespace: cluster.Namespace, Name: getAppPodGroupName(&cluster)}
+	require.NoError(t, fakeCli.Get(ctx, podGroupKey, podGroup))
+	assert.Empty(t, podGroup.Spec.SubGroupPolicy)
+	assert.Equal(t, int32(5), podGroup.Spec.MinMember)
+	assert.Equal(t, "1280m", podGroup.Spec.MinResources.Cpu().String())
+
+	// Updates also continue to synchronize the legacy fields without failing.
+	cluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](3)
+	require.NoError(t, scheduler.handleRayCluster(ctx, &cluster))
+	require.NoError(t, fakeCli.Get(ctx, podGroupKey, podGroup))
+	assert.Empty(t, podGroup.Spec.SubGroupPolicy)
+	assert.Equal(t, int32(7), podGroup.Spec.MinMember)
+	assert.Equal(t, "1792m", podGroup.Spec.MinResources.Cpu().String())
 }
 
 func TestGetAppPodGroupName(t *testing.T) {
@@ -755,8 +797,6 @@ func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
 }
 
 func TestCleanupOnCompletion(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.VolcanoSubGroupPolicy, true)
-
 	t.Run("RayCluster - should be no-op", func(t *testing.T) {
 		a := assert.New(t)
 		require := require.New(t)
