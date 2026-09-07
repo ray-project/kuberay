@@ -34,7 +34,7 @@ require (
 	sigs.k8s.io/scheduler-plugins v0.33.5
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2
 	sigs.k8s.io/yaml v1.6.0
-	volcano.sh/apis v1.13.0
+	volcano.sh/apis v1.15.2
 )
 
 require (
