@@ -73,7 +73,10 @@ spec:
           # - name: RAY_COLLECTOR_POLL_INTERVAL
           #   value: "1m"
           # Optional; defaults to 30s. Interval at which completed Ray log rotation
-          # backups are uploaded before Ray's rotation ring overwrites them.
+          # backups are uploaded before Ray's rotation ring overwrites them. Keep it
+          # shorter than the time Ray takes to cycle through its rotation backups, which
+          # depends on RAY_ROTATION_MAX_BYTES, RAY_ROTATION_BACKUP_COUNT and how fast the
+          # node logs.
           # - name: RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL
           #   value: "10s"
           # Optional extras on top of the built-in endpoints (Serve, placement groups, Ray Data).

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ type MockStorageWriter struct {
 	mu           sync.Mutex
 	createdDirs  []string
 	writtenFiles map[string]string // path -> content
+	writeOrder   []string          // paths in the order they were written
 	// beforeWrite runs while the caller's file handle is still open, letting a
 	// test disturb the source path mid-upload.
 	beforeWrite func()
@@ -57,6 +59,7 @@ func (m *MockStorageWriter) WriteFile(file string, reader io.ReadSeeker) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.writtenFiles[file] = string(content)
+	m.writeOrder = append(m.writeOrder, file)
 	return nil
 }
 
@@ -68,6 +71,12 @@ func (m *MockStorageWriter) written() map[string]string {
 		files[name] = content
 	}
 	return files
+}
+
+func (m *MockStorageWriter) order() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.writeOrder)
 }
 
 func (m *MockStorageWriter) setWriteErr(err error) {

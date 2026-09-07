@@ -184,6 +184,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		return
 	}
 
+	rotatedObjectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
+
 	// Walk through the logs directory and process all files
 	err = filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -196,7 +198,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			return nil
 		}
 
-		if r.collectRotatedLog(path, logsDir, sessionID, nodeID) {
+		if r.collectRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 
@@ -614,6 +616,8 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 		return
 	}
 
+	rotatedObjectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
+
 	// Walk through the logs directory and process all files
 	err := filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -626,7 +630,7 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 			return nil
 		}
 
-		if r.collectRotatedLog(path, logsDir, sessionID, nodeID) {
+		if r.collectRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 

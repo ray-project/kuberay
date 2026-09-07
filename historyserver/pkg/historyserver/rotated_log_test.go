@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	rotatedWorkerOut   = "worker-abc123-01000000-123.rotated.4390125-1048576.out"
-	rotatedWorkerErr   = "worker-abc123-01000000-123.rotated.4390125-1048576.err"
+	rotatedWorkerOut   = "worker-abc123-01000000-123.rotated.1788398100000000000-4390125.out"
+	rotatedWorkerErr   = "worker-abc123-01000000-123.rotated.1788398100000000000-4390125.err"
 	canonicalWorkerOut = "worker-abc123-01000000-123.out"
-	rotatedRayletOut   = "raylet.rotated.4390126-2048.out"
-	// A rotated object whose recorded size happens to equal the pid under lookup:
-	// without the exclusion this is what a pid search would match first.
-	rotatedPidCollision = "worker-def456-01000000-99.rotated.4390200-123.out"
+	rotatedRayletOut   = "raylet.rotated.1788398100000000000-4390126.out"
+	// A rotated object whose inode happens to equal the pid under lookup: without
+	// the exclusion this is what a pid search would match first.
+	rotatedPidCollision = "worker-def456-01000000-99.rotated.1788398100000000000-123.out"
 )
 
 func TestResolvePidLogFilenameIgnoresRotatedObjects(t *testing.T) {
@@ -67,7 +67,7 @@ func TestFindWorkerLogFileIgnoresRotatedObjects(t *testing.T) {
 			want:   "worker-abc123-01000000-123.err",
 		},
 		"only rotated generations is a miss": {
-			files:   []string{rotatedWorkerOut, "worker-abc123-01000000-123.rotated.4390200-64.out"},
+			files:   []string{rotatedWorkerOut, "worker-abc123-01000000-123.rotated.1788398200000000000-4390200.out"},
 			suffix:  "out",
 			wantErr: true,
 		},

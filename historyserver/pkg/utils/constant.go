@@ -25,7 +25,7 @@ const (
 	DefaultDashboardPort = 8265
 
 	// RotatedLogMarker separates a rotated log generation's identity from the
-	// active log name it was rotated out of: <base>.rotated.<inode>-<size><ext>.
+	// active log name it was rotated out of: <base>.rotated.<time>-<inode><ext>.
 	RotatedLogMarker = ".rotated."
 
 	// DefaultRotatedLogScanInterval is how often the collector scans the active
