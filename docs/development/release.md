@@ -198,7 +198,7 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 > commands with your target release version.
 
 Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
-See [helm-chart.md](./helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
+See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
 
 1. **Create Release Branch (if it doesn't exist):**
     * Clone the `kuberay-helm` repository if you haven't already.
@@ -354,5 +354,11 @@ Announce the new release in the [kuberay Slack channel](https://ray.slack.com/ar
 
 ### Step 10: Update ray.io documentation
 
-Update all references to the KubeRay version in the ray.io documentation. Example PR:
+Update all references to the KubeRay version in the ray.io documentation (e.g., Helm chart
+versions and `kubectl` install commands). Example PR:
 [ray#65498](https://github.com/ray-project/ray/pull/65498/changes)
+
+Note: sample YAML URLs should point to `master` rather than a pinned version, so they do not need to be
+updated during a release. If you find any that still pin a version, update them to `master` as part of this
+step.
+See [this discussion](https://github.com/ray-project/ray/pull/65708#discussion_r3916793765).
