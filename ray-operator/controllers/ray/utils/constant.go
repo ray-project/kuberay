@@ -32,10 +32,6 @@ const (
 	RayJobSubmissionModeLabelKey             = "ray.io/job-submission-mode"
 	// DisableProvisionedHeadRestartAnnotationKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
 	DisableProvisionedHeadRestartAnnotationKey = "ray.io/disable-provisioned-head-restart"
-	// NoDriverTTLExpiredAnnotationKey is set to "true" on a RayCluster by the Ray autoscaler v2 when no user
-	// driver has been attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds. The KubeRay operator
-	// deletes the RayCluster when this annotation is present.
-	NoDriverTTLExpiredAnnotationKey = "ray.io/no-driver-ttl-expired"
 	// Finalizer for No Driver Idle Termination
 	NoDriverIdleTerminationFinalizer = "ray.io/no-driver-idle-termination"
 	// Labels for feature RayMultihostIndexing
