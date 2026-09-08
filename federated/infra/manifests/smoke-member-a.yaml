@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: echo-member-a
+  labels:
+    app: echo
+    cluster: frc-member-a
+spec:
+  containers:
+  - name: echo
+    image: hashicorp/http-echo
+    args: ["-text=hello-from-member-a"]
+    ports:
+    - containerPort: 5678
