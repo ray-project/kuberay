@@ -1097,6 +1097,78 @@ func TestNormalizeActorIDsToHex(t *testing.T) {
 	}
 }
 
+func TestClassifyRayEventFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		relativePath string
+		want         rayEventFileKind
+	}{
+		{
+			name:         "canonical job event",
+			relativePath: "node-a/job_events/job-1/node-a-2026-01-01-00.gz",
+			want:         jobEventFile,
+		},
+		{
+			name:         "canonical node event",
+			relativePath: "node-a/node_events/node-a-2026-01-01-00.jsonl.gz",
+			want:         nodeEventFile,
+		},
+		{
+			name:         "absolute path",
+			relativePath: "/node-a/node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "parent traversal",
+			relativePath: "../node-a/node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "double slash",
+			relativePath: "node-a//node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "dot component",
+			relativePath: "node-a/./node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "empty node ID",
+			relativePath: "/node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "empty job ID",
+			relativePath: "node-a/job_events//node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "missing job ID",
+			relativePath: "node-a/job_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "nested below node events",
+			relativePath: "node-a/node_events/nested/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
+			name:         "nested below job directory",
+			relativePath: "node-a/job_events/job-1/nested/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifyRayEventFile(tt.relativePath); got != tt.want {
+				t.Errorf("classifyRayEventFile(%q) = %v, want %v", tt.relativePath, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetAllRayEventFiles(t *testing.T) {
 	const clusterID = "cluster-history/raycluster/ns/cluster"
 	mock := newLogEventMockReader()
