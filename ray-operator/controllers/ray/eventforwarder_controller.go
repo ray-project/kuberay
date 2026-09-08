@@ -30,7 +30,7 @@ const (
 	forwardedEventReason = "NodeInfrastructureFailure"
 	// maxEventNoteLength is the note length that events.k8s.io/v1 API server
 	// validation enforces. An Event whose note exceeds it is rejected outright,
-	// so a  verbose source message must be truncated rather than dropped.
+	// so a verbose source message must be truncated rather than dropped.
 	maxEventNoteLength = 1024
 	// podNodeNameIndexField is the cache field-index key for a Pod's spec.nodeName.
 	podNodeNameIndexField = "spec.nodeName"
