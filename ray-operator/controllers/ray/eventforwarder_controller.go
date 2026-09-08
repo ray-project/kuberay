@@ -336,6 +336,7 @@ func (r *EventForwarderReconciler) resolveTargets(ctx context.Context, clusterKe
 		}
 		targets = append(targets, cluster)
 
+		// TODO: Support forwarding events to owning RayService as well.
 		jobKey, ok := owningRayJob(cluster)
 		if !ok {
 			continue
