@@ -145,7 +145,7 @@ func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId strin
 		Bucket:    oss.Ptr(r.OssBucket),
 		Prefix:    oss.Ptr(prefix + "/"),
 		Delimiter: oss.Ptr(""),
-		MaxKeys:   100,
+		MaxKeys:   1000,
 	})
 
 	var objectPaths []string
