@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -26,12 +27,15 @@ import (
 )
 
 const (
-	// forwardedEventReason is the reason set on Events re-emitted onto Ray custom resources.
+	// forwardedEventReason is the fallback reason set on Events re-emitted onto Ray custom resources
+	// if the source Node Event has an empty Reason.
 	forwardedEventReason = "NodeInfrastructureFailure"
 	// maxEventNoteLength is the note length that events.k8s.io/v1 API server
 	// validation enforces. An Event whose note exceeds it is rejected outright,
 	// so a verbose source message must be truncated rather than dropped.
 	maxEventNoteLength = 1024
+	// maxEventReasonLength is the maximum reason length enforced by events.k8s.io/v1.
+	maxEventReasonLength = 128
 	// podNodeNameIndexField is the cache field-index key for a Pod's spec.nodeName.
 	podNodeNameIndexField = "spec.nodeName"
 	// nodeInvolvedObjectKind is the involvedObject.kind of the source Events we forward.
@@ -69,9 +73,9 @@ func (o EventForwarderOptions) Validate() error {
 
 // eventFilter is the compiled form of EventForwarderOptions.
 type eventFilter struct {
-	sources map[string]struct{}
-	reasons map[string]struct{}
-	types   map[string]struct{}
+	sources sets.Set[string]
+	reasons sets.Set[string]
+	types   sets.Set[string]
 }
 
 func newEventFilter(options EventForwarderOptions) eventFilter {
@@ -79,9 +83,9 @@ func newEventFilter(options EventForwarderOptions) eventFilter {
 		options.Types = []string{corev1.EventTypeWarning}
 	}
 	return eventFilter{
-		sources: toSet(options.Sources),
-		reasons: toSet(options.Reasons),
-		types:   toSet(options.Types),
+		sources: sets.New(options.Sources...),
+		reasons: sets.New(options.Reasons...),
+		types:   sets.New(options.Types...),
 	}
 }
 
@@ -132,6 +136,10 @@ func (r *EventForwarderReconciler) NeedLeaderElection() bool {
 // that cached Events predating leadership (informer replays from standby mode) are skipped.
 func (r *EventForwarderReconciler) Start(ctx context.Context) error {
 	r.mu.Lock()
+	// Truncate to second precision because Kubernetes Event timestamps (metav1.Time)
+	// only have second-level resolution. Without truncation, sub-second precision
+	// would cause events occurring within the same second as leadership acquisition
+	// to appear strictly before startedAt and be erroneously dropped.
 	r.startedAt = time.Now().Truncate(time.Second)
 	r.mu.Unlock()
 
@@ -275,8 +283,7 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 
 	targets, err := r.resolveTargets(ctx, clusterKeys)
 	if err != nil {
-		// Retry the whole Event; markForwarded is not reached, so targets
-		// already emitted to may see the Event again (at-least-once).
+		// Requeue and retry.
 		return ctrl.Result{}, err
 	}
 
@@ -292,8 +299,19 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 		"Infrastructure failure detected on Node %q (reason: %s, source: %s): %s",
 		nodeName, src.Reason, eventSource(src), src.Message))
 
+	reason := src.Reason
+	if reason == "" {
+		reason = forwardedEventReason
+	}
+	if source := eventSource(src); source != "" {
+		reason = fmt.Sprintf("%s/%s", reason, source)
+	}
+	if len(reason) > maxEventReasonLength {
+		reason = reason[:maxEventReasonLength]
+	}
+
 	for _, target := range targets {
-		r.Recorder.Eventf(target, node, src.Type, forwardedEventReason, "Forward", "%s", note)
+		r.Recorder.Eventf(target, node, src.Type, reason, "Forward", "%s", note)
 		logger.V(1).Info("forwarded node event to Ray resource",
 			"node", nodeName, "target", client.ObjectKeyFromObject(target), "sourceReason", src.Reason)
 	}
@@ -437,28 +455,16 @@ func eventSource(e *corev1.Event) string {
 }
 
 func (f eventFilter) matches(e *corev1.Event) bool {
-	if _, ok := f.types[e.Type]; !ok {
+	if !f.types.Has(e.Type) {
 		return false
 	}
-	if len(f.reasons) > 0 {
-		if _, ok := f.reasons[e.Reason]; !ok {
-			return false
-		}
+	if f.reasons.Len() > 0 && !f.reasons.Has(e.Reason) {
+		return false
 	}
-	if len(f.sources) > 0 {
-		_, bySource := f.sources[e.Source.Component]
-		_, byReportingController := f.sources[e.ReportingController]
-		if !bySource && !byReportingController {
+	if f.sources.Len() > 0 {
+		if !f.sources.Has(e.Source.Component) && !f.sources.Has(e.ReportingController) {
 			return false
 		}
 	}
 	return true
-}
-
-func toSet(values []string) map[string]struct{} {
-	set := make(map[string]struct{}, len(values))
-	for _, v := range values {
-		set[v] = struct{}{}
-	}
-	return set
 }

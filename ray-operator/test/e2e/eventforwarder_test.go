@@ -80,7 +80,7 @@ func TestEventForwarder(t *testing.T) {
 			for _, ev := range events.Items {
 				if ev.InvolvedObject.Kind == "RayCluster" &&
 					ev.InvolvedObject.Name == rayCluster.Name &&
-					ev.Reason == "NodeInfrastructureFailure" &&
+					ev.Reason == "MemoryPressure/kubelet" &&
 					strings.Contains(ev.Message, "MemoryPressure") &&
 					strings.Contains(ev.Message, headPod.Spec.NodeName) {
 					return true
