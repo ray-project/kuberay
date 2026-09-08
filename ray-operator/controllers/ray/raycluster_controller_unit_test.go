@@ -3545,30 +3545,49 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 	_ = batchv1.AddToScheme(newScheme)
 	_ = rbacv1.AddToScheme(newScheme)
 
+	enableNoDriverTimeout := func(c *rayv1.RayCluster) {
+		c.Spec.EnableInTreeAutoscaling = new(true)
+		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+			Version:                ptr.To(rayv1.AutoscalerVersionV2),
+			NoDriverTimeoutSeconds: ptr.To[int32](600),
+		}
+	}
+	setDeletionTimestamp := func(c *rayv1.RayCluster) {
+		now := metav1.Now()
+		c.DeletionTimestamp = &now
+	}
+
 	tests := []struct {
 		mutate        func(*rayv1.RayCluster)
 		name          string
 		expectDeleted bool
 	}{
 		{
-			name: "annotation true and feature enabled deletes the cluster",
+			name: "finalizer present, deletionTimestamp set, noDriverTimeout enabled: finalizer is removed and deletion proceeds",
 			mutate: func(c *rayv1.RayCluster) {
-				c.Spec.EnableInTreeAutoscaling = new(true)
-				c.Spec.RayVersion = "2.56.0"
-				c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: ptr.To[int32](600),
-				}
-				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
+				enableNoDriverTimeout(c)
+				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				setDeletionTimestamp(c)
 			},
 			expectDeleted: true,
 		},
 		{
-			name: "annotation true but feature disabled keeps the cluster",
+			name: "finalizer present, deletionTimestamp set, feature disabled: finalizer is left untouched",
 			mutate: func(c *rayv1.RayCluster) {
 				c.Spec.EnableInTreeAutoscaling = new(false)
 				c.Spec.AutoscalerOptions = nil
-				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
+				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				setDeletionTimestamp(c)
+			},
+			expectDeleted: false,
+		},
+		{
+			name: "deletionTimestamp set but a different finalizer is blocking deletion: no-driver finalizer logic is a no-op",
+			mutate: func(c *rayv1.RayCluster) {
+				enableNoDriverTimeout(c)
+				controllerutil.AddFinalizer(c, "example.com/other-finalizer")
+				setDeletionTimestamp(c)
 			},
 			expectDeleted: false,
 		},
@@ -3601,6 +3620,9 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got)
 			if tc.expectDeleted {
 				assert.True(t, k8serrors.IsNotFound(err))
+				if err == nil {
+					assert.False(t, controllerutil.ContainsFinalizer(got, utils.NoDriverIdleTerminationFinalizer))
+				}
 				event := <-recorder.Events
 				assert.Contains(t, event, string(utils.DeletedRayClusterNoDriverTimeout))
 				assert.Contains(t, event, "noDriverTimeoutSeconds=600")

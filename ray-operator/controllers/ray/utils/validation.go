@@ -244,6 +244,11 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate AutoscalerOptions.NoDriverTimeoutPolicy has to be set alongside AutoscalerOptions.IdleTimeoutSeconds
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutPolicy != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds == nil {
+		return fmt.Errorf("autoscalerOptions.noDriverTimeoutPolicy requires autoscalerOptions.noDriverTimeoutSeconds to be set")
+	}
+
 	// Validate AutoscalerOptions.NoDriverTimeoutSeconds (works only with v2 autoscaler)
 	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
 		if *spec.AutoscalerOptions.NoDriverTimeoutSeconds < 0 {

@@ -374,6 +374,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		}
 	}
 
+	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+		logger.Info("RayCluster is being deleted, just ignore")
+		return ctrl.Result{}, nil
+	}
+
 	reconcileFuncs := []reconcileFunc{
 		r.reconcileAutoscalerServiceAccount,
 		r.reconcileAutoscalerRole,

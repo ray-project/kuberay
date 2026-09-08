@@ -525,14 +525,14 @@ type AutoscalerOptions struct {
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
-	// NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering RayCluster deletion.
-	// The autoscaler v2 tracks driver activity and, when no driver has been attached for this duration, sets the
-	// `ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster.
+	// NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before applying NoDriverTimeoutPolicy.
 	// +optional
 	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
-	// NoDriverTimeoutPolicy is "Delete", or "Suspend". The default policy is "Delete".
+	// NoDriverTimeoutPolicy is "Delete" or "Suspend". It specifies the action to take when the cluster is idle.
+	// The default policy is "Delete".
 	// Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.
 	// Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds.
+	// +optional
 	NoDriverTimeoutPolicy *NoDriverTimeoutPolicy `json:"noDriverTimeoutPolicy,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
