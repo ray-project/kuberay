@@ -220,7 +220,7 @@ kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest locally if necessary.
-	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.24
+	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.25
 
 GOFUMPT = $(LOCALBIN)/gofumpt
 $(GOFUMPT): $(LOCALBIN)
