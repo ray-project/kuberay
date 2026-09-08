@@ -1,5 +1,5 @@
 # Strategic merge patch for kuberay-operator Deployment.
-# Enables the Kubernetes workload-aware scheduling v1alpha2 batch scheduler plugin
+# Enables the Kubernetes workload-aware scheduling v1alpha3 batch scheduler plugin
 # via the KubernetesWAS feature gate.
 apiVersion: apps/v1
 kind: Deployment
