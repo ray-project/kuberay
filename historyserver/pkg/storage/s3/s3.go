@@ -150,7 +150,6 @@ func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId strin
 	listInput := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(r.S3Bucket),
 		Prefix:    aws.String(prefix + "/"),
-		MaxKeys:   aws.Int64(100),
 		Delimiter: aws.String(""),
 	}
 

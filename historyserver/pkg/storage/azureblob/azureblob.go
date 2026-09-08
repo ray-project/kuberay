@@ -157,8 +157,7 @@ func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId strin
 	prefix := path.Join(r.RootDir, clusterId, dir)
 	prefixWithSlash := prefix + "/"
 	pager := r.ContainerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
-		Prefix:     &prefixWithSlash,
-		MaxResults: to32(100),
+		Prefix: &prefixWithSlash,
 	})
 
 	var objectPaths []string
