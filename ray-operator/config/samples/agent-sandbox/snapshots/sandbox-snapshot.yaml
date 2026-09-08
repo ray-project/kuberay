@@ -94,3 +94,31 @@ spec:
   replicas: 4
   sandboxTemplateRef:
     name: python-snapshot-sandbox
+---
+# Default-deny egress for the snapshot pool (DNS only). Blocks untrusted code in
+# the sandbox from reaching the GKE metadata server and obtaining the pool's
+# Workload Identity credentials (which hold bucket access). Snapshot checkpoints
+# are unaffected: uploads run through the node-side snapshot agent, not the
+# pod's network namespace. Ingress from Ray workers is untouched (egress-only).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: python-snapshot-pool-restrict-egress
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: python-snapshot-pool
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
