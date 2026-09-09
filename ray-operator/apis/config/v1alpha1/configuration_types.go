@@ -104,6 +104,10 @@ type Configuration struct {
 	// onto the RayCluster custom resources whose Pods run on the affected node, so they
 	// surface in the Ray Dashboard.
 	NodeEventForwarder NodeEventForwarderConfiguration `json:"nodeEventForwarder,omitempty"`
+
+	// AllowedNodeLabels lists the node label keys worker groups may deliver through topology.labelMappings.
+	// RayClusters mapping other keys are rejected; empty disables delivery.
+	AllowedNodeLabels []string `json:"allowedNodeLabels,omitempty"`
 }
 
 // NodeEventForwarderConfiguration specifies options for the Node Event Forwarder.
