@@ -818,6 +818,39 @@ _Appears in:_
 | `enabled` _boolean_ | Enabled controls whether mTLS is active for this RayCluster.<br />Defaults to false when omitted. Set to true to enable mTLS. |  |  |
 
 
+#### TopologyLabelMapping
+
+
+
+TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
+
+
+
+_Appears in:_
+- [TopologySpec](#topologyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `nodeLabel` _string_ | NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels. |  |  |
+| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel. |  |  |
+
+
+#### TopologySpec
+
+
+
+TopologySpec selects the node labels delivered to a worker group's Ray nodes.
+
+
+
+_Appears in:_
+- [WorkerGroupSpec](#workergroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `labelMappings` _[TopologyLabelMapping](#topologylabelmapping) array_ | LabelMappings lists the node labels to deliver. An empty list delivers nothing. Every listed label is<br />required: a pod bound to a node missing one exits before ray start. |  |  |
+
+
 #### UpscalingMode
 
 _Underlying type:_ _string_
@@ -876,6 +909,7 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
 | `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy defines which pods to remove |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
+| `topology` _[TopologySpec](#topologyspec)_ | Topology delivers labels of the node each worker pod is bound to as Ray node labels.<br />Requires the operator to run with ENABLE_WEBHOOKS=true and Ray 2.45.0 or later. |  |  |
 
 
 

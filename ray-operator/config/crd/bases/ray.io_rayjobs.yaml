@@ -9532,6 +9532,23 @@ spec:
                               - containers
                               type: object
                           type: object
+                        topology:
+                          properties:
+                            labelMappings:
+                              items:
+                                properties:
+                                  mapTo:
+                                    type: string
+                                  nodeLabel:
+                                    type: string
+                                required:
+                                - nodeLabel
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - nodeLabel
+                              x-kubernetes-list-type: map
+                          type: object
                       required:
                       - groupName
                       - maxReplicas

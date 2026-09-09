@@ -483,12 +483,35 @@ type WorkerGroupSpec struct {
 	// +kubebuilder:default:=1
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
+	// Topology delivers labels of the node each worker pod is bound to as Ray node labels.
+	// Requires the operator to run with ENABLE_WEBHOOKS=true and Ray 2.45.0 or later.
+	// +optional
+	Topology *TopologySpec `json:"topology,omitempty"`
 }
 
 // ScaleStrategy to remove workers
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+}
+
+// TopologySpec selects the node labels delivered to a worker group's Ray nodes.
+type TopologySpec struct {
+	// LabelMappings lists the node labels to deliver. An empty list delivers nothing. Every listed label is
+	// required: a pod bound to a node missing one exits before ray start.
+	// +listType=map
+	// +listMapKey=nodeLabel
+	// +optional
+	LabelMappings []TopologyLabelMapping `json:"labelMappings,omitempty"`
+}
+
+// TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
+type TopologyLabelMapping struct {
+	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
+	NodeLabel string `json:"nodeLabel"`
+	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
+	// +optional
+	MapTo string `json:"mapTo,omitempty"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.

@@ -98,6 +98,10 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// AllowedNodeLabels lists the node label keys worker groups may deliver through topology.labelMappings.
+	// RayClusters mapping other keys are rejected; empty disables delivery.
+	AllowedNodeLabels []string `json:"allowedNodeLabels,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
