@@ -15,24 +15,20 @@ This document describes the mechanisms of governance. For guidelines for how to 
 
 ### Triagers
 
-Triagers are nominated by any member of the TSC. They are approved if there are no objections from other TSC
-members within one week, or be approved by a supermajority (greater than 67%) vote of the TSC if an objection
-is raised.
-
-Triagers are automatically moved to emeritus status after 12 months of inactivity. Reactivation is by a TSC vote.
+Any member of the TSC can appoint a triager directly, so no vote is required.
 
 ### Reviewers
 
 Reviewers are nominated by any member of the TSC. They are approved if there are no objections from other TSC
 members within one week, or be approved by a supermajority (greater than 67%) vote of the TSC if an objection
-is raised.
+is raised. The TSC votes on reviewer nominations once per KubeRay minor release.
 
 Reviewers are automatically moved to emeritus status after 12 months of inactivity. Reactivation is by a TSC vote.
 
 ### Committers
 
 Committers are added by a supermajority (greater than 67%) of the TSC and removed by a majority vote
-(greater than 50%) of the TSC.
+(greater than 50%) of the TSC. The TSC votes on committer nominations once per KubeRay minor release.
 
 Committers are automatically moved to emeritus status after 12 months with no merged pull requests authored
 or reviewed. Reactivation is by a TSC vote.
