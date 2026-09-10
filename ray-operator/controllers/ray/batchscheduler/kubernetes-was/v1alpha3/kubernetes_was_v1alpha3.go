@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,7 @@ import (
 	kuberneteswas "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/kubernetes-was"
 	batchschedulerutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -35,7 +37,6 @@ const (
 
 const (
 	skipReasonGangSchedulingDisabled = "gang scheduling not enabled on RayCluster"
-	skipReasonAutoscaling            = "autoscaling is not yet supported"
 )
 
 type KubernetesWASV1Alpha3Scheduler struct {
@@ -108,10 +109,10 @@ func (p *Provider) ConfigureReconciler(b *builder.Builder) *builder.Builder {
 		Owns(&schedulingv1alpha3.PodGroup{})
 }
 
-// Preserve the existing reconciliation behavior by deleting stale resources in
-// dependency order and recreating them on later reconciles.
+// syncSchedulingResources creates the Workload and PodGroup on the first reconcile and
+// patches gang.minCount in place on later reconciles (v1alpha3 minCount is mutable).
 func (k *KubernetesWASV1Alpha3Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
-	workload, podGroup, err := k.buildSchedulingResources(rayCluster)
+	workload, podGroup, err := k.buildSchedulingResources(ctx, rayCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build scheduling resources for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
@@ -120,7 +121,6 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncSchedulingResources(ctx context.Con
 	}
 	return k.syncPodGroup(ctx, rayCluster, podGroup)
 }
-
 func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.Workload) error {
 	existing := &schedulingv1alpha3.Workload{}
 	found, err := k.getSchedulingResource(ctx, "Workload", client.ObjectKeyFromObject(desired), existing)
@@ -142,28 +142,14 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCl
 	if existing.DeletionTimestamp != nil {
 		return fmt.Errorf("Workload %s/%s is being deleted, will retry", existing.Namespace, existing.Name)
 	}
-	if !isWorkloadStale(existing, desired) {
+	// gang.minCount is mutable in v1alpha3, so a RayCluster resize edits minCount on the
+	// existing Workload in place instead of deleting and recreating it.
+	existingGang := workloadClusterGang(existing)
+	desiredMinCount := desired.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount
+	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-
-	// Delete the runtime PodGroup before deleting the immutable Workload it
-	// references. A later reconcile recreates the Workload before the PodGroup.
-	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
-	podGroup := &schedulingv1alpha3.PodGroup{}
-	if found, err := k.getSchedulingResource(ctx, "PodGroup", podGroupKey, podGroup); err != nil {
-		return err
-	} else if found && metav1.IsControlledBy(podGroup, rayCluster) {
-		if _, err := k.deletePodGroup(ctx, podGroup); err != nil {
-			return err
-		}
-		return fmt.Errorf("deleted PodGroup %s/%s before replacing stale Workload, will retry after deletion completes", podGroup.Namespace, podGroup.Name)
-	}
-
-	// PodGroup is gone or not ours; safe to delete the stale Workload.
-	if err := client.IgnoreNotFound(k.deleteWithUIDPrecondition(ctx, existing)); err != nil {
-		return fmt.Errorf("failed to delete stale Workload %s/%s: %w", existing.Namespace, existing.Name, err)
-	}
-	return fmt.Errorf("deleted stale Workload %s/%s, will retry after deletion completes", existing.Namespace, existing.Name)
+	return k.patchGangMinCount(ctx, "Workload", existing, existingGang, desiredMinCount)
 }
 
 func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.PodGroup) error {
@@ -185,37 +171,28 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCl
 		return fmt.Errorf("PodGroup %s/%s already exists and is not owned by this RayCluster; rename it or use a different RayCluster name to avoid the collision", existing.Namespace, existing.Name)
 	}
 	if existing.DeletionTimestamp != nil {
-		if _, err := k.deletePodGroup(ctx, existing); err != nil {
+		// The PodGroup is terminating (e.g. deleted out of band). Drop KubeRay's protection
+		// finalizer so it can finish deleting; a later reconcile finds it gone and recreates it.
+		// Resizes never reach here — they patch gang.minCount in place rather than deleting.
+		if _, err := k.removeProtectionFinalizer(ctx, existing); err != nil {
 			return err
 		}
 		return fmt.Errorf("PodGroup %s/%s is being deleted, will retry", existing.Namespace, existing.Name)
 	}
-	// MinCount changed; existing PodGroup is stale and must be recreated.
+	// gang.minCount is mutable in v1alpha3, so a RayCluster resize edits minCount on the
+	// existing PodGroup in place.
 	existingGang := existing.Spec.SchedulingPolicy.Gang
-	if existingGang != nil && existingGang.MinCount == desired.Spec.SchedulingPolicy.Gang.MinCount {
+	desiredMinCount := desired.Spec.SchedulingPolicy.Gang.MinCount
+	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-
-	// Remove the protection finalizer before deleting the stale PodGroup.
-	if _, err := k.deletePodGroup(ctx, existing); err != nil {
-		return err
-	}
-	return fmt.Errorf("deleted stale PodGroup %s/%s, will retry after deletion completes", existing.Namespace, existing.Name)
+	return k.patchGangMinCount(ctx, "PodGroup", existing, existingGang, desiredMinCount)
 }
 
 func (k *KubernetesWASV1Alpha3Scheduler) deletePodGroup(ctx context.Context, podGroup *schedulingv1alpha3.PodGroup) (bool, error) {
-	// Kubernetes uses this finalizer to protect a PodGroup while Pods still
-	// reference it. KubeRay removes it before explicitly deleting an owned
-	// PodGroup because replacement or cleanup may occur before those Pods
-	// terminate.
-	didDelete := controllerutil.RemoveFinalizer(podGroup, podGroupProtectionFinalizer)
-	if didDelete {
-		if err := k.cli.Update(ctx, podGroup); err != nil {
-			if errors.IsNotFound(err) {
-				return true, nil
-			}
-			return false, fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
-		}
+	didDelete, err := k.removeProtectionFinalizer(ctx, podGroup)
+	if err != nil {
+		return false, err
 	}
 	if podGroup.DeletionTimestamp != nil {
 		return didDelete, nil
@@ -229,16 +206,69 @@ func (k *KubernetesWASV1Alpha3Scheduler) deletePodGroup(ctx context.Context, pod
 	return true, nil
 }
 
-// buildClusterSchedulingPolicy gang schedules the head and all desired workers.
+// removeProtectionFinalizer drops KubeRay's PodGroup protection finalizer and persists the
+// change, reporting whether the finalizer was present. Kubernetes adds this finalizer to
+// protect a PodGroup while Pods still reference it; KubeRay removes it before deleting or
+// unsticking an owned PodGroup. A NotFound on update means the PodGroup is already gone.
+func (k *KubernetesWASV1Alpha3Scheduler) removeProtectionFinalizer(ctx context.Context, podGroup *schedulingv1alpha3.PodGroup) (bool, error) {
+	if !controllerutil.RemoveFinalizer(podGroup, podGroupProtectionFinalizer) {
+		return false, nil
+	}
+	if err := k.cli.Update(ctx, podGroup); err != nil && !errors.IsNotFound(err) {
+		return false, fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", podGroup.Namespace, podGroup.Name, err)
+	}
+	return true, nil
+}
+
+// buildClusterSchedulingPolicy gang schedules the whole cluster at the gang floor.
 func buildClusterSchedulingPolicy(rayCluster *rayv1.RayCluster) schedulingv1alpha3.PodGroupSchedulingPolicy {
-	minCount := int32(1) + utils.CalculateDesiredReplicas(rayCluster)
 	return schedulingv1alpha3.PodGroupSchedulingPolicy{
-		Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: minCount},
+		Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: clusterGangMinCount(rayCluster)},
 	}
 }
 
-func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *rayv1.RayCluster) (*schedulingv1alpha3.Workload, *schedulingv1alpha3.PodGroup, error) {
+// gangNeedsMinCountPatch reports whether the live gang policy differs from the desired
+// minCount and can be patched. A nil gang is left untouched (the builder always sets one,
+// so nil means an object we did not create or that drifted).
+func gangNeedsMinCountPatch(existing *schedulingv1alpha3.GangSchedulingPolicy, desiredMinCount int32) bool {
+	return existing != nil && existing.MinCount != desiredMinCount
+}
+
+// workloadClusterGang returns the gang policy of the single whole-cluster template, or nil.
+func workloadClusterGang(workload *schedulingv1alpha3.Workload) *schedulingv1alpha3.GangSchedulingPolicy {
+	if len(workload.Spec.PodGroupTemplates) != 1 {
+		return nil
+	}
+	return workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang
+}
+
+// patchGangMinCount patches gang.minCount on a live Workload or PodGroup in place. The caller
+// supplies the object's gang pointer, already confirmed non-nil and differing from desired.
+func (k *KubernetesWASV1Alpha3Scheduler) patchGangMinCount(ctx context.Context, kind string, obj client.Object, gang *schedulingv1alpha3.GangSchedulingPolicy, desiredMinCount int32) error {
+	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
+	gang.MinCount = desiredMinCount
+	if err := k.cli.Patch(ctx, obj, patch); err != nil {
+		return fmt.Errorf("failed to patch %s %s/%s minCount: %w", kind, obj.GetNamespace(), obj.GetName(), err)
+	}
+	return nil
+}
+
+// clusterGangMinCount is the whole-cluster gang floor: the full desired size
+// (1 head + all desired workers) normally, or 1 head + minReplicas when the Ray
+// autoscaler is enabled so it can grow above the floor without deadlocking the gang.
+func clusterGangMinCount(rayCluster *rayv1.RayCluster) int32 {
+	if utils.IsAutoscalingEnabled(&rayCluster.Spec) {
+		return int32(1) + utils.CalculateMinReplicas(rayCluster)
+	}
+	return int32(1) + utils.CalculateDesiredReplicas(rayCluster)
+}
+
+func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (*schedulingv1alpha3.Workload, *schedulingv1alpha3.PodGroup, error) {
 	policy := buildClusterSchedulingPolicy(rayCluster)
+	priorityClassName, preemption, err := k.resolveGangPriority(ctx, rayCluster)
+	if err != nil {
+		return nil, nil, err
+	}
 	workload := &schedulingv1alpha3.Workload{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayCluster.Name,
@@ -256,8 +286,10 @@ func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *ra
 				Name:     rayCluster.Name,
 			},
 			PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{{
-				Name:             clusterPodGroupTemplateName,
-				SchedulingPolicy: policy,
+				Name:              clusterPodGroupTemplateName,
+				PriorityClassName: priorityClassName,
+				SchedulingPolicy:  policy,
+				PreemptionPolicy:  preemption,
 			}},
 		},
 	}
@@ -274,7 +306,9 @@ func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *ra
 				WorkloadName: rayCluster.Name,
 				TemplateName: clusterPodGroupTemplateName,
 			},
-			SchedulingPolicy: policy,
+			PriorityClassName: priorityClassName,
+			SchedulingPolicy:  policy,
+			PreemptionPolicy:  preemption,
 		},
 	}
 
@@ -286,6 +320,9 @@ func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *ra
 	return workload, podGroup, nil
 }
 
+// deleteSchedulingResources tears down the owned PodGroup before the Workload (dependency
+// order). While teardown is in progress it returns a non-nil error so the caller requeues;
+// the bool reports whether anything was actually deleted on this pass.
 func (k *KubernetesWASV1Alpha3Scheduler) deleteSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	podGroupKey := client.ObjectKey{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}
@@ -351,22 +388,37 @@ func schedulingSkipReason(rayCluster *rayv1.RayCluster) string {
 	if !strings.EqualFold(rayCluster.GetLabels()[utils.RayGangSchedulingEnabled], "true") {
 		return skipReasonGangSchedulingDisabled
 	}
-	// TODO: support the Ray autoscaler with workload-aware scheduling.
-	if utils.IsAutoscalingEnabled(&rayCluster.Spec) {
-		return skipReasonAutoscaling
-	}
 	return ""
 }
 
-func isWorkloadStale(existing, desired *schedulingv1alpha3.Workload) bool {
-	if len(existing.Spec.PodGroupTemplates) != 1 {
-		return true
+// resolveGangPriority reflects the RayCluster pods' PriorityClass onto the whole-cluster gang so
+// the scheduling.k8s.io priority admission controller populates the PodGroup's priority and
+// preemptionPolicy. It returns the priority class name and the preemptionPolicy that admission
+// will compute from it, or zero values when the KubernetesWASPodGroupPreemptionPolicy gate is off,
+// the pods set no priority class, or the class is absent. The PodGroup's preemptionPolicy must
+// equal the value admission derives from the class, so it is read from the class (not set freely).
+// All Ray pods must share this priority class for the gang to schedule (the scheduler requires a
+// uniform priority across the PodGroup); the head group's class is treated as authoritative.
+func (k *KubernetesWASV1Alpha3Scheduler) resolveGangPriority(ctx context.Context, rayCluster *rayv1.RayCluster) (string, *schedulingv1alpha3.PreemptionPolicy, error) {
+	if !features.Enabled(features.KubernetesWASPodGroupPreemptionPolicy) {
+		return "", nil, nil
 	}
-
-	existingTemplate := existing.Spec.PodGroupTemplates[0]
-	desiredTemplate := desired.Spec.PodGroupTemplates[0]
-	existingGang := existingTemplate.SchedulingPolicy.Gang
-	return existingTemplate.Name != desiredTemplate.Name || existingGang == nil || existingGang.MinCount != desiredTemplate.SchedulingPolicy.Gang.MinCount
+	priorityClassName := rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName
+	if priorityClassName == "" {
+		return "", nil, nil
+	}
+	priorityClass := &schedulingv1.PriorityClass{}
+	if err := k.cli.Get(ctx, client.ObjectKey{Name: priorityClassName}, priorityClass); err != nil {
+		if errors.IsNotFound(err) {
+			return "", nil, nil
+		}
+		return "", nil, fmt.Errorf("failed to get PriorityClass %s: %w", priorityClassName, err)
+	}
+	policy := schedulingv1alpha3.PreemptLowerPriority
+	if priorityClass.PreemptionPolicy != nil {
+		policy = schedulingv1alpha3.PreemptionPolicy(*priorityClass.PreemptionPolicy)
+	}
+	return priorityClassName, &policy, nil
 }
 
 func clusterPodGroupName(clusterName string) string {
