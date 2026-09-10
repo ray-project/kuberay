@@ -10,20 +10,24 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var rayJobLog = logf.Log.WithName("rayjob-resource")
 
-// SetupRayJobWebhookWithManager registers the webhook for RayJob in the manager.
-func SetupRayJobWebhookWithManager(mgr ctrl.Manager) error {
+// SetupRayJobWebhookWithManager registers the RayJob webhook, configured from the operator config
+func SetupRayJobWebhookWithManager(mgr ctrl.Manager, config configapi.Configuration) error {
 	return ctrl.NewWebhookManagedBy(mgr, &rayv1.RayJob{}).
-		WithValidator(&RayJobWebhook{}).
+		WithValidator(&RayJobWebhook{AllowedNodeLabels: config.AllowedNodeLabels}).
 		Complete()
 }
 
-type RayJobWebhook struct{}
+type RayJobWebhook struct {
+	// AllowedNodeLabels is the operator allowlist for topology.labelMappings
+	AllowedNodeLabels []string
+}
 
 //+kubebuilder:webhook:path=/validate-ray-io-v1-rayjob,mutating=false,failurePolicy=fail,sideEffects=None,groups=ray.io,resources=rayjobs,verbs=create;update,versions=v1,name=vrayjob.kb.io,admissionReviewVersions=v1
 
@@ -51,6 +55,12 @@ func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
 
 	if err := utils.ValidateRayJobMetadata(rayJob.ObjectMeta); err != nil {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), rayJob.Name, err.Error()))
+	}
+
+	if rayJob.Spec.RayClusterSpec != nil {
+		if err := validateTopology(rayJob.Spec.RayClusterSpec, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
+			allErrs = append(allErrs, err)
+		}
 	}
 
 	if len(allErrs) == 0 {

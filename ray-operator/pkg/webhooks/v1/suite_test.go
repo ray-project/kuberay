@@ -22,6 +22,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
@@ -34,6 +35,9 @@ var (
 	testEnv   *envtest.Environment
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	// testConfig is the operator config the webhooks run with in this suite
+	testConfig = configapi.Configuration{AllowedNodeLabels: []string{"topology.kubernetes.io/zone", "nvidia.com/gpu.clique"}}
 )
 
 func TestAPIs(t *testing.T) {
@@ -91,11 +95,11 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = SetupRayClusterWebhookWithManager(mgr)
+	err = SetupRayClusterWebhookWithManager(mgr, testConfig)
 	Expect(err).NotTo(HaveOccurred())
-	err = SetupRayJobWebhookWithManager(mgr)
+	err = SetupRayJobWebhookWithManager(mgr, testConfig)
 	Expect(err).NotTo(HaveOccurred())
-	err = SetupRayServiceWebhookWithManager(mgr)
+	err = SetupRayServiceWebhookWithManager(mgr, testConfig)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:webhook
