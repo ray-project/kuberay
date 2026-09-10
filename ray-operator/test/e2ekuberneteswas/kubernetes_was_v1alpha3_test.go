@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,6 +26,15 @@ import (
 func newWASRayClusterAC(name, namespace string) *rayv1ac.RayClusterApplyConfiguration {
 	return rayv1ac.RayCluster(name, namespace).
 		WithLabels(map[string]string{utils.RayGangSchedulingEnabled: "true"})
+}
+
+// expectClusterPodGroupMembership asserts every pod joins the whole-cluster PodGroup.
+func expectClusterPodGroupMembership(g Gomega, pods []corev1.Pod, clusterName string) {
+	for _, pod := range pods {
+		g.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil(), "pod %s missing schedulingGroup", pod.Name)
+		g.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil(), "pod %s missing podGroupName", pod.Name)
+		g.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(clusterName+"-cluster"), "pod %s has wrong podGroupName", pod.Name)
+	}
 }
 
 func TestKubernetesWAS_CreatesWorkloadAndPodGroups(t *testing.T) {
@@ -177,30 +187,104 @@ func TestKubernetesWAS_MultipleWorkerGroups(t *testing.T) {
 	}
 }
 
-func TestKubernetesWAS_AutoscalingSkipped(t *testing.T) {
+func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := newWASRayClusterAC("autoscale-skip", namespace.Name).
-		WithSpec(NewRayClusterSpec().WithEnableInTreeAutoscaling(true))
+	// Autoscaling clusters are gang scheduled at the floor (1 head + minReplicas) so
+	// the autoscaler can grow above the floor without deadlocking the gang.
+	rayClusterAC := newWASRayClusterAC("autoscale-floor", namespace.Name).
+		WithSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithEnableInTreeAutoscaling(true).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(HeadPodTemplateApplyConfiguration())).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(1).
+				WithMinReplicas(1).
+				WithMaxReplicas(3).
+				WithGroupName("small-group").
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(WorkerPodTemplateApplyConfiguration())))
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with autoscaling", rayCluster.Namespace, rayCluster.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to start reconciling", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
-	_, err = GetWorkload(test, namespace.Name, rayCluster.Name)
-	g.Expect(errors.IsNotFound(err)).To(BeTrue(), "expected NotFound for Workload, got: %v", err)
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
+	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
+	// Floor MinCount = 1 head + 1 minReplica.
+	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
+
+	clusterPodGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(clusterPodGroup.Spec.SchedulingPolicy.Gang).NotTo(BeNil())
+	g.Expect(clusterPodGroup.Spec.SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.SchedulerName).To(Equal(corev1.DefaultSchedulerName))
-	g.Expect(headPod.Spec.SchedulingGroup).To(BeNil(), "head pod should not have schedulingGroup when autoscaling is enabled")
+	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil(), "head pod should join the whole-cluster PodGroup when autoscaling is enabled")
+	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
+	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+}
+
+// TestKubernetesWAS_AutoscalingSchedulesAboveFloor verifies that when an autoscaling
+// cluster's desired replicas exceed minReplicas, the gang is floored at 1+minReplicas
+// (not the desired size) so the cluster still becomes ready with pods above the floor.
+func TestKubernetesWAS_AutoscalingSchedulesAboveFloor(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	// minReplicas=1 -> floor minCount=2, but 3 workers are desired (above the floor).
+	rayClusterAC := newWASRayClusterAC("autoscale-above-floor", namespace.Name).
+		WithSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithEnableInTreeAutoscaling(true).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(HeadPodTemplateApplyConfiguration())).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(3).
+				WithMinReplicas(1).
+				WithMaxReplicas(5).
+				WithGroupName("small-group").
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(WorkerPodTemplateApplyConfiguration())))
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created autoscaling RayCluster %s/%s with 3 desired workers, minReplicas 1", rayCluster.Namespace, rayCluster.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
+	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
+	// Floor MinCount = 1 head + 1 minReplica, NOT 1 head + 3 desired replicas. The cluster
+	// reaching Ready above proves the extra pods above the floor still schedule; the exact
+	// running worker count is intentionally not asserted since the autoscaler owns it.
+	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
+
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
+	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
+	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
 }
 
 func TestKubernetesWAS_GangSchedules(t *testing.T) {
@@ -406,7 +490,7 @@ func TestKubernetesWAS_ResumeReusesResources(t *testing.T) {
 	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
 }
 
-func TestKubernetesWAS_ScaleUpRecreatesWorkload(t *testing.T) {
+func TestKubernetesWAS_ScaleUpPatchesWorkloadInPlace(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -426,6 +510,9 @@ func TestKubernetesWAS_ScaleUpRecreatesWorkload(t *testing.T) {
 	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalUID := workload.UID
+	podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	originalPodGroupUID := podGroup.UID
 	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
 	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
 	// MinCount = 1 head + 1 worker replica.
@@ -444,11 +531,11 @@ func TestKubernetesWAS_ScaleUpRecreatesWorkload(t *testing.T) {
 		inner.Expect(RayClusterDesiredWorkerReplicas(rc)).To(Equal(int32(3)))
 	}, TestTimeoutMedium).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Verifying Workload was recreated with updated minCount")
+	LogWithTimestamp(test.T(), "Verifying the Workload minCount was patched in place (same UID)")
 	g.Eventually(func(inner Gomega) {
 		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have been recreated with a new UID")
+		inner.Expect(w.UID).To(Equal(originalUID), "Workload should be patched in place, preserving its UID")
 		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
 		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
@@ -456,17 +543,17 @@ func TestKubernetesWAS_ScaleUpRecreatesWorkload(t *testing.T) {
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(4)))
 	}, TestTimeoutShort).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Waiting for the whole-cluster PodGroup to be recreated with updated minCount")
-	g.Eventually(func() int32 {
-		podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
-		if err != nil || podGroup.DeletionTimestamp != nil || podGroup.Spec.SchedulingPolicy.Gang == nil {
-			return -1
-		}
-		return podGroup.Spec.SchedulingPolicy.Gang.MinCount
-	}, TestTimeoutShort).Should(Equal(int32(4)))
+	LogWithTimestamp(test.T(), "Verifying the whole-cluster PodGroup minCount was patched in place (same UID)")
+	g.Eventually(func(inner Gomega) {
+		pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(pg.UID).To(Equal(originalPodGroupUID), "PodGroup should be patched in place, preserving its UID")
+		inner.Expect(pg.Spec.SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(pg.Spec.SchedulingPolicy.Gang.MinCount).To(Equal(int32(4)))
+	}, TestTimeoutShort).Should(Succeed())
 }
 
-func TestKubernetesWAS_ScaleDownRecreatesWorkload(t *testing.T) {
+func TestKubernetesWAS_ScaleDownPatchesWorkloadInPlace(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -497,6 +584,9 @@ func TestKubernetesWAS_ScaleDownRecreatesWorkload(t *testing.T) {
 	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalUID := workload.UID
+	podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	originalPodGroupUID := podGroup.UID
 	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
 	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
 	// MinCount = 1 head + 3 worker replicas.
@@ -515,11 +605,11 @@ func TestKubernetesWAS_ScaleDownRecreatesWorkload(t *testing.T) {
 		inner.Expect(RayClusterDesiredWorkerReplicas(rc)).To(Equal(int32(1)))
 	}, TestTimeoutMedium).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Verifying Workload was recreated with updated minCount")
+	LogWithTimestamp(test.T(), "Verifying the Workload minCount was patched in place (same UID)")
 	g.Eventually(func(inner Gomega) {
 		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have a new UID after scale-down")
+		inner.Expect(w.UID).To(Equal(originalUID), "Workload should be patched in place, preserving its UID")
 		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
 		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
@@ -527,17 +617,17 @@ func TestKubernetesWAS_ScaleDownRecreatesWorkload(t *testing.T) {
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
 	}, TestTimeoutShort).Should(Succeed())
 
-	LogWithTimestamp(test.T(), "Waiting for the whole-cluster PodGroup to be recreated with updated minCount")
-	g.Eventually(func() int32 {
-		podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
-		if err != nil || podGroup.DeletionTimestamp != nil || podGroup.Spec.SchedulingPolicy.Gang == nil {
-			return -1
-		}
-		return podGroup.Spec.SchedulingPolicy.Gang.MinCount
-	}, TestTimeoutShort).Should(Equal(int32(2)))
+	LogWithTimestamp(test.T(), "Verifying the whole-cluster PodGroup minCount was patched in place (same UID)")
+	g.Eventually(func(inner Gomega) {
+		pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(pg.UID).To(Equal(originalPodGroupUID), "PodGroup should be patched in place, preserving its UID")
+		inner.Expect(pg.Spec.SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(pg.Spec.SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
+	}, TestTimeoutShort).Should(Succeed())
 }
 
-func TestKubernetesWAS_AddWorkerGroupRecreatesWorkload(t *testing.T) {
+func TestKubernetesWAS_AddWorkerGroupPatchesWorkloadInPlace(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -557,6 +647,9 @@ func TestKubernetesWAS_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalUID := workload.UID
+	podGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	originalPodGroupUID := podGroup.UID
 	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
 
 	LogWithTimestamp(test.T(), "Adding second worker group 'gpu-group' to RayCluster")
@@ -574,11 +667,11 @@ func TestKubernetesWAS_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
-	LogWithTimestamp(test.T(), "Verifying Workload was recreated with a single whole-cluster PodGroupTemplate")
+	LogWithTimestamp(test.T(), "Verifying the Workload minCount was patched in place (same UID, single whole-cluster template)")
 	g.Eventually(func(inner Gomega) {
 		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have a new UID after adding worker group")
+		inner.Expect(w.UID).To(Equal(originalUID), "Workload should be patched in place, preserving its UID")
 		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
 		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("cluster"))
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
@@ -587,8 +680,9 @@ func TestKubernetesWAS_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 
 	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
-	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
 	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(pg.UID).To(Equal(originalPodGroupUID), "PodGroup should be patched in place, preserving its UID")
 }
 
 // TestKubernetesWAS_GangAtomicityIncludesHead verifies that the head pod is part
@@ -798,8 +892,8 @@ func TestKubernetesWAS_ManyWorkerGroups(t *testing.T) {
 }
 
 // TestKubernetesWAS_SuspendSingleWorkerGroup verifies that suspending one worker
-// group of several recomputes the whole-cluster gang minCount and recreates the
-// Workload and PodGroup while the head and the remaining worker group keep
+// group of several recomputes the whole-cluster gang minCount and patches the
+// Workload and PodGroup in place while the head and the remaining worker group keep
 // running. Per-worker-group suspension requires the RayJobDeletionPolicy feature
 // gate, which the kubernetes-was-v1alpha3 overlay enables.
 func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
@@ -852,11 +946,11 @@ func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
 	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Verifying the Workload was recreated with the reduced minCount")
+	LogWithTimestamp(test.T(), "Verifying the Workload minCount was patched in place with the reduced minCount")
 	g.Eventually(func(inner Gomega) {
 		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
 		inner.Expect(err).NotTo(HaveOccurred())
-		inner.Expect(w.UID).NotTo(Equal(originalWorkloadUID), "Workload should be recreated after suspend")
+		inner.Expect(w.UID).To(Equal(originalWorkloadUID), "Workload should be patched in place after suspend, preserving its UID")
 		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(1))
 		inner.Expect(w.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
 		// MinCount = 1 head + 1 (group-a); group-b is suspended and contributes 0.
@@ -1009,11 +1103,74 @@ func TestKubernetesWAS_MultiHostWorkerGroup(t *testing.T) {
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		inner.Expect(err).NotTo(HaveOccurred())
 		inner.Expect(workerPods).To(HaveLen(2))
-		for _, pod := range workerPods {
-			inner.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil(), "pod %s missing schedulingGroup", pod.Name)
-			inner.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil(), "pod %s missing podGroupName", pod.Name)
-			inner.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name+"-cluster"),
-				"pod %s has wrong podGroupName", pod.Name)
-		}
+		expectClusterPodGroupMembership(inner, workerPods, rayCluster.Name)
 	}, TestTimeoutShort).Should(Succeed())
+}
+
+// TestKubernetesWAS_PreemptionPolicyFromPriorityClass verifies that a Never PriorityClass on the
+// Ray pods is reflected onto the whole-cluster gang: KubeRay stamps priorityClassName on the
+// Workload template + PodGroup, and the scheduling.k8s.io priority admission controller populates
+// their preemptionPolicy to Never. Requires the operator's KubernetesWASPodGroupPreemptionPolicy
+// gate and the Kubernetes cluster PodGroupPreemptionPolicy feature gate (set in the kind config).
+func TestKubernetesWAS_PreemptionPolicyFromPriorityClass(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	// A cluster-scoped PriorityClass carrying preemptionPolicy=Never, used by all Ray pods.
+	preemptNever := corev1.PreemptNever
+	priorityClassName := "was-never-" + namespace.Name
+	_, err := test.Client().Core().SchedulingV1().PriorityClasses().Create(test.Ctx(), &schedulingv1.PriorityClass{
+		ObjectMeta:       metav1.ObjectMeta{Name: priorityClassName},
+		Value:            1000,
+		PreemptionPolicy: &preemptNever,
+		Description:      "WAS e2e: preemptionPolicy=Never",
+	}, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		_ = test.Client().Core().SchedulingV1().PriorityClasses().Delete(test.Ctx(), priorityClassName, metav1.DeleteOptions{})
+	})
+
+	// All pods in the gang must share the PriorityClass (the scheduler requires a uniform priority).
+	headTemplate := HeadPodTemplateApplyConfiguration()
+	headTemplate.Spec.WithPriorityClassName(priorityClassName)
+	workerTemplate := WorkerPodTemplateApplyConfiguration()
+	workerTemplate.Spec.WithPriorityClassName(priorityClassName)
+
+	rayClusterAC := newWASRayClusterAC("preempt-never", namespace.Name).
+		WithSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(headTemplate)).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(1).
+				WithMinReplicas(1).
+				WithMaxReplicas(1).
+				WithGroupName("small-group").
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(workerTemplate)))
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with a Never PriorityClass", rayCluster.Namespace, rayCluster.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
+	g.Expect(workload.Spec.PodGroupTemplates[0].PriorityClassName).To(Equal(priorityClassName))
+	g.Expect(workload.Spec.PodGroupTemplates[0].PreemptionPolicy).NotTo(BeNil(), "Workload template preemptionPolicy should be set")
+	g.Expect(*workload.Spec.PodGroupTemplates[0].PreemptionPolicy).To(Equal(schedulingv1alpha3.PreemptNever))
+
+	clusterPodGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	// The priority admission controller populated the PodGroup's preemptionPolicy from the class.
+	g.Expect(clusterPodGroup.Spec.PriorityClassName).To(Equal(priorityClassName))
+	g.Expect(clusterPodGroup.Spec.PreemptionPolicy).NotTo(BeNil(), "PodGroup preemptionPolicy should be set")
+	g.Expect(*clusterPodGroup.Spec.PreemptionPolicy).To(Equal(schedulingv1alpha3.PreemptNever))
 }

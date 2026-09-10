@@ -56,6 +56,17 @@ tests:
               - patch
               - update
               - watch
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - priorityclasses
+            verbs:
+              - get
+              - list
+              - watch
 
   - it: Should grant nodes get for the pods/binding webhook
     set:
