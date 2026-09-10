@@ -801,6 +801,12 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
+// IsPodFQDNEnabled returns whether worker pods get per-pod DNS records (hostname/subdomain plus
+// the headless Service). mTLS implies it because certificates rely on DNS SANs instead of pod IPs.
+func IsPodFQDNEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && (ptr.Deref(spec.EnablePodFQDN, false) || IsTLSEnabled(spec))
+}
+
 // IsTLSEnabled returns whether TLS is enabled for the RayCluster.
 // TLS is enabled when the RayClusterMTLS feature gate is on, spec.TLSOptions is non-nil,
 // and spec.TLSOptions.Enabled is true.
