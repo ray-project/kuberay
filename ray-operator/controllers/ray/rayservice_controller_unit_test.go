@@ -3269,3 +3269,38 @@ func TestHandleSuspendObservedGeneration(t *testing.T) {
 		assert.Equal(t, int64(4), rayService.Status.ObservedGeneration)
 	})
 }
+
+func TestApplyServeTargetCapacitySkipsUnchangedCapacity(t *testing.T) {
+	for _, config := range []string{`{"target_capacity":50}`, "target_capacity: 50", `{"target_capacity":50.0}`} {
+		for _, cached := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/cached=%t", config, cached), func(t *testing.T) {
+				service := &rayv1.RayService{Spec: rayv1.RayServiceSpec{ServeConfigV2: config}}
+				cluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}
+				dashboard := &utils.FakeRayDashboardClient{}
+				reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+				if cached {
+					reconciler.cacheServeConfig(service, cluster.Name)
+					service.Spec.ServeConfigV2 = `{"target_capacity":0}`
+				}
+				require.NoError(t, reconciler.applyServeTargetCapacity(context.Background(), service, cluster, dashboard, 50))
+				assert.Empty(t, dashboard.LastUpdatedConfig, "unchanged capacity must not trigger a deployment update")
+			})
+		}
+	}
+}
+
+func TestApplyServeTargetCapacityUpdatesDifferentCapacity(t *testing.T) {
+	for _, config := range []string{`{"target_capacity":49}`, `{"target_capacity":50.5}`, `{"target_capacity":null}`, `{}`} {
+		t.Run(config, func(t *testing.T) {
+			service := &rayv1.RayService{Spec: rayv1.RayServiceSpec{ServeConfigV2: config},
+				Status: rayv1.RayServiceStatuses{ActiveServiceStatus: rayv1.RayServiceStatus{RayClusterName: "active"}}}
+			cluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}
+			dashboard := &utils.FakeRayDashboardClient{}
+			reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+			require.NoError(t, reconciler.applyServeTargetCapacity(context.Background(), service, cluster, dashboard, 50))
+			assert.JSONEq(t, `{"target_capacity":50}`, string(dashboard.LastUpdatedConfig))
+			require.NotNil(t, service.Status.ActiveServiceStatus.TargetCapacity)
+			assert.EqualValues(t, 50, *service.Status.ActiveServiceStatus.TargetCapacity)
+		})
+	}
+}

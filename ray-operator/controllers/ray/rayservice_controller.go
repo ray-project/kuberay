@@ -1708,13 +1708,21 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 		return err
 	}
 
-	// Check if ServeConfig requires update
-	if currentTargetCapacity, ok := serveConfig["target_capacity"].(float64); ok {
-		if int32(currentTargetCapacity) == goalTargetCapacity {
-			logger.Info("target_capacity already updated on RayCluster", "target_capacity", currentTargetCapacity)
-			// No update required, return early
-			return nil
-		}
+	// YAML decoding preserves whole numbers as int64, including JSON values
+	// such as 50.0. Compare without truncating fractional capacities.
+	var currentTargetCapacity float64
+	capacityPresent := true
+	switch value := serveConfig["target_capacity"].(type) {
+	case int64:
+		currentTargetCapacity = float64(value)
+	case float64:
+		currentTargetCapacity = value
+	default:
+		capacityPresent = false
+	}
+	if capacityPresent && currentTargetCapacity == float64(goalTargetCapacity) {
+		logger.Info("target_capacity already updated on RayCluster", "target_capacity", currentTargetCapacity)
+		return nil
 	}
 
 	serveConfig["target_capacity"] = goalTargetCapacity
