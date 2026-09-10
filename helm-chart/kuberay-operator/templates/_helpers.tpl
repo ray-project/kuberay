@@ -143,13 +143,13 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- end }}
 {{- end }}
 
-{{- /* Create the name of the node event forwarder cluster role to use. */ -}}
-{{- define "kuberay-operator.nodeEventForwarderClusterRole.name" -}}
+{{- /* Create the name of the node event forwarder role to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderRole.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
 {{- end -}}
 
-{{- /* Create the name of the node event forwarder cluster role binding to use. */ -}}
-{{- define "kuberay-operator.nodeEventForwarderClusterRoleBinding.name" -}}
+{{- /* Create the name of the node event forwarder role binding to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderRoleBinding.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
 {{- end -}}
 
@@ -168,14 +168,6 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - ""
   resources:

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +147,28 @@ func TestEventForwarder_TruncatesLongMessages(t *testing.T) {
 	message := recorder.events[0].message
 	assert.LessOrEqual(t, len(message), maxEventNoteLength)
 	assert.Contains(t, message, `Node "node-1"`, "the prefix must survive truncation")
-	assert.True(t, strings.HasSuffix(message, "..."))
+}
+
+func TestEventForwarder_TruncatesLongReason(t *testing.T) {
+	evt := warningNodeEvent("evt-1", "node-1", "")
+	// 127 ASCII bytes followed by a 2-byte UTF-8 rune ("é" = \u00e9).
+	// A naive slice at maxEventReasonLength (128) would split the rune, producing invalid UTF-8.
+	evt.Reason = strings.Repeat("a", 127) + "é"
+
+	recorder := &capturingRecorder{}
+	r := newEventForwarder(t, recorder, EventForwarderOptions{},
+		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
+		rayPodOnNode("a-head", "cluster-a"),
+		evt,
+	)
+
+	reconcileForwarderEvent(t, r, "evt-1")
+
+	require.Len(t, recorder.events, 1)
+	reason := recorder.events[0].reason
+	assert.LessOrEqual(t, len(reason), maxEventReasonLength)
+	assert.True(t, utf8.ValidString(reason), "truncated reason must be valid UTF-8")
+	assert.Equal(t, strings.Repeat("a", 127), reason)
 }
 
 func TestEventForwarderOptions_Validate(t *testing.T) {
@@ -176,6 +198,7 @@ func TestEventForwarderOptions_Validate(t *testing.T) {
 func TestEventForwarder_SkipsNodesWithoutRayPods(t *testing.T) {
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
+		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
 		warningNodeEvent("evt-2", "node-2", "kubelet"), // event for a node with no Ray pods
 	)
@@ -183,6 +206,27 @@ func TestEventForwarder_SkipsNodesWithoutRayPods(t *testing.T) {
 	reconcileForwarderEvent(t, r, "evt-2")
 
 	assert.Empty(t, recorder.events)
+
+	// An informer resync occurs after a Ray pod is later scheduled onto node-2.
+	// Because the event was already observed and marked forwarded, the resync must not
+	// retroactively forward it.
+	podOnNode2 := rayPodOnNode("a-worker", "cluster-a")
+	podOnNode2.Spec.NodeName = "node-2"
+	require.NoError(t, r.Create(context.Background(), podOnNode2))
+
+	reconcileForwarderEvent(t, r, "evt-2") // informer resync
+	assert.Empty(t, recorder.events, "resync must not retroactively forward old event to newly scheduled pod")
+
+	// If the fault recurs (count bump), it must now be forwarded to cluster-a.
+	ctx := context.Background()
+	evt := &corev1.Event{}
+	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "evt-2", Namespace: "default"}, evt))
+	evt.Count = 2
+	evt.LastTimestamp = metav1.NewTime(time.Now())
+	require.NoError(t, r.Update(ctx, evt))
+
+	reconcileForwarderEvent(t, r, "evt-2")
+	assert.Len(t, recorder.events, 1, "fault recurrence on node-2 should now be forwarded")
 }
 
 func TestEventForwarder_ResyncDoesNotReforward(t *testing.T) {

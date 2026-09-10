@@ -211,7 +211,9 @@ func (r *EventForwarderReconciler) SetupWithManager(mgr ctrl.Manager, reconcileC
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch
+// Note: RBAC for watching Node events (get, list, watch) is intentionally scoped
+// to the "default" and "kube-system" namespaces via dedicated Roles rather than
+// being granted cluster-wide in the base ClusterRole, enforcing least privilege.
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ray.io,resources=rayjobs,verbs=get;list;watch
@@ -274,10 +276,10 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 	}
 
 	if len(clusterKeys) == 0 {
-		// No Ray workload on this node right now. The Event is deliberately not
-		// marked forwarded, but this controller only watches Events, so a Pod
-		// scheduled onto the node later will not retroactively receive it unless
-		// the fault recurs.
+		// No Ray workload on this node right now. Mark the event as forwarded
+		// for its current count so an informer resync or requeue does not
+		// retroactively forward it if a Ray pod is scheduled onto this node later.
+		r.markForwarded(request.NamespacedName, src)
 		return ctrl.Result{}, nil
 	}
 
@@ -289,15 +291,16 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 
 	if len(targets) == 0 {
 		// All RayClusters referenced by pods on this node have already been deleted.
+		r.markForwarded(request.NamespacedName, src)
 		return ctrl.Result{}, nil
 	}
 
 	// The affected Node is attached as the related object so a reader of the
 	// forwarded Event can get back to the source of the fault.
 	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName, UID: src.InvolvedObject.UID}}
-	note := truncatedEventNote(fmt.Sprintf(
+	note := truncateString(fmt.Sprintf(
 		"Infrastructure failure detected on Node %q (reason: %s, source: %s): %s",
-		nodeName, src.Reason, eventSource(src), src.Message))
+		nodeName, src.Reason, eventSource(src), src.Message), maxEventNoteLength, "...")
 
 	reason := src.Reason
 	if reason == "" {
@@ -306,9 +309,7 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 	if source := eventSource(src); source != "" {
 		reason = fmt.Sprintf("%s/%s", reason, source)
 	}
-	if len(reason) > maxEventReasonLength {
-		reason = reason[:maxEventReasonLength]
-	}
+	reason = truncateString(reason, maxEventReasonLength, "")
 
 	for _, target := range targets {
 		r.Recorder.Eventf(target, node, src.Type, reason, "Forward", "%s", note)
@@ -375,17 +376,18 @@ func owningRayJob(cluster *rayv1.RayCluster) (types.NamespacedName, bool) {
 	}, true
 }
 
-func truncatedEventNote(note string) string {
-	if len(note) <= maxEventNoteLength {
-		return note
+// truncateString truncates s to at most maxLen bytes, cutting at a UTF-8 rune
+// boundary and appending suffix if truncation occurred.
+func truncateString(s string, maxLen int, suffix string) string {
+	if len(s) <= maxLen {
+		return s
 	}
 
-	const ellipsis = "..."
-	cut := maxEventNoteLength - len(ellipsis)
-	for cut > 0 && !utf8.RuneStart(note[cut]) {
+	cut := maxLen - len(suffix)
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}
-	return note[:cut] + ellipsis
+	return s[:cut] + suffix
 }
 
 // shouldForward reports whether this occurrence of the source Event is new.
@@ -405,7 +407,10 @@ func (r *EventForwarderReconciler) shouldForward(key types.NamespacedName, e *co
 func (r *EventForwarderReconciler) markForwarded(key types.NamespacedName, e *corev1.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.forwarded[key] = forwardedRecord{uid: e.UID, count: occurrenceCount(e)}
+	count := occurrenceCount(e)
+	if last, ok := r.forwarded[key]; !ok || last.uid != e.UID || count > last.count {
+		r.forwarded[key] = forwardedRecord{uid: e.UID, count: count}
+	}
 }
 
 func (r *EventForwarderReconciler) forget(key types.NamespacedName) {
@@ -417,7 +422,7 @@ func (r *EventForwarderReconciler) forget(key types.NamespacedName) {
 // occurrenceCount returns how many times the source Event has occurred,
 // handling both legacy (count) and new-style (series.count) aggregation.
 func occurrenceCount(e *corev1.Event) int32 {
-	if e.Series != nil {
+	if e.Series != nil && e.Series.Count > 0 {
 		return e.Series.Count
 	}
 	if e.Count > 0 {

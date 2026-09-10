@@ -32,13 +32,8 @@ func TestEventForwarder(t *testing.T) {
 		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 		LogWithTimestamp(test.T(), "Waiting for Head pod of RayCluster %s/%s to be running and ready", rayCluster.Namespace, rayCluster.Name)
-		headPodContainerReady := func(p *corev1.Pod) bool {
-			return p.Status.Phase == corev1.PodRunning &&
-				len(p.Status.ContainerStatuses) > 0 &&
-				p.Status.ContainerStatuses[0].Ready
-		}
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
-			Should(WithTransform(headPodContainerReady, BeTrue()))
+			Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
