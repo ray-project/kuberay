@@ -600,17 +600,12 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 		size:        int64(len(payload)),
 	}
 
-	// Drive the first attempt synchronously so retryProcess has registered
-	// the backoff goroutine on consumerWG before shutdown begins.
-	// failPending() flips false inside WriteFile, before that registration.
+	// When this returns, retryProcess has already registered the backoff goroutine
+	// on consumerWG, so shutdown below will wake it for a final attempt.
 	ec.processRotatedFile(task)
+	// Check that the injected failure was hit and nothing was uploaded.
 	require.False(t, writer.failPending(), "first attempt should consume the injected failure")
 	require.Empty(t, writer.fileKeys(), "first attempt must not have uploaded")
-
-	// Start the worker so shutdown can close the queue and wait for the
-	// consumer, matching the production pipeline.
-	ec.consumerWG.Add(1)
-	go ec.compressionUploadWorker()
 
 	// Run's real shutdown sequence. Closing stopProducers cuts the retry's
 	// backoff short and triggers its final attempt.
