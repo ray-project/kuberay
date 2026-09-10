@@ -4105,3 +4105,18 @@ func TestValidateCollectorOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateRayClusterSpec_Topology checks that a topology group is rejected when the operator runs without webhooks
+func TestValidateRayClusterSpec_Topology(t *testing.T) {
+	spec := createBasicRayClusterSpec()
+	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
+		GroupName:   "test",
+		MinReplicas: new(int32(1)),
+		MaxReplicas: new(int32(1)),
+		Template:    corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
+		Topology:    &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}}},
+	}}
+
+	t.Setenv("ENABLE_WEBHOOKS", "")
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the KubeRay operator to run with ENABLE_WEBHOOKS=true")
+}
