@@ -1,7 +1,6 @@
 package support
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -38,11 +37,7 @@ func GetContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 }
 
 func PortForwardService(test Test, g *WithT, namespace, serviceName string, port int) {
-	ctx, cancel := context.WithCancel(context.Background())
-	test.T().Cleanup(cancel)
-
-	kubectlCmd := exec.CommandContext(
-		ctx,
+	kubectlCmd := exec.Command(
 		"kubectl",
 		"-n", namespace,
 		"port-forward",
@@ -51,6 +46,13 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 	)
 	err := kubectlCmd.Start()
 	g.Expect(err).NotTo(HaveOccurred())
+
+	// Kill and reap on cleanup: a leaked forward keeps the port, so the next test's
+	// forward cannot bind and silently talks to this test's deleted namespace.
+	test.T().Cleanup(func() {
+		_ = kubectlCmd.Process.Kill()
+		_ = kubectlCmd.Wait()
+	})
 }
 
 // InstallGrafanaAndPrometheus installs Grafana and Prometheus in the cluster for testing.

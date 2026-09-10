@@ -99,6 +99,60 @@ tests:
           path: data["config.yaml"]
           pattern: "defaultContainerEnvs:"
 
+  - it: Should include defaultPodAnnotations in Configuration
+    set:
+      configuration:
+        enabled: true
+        defaultPodAnnotations:
+          monitoring.example.com/scrape: "true"
+          monitoring.example.com/port: "8080"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodAnnotations:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "monitoring.example.com/scrape: \"true\""
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "monitoring.example.com/port: \"8080\""
+
+  - it: Should not include defaultPodAnnotations when not set
+    set:
+      configuration:
+        enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodAnnotations:"
+
+  - it: Should include defaultPodLabels in Configuration
+    set:
+      configuration:
+        enabled: true
+        defaultPodLabels:
+          app.kubernetes.io/managed-by: kuberay
+          team: platform
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodLabels:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "app.kubernetes.io/managed-by: kuberay"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "team: platform"
+
+  - it: Should not include defaultPodLabels when not set
+    set:
+      configuration:
+        enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodLabels:"
+
   - it: Should include enableLeaderElection from values.leaderElectionEnabled
     set:
       configuration:
@@ -263,6 +317,10 @@ tests:
         defaultContainerEnvs:
           - name: RAY_TEST
             value: "test"
+        defaultPodAnnotations:
+          monitoring.example.com/scrape: "true"
+        defaultPodLabels:
+          team: platform
       leaderElectionEnabled: false
       metrics:
         enabled: false
@@ -292,3 +350,15 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "name: RAY_TEST"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodAnnotations:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "monitoring.example.com/scrape: \"true\""
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultPodLabels:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "team: platform"

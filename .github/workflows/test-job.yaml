@@ -323,6 +323,10 @@ jobs:
         with:
           ref: ${{github.event.pull_request.head.sha}}
 
+      - name: Get revision SHA
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
       - name: Get dependencies
         run: go mod download
         working-directory: ${{env.working-directory}}
@@ -334,3 +338,52 @@ jobs:
       - name: Test
         run: make test
         working-directory: ${{env.working-directory}}
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v4
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+      - name: Build multi-arch binaries for historyserver and collector
+        run: make build-multi-arch
+        working-directory: ${{env.working-directory}}
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+      - name: Build MultiArch Docker Image and Push on Merge
+        uses: docker/build-push-action@v7
+        env:
+          REPO_ORG: kuberay
+          REPO_NAME: historyserver
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: ${{env.working-directory}}
+          file: ${{env.working-directory}}/Dockerfile.historyserver.buildx
+          push: true
+          provenance: false
+          tags: |
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)
+
+      - name: Build MultiArch Docker Image for Historyserver Collector and Push on Merge
+        uses: docker/build-push-action@v7
+        env:
+          REPO_ORG: kuberay
+          REPO_NAME: collector
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: ${{env.working-directory}}
+          file: ${{env.working-directory}}/Dockerfile.collector.buildx
+          push: true
+          provenance: false
+          tags: |
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+            quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:nightly
+        if: contains(fromJson('["refs/heads/master"]'), github.ref)

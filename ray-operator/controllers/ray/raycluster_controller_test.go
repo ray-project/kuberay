@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -1728,7 +1728,7 @@ var _ = Context("Inside the default namespace", func() {
 			return &RayClusterReconciler{
 				Client:                     k8sClient,
 				Scheme:                     k8sClient.Scheme(),
-				Recorder:                   record.NewFakeRecorder(10),
+				Recorder:                   events.NewFakeRecorder(10),
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(k8sClient),
 			}
 		}

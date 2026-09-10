@@ -37,6 +37,7 @@ const (
 	// owner: @ryanaoleary
 	// rep: https://github.com/ray-project/enhancements/pull/58
 	// alpha: v1.5
+	// beta: v1.7
 	//
 	// Enabled NewClusterWithIncrementalUpgrade type for RayService zero-downtime upgrades.
 	RayServiceIncrementalUpgrade featuregate.Feature = "RayServiceIncrementalUpgrade"
@@ -60,8 +61,41 @@ const (
 	// rep: N/A
 	// alpha: v1.7
 	//
-	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
-	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
+	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkPolicy).
+	RayClusterNetworkPolicy featuregate.Feature = "RayClusterNetworkPolicy"
+
+	// owner: @jhasm
+	// rep: https://github.com/ray-project/enhancements/pull/65
+	// alpha: v1.7
+	//
+	// Enables the embedded RocksDB storage backend for GCS fault tolerance
+	// (GcsFaultToleranceOptions.Backend: rocksdb). Mirrors the alpha status of the
+	// corresponding Ray Core feature (ray-project/ray#63657).
+	GCSFaultToleranceEmbeddedStorage featuregate.Feature = "GCSFaultToleranceEmbeddedStorage"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables mTLS (spec.tlsOptions) for RayClusters via cert-manager.
+	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
+
+	// owner: @chiayi @Future-Outlier
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables RayCluster history server collector sidecar injection (spec.historyServerOptions).
+	RayClusterHistoryServer featuregate.Feature = "RayClusterHistoryServer"
+
+	// owner: @marosset
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables the Kubernetes Workload-Aware Scheduling (WAS) batch scheduler, which gang schedules
+	// RayClusters through the in-tree scheduling.k8s.io Workload and PodGroup APIs. Enabling this gate
+	// selects the scheduler; it is mutually exclusive with --batch-scheduler and --enable-batch-scheduler.
+	// Requires a Kubernetes cluster that serves the scheduling.k8s.io API with GenericWorkload enabled.
+	KubernetesWAS featuregate.Feature = "KubernetesWAS"
 )
 
 func init() {
@@ -69,13 +103,17 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
-	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:       {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:             {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:             {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:     {Default: true, PreRelease: featuregate.Beta},
+	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
+	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
+	KubernetesWAS:                    {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

@@ -1,9 +1,7 @@
 package runtime
 
 import (
-	"fmt"
 	"net/http"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,6 +11,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime/logcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -53,7 +52,7 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
-	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, utils.AppendRayClusterNameNamespace(handler.RayClusterName, handler.RayClusterNamespace))))
+	clusterRootDir := clusterlogs.Prefix(handler.RootDir, handler.OwnerKind, handler.OwnerName, handler.RayClusterNamespace, handler.RayClusterName)
 	handler.ClusterDir = clusterRootDir
 
 	return &handler

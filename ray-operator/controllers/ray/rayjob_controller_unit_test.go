@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -98,7 +98,7 @@ func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
 	rayJobReconciler := &RayJobReconciler{
 		Client:   fakeClient,
 		Scheme:   newScheme,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 	}
 
 	err := rayJobReconciler.createK8sJobIfNeed(ctx, rayJob, rayCluster)
@@ -455,7 +455,7 @@ func TestUpdateRayJobStatus(t *testing.T) {
 			// Initialize a new RayClusterReconciler.
 			testRayJobReconciler := &RayJobReconciler{
 				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 				Scheme:   newScheme,
 			}
 
@@ -499,7 +499,7 @@ func TestUpdateRayJobStatusPersistsJobStatusCheckFailureStartTime(t *testing.T) 
 
 	testRayJobReconciler := &RayJobReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -542,7 +542,7 @@ func TestUpdateRayJobStatusClearsJobStatusCheckFailureStartTime(t *testing.T) {
 
 	testRayJobReconciler := &RayJobReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -583,7 +583,7 @@ func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 		},
 	}).WithScheme(scheme.Scheme).Build()
 
-	recorder := record.NewFakeRecorder(100)
+	recorder := events.NewFakeRecorder(100)
 
 	reconciler := &RayJobReconciler{
 		Client:   fakeClient,
@@ -648,7 +648,7 @@ func TestCreateNewK8sJob_PropagatesLabelsToSubmitterPodTemplate(t *testing.T) {
 
 	reconciler := &RayJobReconciler{
 		Client:   fakeClient,
-		Recorder: record.NewFakeRecorder(10),
+		Recorder: events.NewFakeRecorder(10),
 		Scheme:   scheme.Scheme,
 	}
 
@@ -682,7 +682,7 @@ func TestFailedCreateRayClusterEvent(t *testing.T) {
 		},
 	}).WithScheme(scheme.Scheme).Build()
 
-	recorder := record.NewFakeRecorder(100)
+	recorder := events.NewFakeRecorder(100)
 
 	reconciler := &RayJobReconciler{
 		Client:   fakeClient,
@@ -731,7 +731,7 @@ func TestFailedDeleteRayJobSubmitterEvent(t *testing.T) {
 		},
 	}).WithScheme(newScheme).WithRuntimeObjects(submitter).Build()
 
-	recorder := record.NewFakeRecorder(100)
+	recorder := events.NewFakeRecorder(100)
 
 	reconciler := &RayJobReconciler{
 		Client:   fakeClient,
@@ -784,7 +784,7 @@ func TestFailedDeleteRayClusterEvent(t *testing.T) {
 		},
 	}).WithScheme(newScheme).WithRuntimeObjects(rayCluster).Build()
 
-	recorder := record.NewFakeRecorder(100)
+	recorder := events.NewFakeRecorder(100)
 
 	reconciler := &RayJobReconciler{
 		Client:   fakeClient,
@@ -917,7 +917,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			AuthOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
+				EnableK8sTokenAuth: new(true),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
@@ -1046,7 +1046,7 @@ func TestBatchSchedulerOnCompletionCalledWhenRayJobComplete(t *testing.T) {
 			}
 			schedulerManager := batchscheduler.NewSchedulerManagerForTest(fakeScheduler)
 
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler := &RayJobReconciler{
 				Client:   fakeClient,
@@ -1228,7 +1228,7 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T)
 			}
 			schedulerManager := batchscheduler.NewSchedulerManagerForTest(fakeScheduler)
 
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler := &RayJobReconciler{
 				Client:   fakeClient,
@@ -1348,7 +1348,7 @@ func TestReconcileRetryingReusesRayCluster(t *testing.T) {
 
 			reconciler := &RayJobReconciler{
 				Client:   fakeClient,
-				Recorder: record.NewFakeRecorder(100),
+				Recorder: events.NewFakeRecorder(100),
 				Scheme:   newScheme,
 			}
 

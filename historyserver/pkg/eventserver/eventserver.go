@@ -1,6 +1,8 @@
 package eventserver
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -29,7 +32,7 @@ type EventHandler struct {
 	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
-var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(\.gz)?$`)
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(-\d+)?(\.jsonl)?(\.gz)?$`)
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage
 const taskPrefix = "task::"
@@ -39,8 +42,64 @@ func isValidEventFile(fileName string) bool {
 	if strings.HasSuffix(fileName, "/") {
 		return false
 	}
-	// Only files matching {nodeId}-{YYYY-MM-DD-HH} format are valid event files
+	// Accept both legacy files ({nodeId}-{YYYY-MM-DD-HH}) and the new
+	// disk-first JSONL files ({nodeId}-{YYYY-MM-DD-HH}.jsonl[.gz]).
 	return eventFilePattern.MatchString(fileName)
+}
+
+// maxJSONLLineBytes bounds a single JSONL line during scanning. It matches the
+// collector's default maximum rotated-file size (see eventcollector defaults),
+// so any single event the collector can persist to a file can also be read back
+// here. Without this, bufio.Scanner's default 64 KiB token limit would return
+// ErrTooLong for a large event (e.g. a big task profile) and cause the entire
+// file to be skipped.
+const maxJSONLLineBytes = 100 * 1024 * 1024
+
+// DecodeEventFileBytes parses the raw bytes of an event file.
+//
+// Gzip decompression is handled at the reader level in ProcessSingleSession
+// via compression.ReadCompressedContent, so data arriving here is always
+// already decompressed.
+//
+// Format auto-detection (JSON array vs JSONL) is always enabled so the
+// historyserver remains forward-compatible with new collectors that emit JSONL
+// and backward-compatible with legacy data stored as a JSON array.
+func DecodeEventFileBytes(fileName string, raw []byte) ([]map[string]any, error) {
+	trimmed := bytes.TrimLeft(raw, " \t\r\n")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+
+	// Format auto-detection is always enabled.
+	// JSON array (legacy format) starts with '['.
+	if trimmed[0] == '[' {
+		var out []map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, fmt.Errorf("unmarshal JSON array %s: %w", fileName, err)
+		}
+		return out, nil
+	}
+
+	// Otherwise treat as JSONL: one object per non-empty line.
+	var out []map[string]any
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	scanner.Buffer(make([]byte, 0, 64*1024), maxJSONLLineBytes)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal(line, &obj); err != nil {
+			logrus.Warnf("Skipping malformed JSONL line in %s: %v", fileName, err)
+			continue
+		}
+		out = append(out, obj)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan JSONL %s: %w", fileName, err)
+	}
+	return out, nil
 }
 
 func NewEventHandler(reader storage.StorageReader) *EventHandler {
@@ -74,7 +133,7 @@ func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]
 	}
 	eventType := types.EventType(eventTypeStr)
 
-	logrus.Infof("current eventType: %v", eventType)
+	logrus.Debugf("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
 		return h.handleTaskDefinitionEvent(eventMap, clusterSessionKey, false)
@@ -460,24 +519,38 @@ func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]
 	return nil
 }
 
+// getClusterLogPathPrefix returns the cluster storage prefix:
+// e.g., cluster-history/{ownerKind}/{namespace}/{ownerName}/{clusterName}
+func (h *EventHandler) getClusterLogPathPrefix(clusterInfo utils.ClusterInfo) string {
+	return clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
+}
+
 // getAllJobEventFiles get all the job event files for the given cluster.
-// Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
 func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
-	for _, jobDir := range jobDirList {
-		// Skip non-directory entries
-		if !strings.HasSuffix(jobDir, "/") {
-			continue
+	// Check candidate prefixes under each node (<sessionName>/<nodeName>/job_events/)
+	var candidatePrefixes []string
+	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
+		if strings.HasSuffix(rawEntry, "/") {
+			nodeName := strings.TrimSuffix(rawEntry, "/")
+			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelJobEventsDir(clusterInfo.SessionName, nodeName, "")+"/")
 		}
-		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
-		for _, jobFile := range jobFiles {
-			if isValidEventFile(jobFile) {
-				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
+	}
+
+	for _, jobEventDirPrefix := range candidatePrefixes {
+		jobDirList := h.reader.ListFiles(clusterLogPathPrefix, jobEventDirPrefix)
+		for _, jobDir := range jobDirList {
+			if !strings.HasSuffix(jobDir, "/") {
+				continue
+			}
+			jobDirPath := jobEventDirPrefix + jobDir
+			jobFiles := h.reader.ListFiles(clusterLogPathPrefix, jobDirPath)
+			for _, jobFile := range jobFiles {
+				if isValidEventFile(jobFile) {
+					allJobFiles = append(allJobFiles, jobDirPath+jobFile)
+				}
 			}
 		}
 	}
@@ -486,17 +559,25 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 
 // getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
-	// Filter out directories (items ending with /) and build full paths
+	// Check candidate prefixes under each node (<sessionName>/<nodeName>/node_events/)
+	var candidatePrefixes []string
+	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
+		if strings.HasSuffix(rawEntry, "/") {
+			nodeName := strings.TrimSuffix(rawEntry, "/")
+			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(clusterInfo.SessionName, nodeName)+"/")
+		}
+	}
+
 	var nodeEventFiles []string
-	for _, fileName := range nodeEventFileNames {
-		// Skip directories
-		if isValidEventFile(fileName) {
-			fullPath := nodeEventDirPrefix + fileName
-			nodeEventFiles = append(nodeEventFiles, fullPath)
+	for _, nodeEventDirPrefix := range candidatePrefixes {
+		nodeEventFileNames := h.reader.ListFiles(clusterLogPathPrefix, nodeEventDirPrefix)
+		for _, fileName := range nodeEventFileNames {
+			if isValidEventFile(fileName) {
+				fullPath := nodeEventDirPrefix + fileName
+				nodeEventFiles = append(nodeEventFiles, fullPath)
+			}
 		}
 	}
 	return nodeEventFiles
@@ -634,11 +715,13 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 			task.WorkerPID = existingWorkerPID
 			task.IsDebuggerPaused = existingIsDebuggerPaused
 			task.ActorReprName = existingActorReprName
-			task.TaskLogInfo = existingTaskLogInfo
 			task.State = task.GetLastState()
 			task.StartTime = existingStartTime
 			task.EndTime = existingEndTime
 			task.CreationTime = existingCreationTime
+		}
+		if existingTaskLogInfo != nil {
+			task.TaskLogInfo = existingTaskLogInfo
 		}
 
 		// Restore profile-derived fields (from TASK_PROFILE_EVENT)
@@ -652,6 +735,52 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 	})
 
 	return nil
+}
+
+// mergeTaskLogInfo combines Ray's partial log-start and log-end updates.
+func mergeTaskLogInfo(current **types.TaskLogInfo, update *types.TaskLogInfo) {
+	if update == nil {
+		return
+	}
+	if *current == nil {
+		copied := *update
+		*current = &copied
+		return
+	}
+
+	mergeTaskLogStream(
+		&(*current).StdoutFile,
+		&(*current).StdoutStart,
+		&(*current).StdoutEnd,
+		update.StdoutFile,
+		update.StdoutStart,
+		update.StdoutEnd,
+	)
+	mergeTaskLogStream(
+		&(*current).StderrFile,
+		&(*current).StderrStart,
+		&(*current).StderrEnd,
+		update.StderrFile,
+		update.StderrStart,
+		update.StderrEnd,
+	)
+}
+
+func mergeTaskLogStream(
+	currentFile *string,
+	currentStart, currentEnd *int64,
+	updateFile string,
+	updateStart, updateEnd int64,
+) {
+	if updateFile != "" {
+		*currentFile = updateFile
+		*currentStart = updateStart
+	} else if updateStart != 0 {
+		*currentStart = updateStart
+	}
+	if updateEnd != 0 || *currentEnd == 0 {
+		*currentEnd = updateEnd
+	}
 }
 
 // handleTaskLifecycleEvent processes TASK_LIFECYCLE_EVENT and merges state transitions for a given task attempt.
@@ -675,9 +804,8 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	}
 	normalizeTaskIDsToHex(&currTask)
 
-	// TODO(jiangjiawei1103): Clarify if there must be at least one state transition. Can one task have more than one state transition?
-	if len(currTask.StateTransitions) == 0 {
-		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
+	if len(currTask.StateTransitions) == 0 && currTask.TaskLogInfo == nil {
+		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition or task log info")
 	}
 
 	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
@@ -707,16 +835,18 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			return task.StateTransitions[i].Timestamp.Before(task.StateTransitions[j].Timestamp)
 		})
 
-		if len(task.StateTransitions) == 0 {
+		if currTask.JobID != "" {
+			task.JobID = currTask.JobID
+		}
+		mergeTaskLogInfo(&task.TaskLogInfo, currTask.TaskLogInfo)
+
+		if len(currTask.StateTransitions) == 0 {
 			return
 		}
 
 		// TODO(jiangjiawei1103): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
-		if currTask.JobID != "" {
-			task.JobID = currTask.JobID
-		}
 		if currTask.NodeID != "" {
 			task.NodeID = currTask.NodeID
 		}
@@ -728,7 +858,6 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 		}
 		task.IsDebuggerPaused = currTask.IsDebuggerPaused
 		task.ActorReprName = currTask.ActorReprName
-		task.TaskLogInfo = currTask.TaskLogInfo
 		task.State = task.GetLastState()
 
 		// Derive creation time, start time and end time from state transitions.
@@ -1018,7 +1147,7 @@ func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node
 // TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
 // StorageReader interface surfacing errors.
 func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
-	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
 	// ClusterLogEventMap backs only the /events endpoint, so log event read failures must not
@@ -1042,14 +1171,14 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 
 		var eventioReader io.Reader
 		if strings.HasSuffix(eventFile, ".gz") {
-			rc, err := compression.ReadCompressedContent(h.reader, clusterNameNamespace, eventFile)
+			rc, err := compression.ReadCompressedContent(h.reader, clusterLogPathPrefix, eventFile)
 			if err != nil {
 				logrus.Errorf("Failed to decompress event file %s: %v", eventFile, err)
 				continue
 			}
 			eventioReader = rc
 		} else {
-			eventioReader = h.reader.GetContent(clusterNameNamespace, eventFile)
+			eventioReader = h.reader.GetContent(clusterLogPathPrefix, eventFile)
 		}
 
 		if eventioReader == nil {
@@ -1068,11 +1197,11 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		rayEventsRead++
 
-		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// DecodeEventFileBytes and storeEvent failures are treated as corrupt-data errors:
 		// retrying won't fix bad bytes, accepting partial loss.
-		var eventList []map[string]any
-		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
+		eventList, err := DecodeEventFileBytes(eventFile, eventbytes)
+		if err != nil {
+			logrus.Errorf("Failed to decode events for file %s: %v", eventFile, err)
 			continue
 		}
 

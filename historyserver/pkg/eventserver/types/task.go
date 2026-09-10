@@ -93,10 +93,10 @@ type TaskStateTransition struct {
 type TaskLogInfo struct {
 	StdoutFile  string `json:"stdoutFile"`
 	StderrFile  string `json:"stderrFile"`
-	StdoutStart int64  `json:"stdoutStart"`
-	StdoutEnd   int64  `json:"stdoutEnd"`
-	StderrStart int64  `json:"stderrStart"`
-	StderrEnd   int64  `json:"stderrEnd"`
+	StdoutStart int64  `json:"stdoutStart,string"`
+	StdoutEnd   int64  `json:"stdoutEnd,string"`
+	StderrStart int64  `json:"stderrStart,string"`
+	StderrEnd   int64  `json:"stderrEnd,string"`
 }
 
 // Task's fields are populated from the TASK_DEFINITION_EVENT, ACTOR_TASK_DEFINITION_EVENT, and TASK_LIFECYCLE_EVENT.
@@ -153,8 +153,7 @@ type Task struct {
 	// Actor task repr name, if applicable.
 	ActorReprName *string `json:"actorReprName,omitempty"`
 
-	// TaskLogInfo is just added at https://github.com/ray-project/ray/pull/60287.
-	// TODO(jiangjiawei1103): Add support for TaskLogInfo.
+	// TaskLogInfo was added at https://github.com/ray-project/ray/pull/60287.
 	TaskLogInfo *TaskLogInfo `json:"taskLogInfo,omitempty"`
 
 	State        TaskStatus

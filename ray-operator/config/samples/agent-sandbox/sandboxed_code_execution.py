@@ -43,7 +43,6 @@ class SandboxExecutor:
 
         t_claim = time.time()
         self.sandbox = self.client.create_sandbox(
-            template="python-runtime-sandbox",
             warmpool="python-runtime-pool",
         )
         print(f"[executor-{worker_id}] claimed sandbox '{self.sandbox.claim_name}' in {time.time() - t_claim:.3f}s")

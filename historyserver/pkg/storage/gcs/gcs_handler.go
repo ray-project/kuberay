@@ -173,13 +173,23 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	return clusterList
 }
 
+// contentMatchGlob builds the object search pattern for GetContent, anchored at
+// the configured root dir the same way ListFiles and List anchor their prefixes.
+// A leading "**/" would let the search escape the root dir entirely, because
+// matchGlob treats "**" as matching across "/", so a bucket shared by more than
+// one root dir could serve a file belonging to a different deployment.
+// An empty root dir keeps the previous unanchored pattern.
+func contentMatchGlob(rootDir string, clusterId string, fileName string) string {
+	return strings.TrimPrefix(path.Join(rootDir, "**", clusterId+"*", "**", fileName), "/")
+}
+
 func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
-		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
+		MatchGlob: contentMatchGlob(h.RootDir, clusterId, fileName),
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()

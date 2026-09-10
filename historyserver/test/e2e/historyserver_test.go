@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 )
@@ -87,7 +89,7 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLiveClusterTasks,
 		},
 		{
-			name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
+			name:     "Dead cluster: /api/v0/tasks should return detailed task information from historical replay",
 			testFunc: testDeadClusterTasks,
 		},
 		{
@@ -154,7 +156,7 @@ func TestHistoryServer(t *testing.T) {
 func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -170,7 +172,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -188,7 +190,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -205,7 +207,7 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -495,7 +497,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	savedNodeIP := headPod.Status.PodIP
-	savedNodeID := GetNodeIDFromHeadPod(test, g, rayCluster)
+	savedNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	LogWithTimestamp(test.T(), "Captured node IP %s and node ID %s before cluster deletion", savedNodeIP, savedNodeID)
 
 	// Delete RayCluster to trigger log upload
@@ -1012,7 +1014,7 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	// Test 1: Live cluster - streaming should work
@@ -1361,7 +1363,7 @@ func countFiles(result map[string]interface{}) int {
 func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -1728,7 +1730,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -1761,8 +1763,8 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks?detail=1 tests completed successfully")
 }
 
-// testDeadClusterTasks verifies that the /api/v0/tasks endpoint for a dead cluster will return the
-// detailed task information of all task attempts without historical replay.
+// testDeadClusterTasks verifies that the /api/v0/tasks endpoint for a dead cluster returns
+// detailed task information reconstructed from historical events.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
@@ -1799,6 +1801,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyDeadClusterTaskLogInfo(g, client, historyServerURL)
 
 	jobIDs := getAllEligibleJobIDs(g, client, historyServerURL)
 	jobIDForFilter := jobIDs[0]
@@ -1901,6 +1904,81 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks tests completed successfully")
 }
 
+func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerURL string) {
+	resp, err := client.Get(historyServerURL + EndpointTasks + "?detail=1")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	var response map[string]any
+	g.Expect(json.Unmarshal(body, &response)).To(Succeed())
+
+	data, ok := response["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	result, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	tasks, ok := result["result"].([]any)
+	g.Expect(ok).To(BeTrue())
+
+	var taskID, nodeID, stdoutFile string
+	for _, value := range tasks {
+		task, ok := value.(map[string]any)
+		if !ok || task["name"] != "my_task" || task["type"] != "NORMAL_TASK" || task["state"] != "FINISHED" {
+			continue
+		}
+		workerID, ok := task["worker_id"].(string)
+		if !ok || workerID == "" {
+			continue
+		}
+		taskLogInfo, ok := task["task_log_info"].(map[string]any)
+		if !ok {
+			continue
+		}
+		stdoutFileValue, _ := taskLogInfo["stdout_file"].(string)
+		stdoutStart, startOK := taskLogInfo["stdout_start"].(float64)
+		stdoutEnd, endOK := taskLogInfo["stdout_end"].(float64)
+		if stdoutFileValue != "" && startOK && endOK && stdoutStart > 0 && stdoutEnd > stdoutStart {
+			taskID, _ = task["task_id"].(string)
+			nodeID, _ = task["node_id"].(string)
+			stdoutFile = stdoutFileValue
+			break
+		}
+	}
+	g.Expect(taskID).NotTo(BeEmpty(),
+		"completed Ray 2.56 my_task should expose a complete stdout byte range")
+	g.Expect(nodeID).NotTo(BeEmpty())
+
+	workerLogURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1",
+		historyServerURL,
+		EndpointLogsFile,
+		url.QueryEscape(nodeID),
+		url.QueryEscape(path.Base(stdoutFile)),
+	)
+	workerLogResp, err := client.Get(workerLogURL)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer workerLogResp.Body.Close()
+	g.Expect(workerLogResp.StatusCode).To(Equal(http.StatusOK))
+	workerLogBody, err := io.ReadAll(workerLogResp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 0"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(workerLogBody)).To(ContainSubstring("Processing 2"))
+
+	logURL := fmt.Sprintf("%s%s?task_id=%s&suffix=out&lines=-1",
+		historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
+	logResp, err := client.Get(logURL)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer logResp.Body.Close()
+	g.Expect(logResp.StatusCode).To(Equal(http.StatusOK))
+	logBody, err := io.ReadAll(logResp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(string(logBody)).To(ContainSubstring("Processing 1"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 0"))
+	g.Expect(string(logBody)).NotTo(ContainSubstring("Processing 2"))
+}
+
 // testLiveClusterNodes verifies that the /nodes?view=summary endpoint for a live cluster will return the current
 // snapshot containing node summary and resource usage information.
 //
@@ -1922,7 +2000,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2016,7 +2094,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2099,7 +2177,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 // live Ray Dashboard and returns valid cluster metadata.
 func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2142,10 +2220,10 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
-	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	sessionDir := clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	metaKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
@@ -2208,13 +2286,13 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
 // stored placement groups data from S3 for a dead (deleted) cluster.
 //
-// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// This endpoint is served by the getFetchedEndpoint fallback handler (/{subpath:*}),
 // which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
 //
 // The test flow mirrors testDeadClusterMetadata:
 // 1. Deploy a cluster with the collector
 // 2. Submit a RayJob that creates a detached placement group
-// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 3. Wait for placement groups data to appear in S3 (written by periodic endpoint polling)
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
@@ -2226,10 +2304,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
 	// The collector stores the endpoint with query params, so the storage key includes them.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
-	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	sessionDir := clusterlogs.SessionDir("", "", "", rayCluster.Namespace, rayCluster.Name, sessionID)
+	pgKey := fmt.Sprintf("%s/%s/%s", sessionDir, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
@@ -2279,8 +2357,8 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 		err = json.Unmarshal(body, &response)
 		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
 		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
-		// The history server serves raw bytes from S3 without transformation, so the
-		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		// The history server preserves this envelope and backfills bundles within each
+		// placement group when the stored response omits that frontend-required field.
 		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
 		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
 		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
@@ -2317,7 +2395,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2397,7 +2475,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 	endpoint := EndpointTasksSummarize
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -2465,7 +2543,7 @@ func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
 func setClusterContext(test Test, g *WithT, client *http.Client, historyServerURL, namespace, clusterName, session string) {
-	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s", historyServerURL, namespace, clusterName, session)
+	enterURL := fmt.Sprintf("%s/enter_cluster/%s/raycluster/%s/%s", historyServerURL, namespace, clusterName, session)
 	LogWithTimestamp(test.T(), "Setting cluster context: %s", enterURL)
 
 	g.Eventually(func(gg Gomega) {
@@ -3118,7 +3196,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -3313,7 +3391,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 10. Delete S3 bucket to ensure test isolation
 func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	// --- Live cluster ---
@@ -3380,7 +3458,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace, "")
+	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)

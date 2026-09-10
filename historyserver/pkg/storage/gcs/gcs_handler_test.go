@@ -274,6 +274,51 @@ func TestList(t *testing.T) {
 	}
 }
 
+// contentMatchGlob is asserted directly because fake-gcs-server does not
+// implement matchGlob, so no test in this package can observe what the pattern
+// actually selects. This checks the pattern that gets sent, not its effect.
+func TestContentMatchGlobIsRooted(t *testing.T) {
+	tests := []struct {
+		name      string
+		rootDir   string
+		clusterID string
+		fileName  string
+		want      string
+	}{
+		{
+			name:      "rooted",
+			rootDir:   "ray_historyserver",
+			clusterID: "clusters/clusterA_ns",
+			fileName:  "session123/logs/important.log",
+			want:      "ray_historyserver/**/clusters/clusterA_ns*/**/session123/logs/important.log",
+		},
+		{
+			name:      "no root dir keeps the previous unanchored pattern",
+			rootDir:   "",
+			clusterID: "clusters/clusterA_ns",
+			fileName:  "session123/logs/important.log",
+			want:      "**/clusters/clusterA_ns*/**/session123/logs/important.log",
+		},
+		{
+			name:      "leading slash on root dir is trimmed",
+			rootDir:   "/ray_historyserver",
+			clusterID: "clusterA",
+			fileName:  "important.log",
+			want:      "ray_historyserver/**/clusterA*/**/important.log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := contentMatchGlob(tt.rootDir, tt.clusterID, tt.fileName)
+			if got != tt.want {
+				t.Errorf("contentMatchGlob(%q, %q, %q) = %q, want %q",
+					tt.rootDir, tt.clusterID, tt.fileName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetContent(t *testing.T) {
 	clusterID := "clusterA"
 	fileName := "important.log"
