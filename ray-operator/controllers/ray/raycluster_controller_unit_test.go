@@ -1186,7 +1186,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 		suspend          bool
 		gateEnabled      bool
 		wantCommitted    bool
-		wantDeletesSvcs  bool
 		wantBlocksCreate bool
 	}{
 		{
@@ -1197,7 +1196,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          true,
 			gateEnabled:      true,
 			wantCommitted:    false,
-			wantDeletesSvcs:  false,
 			wantBlocksCreate: true,
 		},
 		{
@@ -1206,20 +1204,14 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          true,
 			gateEnabled:      true,
 			wantCommitted:    true,
-			wantDeletesSvcs:  true,
 			wantBlocksCreate: true,
 		},
 		{
-			// Pods cannot come back on their own once suspended, but a Service can still
-			// be present - suspended by an operator that predates this cleanup, or
-			// re-created behind the controller's back - so the Service teardown stays
-			// armed while the Pod teardown does not.
 			name:             "gate enabled, suspended",
 			condition:        rayv1.RayClusterSuspended,
 			suspend:          true,
 			gateEnabled:      true,
 			wantCommitted:    false,
-			wantDeletesSvcs:  true,
 			wantBlocksCreate: true,
 		},
 		{
@@ -1227,7 +1219,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          false,
 			gateEnabled:      true,
 			wantCommitted:    false,
-			wantDeletesSvcs:  false,
 			wantBlocksCreate: false,
 		},
 		{
@@ -1237,7 +1228,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          true,
 			gateEnabled:      false,
 			wantCommitted:    true,
-			wantDeletesSvcs:  true,
 			wantBlocksCreate: true,
 		},
 		{
@@ -1246,7 +1236,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          false,
 			gateEnabled:      false,
 			wantCommitted:    false,
-			wantDeletesSvcs:  false,
 			wantBlocksCreate: false,
 		},
 		{
@@ -1254,7 +1243,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			suspend:          false,
 			gateEnabled:      false,
 			wantCommitted:    false,
-			wantDeletesSvcs:  false,
 			wantBlocksCreate: false,
 		},
 	}
@@ -1270,7 +1258,6 @@ func TestRayClusterSuspendPredicates(t *testing.T) {
 			cluster := withSuspend(testRayCluster, tc.suspend, conditions)
 
 			assert.Equal(t, tc.wantCommitted, rayClusterSuspendCommitted(cluster))
-			assert.Equal(t, tc.wantDeletesSvcs, rayClusterSuspendDeletesServices(cluster))
 			assert.Equal(t, tc.wantBlocksCreate, rayClusterSuspendBlocksCreation(cluster))
 		})
 	}
@@ -1291,7 +1278,6 @@ func TestRayClusterSuspendPredicatesIgnoreClearedConditions(t *testing.T) {
 
 	require.NotEmpty(t, cluster.Status.Conditions, "the cleared conditions must remain in the array")
 	assert.False(t, rayClusterSuspendCommitted(cluster))
-	assert.False(t, rayClusterSuspendDeletesServices(cluster))
 	assert.False(t, rayClusterSuspendBlocksCreation(cluster))
 }
 
@@ -1357,7 +1343,7 @@ func TestReconcileServicesOnSuspend(t *testing.T) {
 		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace), "suspending should delete all owned Services")
 	})
 
-	t.Run("a RayCluster suspended before this cleanup existed converges", func(t *testing.T) {
+	t.Run("a RayCluster suspended before this cleanup existed keeps its Services", func(t *testing.T) {
 		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 		cluster := baseCluster.DeepCopy()
@@ -1367,10 +1353,8 @@ func TestReconcileServicesOnSuspend(t *testing.T) {
 		reconcileServices(t, r, cluster)
 		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
 
-		// The cluster is long past the suspending phase, so a teardown armed only by
-		// RayClusterSuspending would never reach these Services.
 		reconcileServices(t, r, withSuspend(cluster, true, suspended))
-		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+		assert.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
 	})
 
 	t.Run("suspending is idempotent once the Services are gone", func(t *testing.T) {
@@ -5240,27 +5224,17 @@ func TestCalculateStatusSuspendWaitsForOwnedServices(t *testing.T) {
 		assert.Contains(t, err.Error(), "unable to find head service")
 	})
 
-	t.Run("a cluster suspended before this teardown gives up its Suspended condition", func(t *testing.T) {
+	t.Run("a cluster suspended before this teardown keeps its Suspended condition", func(t *testing.T) {
 		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
-		// An operator that predates the Service teardown leaves a suspended cluster whose
-		// Services are still there. Reporting Suspended would claim a teardown that has
-		// not happened, and would let a resume run straight into them.
 		suspended := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspended: metav1.ConditionTrue}
 		cluster := withSuspend(baseCluster, true, suspended)
 
-		terminating := headService(t)
-		terminating.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
-		r := newReconciler(cluster, terminating)
-		require.NoError(t, r.Delete(ctx, terminating))
-
+		r := newReconciler(cluster, headService(t))
 		newInstance, err := r.calculateStatus(ctx, cluster, nil)
 		require.NoError(t, err)
-		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
-		condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending))
-		require.NotNil(t, condition)
-		assert.Equal(t, metav1.ConditionTrue, condition.Status)
-		assert.Contains(t, condition.Message, "head")
+		assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending)))
 	})
 
 	t.Run("a resume still clears the Suspended condition once the Services are gone", func(t *testing.T) {

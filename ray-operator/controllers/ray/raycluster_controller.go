@@ -177,20 +177,6 @@ func rayClusterSuspendBlocksCreation(instance *rayv1.RayCluster) bool {
 		ptr.Deref(instance.Spec.Suspend, false)
 }
 
-// rayClusterSuspendDeletesServices covers the whole suspension, not only the teardown
-// window that the Pod deletion covers. Deleted Pods cannot come back on their own, so
-// that window is enough for them. Services left behind by an operator too old to delete
-// them still have to be collected, without asking the user to resume first.
-func rayClusterSuspendDeletesServices(instance *rayv1.RayCluster) bool {
-	if rayClusterSuspendCommitted(instance) {
-		return true
-	}
-	if !features.Enabled(features.RayClusterStatusConditions) {
-		return false
-	}
-	return utils.FindRayClusterSuspendStatus(instance) == rayv1.RayClusterSuspended
-}
-
 // deleteServicesForSuspend only issues the deletions. Whether they have finished is
 // remainingServicesForSuspend's question, and the suspend state machine's to act on.
 func (r *RayClusterReconciler) deleteServicesForSuspend(ctx context.Context, instance *rayv1.RayCluster, services []corev1.Service) error {
@@ -751,7 +737,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		return err
 	}
 
-	if rayClusterSuspendDeletesServices(instance) {
+	if rayClusterSuspendCommitted(instance) {
 		return r.deleteServicesForSuspend(ctx, instance, services.Items)
 	}
 	if rayClusterSuspendBlocksCreation(instance) {
@@ -1018,7 +1004,7 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 	// The annotation gate above is load-bearing here: during an incremental upgrade the
 	// RayService controller owns a per-cluster serve Service under this same name, and
 	// only the annotation tells the two apart.
-	if rayClusterSuspendDeletesServices(instance) {
+	if rayClusterSuspendCommitted(instance) {
 		svc := &corev1.Service{}
 		if err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), svc); err != nil {
 			return client.IgnoreNotFound(err)
@@ -1056,7 +1042,7 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 	// This sits ahead of the multi-host gate, unlike the serve Service: the label is
 	// KubeRay's own, so there is no foreign Service to confuse it with, and a group that
 	// has since shrunk to a single host still has a headless Service to collect.
-	if rayClusterSuspendDeletesServices(instance) {
+	if rayClusterSuspendCommitted(instance) {
 		services := corev1.ServiceList{}
 		if err := r.List(ctx, &services, common.RayClusterHeadlessServiceListOptions(instance)...); err != nil {
 			return err
@@ -2224,10 +2210,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 
 		switch suspendStatus {
-		case rayv1.RayClusterSuspending, rayv1.RayClusterSuspended:
-			// Suspending completes once the Pods and the Services this path tears down
-			// are gone. A Service only on its way out has not gone.
-			var remaining []string
+		case rayv1.RayClusterSuspending:
 			if len(runtimePods.Items) == 0 {
 				// Provisioned describes the Pods, so it answers as soon as they are gone,
 				// whatever the Services are still doing.
@@ -2237,40 +2220,33 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Reason:  rayv1.RayClusterPodsProvisioning,
 					Message: "RayCluster has been suspended",
 				})
-				var err error
-				if remaining, err = r.remainingServicesForSuspend(ctx, instance); err != nil {
+
+				remaining, err := r.remainingServicesForSuspend(ctx, instance)
+				if err != nil {
 					return nil, err
 				}
+				if len(remaining) != 0 {
+					meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+						Type:    string(rayv1.RayClusterSuspending),
+						Reason:  string(rayv1.RayClusterSuspending),
+						Status:  metav1.ConditionTrue,
+						Message: "Waiting for owned Services to be deleted: " + strings.Join(remaining, ", "),
+					})
+				} else {
+					meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+						Type:   string(rayv1.RayClusterSuspending),
+						Reason: string(rayv1.RayClusterSuspending),
+						Status: metav1.ConditionFalse,
+					})
+					meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+						Type:   string(rayv1.RayClusterSuspended),
+						Reason: string(rayv1.RayClusterSuspended),
+						Status: metav1.ConditionTrue,
+					})
+				}
 			}
-
-			switch {
-			case len(remaining) != 0:
-				// Also how a cluster suspended by an operator that predates this teardown
-				// converges: it arrives already reporting Suspended and has to give that
-				// up until its leftover Services are gone.
-				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-					Type:    string(rayv1.RayClusterSuspending),
-					Reason:  string(rayv1.RayClusterSuspending),
-					Status:  metav1.ConditionTrue,
-					Message: "Waiting for owned Services to be deleted: " + strings.Join(remaining, ", "),
-				})
-				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-					Type:   string(rayv1.RayClusterSuspended),
-					Reason: string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionFalse,
-				})
-			case len(runtimePods.Items) == 0 && suspendStatus == rayv1.RayClusterSuspending:
-				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-					Type:   string(rayv1.RayClusterSuspending),
-					Reason: string(rayv1.RayClusterSuspending),
-					Status: metav1.ConditionFalse,
-				})
-				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-					Type:   string(rayv1.RayClusterSuspended),
-					Reason: string(rayv1.RayClusterSuspended),
-					Status: metav1.ConditionTrue,
-				})
-			case suspendStatus == rayv1.RayClusterSuspended && instance.Spec.Suspend != nil && !*instance.Spec.Suspend:
+		case rayv1.RayClusterSuspended:
+			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
 					Reason: string(rayv1.RayClusterSuspended),

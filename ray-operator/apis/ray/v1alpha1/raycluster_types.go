@@ -20,6 +20,8 @@ type RayClusterSpec struct {
 	// Kubernetes Services that expose them. Resuming the RayCluster recreates them.
 	// The Services are recreated rather than preserved, so a ClusterIP, NodePort or
 	// LoadBalancer address assigned to one does not survive a suspend and resume.
+	// A RayCluster that was already suspended by an operator version without this
+	// behavior keeps its Services until it is resumed.
 	Suspend                *bool             `json:"suspend,omitempty"`
 	HeadServiceAnnotations map[string]string `json:"headServiceAnnotations,omitempty"`
 	// HeadGroupSpec is the spec for the head pod

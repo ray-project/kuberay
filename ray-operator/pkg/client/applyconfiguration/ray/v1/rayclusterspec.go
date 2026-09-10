@@ -18,6 +18,8 @@ type RayClusterSpecApplyConfiguration struct {
 	// Kubernetes Services that expose them. Resuming the RayCluster recreates them.
 	// The Services are recreated rather than preserved, so a ClusterIP, NodePort or
 	// LoadBalancer address assigned to one does not survive a suspend and resume.
+	// A RayCluster that was already suspended by an operator version without this
+	// behavior keeps its Services until it is resumed.
 	Suspend *bool `json:"suspend,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
