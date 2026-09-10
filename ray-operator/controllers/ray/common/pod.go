@@ -1090,6 +1090,18 @@ func getCollectorContainerIndex(pod corev1.Pod) int {
 	return -1
 }
 
+// SetDefaultCollectorImage sets the image of the injected collector container to defaultImage if the
+// RayCluster doesn't specify `historyServerOptions.collectorOptions.image`. It is a no-op if the
+// collector container is not injected into the Pod.
+func SetDefaultCollectorImage(podTemplate *corev1.PodTemplateSpec, defaultImage string) {
+	for i := range podTemplate.Spec.Containers {
+		container := &podTemplate.Spec.Containers[i]
+		if container.Name == utils.CollectorContainerName && container.Image == "" {
+			container.Image = defaultImage
+		}
+	}
+}
+
 // BuildCollectorContainer builds a history server collector container which can be appended to the head and worker pods.
 func BuildCollectorContainer(collectorOptions *rayv1.CollectorOptions, nodeType rayv1.RayNodeType, rayClusterName string, rayClusterNamespace string, fqdnRayIP string, labels map[string]string) corev1.Container {
 	image := ""

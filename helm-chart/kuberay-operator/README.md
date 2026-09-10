@@ -189,6 +189,7 @@ spec:
 | featureGates[6].enabled | bool | `false` |  |
 | featureGates[7].name | string | `"RayClusterHistoryServer"` |  |
 | featureGates[7].enabled | bool | `false` |  |
+| collectorImage | string | `""` | Image of the History Server collector sidecar injected into Ray Pods of RayClusters that set `spec.historyServerOptions.collectorOptions`. A RayCluster can override it with `spec.historyServerOptions.collectorOptions.image`. If empty, the operator uses `quay.io/kuberay/collector` with the tag matching the operator version. Set this to mirror the collector image in your own registry, for example `my-registry.io/kuberay/collector:v1.7.0`. |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

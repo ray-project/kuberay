@@ -1030,9 +1030,9 @@ func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
 	if collectorOpts == nil {
 		return nil
 	}
-	if collectorOpts.Image == nil || *collectorOpts.Image == "" {
-		return fmt.Errorf("historyServerOptions.collectorOptions.image must be set")
-	}
+
+	// The collector image is optional: when it is not set, KubeRay falls back to the collector image
+	// configured on the operator.
 
 	envMap := make(map[string]corev1.EnvVar)
 	for _, env := range collectorOpts.Env {

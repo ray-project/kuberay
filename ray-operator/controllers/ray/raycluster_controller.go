@@ -80,6 +80,7 @@ type RayClusterReconcilerOptions struct {
 	DefaultContainerEnvs     []corev1.EnvVar
 	DefaultPodAnnotations    map[string]string
 	DefaultPodLabels         map[string]string
+	CollectorImage           string
 	IsOpenShift              bool
 	UseIngressOnOpenShift    bool
 	CertManagerAvailable     bool
@@ -1723,6 +1724,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
+	common.SetDefaultCollectorImage(&podConf, r.options.CollectorImage)
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
@@ -1771,6 +1773,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort, replicaGrpName, replicaIndex, hostIndex)
+	common.SetDefaultCollectorImage(&podTemplateSpec, r.options.CollectorImage)
 	if len(r.options.WorkerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
 	}
