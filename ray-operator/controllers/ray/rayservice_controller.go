@@ -1697,6 +1697,20 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient dashboardclient.RayDashboardClientInterface, goalTargetCapacity int32) error {
 	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
 
+	// The cached config contains the original spec, not the capacity applied during
+	// an incremental upgrade. Compare the capacity tracked for this cluster instead.
+	var currentTargetCapacity *int32
+	switch rayClusterInstance.Name {
+	case rayServiceInstance.Status.ActiveServiceStatus.RayClusterName:
+		currentTargetCapacity = rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity
+	case rayServiceInstance.Status.PendingServiceStatus.RayClusterName:
+		currentTargetCapacity = rayServiceInstance.Status.PendingServiceStatus.TargetCapacity
+	}
+	if currentTargetCapacity != nil && *currentTargetCapacity == goalTargetCapacity {
+		logger.Info("target_capacity already updated on RayCluster", "target_capacity", *currentTargetCapacity)
+		return nil
+	}
+
 	// Retrieve cached ServeConfig from last reconciliation for cluster to update
 	cachedConfig := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
 	if cachedConfig == "" {
@@ -1706,23 +1720,6 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	serveConfig := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(cachedConfig), &serveConfig); err != nil {
 		return err
-	}
-
-	// YAML decoding preserves whole numbers as int64, including JSON values
-	// such as 50.0. Compare without truncating fractional capacities.
-	var currentTargetCapacity float64
-	capacityPresent := true
-	switch value := serveConfig["target_capacity"].(type) {
-	case int64:
-		currentTargetCapacity = float64(value)
-	case float64:
-		currentTargetCapacity = value
-	default:
-		capacityPresent = false
-	}
-	if capacityPresent && currentTargetCapacity == float64(goalTargetCapacity) {
-		logger.Info("target_capacity already updated on RayCluster", "target_capacity", currentTargetCapacity)
-		return nil
 	}
 
 	serveConfig["target_capacity"] = goalTargetCapacity
@@ -1761,17 +1758,10 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	activeRayServiceStatus := &rayServiceInstance.Status.ActiveServiceStatus
 	pendingRayServiceStatus := &rayServiceInstance.Status.PendingServiceStatus
 
-	// Set initial TargetCapacity values if unset
-	if activeRayServiceStatus.TargetCapacity == nil {
-		activeRayServiceStatus.TargetCapacity = new(int32(100))
-	}
-	if pendingRayServiceStatus.TargetCapacity == nil {
-		pendingRayServiceStatus.TargetCapacity = new(int32(0))
-	}
-
-	// Retrieve the current observed Status fields for NewClusterWithIncrementalUpgrade
-	activeTargetCapacity := *activeRayServiceStatus.TargetCapacity
-	pendingTargetCapacity := *pendingRayServiceStatus.TargetCapacity
+	// Use defaults for upgrade calculations without recording them as applied capacity.
+	// Status is advanced only after the Dashboard accepts a capacity update.
+	activeTargetCapacity := ptr.Deref(activeRayServiceStatus.TargetCapacity, 100)
+	pendingTargetCapacity := ptr.Deref(pendingRayServiceStatus.TargetCapacity, 0)
 	pendingTrafficRoutedPercent := ptr.Deref(pendingRayServiceStatus.TrafficRoutedPercent, 0)
 
 	// Retrieve MaxSurgePercent - the maximum amount to change TargetCapacity by
