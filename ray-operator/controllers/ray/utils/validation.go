@@ -3,6 +3,7 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -150,6 +151,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return err
 		}
 		if len(workerGroup.LabelRefs) > 0 {
+			// the webhook validates labelRefs; without webhooks the operator cannot deliver node labels
+			if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "true" {
+				return fmt.Errorf("worker group %s sets labelRefs, which requires the KubeRay operator to run with ENABLE_WEBHOOKS=true", workerGroup.GroupName)
+			}
 			// ray start --labels-file was added in Ray 2.45.0
 			rayVersion, err := version.ParseGeneric(spec.RayVersion)
 			if err != nil {
