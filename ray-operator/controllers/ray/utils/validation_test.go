@@ -4174,7 +4174,7 @@ func TestValidateCollectorOptions(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a topology group
+// TestValidateRayClusterSpec_Topology checks the webhook and Ray version requirements of a topology group
 func TestValidateRayClusterSpec_Topology(t *testing.T) {
 	spec := createBasicRayClusterSpec()
 	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
@@ -4185,6 +4185,10 @@ func TestValidateRayClusterSpec_Topology(t *testing.T) {
 		Topology:    &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}}},
 	}}
 
+	t.Setenv("ENABLE_WEBHOOKS", "")
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the KubeRay operator to run with ENABLE_WEBHOOKS=true")
+
+	t.Setenv("ENABLE_WEBHOOKS", "true")
 	spec.RayVersion = ""
 	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "is unset or invalid")
 	spec.RayVersion = "2.44.0"

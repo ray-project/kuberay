@@ -10,20 +10,24 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 var rayClusterLog = logf.Log.WithName("raycluster-resource")
 
-// SetupRayClusterWebhookWithManager registers the webhook for RayCluster in the manager.
-func SetupRayClusterWebhookWithManager(mgr ctrl.Manager) error {
+// SetupRayClusterWebhookWithManager registers the RayCluster webhook, configured from the operator config
+func SetupRayClusterWebhookWithManager(mgr ctrl.Manager, config configapi.Configuration) error {
 	return ctrl.NewWebhookManagedBy(mgr, &rayv1.RayCluster{}).
-		WithValidator(&RayClusterWebhook{}).
+		WithValidator(&RayClusterWebhook{AllowedNodeLabels: config.AllowedNodeLabels}).
 		Complete()
 }
 
-type RayClusterWebhook struct{}
+type RayClusterWebhook struct {
+	// AllowedNodeLabels is the operator allowlist for topology.labelMappings
+	AllowedNodeLabels []string
+}
 
 //+kubebuilder:webhook:path=/validate-ray-io-v1-raycluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=ray.io,resources=rayclusters,verbs=create;update,versions=v1,name=vraycluster.kb.io,admissionReviewVersions=v1
 
@@ -54,6 +58,10 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 	}
 
 	if err := w.validateWorkerGroups(rayCluster); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	if err := validateTopology(&rayCluster.Spec, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
