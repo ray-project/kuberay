@@ -275,9 +275,8 @@ func TestCollectRotatedLogIgnoresRotationIndexChange(t *testing.T) {
 	})
 }
 
-// Ray reuses .1 for the next generation. Linux commonly hands back the inode of
-// the generation it just evicted, and rotation at a byte threshold makes equal
-// sizes the norm, so both generations must still reach distinct objects.
+// Ray reuses .1 for the next generation, often on the inode it just evicted, so
+// the two generations must still reach distinct objects.
 func TestCollectRotatedLogUploadsNewGenerationReusingIndex(t *testing.T) {
 	logsDir := t.TempDir()
 	writer := NewMockStorageWriter()
@@ -363,7 +362,7 @@ func TestCollectRotatedLogsStopsBeforeNextCandidate(t *testing.T) {
 	// Shutdown collection ignores stop and still reaches the skipped candidates.
 	objectPrefix := handler.rotatedObjectPrefix(testSessionID, testNodeID)
 	for _, index := range []int{1, 2, 3} {
-		handler.collectRotatedLog(filepath.Join(logsDir, fmt.Sprintf("foo.out.%d", index)), logsDir, objectPrefix)
+		handler.collectIfRotatedLog(filepath.Join(logsDir, fmt.Sprintf("foo.out.%d", index)), logsDir, objectPrefix)
 	}
 	if got := writer.order(); len(got) != 3 {
 		t.Fatalf("uploaded %v after shutdown collection, want all three", got)
@@ -408,6 +407,13 @@ func TestCollectRotatedLogsClosesEveryDescriptor(t *testing.T) {
 	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	writer.setWriteErr(nil)
 	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+
+	// The shutdown and prev-logs walkers open through the same helper.
+	objectPrefix := handler.rotatedObjectPrefix(testSessionID, testNodeID)
+	writer.setWriteErr(errors.New("object store unavailable"))
+	handler.collectIfRotatedLog(filepath.Join(logsDir, "b-stream.out.1"), logsDir, objectPrefix)
+	writer.setWriteErr(nil)
+	handler.collectIfRotatedLog(filepath.Join(logsDir, "b-stream.out.1"), logsDir, objectPrefix)
 
 	if after := openDescriptorCount(t); after > before {
 		t.Fatalf("open descriptors grew from %d to %d", before, after)
@@ -460,8 +466,8 @@ func TestCollectRotatedLogToleratesVanishedPath(t *testing.T) {
 	handler := newRotatedTestHandler(writer)
 
 	objectPrefix := handler.rotatedObjectPrefix(testSessionID, testNodeID)
-	if handled := handler.collectRotatedLog(filepath.Join(logsDir, "raylet.out.1"), logsDir, objectPrefix); !handled {
-		t.Fatal("collectRotatedLog() = false, want true for a rotation backup name")
+	if handled := handler.collectIfRotatedLog(filepath.Join(logsDir, "raylet.out.1"), logsDir, objectPrefix); !handled {
+		t.Fatal("collectIfRotatedLog() = false, want true for a rotation backup name")
 	}
 	assertWritten(t, writer, map[string]string{})
 }
@@ -700,6 +706,107 @@ func TestCollectRotatedLogsKeepsStateAfterIncompleteWalk(t *testing.T) {
 
 	handler.collectRotatedLogsUnder(filepath.Join(logsDir, "gone"), testSessionID, testNodeID, nil)
 	assertRotatedUploaded(t, handler, []string{object})
+}
+
+// A session change splits rotated-log collection across two paths: the active
+// scan of S2 and the prev-logs pass over S1. Pruning must stay inside the
+// session it scanned, or the S1 entries vanish and prev-logs writes them again.
+func TestScanOfNewSessionKeepsPrevSessionUploads(t *testing.T) {
+	rayRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", rayRoot)
+
+	const (
+		sessionOne = "session_2026-01-11_19-38-40_000001"
+		sessionTwo = "session_2026-01-11_20-15-02_000002"
+	)
+
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+	handler.prevLogsDir = utils.GetRayPrevLogsPath()
+	handler.persistCompleteLogsDir = utils.GetRayPersistCompletePath()
+
+	// S1 is the active session and its rotation backup is uploaded.
+	logsOne := filepath.Join(rayRoot, sessionOne, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	idOne := writeLogFile(t, filepath.Join(logsOne, "raylet.out.1"), "s1 rotated")
+	pointSessionLatest(t, rayRoot, sessionOne)
+	handler.collectActiveSessionRotatedLogs(nil)
+
+	objectOne := logsPrefixOf(sessionOne) + mustRotatedName(t, "raylet.out.1", idOne)
+	assertRotatedUploaded(t, handler, []string{objectOne})
+
+	// The session rolls over: S1's logs move to prev-logs and S2 starts rotating.
+	sessionTwoDir := filepath.Join(rayRoot, sessionTwo)
+	logsTwo := filepath.Join(sessionTwoDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	idTwo := writeLogFile(t, filepath.Join(logsTwo, "raylet.out.1"), "s2 rotated")
+	pointSessionLatest(t, rayRoot, sessionTwo)
+	if err := utils.MoveLeftoverSessionLogs(sessionTwoDir, testNodeID); err != nil {
+		t.Fatalf("MoveLeftoverSessionLogs() = %v", err)
+	}
+
+	handler.collectActiveSessionRotatedLogs(nil)
+	objectTwo := logsPrefixOf(sessionTwo) + mustRotatedName(t, "raylet.out.1", idTwo)
+	assertRotatedUploaded(t, handler, []string{objectOne, objectTwo})
+
+	// S1 is already on the object store, so the prev-logs pass must not write it
+	// a second time.
+	handler.processPrevLogsDir(filepath.Join(rayRoot, "prev-logs", sessionOne, testNodeID))
+	if got := writeCount(writer, objectOne); got != 1 {
+		t.Fatalf("wrote %q %d times, want 1 (order: %v)", objectOne, got, writer.order())
+	}
+
+	// prev-logs removed the directory, so S1 can never be seen again and its
+	// entries would otherwise leak for the collector's lifetime.
+	assertRotatedUploaded(t, handler, []string{objectTwo})
+}
+
+// Object keys are compared by path segment so one node's scan cannot prune a
+// node whose ID it merely prefixes.
+func TestPruneRotatedUploadedIsScopedToNode(t *testing.T) {
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+
+	logsOne, logsTen := t.TempDir(), t.TempDir()
+	idOne := writeLogFile(t, filepath.Join(logsOne, "raylet.out.1"), "node1 rotated")
+	writeLogFile(t, filepath.Join(logsTen, "raylet.out.1"), "node10 rotated")
+
+	handler.collectRotatedLogsUnder(logsOne, testSessionID, "node1", nil)
+	handler.collectRotatedLogsUnder(logsTen, testSessionID, "node10", nil)
+
+	// node10 loses its generation; node1 keeps its own.
+	if err := os.Remove(filepath.Join(logsTen, "raylet.out.1")); err != nil {
+		t.Fatalf("Remove() = %v", err)
+	}
+	handler.collectRotatedLogsUnder(logsTen, testSessionID, "node10", nil)
+
+	nodeOnePrefix := "root/cluster-history/raycluster/default/rc/" + testSessionID + "/node1/logs/"
+	assertRotatedUploaded(t, handler, []string{nodeOnePrefix + mustRotatedName(t, "raylet.out.1", idOne)})
+}
+
+func logsPrefixOf(sessionID string) string {
+	return "root/cluster-history/raycluster/default/rc/" + sessionID + "/" + testNodeID + "/logs/"
+}
+
+func writeCount(writer *MockStorageWriter, objectName string) int {
+	count := 0
+	for _, written := range writer.order() {
+		if written == objectName {
+			count++
+		}
+	}
+	return count
+}
+
+// pointSessionLatest aims the session_latest symlink at sessionID, replacing any
+// session it already points to.
+func pointSessionLatest(t *testing.T, rayRoot, sessionID string) {
+	t.Helper()
+	link := filepath.Join(rayRoot, "session_latest")
+	if err := os.Remove(link); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Remove(%s) = %v", link, err)
+	}
+	if err := os.Symlink(filepath.Join(rayRoot, sessionID), link); err != nil {
+		t.Fatalf("Symlink() = %v", err)
+	}
 }
 
 func assertRotatedUploaded(t *testing.T, handler *RayLogHandler, want []string) {

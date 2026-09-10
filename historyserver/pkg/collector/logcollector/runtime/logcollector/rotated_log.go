@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -20,12 +21,10 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// rotatedIdentity distinguishes one rotation generation of a log stream from
-// every other generation of the same stream. Linux hands the inode of an evicted
-// generation straight to the next one, so the last-modified time is what
-// actually separates them. It is read from the opened descriptor and survives
-// the .1 -> .2 renames Ray performs as the ring advances, which the inode change
-// time would not.
+// rotatedIdentity distinguishes rotation generations of one log stream. The
+// inode alone is not enough because Linux reuses an evicted generation's inode
+// for the next one; the modification time separates them and survives Ray's
+// .1 -> .2 renames.
 type rotatedIdentity struct {
 	modTimeNs int64
 	inode     uint64
@@ -35,10 +34,9 @@ func (id rotatedIdentity) String() string {
 	return fmt.Sprintf("%d-%d", id.modTimeNs, id.inode)
 }
 
-// rotatedCandidate is a rotation backup pinned by an open descriptor so that Ray
-// cannot evict the generation while it uploads.
+// rotatedCandidate is the object a rotation backup uploads to. It holds no
+// descriptor: the function that opens the backup keeps ownership of it.
 type rotatedCandidate struct {
-	file       *os.File
 	path       string
 	objectName string
 	size       int64
@@ -78,10 +76,8 @@ func rotationIndex(name string) int {
 }
 
 // rotatedLogName builds the deterministic object name for one rotation
-// generation: "worker-abc123-01000000-123.out.1" with modification time
-// 1788398123456789012 and inode 4390125 becomes
-// "worker-abc123-01000000-123.rotated.1788398123456789012-4390125.out". Leading
-// with the time keeps a plain listing of one stream in rotation order.
+// generation: "raylet.out.1" becomes "raylet.rotated.<mtime-ns>-<inode>.out".
+// The time leads so a plain listing of one stream stays in rotation order.
 func rotatedLogName(backupName string, id rotatedIdentity) (string, bool) {
 	base, ok := rotationBaseName(backupName)
 	if !ok {
@@ -97,9 +93,8 @@ func rotatedLogName(backupName string, id rotatedIdentity) (string, bool) {
 	return stem + identity + ext, true
 }
 
-// scanRotatedLogs uploads completed rotation backups from the active session
-// until stop is closed, so a generation is preserved before Ray's rotation ring
-// overwrites it.
+// scanRotatedLogs uploads the active session's rotation backups until stop is
+// closed, preserving each generation before Ray's ring overwrites it.
 func (r *RayLogHandler) scanRotatedLogs(stop <-chan struct{}) {
 	interval := r.RotatedLogScanInterval
 	if interval <= 0 {
@@ -135,10 +130,8 @@ func (r *RayLogHandler) collectActiveSessionRotatedLogs(stop <-chan struct{}) {
 }
 
 // collectRotatedLogsUnder collects every rotation backup below logsDir, highest
-// rotation index first because that is the generation Ray evicts next. Each
-// backup is opened only while it uploads, so a node with many streams does not
-// pin a descriptor per backup. Walk errors are left unreported: entries
-// disappear as Ray advances the ring, and the next scan covers what remains.
+// rotation index first because that is the generation Ray evicts next. Walk
+// errors go unreported: entries disappear as Ray advances the ring.
 func (r *RayLogHandler) collectRotatedLogsUnder(logsDir, sessionID, nodeID string, stop <-chan struct{}) {
 	objectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
 	if objectPrefix == "" {
@@ -168,23 +161,20 @@ func (r *RayLogHandler) collectRotatedLogsUnder(logsDir, sessionID, nodeID strin
 			logrus.Debug("Shutdown signaled, ending rotated log scan early")
 			return
 		}
-		if objectName, ok := r.collectRotatedLogAt(absPath, logsDir, objectPrefix); ok {
+		if objectName, ok := r.collectRotatedLog(absPath, logsDir, objectPrefix); ok {
 			seen[objectName] = struct{}{}
 		}
 	}
 	// Only a pass that saw the whole directory can tell which generations Ray has
 	// dropped, so a partial walk leaves the uploaded set alone.
 	if walkComplete {
-		r.pruneRotatedUploaded(seen)
+		r.pruneRotatedUploaded(objectPrefix, seen)
 	}
 }
 
-// collectRotatedLog uploads absPath when it is a Ray rotation backup and reports
-// whether it was one, so callers can skip their ordinary log handling. The
-// periodic scan, shutdown and prev-logs paths all funnel through the same open
-// and upload steps, which is what keeps one generation to one deterministic
-// object.
-func (r *RayLogHandler) collectRotatedLog(absPath, logsDir, objectPrefix string) bool {
+// collectIfRotatedLog uploads absPath when it is a Ray rotation backup and
+// reports whether it was one, so walkers can skip their ordinary log handling.
+func (r *RayLogHandler) collectIfRotatedLog(absPath, logsDir, objectPrefix string) bool {
 	if _, ok := rotationBaseName(filepath.Base(absPath)); !ok {
 		return false
 	}
@@ -192,21 +182,29 @@ func (r *RayLogHandler) collectRotatedLog(absPath, logsDir, objectPrefix string)
 		logrus.Warnf("Skipping rotated log %s: session or node ID is unknown", absPath)
 		return true
 	}
-	r.collectRotatedLogAt(absPath, logsDir, objectPrefix)
+	r.collectRotatedLog(absPath, logsDir, objectPrefix)
 	return true
 }
 
-// collectRotatedLogAt opens absPath, uploads it unless this run already did, and
-// returns the object name of the generation it found. It reports false when the
-// path lost the rotation race or could not be identified.
-func (r *RayLogHandler) collectRotatedLogAt(absPath, logsDir, objectPrefix string) (string, bool) {
-	candidate := r.openRotatedCandidate(absPath, logsDir, objectPrefix)
-	if candidate == nil {
+// collectRotatedLog uploads one rotation backup unless this run already did, and
+// returns the object name of the generation it found. The descriptor stays open
+// across the upload so Ray cannot evict the generation mid-write.
+func (r *RayLogHandler) collectRotatedLog(absPath, logsDir, objectPrefix string) (string, bool) {
+	file, err := os.Open(absPath)
+	if err != nil {
+		// A missing path is Ray advancing the ring between the walk and the open.
+		if !errors.Is(err, fs.ErrNotExist) {
+			logrus.Errorf("Failed to open rotated log %s: %v", absPath, err)
+		}
 		return "", false
 	}
-	defer candidate.file.Close()
+	defer file.Close()
 
-	if err := r.uploadRotatedCandidate(candidate); err != nil {
+	candidate, ok := buildRotatedCandidate(file, absPath, logsDir, objectPrefix)
+	if !ok {
+		return "", false
+	}
+	if err := r.uploadRotatedCandidate(candidate, file); err != nil {
 		logrus.Errorf("Failed to collect rotated log %s: %v", candidate.path, err)
 	}
 	return candidate.objectName, true
@@ -221,23 +219,13 @@ func (r *RayLogHandler) rotatedObjectPrefix(sessionID, nodeID string) string {
 	return clusterlogs.LogsDir(r.RootDir, r.OwnerKind, r.OwnerName, r.RayClusterNamespace, r.RayClusterName, sessionID, nodeID)
 }
 
-// openRotatedCandidate pins absPath and derives its object key from the opened
-// descriptor. It returns nil, having closed anything it opened, when the path
-// lost the rotation race or cannot be identified.
-func (r *RayLogHandler) openRotatedCandidate(absPath, logsDir, objectPrefix string) *rotatedCandidate {
+// buildRotatedCandidate derives the object key of an already opened rotation
+// backup. It borrows file to stat it and never closes it.
+func buildRotatedCandidate(file *os.File, absPath, logsDir, objectPrefix string) (rotatedCandidate, bool) {
 	relPath, err := filepath.Rel(logsDir, absPath)
 	if err != nil {
 		logrus.Errorf("Failed to get relative path for rotated log %s: %v", absPath, err)
-		return nil
-	}
-
-	file, err := os.Open(absPath)
-	if err != nil {
-		// A missing path is Ray advancing the ring between the walk and the open.
-		if !errors.Is(err, fs.ErrNotExist) {
-			logrus.Errorf("Failed to open rotated log %s: %v", absPath, err)
-		}
-		return nil
+		return rotatedCandidate{}, false
 	}
 
 	// Stat the descriptor rather than the path so the identity and the uploaded
@@ -245,37 +233,32 @@ func (r *RayLogHandler) openRotatedCandidate(absPath, logsDir, objectPrefix stri
 	info, err := file.Stat()
 	if err != nil {
 		logrus.Errorf("Failed to stat rotated log %s: %v", absPath, err)
-		file.Close()
-		return nil
+		return rotatedCandidate{}, false
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		logrus.Errorf("Inode of rotated log %s is unavailable on this platform", absPath)
-		file.Close()
-		return nil
+		return rotatedCandidate{}, false
 	}
 	objectBaseName, ok := rotatedLogName(filepath.Base(relPath), rotatedIdentity{
 		modTimeNs: info.ModTime().UnixNano(),
 		inode:     stat.Ino,
 	})
 	if !ok {
-		file.Close()
-		return nil
+		return rotatedCandidate{}, false
 	}
 
-	return &rotatedCandidate{
-		file:       file,
+	return rotatedCandidate{
 		path:       absPath,
 		objectName: path.Join(objectPrefix, filepath.ToSlash(filepath.Dir(relPath)), objectBaseName),
 		size:       info.Size(),
-	}
+	}, true
 }
 
 // uploadRotatedCandidate uploads a generation this run has not written yet. A
-// failed upload is not recorded, so the periodic active-session scan retries it
-// while the generation remains in Ray's rotation ring. The prev-logs caller gets
-// no such retry: that directory is removed after a single pass.
-func (r *RayLogHandler) uploadRotatedCandidate(candidate *rotatedCandidate) error {
+// failed upload is not recorded, so the next periodic scan retries it while the
+// generation is still in Ray's rotation ring.
+func (r *RayLogHandler) uploadRotatedCandidate(candidate rotatedCandidate, content io.ReadSeeker) error {
 	r.rotatedMu.Lock()
 	defer r.rotatedMu.Unlock()
 
@@ -285,7 +268,7 @@ func (r *RayLogHandler) uploadRotatedCandidate(candidate *rotatedCandidate) erro
 	if err := r.Writer.CreateDirectory(path.Dir(candidate.objectName)); err != nil {
 		return fmt.Errorf("failed to create directory for %s: %w", candidate.objectName, err)
 	}
-	if err := r.Writer.WriteFile(candidate.objectName, candidate.file); err != nil {
+	if err := r.Writer.WriteFile(candidate.objectName, content); err != nil {
 		return fmt.Errorf("failed to write object %s: %w", candidate.objectName, err)
 	}
 	if r.rotatedUploaded == nil {
@@ -297,13 +280,21 @@ func (r *RayLogHandler) uploadRotatedCandidate(candidate *rotatedCandidate) erro
 	return nil
 }
 
-// pruneRotatedUploaded drops generations Ray has removed from the rotation ring,
-// keeping only the object names seen on disk during a complete scan.
-func (r *RayLogHandler) pruneRotatedUploaded(seen map[string]struct{}) {
+// pruneRotatedUploaded drops generations Ray has evicted, keeping the object
+// names a complete scan of objectPrefix saw on disk. The scope matters: a scan of
+// one session must not discard the entries prev-logs still dedups against.
+func (r *RayLogHandler) pruneRotatedUploaded(objectPrefix string, seen map[string]struct{}) {
+	// Match on a whole path segment so ".../node1/logs" never covers
+	// ".../node10/logs".
+	scope := strings.TrimSuffix(objectPrefix, "/") + "/"
+
 	r.rotatedMu.Lock()
 	defer r.rotatedMu.Unlock()
 
 	for objectName := range r.rotatedUploaded {
+		if !strings.HasPrefix(objectName, scope) {
+			continue
+		}
 		if _, ok := seen[objectName]; !ok {
 			delete(r.rotatedUploaded, objectName)
 		}

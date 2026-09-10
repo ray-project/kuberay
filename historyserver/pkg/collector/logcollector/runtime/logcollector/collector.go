@@ -198,7 +198,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			return nil
 		}
 
-		if r.collectRotatedLog(path, logsDir, rotatedObjectPrefix) {
+		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 
@@ -630,7 +630,7 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 			return nil
 		}
 
-		if r.collectRotatedLog(path, logsDir, rotatedObjectPrefix) {
+		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 
@@ -656,9 +656,12 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 	logrus.Infof("Finished processing all logs for session: %s, node: %s. Removing node directory.", sessionID, nodeID)
 	if err := os.RemoveAll(sessionNodeDir); err != nil {
 		logrus.Errorf("Failed to remove node directory %s: %v", sessionNodeDir, err)
-	} else {
-		logrus.Infof("Successfully removed node directory: %s", sessionNodeDir)
+		// Keep this session's dedup entries so a retry does not re-upload.
+		return
 	}
+	logrus.Infof("Successfully removed node directory: %s", sessionNodeDir)
+	// The directory is gone, so these entries can never be seen again.
+	r.pruneRotatedUploaded(rotatedObjectPrefix, nil)
 }
 
 // processPrevLogFile processes a single log file from prev-logs
