@@ -68,6 +68,17 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayServeProxyLocationAnnotationKey carries the top-level `proxy_location` field of the
+	// RayService's Serve config (serveConfigV2) from the RayService to the RayCluster it creates,
+	// and from there to the Pods. Pod construction uses it to decide whether worker Pods run a
+	// Serve proxy: when the proxy location is "HeadOnly" or "Disabled", workers must not get the
+	// Serve proxy readiness check or the ray.io/serve label. See issue #4994.
+	RayServeProxyLocationAnnotationKey = "ray.io/serve-proxy-location"
+
+	// Values of the Serve config's `proxy_location` field for which worker Pods run no Serve proxy.
+	ServeProxyLocationHeadOnly = "HeadOnly"
+	ServeProxyLocationDisabled = "Disabled"
+
 	// RayServiceInitializingTimeoutAnnotation specifies the timeout for RayService initialization.
 	// Accepts Go duration format (e.g., "30m", "1h") or integer seconds.
 	//

@@ -1175,6 +1175,26 @@ func TestIsAutoscalingV1Enabled(t *testing.T) {
 	}
 }
 
+func TestIsServeProxyDisabledOnWorkers(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		expected    bool
+	}{
+		{name: "HeadOnly", annotations: map[string]string{RayServeProxyLocationAnnotationKey: "HeadOnly"}, expected: true},
+		{name: "Disabled", annotations: map[string]string{RayServeProxyLocationAnnotationKey: "Disabled"}, expected: true},
+		{name: "case-insensitive", annotations: map[string]string{RayServeProxyLocationAnnotationKey: "headonly"}, expected: true},
+		{name: "EveryNode", annotations: map[string]string{RayServeProxyLocationAnnotationKey: "EveryNode"}, expected: false},
+		{name: "annotation absent", annotations: map[string]string{}, expected: false},
+		{name: "nil annotations", annotations: nil, expected: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, IsServeProxyDisabledOnWorkers(tt.annotations))
+		})
+	}
+}
+
 func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 	tests := []struct {
 		name     string
