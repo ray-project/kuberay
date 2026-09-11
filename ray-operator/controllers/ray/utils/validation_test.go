@@ -929,6 +929,106 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
+// TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy tests that when Ray version is
+// 2.56.0 or later, non-Never RestartPolicy values are accepted for head and worker pods
+// even when autoscaler V2 is active.
+func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
+	tests := map[string]struct {
+		expectedErr string
+		spec        rayv1.RayClusterSpec
+	}{
+		"should not return error if Ray >= 2.56.0 and head Pod has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+		},
+		"should not return error if Ray >= 2.56.0 and a worker group has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyOnFailure)),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+		},
+		"should not return error if Ray >= 2.56.0 and restartPolicy is unset": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.56.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, nil),
+					},
+				},
+			},
+		},
+		"should return error if Ray < 2.56.0 and head Pod has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.55.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+		"should return error if Ray version is not specified and head Pod has a non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tc.spec, map[string]string{})
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterSpec_Resources(t *testing.T) {
 	// Util function to create a RayCluster spec.
 	createSpec := func() rayv1.RayClusterSpec {
