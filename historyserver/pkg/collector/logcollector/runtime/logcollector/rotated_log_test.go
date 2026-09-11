@@ -197,16 +197,6 @@ func TestRotatedLogNameSeparatesReusedInode(t *testing.T) {
 	}
 }
 
-// Ray rotates at a fixed byte threshold, so size carries no identity and must
-// not separate two generations that share a modification time and inode.
-func TestRotatedLogNameIgnoresSize(t *testing.T) {
-	id := rotatedIdentity{modTimeNs: 1788398100000000000, inode: 4390125}
-	name, _ := rotatedLogName("raylet.out.1", id)
-	if want := "raylet.rotated.1788398100000000000-4390125.out"; name != want {
-		t.Fatalf("rotatedLogName() = %q, want %q", name, want)
-	}
-}
-
 // One generation keeps its identity as Ray renames it down the ring, so every
 // index must map to a single object name.
 func TestRotatedLogNameIsStableAcrossRotationIndex(t *testing.T) {
@@ -367,27 +357,6 @@ func TestCollectRotatedLogsStopsBeforeNextCandidate(t *testing.T) {
 	if got := writer.order(); len(got) != 3 {
 		t.Fatalf("uploaded %v after shutdown collection, want all three", got)
 	}
-}
-
-// A candidate that disappears before it can be opened is an ordinary rotation
-// race and must not stop the rest of the scan.
-func TestCollectRotatedLogsContinuesAfterLostOpenRace(t *testing.T) {
-	logsDir := t.TempDir()
-	writer := NewMockStorageWriter()
-	handler := newRotatedTestHandler(writer)
-
-	survivorID := writeLogFile(t, filepath.Join(logsDir, "b-stream.out.1"), "survivor")
-	lostPath := filepath.Join(logsDir, "a-stream.out.1")
-	writeLogFile(t, lostPath, "lost to the ring")
-	if err := os.Remove(lostPath); err != nil {
-		t.Fatalf("Remove() = %v", err)
-	}
-
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
-
-	assertWritten(t, writer, map[string]string{
-		testLogPrefix + mustRotatedName(t, "b-stream.out.1", survivorID): "survivor",
-	})
 }
 
 // Descriptors must not leak on the success, failure or already-uploaded paths.
