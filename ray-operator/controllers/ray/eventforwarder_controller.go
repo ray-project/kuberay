@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	// forwardedEventReason is the fallback reason set on Events re-emitted onto Ray custom resources
+	// forwardedEventReason is the fallback reason set on Events re-emitted onto RayClusters
 	// if the source Node Event has an empty Reason.
-	forwardedEventReason = "NodeInfrastructureFailure"
+	forwardedEventReason = "NodeEvent"
 	// maxEventNoteLength is the note length that events.k8s.io/v1 API server
 	// validation enforces. An Event whose note exceeds it is rejected outright,
 	// so a verbose source message must be truncated rather than dropped.
@@ -46,16 +46,15 @@ const (
 )
 
 // EventForwarderOptions configures which Node Events are forwarded.
-// An empty Sources or Reasons list means "allow all". An empty Types list
-// defaults to forwarding only Warning events.
+// An empty Sources, Reasons, or Types list means "allow all".
 type EventForwarderOptions struct {
 	// Sources is the allowed set of event emitters, matched against both the
 	// legacy Source.Component and the new-style ReportingController fields
-	// (e.g. "node-problem-detector", "nvidia-gpu-device-plugin").
+	// (e.g. "node-problem-detector", "nvidia-gpu-device-plugin"). Empty means all sources.
 	Sources []string
-	// Reasons is the allowed set of event reasons (e.g. "XIDError", "KernelDeadlock").
+	// Reasons is the allowed set of event reasons (e.g. "XIDError", "KernelDeadlock"). Empty means all reasons.
 	Reasons []string
-	// Types is the allowed set of event types ("Warning", "Normal").
+	// Types is the allowed set of event types ("Warning", "Normal"). Empty means all types.
 	Types []string
 }
 
@@ -79,9 +78,6 @@ type eventFilter struct {
 }
 
 func newEventFilter(options EventForwarderOptions) eventFilter {
-	if len(options.Types) == 0 {
-		options.Types = []string{corev1.EventTypeWarning}
-	}
 	return eventFilter{
 		sources: sets.New(options.Sources...),
 		reasons: sets.New(options.Reasons...),
@@ -98,14 +94,13 @@ type forwardedRecord struct {
 }
 
 // EventForwarderReconciler watches Kubernetes Events involving Nodes and
-// re-emits them onto the Ray custom resources (RayCluster, and the owning RayJob if any)
-// whose Pods are scheduled on those Nodes, so they surface in the Ray Dashboard's Platform
-// Events tab.
+// re-emits them onto the RayCluster custom resources whose Pods are scheduled
+// on those Nodes, so they surface in the Ray Dashboard's Platform Events tab.
 //
 // The node->cluster join is served by a Pod field index on spec.nodeName: on
 // each Node Event we list the Ray Pods on that node (filtered by the
-// ray.io/cluster label), dedupe by target resource, and emit one Event per
-// target with the involvedObject set to that resource.
+// ray.io/cluster label), dedupe by cluster, and emit one Event per
+// RayCluster with the involvedObject set to that RayCluster.
 type EventForwarderReconciler struct {
 	client.Client
 	Recorder events.EventRecorder
@@ -216,11 +211,10 @@ func (r *EventForwarderReconciler) SetupWithManager(mgr ctrl.Manager, reconcileC
 // being granted cluster-wide in the base ClusterRole, enforcing least privilege.
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=ray.io,resources=rayjobs,verbs=get;list;watch
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 
-// Reconcile forwards a single Node Event onto every Ray custom resource with Pods on that Node.
+// Reconcile forwards a single Node Event onto every RayCluster with Pods on that Node.
 func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -275,57 +269,38 @@ func (r *EventForwarderReconciler) Reconcile(ctx context.Context, request ctrl.R
 		}
 	}
 
-	if len(clusterKeys) == 0 {
-		// No Ray workload on this node right now. Mark the event as forwarded
-		// for its current count so an informer resync or requeue does not
-		// retroactively forward it if a Ray pod is scheduled onto this node later.
-		r.markForwarded(request.NamespacedName, src)
-		return ctrl.Result{}, nil
-	}
-
 	targets, err := r.resolveTargets(ctx, clusterKeys)
 	if err != nil {
-		// Requeue and retry.
 		return ctrl.Result{}, err
 	}
 
-	if len(targets) == 0 {
-		// All RayClusters referenced by pods on this node have already been deleted.
-		r.markForwarded(request.NamespacedName, src)
-		return ctrl.Result{}, nil
+	if len(targets) > 0 {
+		// The affected Node is attached as the related object so a reader of the
+		// forwarded Event can get back to the source Node.
+		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName, UID: src.InvolvedObject.UID}}
+		reason := forwardedReason(src)
+		note := forwardedNote(nodeName, src)
+
+		for _, target := range targets {
+			r.Recorder.Eventf(target, node, src.Type, reason, "Forward", "%s", note)
+			logger.V(1).Info("forwarded node event to RayCluster",
+				"node", nodeName, "target", client.ObjectKeyFromObject(target), "sourceReason", src.Reason)
+		}
 	}
 
-	// The affected Node is attached as the related object so a reader of the
-	// forwarded Event can get back to the source of the fault.
-	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName, UID: src.InvolvedObject.UID}}
-	note := truncateString(fmt.Sprintf(
-		"Infrastructure failure detected on Node %q (reason: %s, source: %s): %s",
-		nodeName, src.Reason, eventSource(src), src.Message), maxEventNoteLength, "...")
-
-	reason := src.Reason
-	if reason == "" {
-		reason = forwardedEventReason
-	}
-	if source := eventSource(src); source != "" {
-		reason = fmt.Sprintf("%s/%s", reason, source)
-	}
-	reason = truncateString(reason, maxEventReasonLength, "")
-
-	for _, target := range targets {
-		r.Recorder.Eventf(target, node, src.Type, reason, "Forward", "%s", note)
-		logger.V(1).Info("forwarded node event to Ray resource",
-			"node", nodeName, "target", client.ObjectKeyFromObject(target), "sourceReason", src.Reason)
-	}
-
+	// Mark the event as forwarded (even if no targets were resolved, e.g. no Ray workload
+	// on the node or clusters already deleted) so an informer resync or requeue does not
+	// retroactively forward it if a Ray pod is scheduled onto this node later.
 	r.markForwarded(request.NamespacedName, src)
 	return ctrl.Result{}, nil
 }
 
-// resolveTargets returns the Ray custom resources to forward to: every RayCluster
-// in clusterKeys that still exists, plus the RayJob that created it, if any
+// resolveTargets returns the RayClusters in clusterKeys that still exist.
+// Events are forwarded strictly to RayCluster (and not parent RayJob or RayService)
+// to prevent duplicate events in the Ray Dashboard's Platform Events tab, where
+// watchers for both the cluster and parent resources run concurrently.
 func (r *EventForwarderReconciler) resolveTargets(ctx context.Context, clusterKeys map[types.NamespacedName]struct{}) ([]client.Object, error) {
 	var targets []client.Object
-	seenJobs := make(map[types.NamespacedName]struct{})
 
 	for clusterKey := range clusterKeys {
 		cluster := &rayv1.RayCluster{}
@@ -336,44 +311,35 @@ func (r *EventForwarderReconciler) resolveTargets(ctx context.Context, clusterKe
 			return nil, err
 		}
 		targets = append(targets, cluster)
-
-		// TODO: Support forwarding events to owning RayService as well.
-		jobKey, ok := owningRayJob(cluster)
-		if !ok {
-			continue
-		}
-		if _, dup := seenJobs[jobKey]; dup {
-			continue
-		}
-		seenJobs[jobKey] = struct{}{}
-
-		job := &rayv1.RayJob{}
-		if err := r.Get(ctx, jobKey, job); err != nil {
-			if errors.IsNotFound(err) {
-				continue
-			}
-			return nil, err
-		}
-		targets = append(targets, job)
 	}
 
 	return targets, nil
 }
 
-func owningRayJob(cluster *rayv1.RayCluster) (types.NamespacedName, bool) {
-	if utils.GetCRDType(cluster.Labels[utils.RayOriginatedFromCRDLabelKey]) != utils.RayJobCRD {
-		return types.NamespacedName{}, false
+// forwardedReason builds the Reason for the forwarded Event, combining the source
+// reason with the event source (e.g. "XIDError/node-problem-detector"), falling back
+// to forwardedEventReason if Reason is empty, and truncating to maxEventReasonLength.
+func forwardedReason(src *corev1.Event) string {
+	reason := src.Reason
+	if reason == "" {
+		reason = forwardedEventReason
 	}
-
-	name := cluster.Labels[utils.RayOriginatedFromCRNameLabelKey]
-	if name == "" {
-		return types.NamespacedName{}, false
+	if source := eventSource(src); source != "" {
+		reason = fmt.Sprintf("%s/%s", reason, source)
 	}
+	return truncateString(reason, maxEventReasonLength, "")
+}
 
-	return types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      name,
-	}, true
+// forwardedNote formats the message for the forwarded Event, capturing the affected Node,
+// reason, source component, and original message, truncated to maxEventNoteLength.
+func forwardedNote(nodeName string, src *corev1.Event) string {
+	reason := src.Reason
+	if reason == "" {
+		reason = forwardedEventReason
+	}
+	return truncateString(fmt.Sprintf(
+		"Node event observed on Node %q (reason: %s, source: %s): %s",
+		nodeName, reason, eventSource(src), src.Message), maxEventNoteLength, "...")
 }
 
 // truncateString truncates s to at most maxLen bytes, cutting at a UTF-8 rune
@@ -461,7 +427,7 @@ func eventSource(e *corev1.Event) string {
 }
 
 func (f eventFilter) matches(e *corev1.Event) bool {
-	if !f.types.Has(e.Type) {
+	if f.types.Len() > 0 && !f.types.Has(e.Type) {
 		return false
 	}
 	if f.reasons.Len() > 0 && !f.reasons.Has(e.Reason) {

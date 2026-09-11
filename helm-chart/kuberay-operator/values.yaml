@@ -167,15 +167,21 @@ featureGates:
   enabled: false
 
 # Configurations for KubeRay node event forwarder controller.
+# The controller forwards Kubernetes Node events to the corresponding RayCluster custom resources.
+# Ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/k8s-events.html
 nodeEventForwarder:
-  # -- Whether KubeRay operator should forward Kubernetes Node events to Ray custom resources.
+  # -- Whether KubeRay operator should forward Kubernetes Node events to RayCluster custom resources.
   enabled: false
   # -- Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources.
   sources: []
+    # - node-problem-detector
+    # - nvidia-gpu-device-plugin
   # -- Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons.
   reasons: []
-  # -- Only forward Node events with these types. Valid values are "Warning" and "Normal". The operator refuses to start on any other value. Empty defaults to "Warning" only.
-  types: []
+  # -- Only forward Node events with these types. Valid values are "Warning" and "Normal". Empty means all types.
+  # Note: Removing the "Warning" filter (or including "Normal") may result in a large number of noisy Normal Node events being forwarded.
+  types:
+    - Warning
 
 # Configurations for KubeRay operator metrics.
 metrics:

@@ -1,5 +1,5 @@
 # Dedicated Roles and RoleBindings granting get/list/watch on core Events in "default"
-# and "kube-system" for e2e testing with --enable-node-event-forwarder=true.
+# and "kube-system" for the node event forwarder (--enable-node-event-forwarder=true).
 # Node events in Kubernetes are strictly recorded in either "default" or "kube-system".
 # Scoping these permissions avoids granting cluster-wide event read access in the base ClusterRole.
 apiVersion: rbac.authorization.k8s.io/v1

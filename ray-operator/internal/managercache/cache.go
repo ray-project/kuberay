@@ -44,15 +44,27 @@ func K8sControllerRuntimeCacheSelectors() (map[client.Object]cache.ByObject, err
 // filter the watch to Node events server-side, so the operator never receives or
 // caches the (high-churn) Events of other objects.
 //
+// If types contains exactly one value (e.g. ["Warning"]), a field selector for "type"
+// is also applied to filter out other event types at the API server level. When types
+// is empty or contains multiple values, type filtering is handled client-side because
+// Kubernetes field selectors do not support OR/IN expressions.
+//
 // Per Kubernetes validation, Events involving
 // cluster-scoped objects like Nodes (where involvedObject.namespace is empty)
 // must be recorded in either "default" or "kube-system". Scoping the cache's
 // Namespaces to these two namespaces ensures controller-runtime starts namespace-scoped
 // informers rather than an all-namespaces cluster-scoped watch, allowing RBAC
 // permissions to be restricted to "default" and "kube-system".
-func EventForwarderCacheByObject() cache.ByObject {
+func EventForwarderCacheByObject(types []string) cache.ByObject {
+	fieldSelector := fields.OneTermEqualSelector("involvedObject.kind", "Node")
+	if len(types) == 1 {
+		fieldSelector = fields.AndSelectors(
+			fieldSelector,
+			fields.OneTermEqualSelector("type", types[0]),
+		)
+	}
 	return cache.ByObject{
-		Field: fields.OneTermEqualSelector("involvedObject.kind", "Node"),
+		Field: fieldSelector,
 		Namespaces: map[string]cache.Config{
 			metav1.NamespaceDefault: {},
 			metav1.NamespaceSystem:  {},

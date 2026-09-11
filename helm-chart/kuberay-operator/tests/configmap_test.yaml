@@ -362,3 +362,93 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "team: platform"
+
+  - it: Should include nodeEventForwarder configuration with default types when enabled
+    set:
+      configuration:
+        enabled: true
+      nodeEventForwarder:
+        enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableNodeEventForwarder: true"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderTypes:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- Warning"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderSources:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderReasons:"
+
+  - it: Should include custom nodeEventForwarder sources, reasons, and types
+    set:
+      configuration:
+        enabled: true
+      nodeEventForwarder:
+        enabled: true
+        sources:
+          - node-problem-detector
+          - nvidia-gpu-device-plugin
+        reasons:
+          - XIDError
+          - KernelDeadlock
+        types:
+          - Warning
+          - Normal
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableNodeEventForwarder: true"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderSources:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- node-problem-detector"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- nvidia-gpu-device-plugin"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderReasons:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- XIDError"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- KernelDeadlock"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderTypes:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- Warning"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- Normal"
+
+  - it: Should not include nodeEventForwarder filters when nodeEventForwarder is disabled
+    set:
+      configuration:
+        enabled: true
+      nodeEventForwarder:
+        enabled: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableNodeEventForwarder: false"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderTypes:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderSources:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "nodeEventForwarderReasons:"

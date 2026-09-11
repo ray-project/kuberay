@@ -31,7 +31,7 @@ func TestEventForwarder_OneEventPerClusterAcrossPods(t *testing.T) {
 		rayPodOnNode("a-head", "cluster-a"),
 		rayPodOnNode("a-worker", "cluster-a"),
 		rayPodOnNode("b-head", "cluster-b"),
-		warningNodeEvent("evt-1", "node-1", "node-problem-detector"),
+		warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79"),
 	)
 
 	reconcileForwarderEvent(t, r, "evt-1")
@@ -49,62 +49,12 @@ func TestEventForwarder_OneEventPerClusterAcrossPods(t *testing.T) {
 	}
 }
 
-func TestEventForwarder_ForwardsToOwningRayJob(t *testing.T) {
-	recorder := &capturingRecorder{}
-	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "job-a"),
-		&rayv1.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
-		rayPodOnNode("a-worker", "job-a-raycluster"),
-		warningNodeEvent("evt-1", "node-1", "kubelet"),
-	)
-
-	reconcileForwarderEvent(t, r, "evt-1")
-
-	assert.ElementsMatch(t,
-		[]string{"RayCluster/default/job-a-raycluster", "RayJob/default/job-a"},
-		recorder.targets(t))
-}
-
-func TestEventForwarder_ForwardsToOwningRayJobOnceAcrossPods(t *testing.T) {
-	// Two Pods of the same RayJob-created cluster on one node => one Event each
-	// for the RayCluster and the RayJob, not two.
-	recorder := &capturingRecorder{}
-	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "job-a"),
-		&rayv1.RayJob{ObjectMeta: metav1.ObjectMeta{Name: "job-a", Namespace: "default"}},
-		rayPodOnNode("a-head", "job-a-raycluster"),
-		rayPodOnNode("a-worker", "job-a-raycluster"),
-		warningNodeEvent("evt-1", "node-1", "nvidia-gpu-device-plugin"),
-	)
-
-	reconcileForwarderEvent(t, r, "evt-1")
-
-	assert.ElementsMatch(t,
-		[]string{"RayCluster/default/job-a-raycluster", "RayJob/default/job-a"},
-		recorder.targets(t))
-}
-
-func TestEventForwarder_SkipsMissingOwningRayJob(t *testing.T) {
-	// The RayCluster still carries its originated-from labels but the RayJob is
-	// already gone: the RayCluster must still receive the Event.
-	recorder := &capturingRecorder{}
-	r := newEventForwarder(t, recorder, EventForwarderOptions{},
-		rayJobCluster("job-a-raycluster", "job-a"),
-		rayPodOnNode("a-worker", "job-a-raycluster"),
-		warningNodeEvent("evt-1", "node-1", "node-problem-detector"),
-	)
-
-	reconcileForwarderEvent(t, r, "evt-1")
-
-	assert.Equal(t, []string{"RayCluster/default/job-a-raycluster"}, recorder.targets(t))
-}
-
 func TestEventForwarder_SkipsDeletedRayCluster(t *testing.T) {
 	// Pods outlive their RayCluster briefly during deletion.
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "node-problem-detector"),
+		warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79"),
 	)
 
 	reconcileForwarderEvent(t, r, "evt-1")
@@ -117,7 +67,7 @@ func TestEventForwarder_RelatesForwardedEventToNode(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "kubelet"),
+		warningNodeEvent("evt-1", "node-1", "kubelet", "XIDError", "Caught XID error, XID=79"),
 	)
 
 	reconcileForwarderEvent(t, r, "evt-1")
@@ -131,8 +81,7 @@ func TestEventForwarder_RelatesForwardedEventToNode(t *testing.T) {
 func TestEventForwarder_TruncatesLongMessages(t *testing.T) {
 	// events.k8s.io/v1 rejects a note longer than maxEventNoteLength, so a verbose
 	// source message must be trimmed rather than lost.
-	evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector")
-	evt.Message = strings.Repeat("x", 4000)
+	evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", strings.Repeat("x", 4000))
 
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
@@ -150,10 +99,9 @@ func TestEventForwarder_TruncatesLongMessages(t *testing.T) {
 }
 
 func TestEventForwarder_TruncatesLongReason(t *testing.T) {
-	evt := warningNodeEvent("evt-1", "node-1", "")
 	// 127 ASCII bytes followed by a 2-byte UTF-8 rune ("é" = \u00e9).
 	// A naive slice at maxEventReasonLength (128) would split the rune, producing invalid UTF-8.
-	evt.Reason = strings.Repeat("a", 127) + "é"
+	evt := warningNodeEvent("evt-1", "node-1", "", strings.Repeat("a", 127)+"é", "reason truncation test")
 
 	recorder := &capturingRecorder{}
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
@@ -169,6 +117,25 @@ func TestEventForwarder_TruncatesLongReason(t *testing.T) {
 	assert.LessOrEqual(t, len(reason), maxEventReasonLength)
 	assert.True(t, utf8.ValidString(reason), "truncated reason must be valid UTF-8")
 	assert.Equal(t, strings.Repeat("a", 127), reason)
+}
+
+func TestEventForwarder_FallbackReasonWhenEmpty(t *testing.T) {
+	recorder := &capturingRecorder{}
+	evt := normalNodeEvent("evt-1", "node-1", "kubelet", "", "Node node-1 status is now: NodeReady")
+
+	r := newEventForwarder(t, recorder, EventForwarderOptions{},
+		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
+		rayPodOnNode("a-head", "cluster-a"),
+		evt,
+	)
+
+	reconcileForwarderEvent(t, r, "evt-1")
+
+	require.Len(t, recorder.events, 1)
+	e := recorder.events[0]
+	assert.Equal(t, corev1.EventTypeNormal, e.eventtype)
+	assert.Equal(t, "NodeEvent/kubelet", e.reason)
+	assert.Equal(t, `Node event observed on Node "node-1" (reason: NodeEvent, source: kubelet): Node node-1 status is now: NodeReady`, e.message)
 }
 
 func TestEventForwarderOptions_Validate(t *testing.T) {
@@ -200,7 +167,7 @@ func TestEventForwarder_SkipsNodesWithoutRayPods(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-2", "node-2", "kubelet"), // event for a node with no Ray pods
+		warningNodeEvent("evt-2", "node-2", "kubelet", "XIDError", "Caught XID error, XID=79"), // event for a node with no Ray pods
 	)
 
 	reconcileForwarderEvent(t, r, "evt-2")
@@ -234,7 +201,7 @@ func TestEventForwarder_ResyncDoesNotReforward(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "nvidia-gpu-device-plugin"),
+		warningNodeEvent("evt-1", "node-1", "nvidia-gpu-device-plugin", "XIDError", "Caught XID error, XID=79"),
 	)
 
 	reconcileForwarderEvent(t, r, "evt-1")
@@ -248,7 +215,7 @@ func TestEventForwarder_CountBumpReforwards(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "node-problem-detector"),
+		warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79"),
 	)
 	ctx := context.Background()
 
@@ -273,7 +240,7 @@ func TestEventForwarder_NewUIDUnderSameNameForwards(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "node-problem-detector"),
+		warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79"),
 	)
 	ctx := context.Background()
 
@@ -283,7 +250,7 @@ func TestEventForwarder_NewUIDUnderSameNameForwards(t *testing.T) {
 	evt := &corev1.Event{}
 	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "evt-1", Namespace: "default"}, evt))
 	require.NoError(t, r.Delete(ctx, evt))
-	replacement := warningNodeEvent("evt-1", "node-1", "node-problem-detector")
+	replacement := warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79")
 	replacement.UID = "evt-1-uid-2"
 	require.NoError(t, r.Create(ctx, replacement))
 
@@ -297,7 +264,7 @@ func TestEventForwarder_ForgetsDeletedEvents(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "kubelet"),
+		warningNodeEvent("evt-1", "node-1", "kubelet", "XIDError", "Caught XID error, XID=79"),
 	)
 	ctx := context.Background()
 	key := types.NamespacedName{Name: "evt-1", Namespace: "default"}
@@ -321,9 +288,15 @@ func TestEventForwarder_Filters(t *testing.T) {
 		want    int
 	}{
 		{
-			name:   "normal events are dropped by default",
+			name:   "normal events are forwarded when Types is empty",
 			mutate: func(e *corev1.Event) { e.Type = corev1.EventTypeNormal },
-			want:   0,
+			want:   1,
+		},
+		{
+			name:    "normal events dropped when configured for Warning only",
+			options: EventForwarderOptions{Types: []string{corev1.EventTypeWarning}},
+			mutate:  func(e *corev1.Event) { e.Type = corev1.EventTypeNormal },
+			want:    0,
 		},
 		{
 			name:    "normal events forwarded when configured",
@@ -367,7 +340,7 @@ func TestEventForwarder_Filters(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector")
+			evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79")
 			tc.mutate(evt)
 			recorder := &capturingRecorder{}
 			r := newEventForwarder(t, recorder, tc.options,
@@ -384,11 +357,11 @@ func TestEventForwarder_Filters(t *testing.T) {
 }
 
 func TestEventForwarder_SkipsEventsObservedBeforeStart(t *testing.T) {
-	legacyOld := warningNodeEvent("evt-legacy", "node-1", "node-problem-detector")
+	legacyOld := warningNodeEvent("evt-legacy", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79")
 	legacyOld.LastTimestamp = metav1.NewTime(time.Now().Add(-2 * time.Hour))
 
 	// New-style events carry eventTime instead of lastTimestamp.
-	newStyleOld := warningNodeEvent("evt-new", "node-1", "kubelet")
+	newStyleOld := warningNodeEvent("evt-new", "node-1", "kubelet", "XIDError", "Caught XID error, XID=79")
 	newStyleOld.LastTimestamp = metav1.Time{}
 	newStyleOld.EventTime = metav1.NewMicroTime(time.Now().Add(-2 * time.Hour))
 
@@ -410,7 +383,7 @@ func TestEventForwarder_SkipsEventsObservedBeforeStart(t *testing.T) {
 func TestEventForwarder_RecurrenceOfOldEventForwards(t *testing.T) {
 	// The Event object predates the controller, but the fault recurs after
 	// startup: series.lastObservedTime moves forward and it must be forwarded.
-	evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector")
+	evt := warningNodeEvent("evt-1", "node-1", "node-problem-detector", "XIDError", "Caught XID error, XID=79")
 	evt.LastTimestamp = metav1.NewTime(time.Now().Add(-2 * time.Hour))
 	evt.Series = &corev1.EventSeries{Count: 5, LastObservedTime: metav1.NewMicroTime(time.Now().Add(time.Minute))}
 
@@ -428,7 +401,7 @@ func TestEventForwarder_RecurrenceOfOldEventForwards(t *testing.T) {
 }
 
 func TestEventForwarder_IgnoresNonNodeEvents(t *testing.T) {
-	podEvent := warningNodeEvent("evt-pod", "a-head", "kubelet")
+	podEvent := warningNodeEvent("evt-pod", "a-head", "kubelet", "XIDError", "Caught XID error, XID=79")
 	podEvent.InvolvedObject = corev1.ObjectReference{Kind: "Pod", Name: "a-head", Namespace: "default"}
 
 	recorder := &capturingRecorder{}
@@ -479,8 +452,6 @@ func (c *capturingRecorder) targets(t *testing.T) []string {
 		switch o := e.object.(type) {
 		case *rayv1.RayCluster:
 			out = append(out, "RayCluster/"+o.Namespace+"/"+o.Name)
-		case *rayv1.RayJob:
-			out = append(out, "RayJob/"+o.Namespace+"/"+o.Name)
 		default:
 			t.Fatalf("unexpected event target type %T", e.object)
 		}
@@ -507,33 +478,31 @@ func rayPodOnNode(name, cluster string) *corev1.Pod {
 	}
 }
 
-// rayJobCluster returns a RayCluster labeled the way the RayJob controller
-// labels the cluster it creates (see constructRayClusterForRayJob). Note that
-// these labels live on the RayCluster only; they are never copied onto its Pods,
-// so rayPodOnNode deliberately does not carry them.
-func rayJobCluster(name, rayJob string) *rayv1.RayCluster {
-	return &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "default",
-			Labels: map[string]string{
-				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
-				utils.RayOriginatedFromCRNameLabelKey: rayJob,
-			},
-		},
-	}
-}
-
 // warningNodeEvent returns a legacy-style Warning Node event, as emitted by
 // components like node-problem-detector.
-func warningNodeEvent(name, node, source string) *corev1.Event {
+func warningNodeEvent(name, node, source, reason, message string) *corev1.Event {
 	return &corev1.Event{
 		ObjectMeta:     metav1.ObjectMeta{Name: name, Namespace: "default", UID: types.UID(name + "-uid")},
 		InvolvedObject: corev1.ObjectReference{Kind: "Node", Name: node},
 		Source:         corev1.EventSource{Component: source},
-		Reason:         "XIDError",
-		Message:        "Caught XID error, XID=79",
+		Reason:         reason,
+		Message:        message,
 		Type:           corev1.EventTypeWarning,
+		Count:          1,
+		LastTimestamp:  metav1.NewTime(time.Now()),
+	}
+}
+
+// normalNodeEvent returns an informational Normal Node event, as emitted by
+// components like kubelet.
+func normalNodeEvent(name, node, source, reason, message string) *corev1.Event {
+	return &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: name, Namespace: "default", UID: types.UID(name + "-uid")},
+		InvolvedObject: corev1.ObjectReference{Kind: "Node", Name: node},
+		Source:         corev1.EventSource{Component: source},
+		Reason:         reason,
+		Message:        message,
+		Type:           corev1.EventTypeNormal,
 		Count:          1,
 		LastTimestamp:  metav1.NewTime(time.Now()),
 	}
@@ -577,7 +546,7 @@ func TestEventForwarder_RequeuesBeforeLeadershipRecorded(t *testing.T) {
 	r := newEventForwarder(t, recorder, EventForwarderOptions{},
 		&rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "default"}},
 		rayPodOnNode("a-head", "cluster-a"),
-		warningNodeEvent("evt-1", "node-1", "nvidia-gpu-device-plugin"),
+		warningNodeEvent("evt-1", "node-1", "nvidia-gpu-device-plugin", "XIDError", "Caught XID error, XID=79"),
 	)
 	// Zero out startedAt to simulate HA standby state before Start() runs
 	r.startedAt = time.Time{}

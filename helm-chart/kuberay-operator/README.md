@@ -191,10 +191,10 @@ spec:
 | featureGates[7].enabled | bool | `false` |  |
 | featureGates[8].name | string | `"RayNodeEventForwarder"` |  |
 | featureGates[8].enabled | bool | `false` |  |
-| nodeEventForwarder.enabled | bool | `false` | Whether KubeRay operator should forward Kubernetes Node events to Ray custom resources. |
+| nodeEventForwarder.enabled | bool | `false` | Whether KubeRay operator should forward Kubernetes Node events to RayCluster custom resources. |
 | nodeEventForwarder.sources | list | `[]` | Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources. |
 | nodeEventForwarder.reasons | list | `[]` | Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons. |
-| nodeEventForwarder.types | list | `[]` | Only forward Node events with these types. Valid values are "Warning" and "Normal". The operator refuses to start on any other value. Empty defaults to "Warning" only. |
+| nodeEventForwarder.types | list | `["Warning"]` | Only forward Node events with these types. Valid values are "Warning" and "Normal". Empty means all types. Note: Removing the "Warning" filter (or including "Normal") may result in a large number of noisy Normal Node events being forwarded. |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

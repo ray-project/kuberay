@@ -369,6 +369,8 @@ tests:
       leaderElectionEnabled: false
       metrics:
         enabled: false
+      nodeEventForwarder:
+        enabled: true
     asserts:
       - contains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
@@ -391,6 +393,9 @@ tests:
       - notContains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "--enable-metrics=false"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-node-event-forwarder=true"
 
   - it: Should include command-line flags when configuration is disabled (command-line mode)
     set:
@@ -413,3 +418,72 @@ tests:
       - contains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "--burst=200"
+
+  - it: Should include nodeEventForwarder flags with default types when enabled (command-line mode)
+    set:
+      configuration:
+        enabled: false
+      nodeEventForwarder:
+        enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-node-event-forwarder=true"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-types=Warning"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-sources="
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-reasons="
+
+  - it: Should include custom nodeEventForwarder flags when configured (command-line mode)
+    set:
+      configuration:
+        enabled: false
+      nodeEventForwarder:
+        enabled: true
+        sources:
+          - node-problem-detector
+          - nvidia-gpu-device-plugin
+        reasons:
+          - XIDError
+          - KernelDeadlock
+        types:
+          - Warning
+          - Normal
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-node-event-forwarder=true"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-sources=node-problem-detector,nvidia-gpu-device-plugin"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-reasons=XIDError,KernelDeadlock"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-types=Warning,Normal"
+
+  - it: Should not include nodeEventForwarder filter flags when disabled (command-line mode)
+    set:
+      configuration:
+        enabled: false
+      nodeEventForwarder:
+        enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-node-event-forwarder=false"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-types"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-sources"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--node-event-forwarder-reasons"

@@ -115,13 +115,13 @@ func main() {
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.BoolVar(&enableNodeEventForwarder, "enable-node-event-forwarder", false,
-		"Enable the Selective Node Event Forwarder, which re-emits Kubernetes Node events onto the Ray custom resources whose Pods run on the affected node.")
+		"Enable the Selective Node Event Forwarder, which re-emits Kubernetes Node events onto the RayCluster custom resources whose Pods run on the affected node.")
 	flag.StringVar(&nodeEventForwarderSources, "node-event-forwarder-sources", "",
 		"Comma-separated list of event sources to forward Node events from, e.g. node-problem-detector. Empty means all sources.")
 	flag.StringVar(&nodeEventForwarderReasons, "node-event-forwarder-reasons", "",
 		"Comma-separated list of event reasons to forward, e.g. XIDError,KernelDeadlock. Empty means all reasons.")
 	flag.StringVar(&nodeEventForwarderTypes, "node-event-forwarder-types", "",
-		"Comma-separated list of event types to forward (Warning, Normal). Empty defaults to Warning only.")
+		"Comma-separated list of event types to forward (Warning, Normal). Empty means all types.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -266,9 +266,10 @@ func main() {
 	selectorsByObject, err := managercache.K8sControllerRuntimeCacheSelectors()
 	exitOnError(err, "unable to build manager cache ByObject")
 	if features.Enabled(features.RayNodeEventForwarder) && config.EnableNodeEventForwarder {
-		// Scope the Event informer server-side to Node events only; without this
-		// the event forwarder's watch would receive every Event in the cluster.
-		selectorsByObject[&corev1.Event{}] = managercache.EventForwarderCacheByObject()
+		// Scope the Event informer server-side to Node events in default and kube-system namespaces;
+		// without this the event forwarder's watch would receive every Event in the cluster.
+		// If types contains a single type (e.g. Warning), it is also filtered server-side.
+		selectorsByObject[&corev1.Event{}] = managercache.EventForwarderCacheByObject(config.NodeEventForwarderTypes)
 	}
 	options.Cache.ByObject = selectorsByObject
 
@@ -385,8 +386,8 @@ func main() {
 		setupLog.Info("RayNodeEventForwarder is enabled, starting EventForwarder controller",
 			"sources", config.NodeEventForwarderSources, "reasons", config.NodeEventForwarderReasons, "types", config.NodeEventForwarderTypes)
 		if config.WatchNamespace != "" {
-			setupLog.Info("Node event forwarder watches Kubernetes Events in all namespaces despite watchNamespace being set; "+
-				"the operator's ServiceAccount needs cluster-scoped get/list/watch on core Events",
+			setupLog.Info("Node event forwarder watches Node events in default and kube-system namespaces despite watchNamespace being set; "+
+				"the operator's ServiceAccount requires Role permissions in those namespaces",
 				"watchNamespace", config.WatchNamespace)
 		}
 		eventForwarderOptions := ray.EventForwarderOptions{

@@ -101,7 +101,7 @@ type Configuration struct {
 
 	// EnableNodeEventForwarder enables the Selective Event Forwarder, which re-emits
 	// Kubernetes Node events (e.g. GPU XID errors reported by node-problem-detector)
-	// onto the Ray custom resources whose Pods run on the affected node, so they
+	// onto the RayCluster custom resources whose Pods run on the affected node, so they
 	// surface in the Ray Dashboard.
 	EnableNodeEventForwarder bool `json:"enableNodeEventForwarder,omitempty"`
 
@@ -115,7 +115,7 @@ type Configuration struct {
 	NodeEventForwarderReasons []string `json:"nodeEventForwarderReasons,omitempty"`
 
 	// NodeEventForwarderTypes restricts event forwarding to Node events of these types
-	// ("Warning", "Normal"). Empty defaults to "Warning" only.
+	// ("Warning", "Normal"). Empty means all types.
 	NodeEventForwarderTypes []string `json:"nodeEventForwarderTypes,omitempty"`
 }
 

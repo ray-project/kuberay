@@ -101,7 +101,7 @@ const (
 	// rep: N/A
 	// alpha: v1.7
 	//
-	// Enables selective forwarding of Kubernetes Node infrastructure events to Ray custom resources.
+	// Enables selective forwarding of Kubernetes Node infrastructure events to RayCluster custom resources.
 	RayNodeEventForwarder featuregate.Feature = "RayNodeEventForwarder"
 )
 
