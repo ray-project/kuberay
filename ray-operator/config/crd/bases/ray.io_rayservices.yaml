@@ -9431,6 +9431,7 @@ spec:
                               items:
                                 properties:
                                   mapTo:
+                                    maxLength: 317
                                     type: string
                                   nodeLabel:
                                     type: string

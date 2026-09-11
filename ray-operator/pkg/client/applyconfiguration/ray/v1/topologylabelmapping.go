@@ -10,6 +10,7 @@ type TopologyLabelMappingApplyConfiguration struct {
 	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
 	NodeLabel *string `json:"nodeLabel,omitempty"`
 	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
+	// The keys set here should not be set in the workerGroupSpec.Labels, since --labels overwrites --labels-file.
 	MapTo *string `json:"mapTo,omitempty"`
 }
 

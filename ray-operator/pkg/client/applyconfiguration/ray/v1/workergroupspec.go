@@ -47,7 +47,8 @@ type WorkerGroupSpecApplyConfiguration struct {
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	NumOfHosts *int32 `json:"numOfHosts,omitempty"`
 	// Topology delivers labels of the node each worker pod is bound to as Ray node labels.
-	// Requires the operator to run with ENABLE_WEBHOOKS=true and Ray 2.45.0 or later.
+	// While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.
+	// Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`).
 	Topology *TopologySpecApplyConfiguration `json:"topology,omitempty"`
 }
 

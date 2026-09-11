@@ -484,7 +484,8 @@ type WorkerGroupSpec struct {
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
 	// Topology delivers labels of the node each worker pod is bound to as Ray node labels.
-	// Requires the operator to run with ENABLE_WEBHOOKS=true and Ray 2.45.0 or later.
+	// While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.
+	// Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`).
 	// +optional
 	Topology *TopologySpec `json:"topology,omitempty"`
 }
@@ -510,6 +511,8 @@ type TopologyLabelMapping struct {
 	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
 	NodeLabel string `json:"nodeLabel"`
 	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
+	// The keys set here should not be set in the workerGroupSpec.Labels, since --labels overwrites --labels-file.
+	// +kubebuilder:validation:MaxLength=317
 	// +optional
 	MapTo string `json:"mapTo,omitempty"`
 }

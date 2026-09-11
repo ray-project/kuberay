@@ -76,4 +76,8 @@ data:
     defaultPodLabels:
     {{- toYaml .Values.configuration.defaultPodLabels | nindent 6 }}
     {{- end }}
+    {{- if .Values.configuration.allowedNodeLabels }}
+    allowedNodeLabels:
+    {{- toYaml .Values.configuration.allowedNodeLabels | nindent 4 }}
+    {{- end }}
 {{- end }}
