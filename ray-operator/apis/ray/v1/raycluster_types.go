@@ -489,6 +489,31 @@ type WorkerGroupSpec struct {
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+	// ScaleGate blocks this worker group from scaling up while non-empty; the
+	// Autoscaler then initiates fallback behavior. Kueue appends a gate named
+	// "kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves
+	// this field across reconciles but never reads or writes it.
+	//
+	// Several controllers may gate the same group, so each gate is keyed by a
+	// domain-prefixed name and a controller must add or remove only its own gates
+	// via Server-Side Apply under a distinct field manager. Replacing the list
+	// wholesale, or using read-modify-write Update, drops other owners' gates.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	ScaleGate []ScaleGate `json:"scaleGate,omitempty"`
+}
+
+// ScaleGate blocks a worker group from scaling up. It follows the shape of
+// PodSchedulingGate: Name identifies the owner and is the merge key, so a gate is
+// added and removed by exactly one controller.
+type ScaleGate struct {
+	// Name uniquely identifies this gate and its owner. It must be a
+	// domain-prefixed path such as "kueue.k8s.io/quota-exceeded".
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=316
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
+	Name string `json:"name"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
