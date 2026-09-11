@@ -173,6 +173,7 @@ spec:
 | configuration.defaultPodLabels | object | `{}` | Default labels to add to all Ray pod templates. User-specified labels take precedence. Example: defaultPodLabels:   app.kubernetes.io/managed-by: kuberay |
 | configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
+| configuration.allowedNodeLabels | list | `[]` | Node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].topology. Enforced by the validating webhooks, so it requires ENABLE_WEBHOOKS to be enabled. Empty disables delivery. Example: allowedNodeLabels: - nvidia.com/gpu.clique - topology.kubernetes.io/zone |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
