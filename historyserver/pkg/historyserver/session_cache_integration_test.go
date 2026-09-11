@@ -18,14 +18,14 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-// TestByteCache_ReadEndpointsRoundTripIsLossless is an in-process HTTP test:
+// TestSessionCache_ReadEndpointsRoundTripIsLossless is an in-process HTTP test:
 //
 // 1. Wire ServerHandler with a fake processor.
 // 2. Register routers for /enter_cluster and the dead-session read endpoints.
-// 3. GET /enter_cluster to trigger cold load and encode snapshot into the byte cache.
-// 4. GET each read endpoint to decode from cache and serve.
+// 3. GET /enter_cluster to trigger cold load and store the snapshot in the session cache.
+// 4. GET each read endpoint to serve the cached snapshot.
 // 5. Assert each response still contains the richSnapshot sentinel values (including nested CustomFields).
-func TestByteCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
+func TestSessionCache_ReadEndpointsRoundTripIsLossless(t *testing.T) {
 	restful.DefaultContainer = restful.NewContainer()
 
 	const (
