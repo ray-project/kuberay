@@ -146,7 +146,7 @@ func firstNotReadyContainerStatus(pod *corev1.Pod) (reason string, message strin
 //	rayv1.RayClusterSuspending:
 //	  False by default
 //	  False -> True: when `spec.Suspend` is true.
-//	  True -> False: when all Pods are deleted, set rayv1.RayClusterSuspended from False to True.
+//	  True -> False: when all Pods and owned Services are deleted, set rayv1.RayClusterSuspended from False to True.
 //	rayv1.RayClusterSuspended
 //	  False by default
 //	  False -> True: when suspending transitions from True to False

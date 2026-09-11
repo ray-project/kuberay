@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -149,6 +150,154 @@ func (r *RayClusterReconciler) deleteAllPods(ctx context.Context, filters common
 		return pods, r.DeleteAllOf(ctx, &corev1.Pod{}, filters.ToDeleteOptions()...)
 	}
 	return pods, nil
+}
+
+// rayClusterSuspendCommitted reports whether suspension teardown is authorized.
+//
+// Atomicity comes from a persisted RayClusterSuspending condition as the commit
+// point. Once committed, teardown must complete even if Spec.Suspend is changed
+// back to false. Without status conditions, Spec.Suspend is the source of truth.
+func rayClusterSuspendCommitted(instance *rayv1.RayCluster) bool {
+	if utils.FindRayClusterSuspendStatus(instance) == rayv1.RayClusterSuspending {
+		return true
+	}
+	return !features.Enabled(features.RayClusterStatusConditions) && ptr.Deref(instance.Spec.Suspend, false)
+}
+
+// rayClusterSuspendBlocksCreation reports whether creation of underlying resources
+// should be blocked for the RayCluster.
+func rayClusterSuspendBlocksCreation(instance *rayv1.RayCluster) bool {
+	if rayClusterSuspendCommitted(instance) {
+		return true
+	}
+	if !features.Enabled(features.RayClusterStatusConditions) {
+		return false
+	}
+	return utils.FindRayClusterSuspendStatus(instance) == rayv1.RayClusterSuspended ||
+		ptr.Deref(instance.Spec.Suspend, false)
+}
+
+// rayClusterSuspendDeletesServices covers the whole suspension, not only the teardown
+// window that the Pod deletion covers. Deleted Pods cannot come back on their own, so
+// that window is enough for them. Services left behind by an operator too old to delete
+// them still have to be collected, without asking the user to resume first.
+func rayClusterSuspendDeletesServices(instance *rayv1.RayCluster) bool {
+	if rayClusterSuspendCommitted(instance) {
+		return true
+	}
+	if !features.Enabled(features.RayClusterStatusConditions) {
+		return false
+	}
+	return utils.FindRayClusterSuspendStatus(instance) == rayv1.RayClusterSuspended
+}
+
+// deleteServicesForSuspend only issues the deletions. Whether they have finished is
+// remainingServicesForSuspend's question, and the suspend state machine's to act on.
+func (r *RayClusterReconciler) deleteServicesForSuspend(ctx context.Context, instance *rayv1.RayCluster, services []corev1.Service) error {
+	logger := ctrl.LoggerFrom(ctx)
+	for i := range services {
+		svc := &services[i]
+		if !metav1.IsControlledBy(svc, instance) {
+			continue
+		}
+		if !svc.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting Service due to suspension", "name", svc.Name)
+		if err := r.Delete(ctx, svc); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteService), string(utils.DeleteAction),
+				"Failed deleting Service %s/%s due to suspension for RayCluster %s/%s, %v",
+				svc.Namespace, svc.Name, instance.Namespace, instance.Name, err)
+			return err
+		}
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedService), string(utils.DeleteAction),
+			"Deleted Service %s/%s due to suspension for RayCluster %s/%s",
+			svc.Namespace, svc.Name, instance.Namespace, instance.Name)
+	}
+	return nil
+}
+
+// remainingServicesForSuspend names the Services whose teardown is still outstanding. A
+// Service that is merely terminating is still outstanding: suspension completes on the
+// objects being gone, not on the deletes having been issued.
+//
+// What it reports has to stay identical to what the reconcilers delete. A Service named
+// here but never deleted would hold the suspension open forever.
+func (r *RayClusterReconciler) remainingServicesForSuspend(ctx context.Context, instance *rayv1.RayCluster) ([]string, error) {
+	var found []corev1.Service
+
+	headServices := corev1.ServiceList{}
+	if err := r.List(ctx, &headServices, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
+		return nil, err
+	}
+	found = append(found, headServices.Items...)
+
+	headlessServices := corev1.ServiceList{}
+	if err := r.List(ctx, &headlessServices, common.RayClusterHeadlessServiceListOptions(instance)...); err != nil {
+		return nil, err
+	}
+	found = append(found, headlessServices.Items...)
+
+	// Same annotation gate as reconcileServeService. Without the annotation the serve
+	// Service is not deleted on suspend, so it must not be waited for either.
+	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; exist && enableServeServiceValue == utils.EnableServeServiceTrue {
+		serveService := &corev1.Service{}
+		err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), serveService)
+		if err != nil && !errors.IsNotFound(err) {
+			return nil, err
+		}
+		if err == nil {
+			found = append(found, *serveService)
+		}
+	}
+
+	var remaining []string
+	for i := range found {
+		if metav1.IsControlledBy(&found[i], instance) {
+			remaining = append(remaining, found[i].Name)
+		}
+	}
+	sort.Strings(remaining)
+	return remaining, nil
+}
+
+// suspendAwareReconcileFuncs orders one reconcile pass. A Pod may only start once the
+// resources it references exist, which is why creation reconciles it last.
+//
+// During a teardown the order carries weight the creation order does not: the caller
+// stops at the first error, so anything the suspend conditions wait on has to run
+// before anything that can fail for reasons of its own. Otherwise a single unrelated
+// failure leaves the Services undeleted and the cluster unable to resume.
+func (r *RayClusterReconciler) suspendAwareReconcileFuncs(instance *rayv1.RayCluster) []reconcileFunc {
+	if rayClusterSuspendCommitted(instance) {
+		return []reconcileFunc{
+			r.reconcilePods,
+			r.reconcileHeadService,
+			r.reconcileHeadlessService,
+			r.reconcileServeService,
+			r.reconcileAutoscalerServiceAccount,
+			r.reconcileAutoscalerRole,
+			r.reconcileAutoscalerRoleBinding,
+			r.reconcileIngress,
+			r.reconcileAuthSecret,
+			r.reconcileGCSStoragePVC,
+		}
+	}
+	return []reconcileFunc{
+		r.reconcileAutoscalerServiceAccount,
+		r.reconcileAutoscalerRole,
+		r.reconcileAutoscalerRoleBinding,
+		r.reconcileIngress,
+		r.reconcileAuthSecret,
+		r.reconcileHeadService,
+		r.reconcileHeadlessService,
+		r.reconcileServeService,
+		r.reconcileGCSStoragePVC,
+		r.reconcilePods,
+	}
 }
 
 func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
@@ -356,20 +505,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
-	reconcileFuncs := []reconcileFunc{
-		r.reconcileAutoscalerServiceAccount,
-		r.reconcileAutoscalerRole,
-		r.reconcileAutoscalerRoleBinding,
-		r.reconcileIngress,
-		r.reconcileAuthSecret,
-		r.reconcileHeadService,
-		r.reconcileHeadlessService,
-		r.reconcileServeService,
-		r.reconcileGCSStoragePVC,
-		r.reconcilePods,
-	}
-
-	for _, fn := range reconcileFuncs {
+	for _, fn := range r.suspendAwareReconcileFuncs(instance) {
 		if reconcileErr = fn(ctx, instance); reconcileErr != nil {
 			funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 			logger.Error(reconcileErr, "Error reconcile resources", "function name", funcName)
@@ -613,6 +749,13 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 
 	if err := r.List(ctx, &services, filterLabels...); err != nil {
 		return err
+	}
+
+	if rayClusterSuspendDeletesServices(instance) {
+		return r.deleteServicesForSuspend(ctx, instance, services.Items)
+	}
+	if rayClusterSuspendBlocksCreation(instance) {
+		return nil
 	}
 
 	// Check if there's existing head service in the cluster.
@@ -872,6 +1015,20 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 		return nil
 	}
 
+	// The annotation gate above is load-bearing here: during an incremental upgrade the
+	// RayService controller owns a per-cluster serve Service under this same name, and
+	// only the annotation tells the two apart.
+	if rayClusterSuspendDeletesServices(instance) {
+		svc := &corev1.Service{}
+		if err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), svc); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		return r.deleteServicesForSuspend(ctx, instance, []corev1.Service{*svc})
+	}
+	if rayClusterSuspendBlocksCreation(instance) {
+		return nil
+	}
+
 	// Retrieve the Service from the Kubernetes cluster with the name and namespace.
 	svc := &corev1.Service{}
 	err := r.Get(ctx, common.RayClusterServeServiceNamespacedName(instance), svc)
@@ -896,6 +1053,20 @@ func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instan
 
 // Return nil only when the headless service for multi-host worker groups is successfully created or already exists.
 func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, instance *rayv1.RayCluster) error {
+	// This sits ahead of the multi-host gate, unlike the serve Service: the label is
+	// KubeRay's own, so there is no foreign Service to confuse it with, and a group that
+	// has since shrunk to a single host still has a headless Service to collect.
+	if rayClusterSuspendDeletesServices(instance) {
+		services := corev1.ServiceList{}
+		if err := r.List(ctx, &services, common.RayClusterHeadlessServiceListOptions(instance)...); err != nil {
+			return err
+		}
+		return r.deleteServicesForSuspend(ctx, instance, services.Items)
+	}
+	if rayClusterSuspendBlocksCreation(instance) {
+		return nil
+	}
+
 	// Check if there are worker groups with NumOfHosts > 1 in the cluster
 	isMultiHost := false
 	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
@@ -938,10 +1109,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	}
 
 	// if RayCluster is suspending, delete all pods and skip reconcile
-	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
-	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
-	if suspendStatus == rayv1.RayClusterSuspending ||
-		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
+	if rayClusterSuspendCommitted(instance) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection), string(utils.DeleteAction),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
@@ -955,14 +1123,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		return nil
 	}
 
-	if statusConditionGateEnabled {
-		if suspendStatus == rayv1.RayClusterSuspended {
-			return nil // stop reconcilePods because the cluster is suspended.
-		}
-		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
-		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
-			return nil // stop reconcilePods because the cluster is going to suspend.
-		}
+	if rayClusterSuspendBlocksCreation(instance) {
+		return nil
 	}
 
 	// Check if pods need to be recreated with Recreate upgradeStrategy
@@ -2062,14 +2224,42 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 
 		switch suspendStatus {
-		case rayv1.RayClusterSuspending:
+		case rayv1.RayClusterSuspending, rayv1.RayClusterSuspended:
+			// Suspending completes once the Pods and the Services this path tears down
+			// are gone. A Service only on its way out has not gone.
+			var remaining []string
 			if len(runtimePods.Items) == 0 {
+				// Provisioned describes the Pods, so it answers as soon as they are gone,
+				// whatever the Services are still doing.
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
 					Status:  metav1.ConditionFalse,
 					Reason:  rayv1.RayClusterPodsProvisioning,
 					Message: "RayCluster has been suspended",
 				})
+				var err error
+				if remaining, err = r.remainingServicesForSuspend(ctx, instance); err != nil {
+					return nil, err
+				}
+			}
+
+			switch {
+			case len(remaining) != 0:
+				// Also how a cluster suspended by an operator that predates this teardown
+				// converges: it arrives already reporting Suspended and has to give that
+				// up until its leftover Services are gone.
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:    string(rayv1.RayClusterSuspending),
+					Reason:  string(rayv1.RayClusterSuspending),
+					Status:  metav1.ConditionTrue,
+					Message: "Waiting for owned Services to be deleted: " + strings.Join(remaining, ", "),
+				})
+				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.RayClusterSuspended),
+					Reason: string(rayv1.RayClusterSuspended),
+					Status: metav1.ConditionFalse,
+				})
+			case len(runtimePods.Items) == 0 && suspendStatus == rayv1.RayClusterSuspending:
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspending),
 					Reason: string(rayv1.RayClusterSuspending),
@@ -2080,9 +2270,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Reason: string(rayv1.RayClusterSuspended),
 					Status: metav1.ConditionTrue,
 				})
-			}
-		case rayv1.RayClusterSuspended:
-			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
+			case suspendStatus == rayv1.RayClusterSuspended && instance.Spec.Suspend != nil && !*instance.Spec.Suspend:
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
 					Reason: string(rayv1.RayClusterSuspended),
@@ -2111,15 +2299,23 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 	}
 
+	// Keep the deprecated .Status.State Pod-gated for Kueue compatibility: Kueue reads
+	// Ready as the RayCluster's active signal, and nothing else writes this field back
+	// down, so delaying it for the Service teardown would delay the quota release.
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
 		newInstance.Status.State = rayv1.Suspended
 	}
 
-	if err := r.updateEndpoints(ctx, newInstance); err != nil {
+	// Read from what this reconcile observed, not from the status being computed: the
+	// resume pass clears the suspend conditions above, while the head Service only comes
+	// back on the following reconcile.
+	headServiceOptional := rayClusterSuspendBlocksCreation(instance) || reconcileErr != nil
+
+	if err := r.updateEndpoints(ctx, newInstance, headServiceOptional); err != nil {
 		return nil, err
 	}
 
-	if err := r.updateHeadInfo(ctx, newInstance); err != nil {
+	if err := r.updateHeadInfo(ctx, newInstance, headServiceOptional); err != nil {
 		return nil, err
 	}
 
@@ -2136,12 +2332,18 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	return newInstance, nil
 }
 
-func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
+// getHeadServiceIPAndName returns empty values without error when the headServiceOptional
+// is true. This is expected while suspending or resuming; returning
+// an error would prevent the suspension state from converging.
+func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster, headServiceOptional bool) (string, string, error) {
 	runtimeServices := corev1.ServiceList{}
 	if err := r.List(ctx, &runtimeServices, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
 		return "", "", err
 	}
 	if len(runtimeServices.Items) < 1 {
+		if headServiceOptional {
+			return "", "", nil
+		}
 		return "", "", fmt.Errorf("unable to find head service. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
 	} else if len(runtimeServices.Items) > 1 {
 		return "", "", fmt.Errorf("found multiple head services. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
@@ -2162,7 +2364,7 @@ func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, inst
 	return runtimeServices.Items[0].Spec.ClusterIP, runtimeServices.Items[0].Name, nil
 }
 
-func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *rayv1.RayCluster, headServiceOptional bool) error {
 	logger := ctrl.LoggerFrom(ctx)
 	// TODO: (@scarlet25151) There may be several K8s Services for a RayCluster.
 	// We assume we can find the right one by filtering Services with appropriate label selectors
@@ -2193,6 +2395,10 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 				logger.Info("updateStatus: Service port's targetPort is empty. Not adding it to RayCluster status.endpoints", "port", port)
 			}
 		}
+	} else if headServiceOptional {
+		// Endpoints that outlive the Service they were read from are worse than none.
+		logger.Info("updateEndpoints: The head Service is absent because this RayCluster is suspended. Clearing RayCluster status.endpoints", "serviceSelectors", filterLabels)
+		instance.Status.Endpoints = nil
 	} else {
 		logger.Info("updateEndpoints: Unable to find a Service for this RayCluster. Not adding RayCluster status.endpoints", "serviceSelectors", filterLabels)
 	}
@@ -2200,7 +2406,7 @@ func (r *RayClusterReconciler) updateEndpoints(ctx context.Context, instance *ra
 	return nil
 }
 
-func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *rayv1.RayCluster, headServiceOptional bool) error {
 	headPod, err := common.GetRayClusterHeadPod(ctx, r, instance)
 	if err != nil {
 		return err
@@ -2213,7 +2419,7 @@ func (r *RayClusterReconciler) updateHeadInfo(ctx context.Context, instance *ray
 		instance.Status.Head.PodName = ""
 	}
 
-	ip, name, err := r.getHeadServiceIPAndName(ctx, instance)
+	ip, name, err := r.getHeadServiceIPAndName(ctx, instance, headServiceOptional)
 	if err != nil {
 		return err
 	}
