@@ -166,8 +166,8 @@ type GcsFaultToleranceOptions struct {
 	RedisPassword *RedisCredential `json:"redisPassword,omitempty"`
 	// +optional
 	ExternalStorageNamespace string `json:"externalStorageNamespace,omitempty"`
-	// RedisAddress is the address of the external Redis service used when Backend
-	// is "redis". It may alternatively be supplied via env vars/annotations.
+	// RedisAddress is the address of the external Redis service. Required when
+	// Backend is "redis"; must be empty for "rocksdb".
 	// +optional
 	RedisAddress string `json:"redisAddress,omitempty"`
 
@@ -181,20 +181,20 @@ type GcsFaultToleranceOptions struct {
 	// ----- Active-Passive Head HA fields -----
 
 	// ActivePassiveHead configures active-passive high availability for the GCS.
-	// It is only supported when Redis is configured (i.e. Backend is "redis" and
-	// RedisAddress is set); it is not supported with the "rocksdb" backend.
+	// It is only supported with the "redis" backend, not with "rocksdb".
 	// +optional
 	ActivePassiveHead *ActivePassiveHeadOptions `json:"activePassiveHead,omitempty"`
 }
 
 // ActivePassiveHeadOptions configures active-passive head high availability for
-// the GCS via leader election. The lease timings mirror the leader election
-// configuration used by Kubernetes components.
+// the GCS via leader election. The default lease timings mirror those of the
+// leader election configuration used by Kubernetes components.
 type ActivePassiveHeadOptions struct {
-	// Enable enables active-passive high availability for the GCS. If enabled,
-	// KubeRay will provision a standby head node to ensure quick recovery.
-	// +kubebuilder:default:=false
-	Enable *bool `json:"enable,omitempty"`
+	// Enabled controls whether active-passive high availability is active for the
+	// GCS. Defaults to false when omitted. When enabled, KubeRay will provision a
+	// standby head node to ensure quick recovery.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
 	// +optional
 	// +kubebuilder:default:=15

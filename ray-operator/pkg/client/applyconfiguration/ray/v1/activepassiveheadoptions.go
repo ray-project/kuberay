@@ -6,12 +6,13 @@ package v1
 // with apply.
 //
 // ActivePassiveHeadOptions configures active-passive head high availability for
-// the GCS via leader election. The lease timings mirror the leader election
-// configuration used by Kubernetes components.
+// the GCS via leader election. The default lease timings mirror those of the
+// leader election configuration used by Kubernetes components.
 type ActivePassiveHeadOptionsApplyConfiguration struct {
-	// Enable enables active-passive high availability for the GCS. If enabled,
-	// KubeRay will provision a standby head node to ensure quick recovery.
-	Enable *bool `json:"enable,omitempty"`
+	// Enabled controls whether active-passive high availability is active for the
+	// GCS. Defaults to false when omitted. When enabled, KubeRay will provision a
+	// standby head node to ensure quick recovery.
+	Enabled *bool `json:"enabled,omitempty"`
 	// LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
 	LeaseDurationSeconds *int32 `json:"leaseDurationSeconds,omitempty"`
 	// RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences.
@@ -26,11 +27,11 @@ func ActivePassiveHeadOptions() *ActivePassiveHeadOptionsApplyConfiguration {
 	return &ActivePassiveHeadOptionsApplyConfiguration{}
 }
 
-// WithEnable sets the Enable field in the declarative configuration to the given value
+// WithEnabled sets the Enabled field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Enable field is set to the value of the last call.
-func (b *ActivePassiveHeadOptionsApplyConfiguration) WithEnable(value bool) *ActivePassiveHeadOptionsApplyConfiguration {
-	b.Enable = &value
+// If called multiple times, the Enabled field is set to the value of the last call.
+func (b *ActivePassiveHeadOptionsApplyConfiguration) WithEnabled(value bool) *ActivePassiveHeadOptionsApplyConfiguration {
+	b.Enabled = &value
 	return b
 }
 

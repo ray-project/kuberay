@@ -19,15 +19,14 @@ type GcsFaultToleranceOptionsApplyConfiguration struct {
 	RedisUsername            *RedisCredentialApplyConfiguration `json:"redisUsername,omitempty"`
 	RedisPassword            *RedisCredentialApplyConfiguration `json:"redisPassword,omitempty"`
 	ExternalStorageNamespace *string                            `json:"externalStorageNamespace,omitempty"`
-	// RedisAddress is the address of the external Redis service used when Backend
-	// is "redis". It may alternatively be supplied via env vars/annotations.
+	// RedisAddress is the address of the external Redis service. Required when
+	// Backend is "redis"; must be empty for "rocksdb".
 	RedisAddress *string `json:"redisAddress,omitempty"`
 	// Storage configures the persistent volume backing the embedded RocksDB
 	// store. Only used when Backend is "rocksdb".
 	Storage *GcsEmbeddedStorageApplyConfiguration `json:"storage,omitempty"`
 	// ActivePassiveHead configures active-passive high availability for the GCS.
-	// It is only supported when Redis is configured (i.e. Backend is "redis" and
-	// RedisAddress is set); it is not supported with the "rocksdb" backend.
+	// It is only supported with the "redis" backend, not with "rocksdb".
 	ActivePassiveHead *ActivePassiveHeadOptionsApplyConfiguration `json:"activePassiveHead,omitempty"`
 }
 

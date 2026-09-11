@@ -443,8 +443,7 @@ spec:
                         properties:
                           activePassiveHead:
                             properties:
-                              enable:
-                                default: false
+                              enabled:
                                 type: boolean
                               leaseDurationSeconds:
                                 default: 15

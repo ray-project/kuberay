@@ -205,12 +205,11 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
-		// The redis backend does not require RedisAddress here: it may be supplied
-		// via env vars/annotations elsewhere, and master never enforced it.
 		{
-			name:                     "redis backend without RedisAddress is accepted",
+			name:                     "redis backend rejects empty RedisAddress",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
-			expectError:              false,
+			expectError:              true,
+			errorMessage:             "GcsFaultToleranceOptions.RedisAddress must be set when backend is 'redis'",
 		},
 		{
 			name: "redis backend rejects rocksdb-only storage field",
@@ -344,7 +343,7 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 		{
 			name: "disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &disabled},
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &disabled},
 			},
 			gateEnabled: true,
 		},
@@ -352,37 +351,28 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 			name: "feature gate disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress:      "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  false,
 			expectError:  true,
-			errorMessage: "activePassiveHead.enable requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
+			errorMessage: "activePassiveHead requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
 		},
 		{
 			name: "rocksdb backend not supported",
 			options: &rayv1.GcsFaultToleranceOptions{
 				Backend:           rayv1.GcsFTBackendRocksDB,
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  true,
 			expectError:  true,
 			errorMessage: "activePassiveHead is only supported with the 'redis' backend",
 		},
 		{
-			name: "empty redis address",
-			options: &rayv1.GcsFaultToleranceOptions{
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
-			},
-			gateEnabled:  true,
-			expectError:  true,
-			errorMessage: "redisAddress must be configured when activePassiveHead.enable is true",
-		},
-		{
 			name: "leaseDuration not greater than renewDeadline",
 			options: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress: "redis:6379",
 				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enable:               &enabled,
+					Enabled:              &enabled,
 					LeaseDurationSeconds: ptr(10),
 					RenewDeadlineSeconds: ptr(10),
 				},
@@ -396,7 +386,7 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 			options: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress: "redis:6379",
 				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enable:               &enabled,
+					Enabled:              &enabled,
 					RenewDeadlineSeconds: ptr(5),
 					RetryPeriodSeconds:   ptr(5),
 				},
@@ -406,10 +396,10 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 			errorMessage: "activePassiveHead.renewDeadlineSeconds must be greater than activePassiveHead.retryPeriodSeconds",
 		},
 		{
-			name: "valid with defaults",
+			name: "valid with unset timings",
 			options: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress:      "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled: true,
 		},
@@ -418,7 +408,7 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 			options: &rayv1.GcsFaultToleranceOptions{
 				RedisAddress: "redis:6379",
 				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enable:               &enabled,
+					Enabled:              &enabled,
 					LeaseDurationSeconds: ptr(20),
 					RenewDeadlineSeconds: ptr(15),
 					RetryPeriodSeconds:   ptr(3),
