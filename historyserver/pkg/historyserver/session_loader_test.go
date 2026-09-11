@@ -3,8 +3,9 @@ package historyserver
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -311,6 +312,24 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 	}
 }
 
+// TestGetSnapshot_ReturnsCachedPointer verifies that GetSnapshot hands out the
+// cached snapshot itself (no per-request decode or copy).
+func TestGetSnapshot_ReturnsCachedPointer(t *testing.T) {
+	key := testClusterSessionKey()
+
+	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
+	stored := testSnapshot(key)
+	sl.putSnapshot(key, stored)
+
+	got, ok := sl.GetSnapshot(key)
+	if !ok {
+		t.Fatal("GetSnapshot: ok=false")
+	}
+	if got != stored {
+		t.Fatal("GetSnapshot should return the cached snapshot pointer, not a copy")
+	}
+}
+
 // TestGetSnapshot_ColdMiss verifies that a miss returns (nil, false).
 func TestGetSnapshot_ColdMiss(t *testing.T) {
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
@@ -339,8 +358,8 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_ConcurrentReadsAreThreadSafe verifies the thread-safety
-// of the byte cache under data race detection (-race).
+// TestGetSnapshot_ConcurrentReadsAreThreadSafe verifies that concurrent
+// putSnapshot/GetSnapshot calls are free of data races (-race).
 func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	key := testClusterSessionKey()
 
@@ -364,28 +383,13 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			mine, ok := sl.GetSnapshot(key)
+			snap, ok := sl.GetSnapshot(key)
 			if !ok {
 				t.Errorf("GetSnapshot: unexpected miss")
 				return
 			}
-			mine.Actors["actor-e2e-cafe"] = eventtypes.Actor{ActorID: "MUTATED"}
-			delete(mine.Nodes, "node-e2e-dead")
-			mine.Jobs["injected"] = eventtypes.Job{}
-
-			fresh, ok := sl.GetSnapshot(key)
-			if !ok {
-				t.Errorf("GetSnapshot: unexpected miss on re-read")
-				return
-			}
-			if fresh.Actors["actor-e2e-cafe"].ActorID != "actor-e2e-cafe" {
-				t.Errorf("Actors map leaked across requests")
-			}
-			if _, ok := fresh.Nodes["node-e2e-dead"]; !ok {
-				t.Errorf("Nodes map leaked across requests")
-			}
-			if _, ok := fresh.Jobs["injected"]; ok {
-				t.Errorf("Jobs map leaked across requests")
+			if snap.Actors["actor-e2e-cafe"].ActorID != "actor-e2e-cafe" {
+				t.Errorf("unexpected snapshot content")
 			}
 		}()
 	}
@@ -393,18 +397,48 @@ func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	wg.Wait()
 }
 
-// TestGetSnapshot_CorruptEntry_TreatedAsMiss verifies that a non-decodable cache
-// entry is dropped and reported as a miss instead of panicking.
-func TestGetSnapshot_CorruptEntry_TreatedAsMiss(t *testing.T) {
+// TestSnapshotConsumers_DoNotMutateSharedSnapshot runs the snapshot consumers
+// concurrently on one cached snapshot and verifies it is unchanged afterwards.
+func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
+	key := testClusterSessionKey()
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	sl.cache.Add("corrupt", []byte("{not valid json"))
-
-	snap, ok := sl.GetSnapshot("corrupt")
-	if ok || snap != nil {
-		t.Fatalf("corrupt entry: got (%v, %v), want (nil, false)", snap, ok)
+	stored := richSnapshot(key)
+	// Store tasks out of order so an in-place sort would actually move elements.
+	slices.Reverse(stored.Tasks)
+	sl.putSnapshot(key, stored)
+	snap, ok := sl.GetSnapshot(key)
+	if !ok {
+		t.Fatal("GetSnapshot: ok=false")
 	}
-	if _, stillCached := sl.cache.Get("corrupt"); stillCached {
-		t.Fatal("corrupt entry should have been dropped")
+
+	// Marshal freezes an independent copy of the snapshot's state as bytes for
+	// before/after comparison.
+	before, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			utils.ApplyTaskFilters(snap.Tasks, utils.ListAPIOptions{Limit: utils.DefaultLimit})
+			getTasksTimeline(snap, "")
+			GetLastTimestamp(snap.Tasks, nil)
+			b := NewClusterStatusBuilder()
+			b.AddFailedNodesFromNodes(snap.Nodes)
+			b.AddPendingDemandsFromTasks(snap.Tasks)
+		}()
+	}
+	wg.Wait()
+
+	after, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("a snapshot consumer mutated the shared snapshot")
 	}
 }
 
@@ -469,8 +503,8 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 	s1 := richSnapshot(olderKey)
 
 	// Budget large enough for one richSnapshot but not two.
-	enc1, _ := encodeSnapshot(s1)
-	maxBytes := len(enc1) + 1
+	enc1, _ := json.Marshal(s1)
+	maxBytes := estimateHeapBytes(len(enc1)) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
 	sl.putSnapshot(olderKey, s1)
@@ -493,47 +527,6 @@ func TestCache_ByteBudgetKeepsOversizedSoleEntry(t *testing.T) {
 	requireSnapshotCached(t, sl, key, true)
 	if entries, total := sl.cache.Len(), sl.totalBytes(); entries != 1 || total <= sl.maxBytes {
 		t.Fatalf("oversized sole entry: got (entries=%d, bytes=%d), want (1, >%d)", entries, total, sl.maxBytes)
-	}
-}
-
-// TestSnapshotCache_RoundTripPreservesData verifies the encode/decode round-trip
-// is lossless.
-func TestSnapshotCache_RoundTripPreservesData(t *testing.T) {
-	snap := richSnapshot(testClusterSessionKey())
-
-	b1, err := encodeSnapshot(snap)
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	got, err := decodeSnapshot(b1)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	b2, err := encodeSnapshot(got)
-	if err != nil {
-		t.Fatalf("re-encode: %v", err)
-	}
-	if !bytes.Equal(b1, b2) {
-		t.Fatalf("round-trip changed the snapshot:\n before=%s\n  after=%s", b1, b2)
-	}
-
-	// byte equality can hide int to float64 drift inside map[string]any after JSON unmarshal.
-	wantCF := snap.LogEventsByJobID["job-e2e-aaaa"][0].CustomFields
-	gotCF := got.LogEventsByJobID["job-e2e-aaaa"][0].CustomFields
-	if !reflect.DeepEqual(wantCF, gotCF) {
-		t.Fatalf("CustomFields round-trip mismatch:\n want=%#v\n  got=%#v", wantCF, gotCF)
-	}
-
-	wantTask, gotTask := snap.Tasks[0], got.Tasks[0]
-	if gotTask.State != wantTask.State ||
-		!gotTask.CreationTime.Equal(wantTask.CreationTime) ||
-		!gotTask.StartTime.Equal(wantTask.StartTime) ||
-		!gotTask.EndTime.Equal(wantTask.EndTime) {
-		t.Fatalf("Task derived fields lost in round-trip:\n want=%+v\n  got=%+v", wantTask, gotTask)
-	}
-	if got.Actors["actor-e2e-cafe"].State != snap.Actors["actor-e2e-cafe"].State {
-		t.Fatalf("Actor.State lost in round-trip: want=%q got=%q",
-			snap.Actors["actor-e2e-cafe"].State, got.Actors["actor-e2e-cafe"].State)
 	}
 }
 
