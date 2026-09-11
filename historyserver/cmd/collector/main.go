@@ -190,6 +190,15 @@ func main() {
 		}
 	}
 
+	rotatedLogScanInterval := utils.DefaultRotatedLogScanInterval
+	if v := os.Getenv("RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			rotatedLogScanInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL=%s, using default %s", v, rotatedLogScanInterval)
+		}
+	}
+
 	jsonData := make(map[string]interface{})
 	if storageBackendConfigPath != "" {
 		data, err := os.ReadFile(storageBackendConfigPath)
@@ -250,6 +259,8 @@ func main() {
 
 		AdditionalEndpoints:  additionalEndpoints,
 		EndpointPollInterval: endpointPollInterval,
+
+		RotatedLogScanInterval: rotatedLogScanInterval,
 
 		EventDataDir:            eventDataDir,
 		EventRotationInterval:   eventRotationInterval,
