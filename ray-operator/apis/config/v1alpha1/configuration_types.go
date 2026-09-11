@@ -106,7 +106,7 @@ type Configuration struct {
 	NodeEventForwarder NodeEventForwarderConfiguration `json:"nodeEventForwarder,omitempty"`
 
 	// AllowedNodeLabels lists the node label keys worker groups may deliver through topology.labelMappings.
-	// RayClusters mapping other keys are rejected; empty disables delivery.
+	// Empty rejects every mapping and disables delivery.
 	AllowedNodeLabels []string `json:"allowedNodeLabels,omitempty"`
 }
 

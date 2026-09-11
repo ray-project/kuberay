@@ -146,6 +146,14 @@ configuration:
   #   image: fluent/fluent-bit:1.9
   workerSidecarContainers: []
 
+  # -- Node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].topology.
+  # Enforced by the validating webhooks, so it requires ENABLE_WEBHOOKS to be enabled. Empty disables delivery.
+  # Example:
+  # allowedNodeLabels:
+  # - nvidia.com/gpu.clique
+  # - topology.kubernetes.io/zone
+  allowedNodeLabels: []
+
 featureGates:
 - name: RayClusterStatusConditions
   enabled: true
