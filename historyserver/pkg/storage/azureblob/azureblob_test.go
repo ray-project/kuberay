@@ -9,12 +9,12 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/internal/storagetest"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -41,33 +41,9 @@ func TestTrim(t *testing.T) {
 // GetContent builds its blob path from three pieces, and a deployment that sets a
 // root dir only works if all three end up in the path. These tests assert on the
 // path that actually reaches the server rather than on a helper's return value.
-const (
-	testContainer = "test-container"
-	testRootDir   = "ray-logs"
-	// Callers pass a root-dir-relative path prefix here, not a bare cluster id.
-	// See clusterlogs.Prefix("", ...) in pkg/historyserver/router.go.
-	testClusterPrefix = "ray_cluster_history/raycluster/default/my-cluster"
-	testFileName      = "session_2026-05-08_18-35-06_774618_1/logs/node123/events/event_CORE_WORKER_256.log"
-)
-
-// recorder collects what a test server was asked for. Requests are served on the
-// server's own goroutines, so access is mutex-guarded to stay clean under -race.
-type recorder struct {
-	mu     sync.Mutex
-	values []string
-}
-
-func (rec *recorder) add(value string) {
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	rec.values = append(rec.values, value)
-}
-
-func (rec *recorder) snapshot() []string {
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	return append([]string(nil), rec.values...)
-}
+// The three path pieces and the request Recorder live in storagetest, since every
+// backend's tests ask the same questions and only the transport differs.
+const testContainer = "test-container"
 
 func newTestHandler(t *testing.T, srv *httptest.Server) *RayLogsHandler {
 	t.Helper()
@@ -80,7 +56,7 @@ func newTestHandler(t *testing.T, srv *httptest.Server) *RayLogsHandler {
 	return &RayLogsHandler{
 		ContainerClient: client,
 		ContainerName:   testContainer,
-		RootDir:         testRootDir,
+		RootDir:         storagetest.RootDir,
 	}
 }
 
@@ -93,17 +69,17 @@ func blobPath(r *http.Request) (name string, isList bool) {
 }
 
 func TestGetContentUsesRootDir(t *testing.T) {
-	wantPath := path.Join(testRootDir, testClusterPrefix, testFileName)
+	wantPath := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, storagetest.FileName)
 	const wantContent = "core worker log line"
 
-	var requested recorder
+	var requested storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name, isList := blobPath(r)
 		if isList {
 			writeListResult(w, r.URL.Query().Get("prefix"))
 			return
 		}
-		requested.add(name)
+		requested.Add(name)
 		if name != wantPath {
 			writeBlobNotFound(w)
 			return
@@ -112,8 +88,8 @@ func TestGetContentUsesRootDir(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	reader := newTestHandler(t, srv).GetContent(testClusterPrefix, testFileName)
-	gotPaths := requested.snapshot()
+	reader := newTestHandler(t, srv).GetContent(storagetest.ClusterPrefix, storagetest.FileName)
+	gotPaths := requested.Snapshot()
 	if reader == nil {
 		t.Fatalf("GetContent returned nil; blobs requested: %v, want %q", gotPaths, wantPath)
 	}
@@ -135,16 +111,16 @@ func TestGetContentUsesRootDir(t *testing.T) {
 // too, or the retry has nothing to find. The first download here fails with a
 // server error so the fallback is the only way to reach the content.
 func TestGetContentFallbackListsUnderRootDir(t *testing.T) {
-	wantPath := path.Join(testRootDir, testClusterPrefix, testFileName)
+	wantPath := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, storagetest.FileName)
 	const wantContent = "recovered log line"
 
-	var listed recorder
-	var downloads recorder
+	var listed storagetest.Recorder
+	var downloads storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name, isList := blobPath(r)
 		if isList {
 			prefix := r.URL.Query().Get("prefix")
-			listed.add(prefix)
+			listed.Add(prefix)
 			if strings.HasPrefix(wantPath, prefix) {
 				writeListResult(w, prefix, wantPath)
 				return
@@ -152,11 +128,11 @@ func TestGetContentFallbackListsUnderRootDir(t *testing.T) {
 			writeListResult(w, prefix)
 			return
 		}
-		downloads.add(name)
+		downloads.Add(name)
 		// Miss the first attempt so the fallback has to do the work. BlobNotFound
 		// is used rather than a server error because the SDK retries the latter,
 		// which would satisfy the download before the fallback ever runs.
-		if name != wantPath || len(downloads.snapshot()) == 1 {
+		if name != wantPath || len(downloads.Snapshot()) == 1 {
 			writeBlobNotFound(w)
 			return
 		}
@@ -164,8 +140,8 @@ func TestGetContentFallbackListsUnderRootDir(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	reader := newTestHandler(t, srv).GetContent(testClusterPrefix, testFileName)
-	listPrefixes := listed.snapshot()
+	reader := newTestHandler(t, srv).GetContent(storagetest.ClusterPrefix, storagetest.FileName)
+	listPrefixes := listed.Snapshot()
 	if reader == nil {
 		t.Fatalf("GetContent returned nil; list prefixes tried: %v", listPrefixes)
 	}

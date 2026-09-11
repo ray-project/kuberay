@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -34,6 +33,7 @@ import (
 	awss3 "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/internal/storagetest"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -63,33 +63,9 @@ func TestTrim(t *testing.T) {
 // by asserting on the key that actually reaches the server, using path style
 // addressing (the same mode the MinIO support already relies on) so the full key
 // stays in the request path.
-const (
-	testBucket  = "test-bucket"
-	testRootDir = "ray-logs"
-	// Callers pass a root-dir-relative path prefix here, not a bare cluster id.
-	// See clusterlogs.Prefix("", ...) in pkg/historyserver/router.go.
-	testClusterPrefix = "ray_cluster_history/raycluster/default/my-cluster"
-	testFileName      = "session_2026-05-08_18-35-06_774618_1/logs/node123/events/event_CORE_WORKER_256.log"
-)
-
-// recorder collects what a test server was asked for. Requests are served on the
-// server's own goroutines, so access is mutex-guarded to stay clean under -race.
-type recorder struct {
-	mu     sync.Mutex
-	values []string
-}
-
-func (rec *recorder) add(value string) {
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	rec.values = append(rec.values, value)
-}
-
-func (rec *recorder) snapshot() []string {
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	return append([]string(nil), rec.values...)
-}
+// The three key pieces and the request Recorder live in storagetest, since every
+// backend's tests ask the same questions and only the transport differs.
+const testBucket = "test-bucket"
 
 func newTestHandler(t *testing.T, srv *httptest.Server) *RayLogsHandler {
 	t.Helper()
@@ -109,7 +85,7 @@ func newTestHandler(t *testing.T, srv *httptest.Server) *RayLogsHandler {
 	return &RayLogsHandler{
 		S3Client:  awss3.New(sess),
 		S3Bucket:  testBucket,
-		S3RootDir: testRootDir,
+		S3RootDir: storagetest.RootDir,
 	}
 }
 
@@ -122,17 +98,17 @@ func requestKey(r *http.Request) (key string, isList bool) {
 }
 
 func TestGetContentUsesRootDir(t *testing.T) {
-	wantKey := path.Join(testRootDir, testClusterPrefix, testFileName)
+	wantKey := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, storagetest.FileName)
 	const wantContent = "core worker log line"
 
-	var requested recorder
+	var requested storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key, isList := requestKey(r)
 		if isList {
 			writeEmptyListResult(w, r.URL.Query().Get("prefix"))
 			return
 		}
-		requested.add(key)
+		requested.Add(key)
 		if key != wantKey {
 			writeNoSuchKey(w)
 			return
@@ -141,8 +117,8 @@ func TestGetContentUsesRootDir(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	reader := newTestHandler(t, srv).GetContent(testClusterPrefix, testFileName)
-	gotKeys := requested.snapshot()
+	reader := newTestHandler(t, srv).GetContent(storagetest.ClusterPrefix, storagetest.FileName)
+	gotKeys := requested.Snapshot()
 	if reader == nil {
 		t.Fatalf("GetContent returned nil; keys requested: %v, want %q", gotKeys, wantKey)
 	}
@@ -162,18 +138,18 @@ func TestGetContentUsesRootDir(t *testing.T) {
 // The recovery path lists the containing directory when the direct fetch misses,
 // and that listing prefix has to be rooted too or it silently finds nothing.
 func TestGetContentFallbackListsUnderRootDir(t *testing.T) {
-	wantKey := path.Join(testRootDir, testClusterPrefix, testFileName)
+	wantKey := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, storagetest.FileName)
 	// The object sits one level deeper than asked for, so only the fallback can
 	// reach it.
 	nestedKey := path.Join(path.Dir(wantKey), "rotated", path.Base(wantKey))
 	const wantContent = "recovered log line"
 
-	var listed recorder
+	var listed storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key, isList := requestKey(r)
 		if isList {
 			prefix := r.URL.Query().Get("prefix")
-			listed.add(prefix)
+			listed.Add(prefix)
 			if strings.HasPrefix(nestedKey, prefix) {
 				writeListResult(w, prefix, nestedKey)
 				return
@@ -189,8 +165,8 @@ func TestGetContentFallbackListsUnderRootDir(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	reader := newTestHandler(t, srv).GetContent(testClusterPrefix, testFileName)
-	listPrefixes := listed.snapshot()
+	reader := newTestHandler(t, srv).GetContent(storagetest.ClusterPrefix, storagetest.FileName)
+	listPrefixes := listed.Snapshot()
 	if reader == nil {
 		t.Fatalf("GetContent returned nil; list prefixes tried: %v", listPrefixes)
 	}
