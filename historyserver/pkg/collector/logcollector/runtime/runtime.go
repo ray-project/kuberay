@@ -33,6 +33,8 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		AdditionalEndpoints:  config.AdditionalEndpoints,
 		EndpointPollInterval: config.EndpointPollInterval,
 
+		RotatedLogScanInterval: config.RotatedLogScanInterval,
+
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,              // Max idle connections
