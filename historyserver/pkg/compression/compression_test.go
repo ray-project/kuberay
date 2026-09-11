@@ -97,7 +97,7 @@ type mockStorageReader struct {
 	content []byte
 }
 
-func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+func (m *mockStorageReader) GetContent(prefix string, fileName string) io.Reader {
 	if m.content == nil {
 		return nil
 	}
