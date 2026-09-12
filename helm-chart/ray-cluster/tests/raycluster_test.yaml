@@ -147,6 +147,54 @@ tests:
               name: test-head-service
               namespace: ray
 
+  - it: Should not set ingress fields by default
+    asserts:
+      - notExists:
+          path: spec.headGroupSpec.enableIngress
+      - notExists:
+          path: spec.headGroupSpec.ingressOptions
+
+  - it: Should enable ingress if `head.enableIngress` is `true`
+    set:
+      head:
+        enableIngress: true
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.enableIngress
+          value: true
+
+  - it: Should not enable ingress if `head.enableIngress` is `false`
+    set:
+      head:
+        enableIngress: false
+    asserts:
+      - notExists:
+          path: spec.headGroupSpec.enableIngress
+
+  - it: Should use the specified ingress options if `head.ingressOptions` is set
+    set:
+      head:
+        enableIngress: true
+        ingressOptions:
+          host: ray.example.com
+          path: /dashboard
+          pathType: Exact
+          tls:
+            - hosts:
+                - ray.example.com
+              secretName: ray-tls
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.ingressOptions
+          value:
+            host: ray.example.com
+            path: /dashboard
+            pathType: Exact
+            tls:
+              - hosts:
+                  - ray.example.com
+                secretName: ray-tls
+
   - it: Should use the specified service type if `service.type` is set
     set:
       service:
