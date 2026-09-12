@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
@@ -1111,7 +1112,7 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 		httpClient := &http.Client{
 			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
 		}
-		httpProxyURL := fmt.Sprintf("http://%s:%d/", hostIp, port)
+		httpProxyURL := fmt.Sprintf("http://%s/", net.JoinHostPort(hostIp, strconv.Itoa(port)))
 
 		if useKubernetesProxy {
 			// Use the manager's transport for TLS and API server authentication.
