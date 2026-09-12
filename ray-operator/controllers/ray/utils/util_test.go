@@ -1116,27 +1116,20 @@ func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
 		"should be false when autoscaling is disabled": {
 			spec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(false),
-				AutoscalerOptions:       &rayv1.AutoscalerOptions{NoDriverTimeoutSeconds: new(int32(600))},
+				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: 600},
 			},
 			expected: false,
 		},
-		"should be false when autoscaler options is nil": {
+		"should be false when idleTerminationOptions is nil": {
 			spec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(true),
 			},
 			expected: false,
 		},
-		"should be false when noDriverTimeoutSeconds is unset": {
+		"should be true when autoscaling is enabled and idleTerminationOptions is set": {
 			spec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(true),
-				AutoscalerOptions:       &rayv1.AutoscalerOptions{},
-			},
-			expected: false,
-		},
-		"should be true when autoscaling is enabled and noDriverTimeoutSeconds is set": {
-			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: new(true),
-				AutoscalerOptions:       &rayv1.AutoscalerOptions{NoDriverTimeoutSeconds: new(int32(600))},
+				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: 600},
 			},
 			expected: true,
 		},

@@ -1,8 +1,7 @@
 # This sample shows how to terminate an idle RayCluster automatically.
-# When `autoscalerOptions.noDriverTimeoutSeconds` is set, the Ray autoscaler v2 tracks whether any
-# user driver is attached. Once no driver has been attached for `noDriverTimeoutSeconds`, the autoscaler
-# sets the `ray.io/no-driver-ttl-expired` annotation on this RayCluster, and the KubeRay operator deletes
-# the RayCluster.
+# When `idleTerminationOptions` is set, the Ray autoscaler v2 tracks whether any
+# user driver is attached. Once no driver has been attached for `idleTerminationOptions.timeoutSeconds`,
+# the autoscaler applies `idleTerminationOptions.policy` (Delete or Suspend) to the RayCluster.
 #
 # Notes:
 # - The feature is only supported by autoscaler v2 and requires `enableInTreeAutoscaling: true`.
@@ -16,13 +15,14 @@ metadata:
 spec:
   rayVersion: "2.56.0"
   enableInTreeAutoscaling: true
+  # Delete the RayCluster after no user driver has been attached for 30 seconds.
+  idleTerminationOptions:
+    timeoutSeconds: 30
+    policy: Delete
   autoscalerOptions:
     version: v2
     upscalingMode: Default
     idleTimeoutSeconds: 60
-    # Delete the RayCluster after no user driver has been attached for 30 seconds.
-    noDriverTimeoutSeconds: 30
-    noDriverTimeoutPolicy: Delete
     imagePullPolicy: IfNotPresent
     resources:
       limits:
