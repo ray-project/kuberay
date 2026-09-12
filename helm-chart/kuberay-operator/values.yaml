@@ -163,6 +163,26 @@ featureGates:
   enabled: false
 - name: RayClusterHistoryServer
   enabled: false
+- name: RayNodeEventForwarder
+  enabled: false
+
+# Configurations for KubeRay node event forwarder controller.
+# The controller forwards Kubernetes Node events to the corresponding RayCluster custom resources.
+# Ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/k8s-events.html
+# Note: Node event forwarding is not supported when singleNamespaceInstall is true.
+nodeEventForwarder:
+  # -- Whether KubeRay operator should forward Kubernetes Node events to RayCluster custom resources. Note: not supported when singleNamespaceInstall is true.
+  enabled: false
+  # -- Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources.
+  sources: []
+    # - node-problem-detector
+    # - nvidia-gpu-device-plugin
+  # -- Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons.
+  reasons: []
+  # -- Only forward Node events with these types. Valid values are "Warning" and "Normal". Empty means all types.
+  # Note: Removing the "Warning" filter (or including "Normal") may result in a large number of noisy Normal Node events being forwarded.
+  types:
+    - Warning
 
 # Configurations for KubeRay operator metrics.
 metrics:
@@ -225,6 +245,7 @@ crNamespacedRbacEnable: true
 #   (Please note that this excludes the CRDs, which can only be installed at the cluster scope.)
 # - If "watchNamespace" is not set, the KubeRay operator will, by default, only listen
 #   to resource events within its own namespace.
+# - Node event forwarding (nodeEventForwarder.enabled) is not supported when singleNamespaceInstall is true.
 singleNamespaceInstall: false
 
 # The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
