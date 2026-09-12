@@ -3537,6 +3537,186 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
+func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = rbacv1.AddToScheme(newScheme)
+
+	enableIdleSuspendPolicy := func(c *rayv1.RayCluster) {
+		c.Spec.EnableInTreeAutoscaling = new(true)
+		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+			Version: ptr.To(rayv1.AutoscalerVersionV2),
+		}
+		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+			TimeoutSeconds: 600,                                        // 1 min
+			Policy:         ptr.To(rayv1.IdleTerminationPolicySuspend), // the default policy is Suspend, we explicitly set it for clarity
+		}
+		// Simulates the Ray autoscaler flipped spec.idleSuspend to true.
+		c.Spec.IdleSuspend = new(true)
+	}
+
+	tests := []struct {
+		mutate          func(*rayv1.RayCluster)
+		name            string
+		expectSuspended bool
+		expectReason    string
+	}{
+		{
+			name: "idleSuspend=true; the reason is RayClusterIdleTerminated",
+			mutate: func(c *rayv1.RayCluster) {
+				enableIdleSuspendPolicy(c)
+			},
+			expectSuspended: true,
+			expectReason:    string(rayv1.RayClusterIdleTerminated),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := testRayCluster.DeepCopy()
+			cluster.Status = rayv1.RayClusterStatus{}
+			tc.mutate(cluster)
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithObjects(cluster).
+				WithStatusSubresource(cluster).
+				Build()
+			recorder := events.NewFakeRecorder(10)
+			reconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   recorder,
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			_, err := reconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			got := &rayv1.RayCluster{}
+			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
+
+			// The first reconcile only transitions RayClusterSuspending to True.
+			// The RayClusterSuspended condition (and its idle-termination reason) is
+			// only set on the following reconcile, once RayClusterSuspending is observed.
+			_, err = reconciler.rayClusterReconcile(ctx, got)
+			require.NoError(t, err)
+			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
+
+			if tc.expectSuspended {
+				cond := meta.FindStatusCondition(got.Status.Conditions, string(rayv1.RayClusterSuspended))
+				if assert.NotNil(t, cond) {
+					assert.Equal(t, metav1.ConditionTrue, cond.Status)
+					assert.Equal(t, tc.expectReason, cond.Reason)
+				}
+			}
+		})
+	}
+}
+
+func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = rbacv1.AddToScheme(newScheme)
+
+	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
+		c.Spec.EnableInTreeAutoscaling = new(true)
+		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+			Version: ptr.To(rayv1.AutoscalerVersionV2),
+		}
+		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+			TimeoutSeconds: 600, // 1 min
+			Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
+		}
+	}
+	setDeletionTimestamp := func(c *rayv1.RayCluster) {
+		now := metav1.Now()
+		c.DeletionTimestamp = &now
+	}
+
+	tests := []struct {
+		mutate        func(*rayv1.RayCluster)
+		name          string
+		expectDeleted bool
+	}{
+		{
+			name: "finalizer present, deletionTimestamp set, noDriverTimeout enabled: finalizer is removed and deletion proceeds",
+			mutate: func(c *rayv1.RayCluster) {
+				enableIdleDeletePolicy(c)
+				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				setDeletionTimestamp(c)
+			},
+			expectDeleted: true,
+		},
+		{
+			name: "finalizer present, deletionTimestamp set, feature disabled: finalizer is left untouched",
+			mutate: func(c *rayv1.RayCluster) {
+				c.Spec.EnableInTreeAutoscaling = new(false)
+				c.Spec.AutoscalerOptions = nil
+				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				setDeletionTimestamp(c)
+			},
+			expectDeleted: false,
+		},
+		{
+			name: "deletionTimestamp set but a different finalizer is blocking deletion: no-driver finalizer logic is a no-op",
+			mutate: func(c *rayv1.RayCluster) {
+				enableIdleDeletePolicy(c)
+				controllerutil.AddFinalizer(c, "example.com/other-finalizer")
+				setDeletionTimestamp(c)
+			},
+			expectDeleted: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := testRayCluster.DeepCopy()
+			cluster.Status = rayv1.RayClusterStatus{}
+			tc.mutate(cluster)
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithObjects(cluster).
+				WithStatusSubresource(cluster).
+				Build()
+			recorder := events.NewFakeRecorder(10)
+			reconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   recorder,
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			}
+
+			_, err := reconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			got := &rayv1.RayCluster{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got)
+			if tc.expectDeleted {
+				assert.True(t, k8serrors.IsNotFound(err))
+				if err == nil {
+					assert.False(t, controllerutil.ContainsFinalizer(got, utils.NoDriverIdleTerminationFinalizer))
+				}
+				event := <-recorder.Events
+				assert.Contains(t, event, string(utils.DeletedRayClusterNoDriverTimeout)) // TODO: check if this is still valid
+				assert.Contains(t, event, "TimeoutSeconds=600")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	clusterName := "test-ray-cluster"
 	clusterNamespace := "default"

@@ -22,6 +22,15 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
+	// IdleSuspend is set to true by the Ray autoscaler when the RayCluster has
+	// had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's
+	// IdleTerminationOptions.Policy is Suspend.
+	// Setting it back to false resumes the RayCluster.
+	// +optional
+	IdleSuspend *bool `json:"idleSuspend,omitempty"`
+	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
+	// A RayCluster is considered idle when no Ray driver is connected.
+	IdleTerminationOptions *IdleTerminationOptions `json:"idleTerminationOptions,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -491,6 +500,23 @@ type ScaleStrategy struct {
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Delete;Suspend
+type IdleTerminationPolicy string
+
+const (
+	IdleTerminationPolicySuspend IdleTerminationPolicy = "Suspend"
+	IdleTerminationPolicyDelete  IdleTerminationPolicy = "Delete"
+)
+
+type IdleTerminationOptions struct {
+	// Policy is the action to take once the RayCluster has been idle for TimeoutSeconds.
+	TimeoutSeconds int32 `json:"timeoutSeconds"`
+
+	// Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds.
+	// +kubebuilder:default=Suspend
+	Policy *IdleTerminationPolicy `json:"policy,omitempty"`
+}
+
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
@@ -662,6 +688,8 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+	// RayClusterIdleTerminated indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
+	RayClusterIdleTerminated RayClusterConditionType = "RayClusterIdleTerminated"
 )
 
 // HeadInfo gives info about head

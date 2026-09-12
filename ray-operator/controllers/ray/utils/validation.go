@@ -244,6 +244,47 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate IdleTerminationOptions.Policy has to be set alongside IdleTerminationOptions.TimeoutSeconds
+	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.Policy != nil && spec.IdleTerminationOptions.TimeoutSeconds == 0 {
+		return fmt.Errorf("idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set")
+	}
+
+	// Validate IdleTerminationOptions.TimeoutSeconds (works only with v2 autoscaler)
+	if spec.IdleTerminationOptions != nil {
+		if spec.IdleTerminationOptions.TimeoutSeconds < 0 {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds must be non-negative, got %d", spec.IdleTerminationOptions.TimeoutSeconds)
+		}
+		if !isAutoscalingEnabled {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true")
+		}
+
+		v2Enabled := IsAutoscalingV2Enabled(spec)
+		if !v2Enabled {
+			if envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env); exists {
+				v2Enabled = envVar.Value == "1" || envVar.Value == "true"
+			}
+		}
+		if !v2Enabled {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
+		}
+
+		if spec.IdleTerminationOptions.Policy != nil {
+			policy := *spec.IdleTerminationOptions.Policy
+			if policy != rayv1.IdleTerminationPolicyDelete && policy != rayv1.IdleTerminationPolicySuspend {
+				return fmt.Errorf("idleTerminationOptions.Policy is invalid. Please use either %s or %s", rayv1.IdleTerminationPolicyDelete, rayv1.IdleTerminationPolicySuspend)
+			}
+		}
+
+		rayVersion, err := version.ParseGeneric(spec.RayVersion)
+		if err != nil {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
+		}
+		minVersion := version.MustParseGeneric("2.56.0") // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		if rayVersion.LessThan(minVersion) {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
+		}
+	}
+
 	// When autoscalerOptions.args is set, the user's custom args can reference the
 	// $KUBERAY_GEN_AUTOSCALER_START_CMD env var that KubeRay injects. If the user also
 	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
@@ -606,6 +647,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
 			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
 		}
+		if rayJob.Spec.RayClusterSpec.IdleTerminationOptions != nil {
+			return fmt.Errorf("The RayJob spec is invalid: idleTerminationOptions is not supported for RayJob")
+		}
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
 		}
@@ -680,6 +724,10 @@ func validateInitializingTimeout(annotations map[string]string) error {
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if IsK8sAuthEnabled(rayService.Spec.RayClusterSpec.AuthOptions) {
 		return fmt.Errorf("The RayService spec is invalid: K8s token auth mode is currently not supported for RayService")
+	}
+
+	if rayService.Spec.RayClusterSpec.IdleTerminationOptions != nil {
+		return fmt.Errorf("The RayService spec is invalid: idleTerminationOptions is not supported for RayService")
 	}
 
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
