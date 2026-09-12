@@ -362,3 +362,17 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "team: platform"
+
+  - it: Should include allowedNodeLabels from values.configuration
+    set:
+      configuration:
+        enabled: true
+        allowedNodeLabels:
+          - topology.kubernetes.io/zone
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "allowedNodeLabels:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- topology.kubernetes.io/zone"

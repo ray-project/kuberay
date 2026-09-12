@@ -262,6 +262,29 @@ reconcileConcurrency: 100
 			},
 			expectErr: false,
 		},
+		{
+			name: "config with allowedNodeLabels",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+allowedNodeLabels:
+- topology.kubernetes.io/zone
+- nvidia.com/gpu.clique
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: new(true),
+				ReconcileConcurrency: 1,
+				QPS:                  ptr.To(configapi.DefaultQPS),
+				Burst:                ptr.To(configapi.DefaultBurst),
+				AllowedNodeLabels:    []string{"topology.kubernetes.io/zone", "nvidia.com/gpu.clique"},
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, testcase := range testcases {
