@@ -29,6 +29,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
@@ -191,11 +192,9 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	submitterTemplate, err = getSubmitterTemplate(rayJobInstanceWithTemplate, rayClusterInstance)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	expectedK8sJobModeArgs := []string{
-		"until " + fmt.Sprintf(utils.BasePythonHealthCommand, "http://test-url/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds) +
-			" >/dev/null 2>&1 ; do echo \"Waiting for Ray Dashboard GCS to become healthy at http://test-url ...\" ; sleep 2 ; done ; " +
-			"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id",
-	}
+	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstanceWithTemplate, rayv1.K8sJobMode)
+	require.NoError(t, err)
+	expectedK8sJobModeArgs := []string{strings.Join(jobCmd, " ")}
 	assert.Equal(t, expectedK8sJobModeArgs, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
@@ -225,6 +224,56 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestConfigureSubmitterContainerDashboardAddress(t *testing.T) {
+	tests := []struct {
+		name string
+		env  []corev1.EnvVar
+	}{
+		{name: "absent"},
+		{name: "literal", env: []corev1.EnvVar{{Name: utils.RAY_DASHBOARD_ADDRESS, Value: "https://proxy:8265/"}}},
+		{name: "empty", env: []corev1.EnvVar{{Name: utils.RAY_DASHBOARD_ADDRESS, Value: ""}}},
+		{name: "valueFrom", env: []corev1.EnvVar{{
+			Name: utils.RAY_DASHBOARD_ADDRESS,
+			ValueFrom: &corev1.EnvVarSource{ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "dashboard-config"}, Key: "address",
+			}},
+		}}},
+	}
+	for _, tt := range tests {
+		for _, customCommand := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/customCommand=%t", tt.name, customCommand), func(t *testing.T) {
+				container := corev1.Container{Env: append([]corev1.EnvVar{{Name: "OTHER", Value: "preserved"}}, tt.env...)}
+				if customCommand {
+					container.Command = []string{"custom-submitter"}
+					container.Args = []string{"custom-argument"}
+				}
+				rayJob := &rayv1.RayJob{Status: rayv1.RayJobStatus{DashboardURL: "head-svc:8265", JobId: "test-job-id"}}
+				require.NoError(t, configureSubmitterContainer(&container, rayJob, nil, rayv1.K8sJobMode))
+				var dashboardEntries []corev1.EnvVar
+				for _, env := range container.Env {
+					if env.Name == utils.RAY_DASHBOARD_ADDRESS {
+						dashboardEntries = append(dashboardEntries, env)
+					}
+				}
+				expected := tt.env
+				if len(expected) == 0 {
+					expected = []corev1.EnvVar{{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJob.Status.DashboardURL}}
+				}
+				assert.Equal(t, expected, dashboardEntries)
+				assert.Contains(t, container.Env, corev1.EnvVar{Name: "OTHER", Value: "preserved"})
+				if customCommand {
+					assert.Equal(t, []string{"custom-submitter"}, container.Command)
+					assert.Equal(t, []string{"custom-argument"}, container.Args)
+				} else {
+					assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, container.Command)
+					require.Len(t, container.Args, 1)
+					assert.Contains(t, container.Args[0], "${RAY_DASHBOARD_ADDRESS:-$dashboard_address}")
+				}
+			})
+		}
+	}
 }
 
 func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {

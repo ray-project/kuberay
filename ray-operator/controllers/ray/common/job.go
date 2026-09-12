@@ -89,6 +89,7 @@ func getMetadataJSONForSubmitCommand(rayJobInstance *rayv1.RayJob, metadata map[
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
 func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
+	var cmd []string
 	port := utils.DefaultDashboardPort
 
 	switch submissionMode {
@@ -99,16 +100,23 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		port = int(utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort))
 		address = "http://127.0.0.1:" + strconv.Itoa(port)
 	case rayv1.K8sJobMode:
-		// Submitter is a separate K8s Job; use cluster dashboard address.
-		address = rayJobInstance.Status.DashboardURL
-		if !strings.HasPrefix(address, "http://") {
-			address = "http://" + address
-		}
+		// Resolve the override in the submitter Pod so valueFrom entries work too.
+		// Single-quote the fallback to keep shell metacharacters literal.
+		fallback := "'" + strings.ReplaceAll(rayJobInstance.Status.DashboardURL, "'", "'\"'\"'") + "'"
+		cmd = append(cmd, `dashboard_address=`+fallback+`;
+dashboard_address="${RAY_DASHBOARD_ADDRESS:-$dashboard_address}";
+case "$dashboard_address" in
+  http://*|https://*) ;;
+  *) dashboard_address="http://$dashboard_address" ;;
+esac;
+while [ "${dashboard_address%/}" != "$dashboard_address" ]; do
+  dashboard_address="${dashboard_address%/}";
+done;`)
+		address = `"$dashboard_address"`
 	default:
 		return nil, fmt.Errorf("unsupported submission mode for job submit command: %s", submissionMode)
 	}
 
-	var cmd []string
 	metadata := rayJobInstance.Spec.Metadata
 	jobId := rayJobInstance.Status.JobId
 	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
@@ -132,22 +140,24 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	// Wait until Ray Dashboard GCS is healthy before proceeding.
 	// In SidecarMode the submitter shares the head Pod's network namespace, so we
 	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
-	// reach the dashboard through the head Service.
-	var healthURL string
+	// reach the dashboard through the configured address.
+	var rayDashboardGCSHealthCommand, waitingMessage string
 	if submissionMode == rayv1.SidecarMode {
-		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+		healthURL := fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+		rayDashboardGCSHealthCommand = fmt.Sprintf(utils.BasePythonHealthCommand, healthURL, utils.RayDashboardGCSHealthCheckTimeoutSeconds)
+		waitingMessage = strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ...")
 	} else {
-		healthURL = address + "/" + utils.RayDashboardGCSHealthPath
+		// Pass the URL as an argument, never as Python source.
+		rayDashboardGCSHealthCommand = fmt.Sprintf(
+			`python -c "import sys, urllib.request; r=urllib.request.urlopen(sys.argv[1], timeout=%d); exit(0 if b'success' in r.read() else 1)" "$dashboard_address/%s"`,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds, utils.RayDashboardGCSHealthPath,
+		)
+		waitingMessage = `"Waiting for Ray Dashboard GCS to become healthy at $dashboard_address ..."`
 	}
-	rayDashboardGCSHealthCommand := fmt.Sprintf(
-		utils.BasePythonHealthCommand,
-		healthURL,
-		utils.RayDashboardGCSHealthCheckTimeoutSeconds,
-	)
 
 	waitLoop := []string{
 		"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		"do", "echo", waitingMessage, ";", "sleep", "2", ";", "done", ";",
 	}
 	cmd = append(cmd, waitLoop...)
 

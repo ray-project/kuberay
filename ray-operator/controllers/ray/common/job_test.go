@@ -1,10 +1,16 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,17 +75,28 @@ pip: ["python-multipart==0.0.6"]
 	assert.Equal(t, expectedMap, actualMap)
 }
 
+const testDashboardAddressResolution = `dashboard_address='http://127.0.0.1:8265';
+dashboard_address="${RAY_DASHBOARD_ADDRESS:-$dashboard_address}";
+case "$dashboard_address" in
+  http://*|https://*) ;;
+  *) dashboard_address="http://$dashboard_address" ;;
+esac;
+while [ "${dashboard_address%/}" != "$dashboard_address" ]; do
+  dashboard_address="${dashboard_address%/}";
+done;`
+
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
+		testDashboardAddressResolution,
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		`python -c "import sys, urllib.request; r=urllib.request.urlopen(sys.argv[1], timeout=10); exit(0 if b'success' in r.read() else 1)" "$dashboard_address/api/gcs_healthz"`,
 		">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
+		"do", "echo", `"Waiting for Ray Dashboard GCS to become healthy at $dashboard_address ..."`, ";", "sleep", "2", ";", "done", ";",
 		"if",
-		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
+		"!", "ray", "job", "status", "--address", `"$dashboard_address"`, "testJobId", ">/dev/null", "2>&1",
 		";", "then",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
+		"ray", "job", "submit", "--address", `"$dashboard_address"`, "--no-wait",
 		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
@@ -89,11 +106,115 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 		"--",
 		"echo no quote 'single quote' \"double quote\"",
 		";", "fi", ";",
-		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
+		"ray", "job", "logs", "--address", `"$dashboard_address"`, "--follow", "testJobId",
 	}
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
+}
+
+func TestBuildJobSubmitCommandDashboardAddressRuntime(t *testing.T) {
+	tests := []struct {
+		name     string
+		override string
+		fallback string
+		expected string
+		unset    bool
+	}{
+		{name: "unset", unset: true, expected: "http://head-svc:8265"},
+		{name: "empty", expected: "http://head-svc:8265"},
+		{name: "host and port", override: "proxy:8265", expected: "http://proxy:8265"},
+		{name: "http", override: "http://proxy:8265", expected: "http://proxy:8265"},
+		{name: "https", override: "https://proxy:443", expected: "https://proxy:443"},
+		{name: "host trailing slash", override: "proxy:8265/", expected: "http://proxy:8265"},
+		{name: "http trailing slashes", override: "http://proxy:8265///", expected: "http://proxy:8265"},
+		{name: "https base path", override: "https://proxy:443/ray///", expected: "https://proxy:443/ray"},
+		{name: "https fallback", fallback: "https://head-svc:8265///", expected: "https://head-svc:8265"},
+		{name: "literal override", override: "https://proxy:443/a'\"$HOME`exit 1`$(exit 1) space///", expected: "https://proxy:443/a'\"$HOME`exit 1`$(exit 1) space"},
+		{name: "literal fallback", fallback: "https://head-svc:8265/a'\"$HOME`exit 1`$(exit 1) space///", expected: "https://head-svc:8265/a'\"$HOME`exit 1`$(exit 1) space"},
+	}
+	for _, tt := range tests {
+		for _, existingJob := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/existing=%t", tt.name, existingJob), func(t *testing.T) {
+				rayJob := rayJobTemplate()
+				rayJob.Status.DashboardURL = "head-svc:8265"
+				if tt.fallback != "" {
+					rayJob.Status.DashboardURL = tt.fallback
+				}
+				command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
+				require.NoError(t, err)
+
+				// Record argument boundaries, and fail the first health check to exercise
+				// the waiting message and retry interval without actually sleeping.
+				dir := t.TempDir()
+				stubs := map[string]string{
+					"python": `printf '%s\0' health "$3" >> "$CALL_LOG"
+printf '\n' >> "$CALL_LOG"
+if [ ! -e "$HEALTH_READY" ]; then
+  : > "$HEALTH_READY"
+  exit 1
+fi
+`,
+					"sleep": `printf '%s\0' sleep "$@" >> "$CALL_LOG"
+printf '\n' >> "$CALL_LOG"
+`,
+					"ray": `printf '%s\0' ray "$@" >> "$CALL_LOG"
+printf '\n' >> "$CALL_LOG"
+if [ "$2" = status ]; then exit "$STATUS_EXIT_CODE"; fi
+`,
+				}
+				for name, script := range stubs {
+					require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+script), 0o700))
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, "/bin/bash", "-ce", "--", strings.Join(command, " "))
+				cmd.WaitDelay = time.Second
+				// Use a controlled environment so the unset case cannot inherit an override.
+				cmd.Env = []string{
+					"PATH=" + dir,
+					"CALL_LOG=" + filepath.Join(dir, "calls"),
+					"HEALTH_READY=" + filepath.Join(dir, "healthy"),
+					"STATUS_EXIT_CODE=1",
+				}
+				if existingJob {
+					cmd.Env[len(cmd.Env)-1] = "STATUS_EXIT_CODE=0"
+				}
+				if !tt.unset {
+					cmd.Env = append(cmd.Env, utils.RAY_DASHBOARD_ADDRESS+"="+tt.override)
+				}
+				output, err := cmd.CombinedOutput()
+				require.NoError(t, err, "%s", output)
+				assert.Equal(t, "Waiting for Ray Dashboard GCS to become healthy at "+tt.expected+" ...\n", string(output))
+
+				calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+				require.NoError(t, err)
+				var actual [][]string
+				for _, call := range strings.Split(strings.TrimSuffix(string(calls), "\n"), "\n") {
+					actual = append(actual, strings.Split(strings.TrimSuffix(call, "\x00"), "\x00"))
+				}
+				expected := [][]string{
+					{"health", tt.expected + "/api/gcs_healthz"},
+					{"sleep", "2"},
+					{"health", tt.expected + "/api/gcs_healthz"},
+					{"ray", "job", "status", "--address", tt.expected, "testJobId"},
+				}
+				if !existingJob {
+					expected = append(expected, []string{
+						"ray", "job", "submit", "--address", tt.expected, "--no-wait",
+						"--runtime-env-json", `{"test":"test"}`,
+						"--metadata-json", `{"testKey":"testValue"}`,
+						"--submission-id", "testJobId",
+						"--entrypoint-num-cpus", "1.000000", "--entrypoint-num-gpus", "0.500000",
+						"--entrypoint-resources", `{"Custom_1": 1, "Custom_2": 5.5}`,
+						"--", "echo", "no", "quote", "single quote", "double quote",
+					})
+				}
+				expected = append(expected, []string{"ray", "job", "logs", "--address", tt.expected, "--follow", "testJobId"})
+				assert.Equal(t, expected, actual)
+			})
+		}
+	}
 }
 
 func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
@@ -202,18 +323,6 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
-	testRayJob := rayJobTemplate()
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(command), 2)
-	assert.Equal(t, "until", command[0])
-	assert.Contains(t, command[1], "python -c")
-	assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
-	assert.Contains(t, command[1], "127.0.0.1:8265")
-	assert.NotContains(t, command[1], "wget")
-}
-
 func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
 	// Enable the SidecarSubmitterRestart feature gate for this test
 	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
@@ -283,21 +392,22 @@ pip: ["python-multipart==0.0.6"]
 		},
 	}
 	expected := []string{
+		testDashboardAddressResolution,
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		`python -c "import sys, urllib.request; r=urllib.request.urlopen(sys.argv[1], timeout=10); exit(0 if b'success' in r.read() else 1)" "$dashboard_address/api/gcs_healthz"`,
 		">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
+		"do", "echo", `"Waiting for Ray Dashboard GCS to become healthy at $dashboard_address ..."`, ";", "sleep", "2", ";", "done", ";",
 		"if",
-		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
+		"!", "ray", "job", "status", "--address", `"$dashboard_address"`, "testJobId", ">/dev/null", "2>&1",
 		";", "then",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
+		"ray", "job", "submit", "--address", `"$dashboard_address"`, "--no-wait",
 		"--runtime-env-json", strconv.Quote(`{"working_dir":"https://github.com/ray-project/serve_config_examples/archive/b393e77bbd6aba0881e3d94c05f968f05a387b96.zip","pip":["python-multipart==0.0.6"]}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
 		"--",
 		"echo no quote 'single quote' \"double quote\"",
 		";", "fi", ";",
-		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
+		"ray", "job", "logs", "--address", `"$dashboard_address"`, "--follow", "testJobId",
 	}
 	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode)
 	require.NoError(t, err)
