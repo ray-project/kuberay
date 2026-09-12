@@ -511,7 +511,7 @@ type TopologyLabelMapping struct {
 	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
 	NodeLabel string `json:"nodeLabel"`
 	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
-	// The keys set here should not be set in the workerGroupSpec.Labels, since --labels overwrites --labels-file.
+	// The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file.
 	// +kubebuilder:validation:MaxLength=317
 	// +optional
 	MapTo string `json:"mapTo,omitempty"`

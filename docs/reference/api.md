@@ -832,7 +832,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `nodeLabel` _string_ | NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels. |  |  |
-| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.<br />The keys set here should not be set in the workerGroupSpec.Labels, since --labels overwrites --labels-file. |  | MaxLength: 317 <br /> |
+| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.<br />The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file. |  | MaxLength: 317 <br /> |
 
 
 #### TopologySpec
