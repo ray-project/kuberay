@@ -562,6 +562,135 @@ func TestEnterClusterRayJobAndRayService(t *testing.T) {
 	})
 }
 
+func TestResolveSessionOwnerClusterSelection(t *testing.T) {
+	const (
+		namespace          = "default"
+		resourceName       = "my-owner"
+		rayJobClusterName  = "rayjob-cluster"
+		activeClusterName  = "active-cluster"
+		pendingClusterName = "pending-cluster"
+		staleClusterName   = "stale-cluster"
+	)
+
+	tests := []struct {
+		name                 string
+		resourceType         string
+		rayJobClusterName    string
+		activeClusterName    string
+		pendingClusterName   string
+		existingClusterNames []string
+		ownerGetErr          error
+		wantClusterName      string
+		wantErrorContains    string
+	}{
+		{
+			name:                 "RayJob selects the cluster named in status",
+			resourceType:         utils.RayJobKind,
+			rayJobClusterName:    rayJobClusterName,
+			existingClusterNames: []string{staleClusterName, rayJobClusterName},
+			wantClusterName:      rayJobClusterName,
+		},
+		{
+			name:              "RayJob with an empty cluster name has no live session",
+			resourceType:      utils.RayJobKind,
+			rayJobClusterName: "",
+		},
+		{
+			name:               "RayService prefers active",
+			resourceType:       utils.RayServiceKind,
+			activeClusterName:  activeClusterName,
+			pendingClusterName: pendingClusterName,
+			existingClusterNames: []string{
+				pendingClusterName,
+				activeClusterName,
+			},
+			wantClusterName: activeClusterName,
+		},
+		{
+			name:               "RayService uses pending when active name is empty",
+			resourceType:       utils.RayServiceKind,
+			pendingClusterName: pendingClusterName,
+			existingClusterNames: []string{
+				pendingClusterName,
+			},
+			wantClusterName: pendingClusterName,
+		},
+		{
+			name:              "RayService owner lookup error is returned",
+			resourceType:      utils.RayServiceKind,
+			activeClusterName: activeClusterName,
+			ownerGetErr:       fmt.Errorf("connection timeout"),
+			wantErrorContains: "failed to get RayService default/my-owner",
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	if err := rayv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("Failed to add Ray types to scheme: %v", err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objects := make([]client.Object, 0, len(tt.existingClusterNames)+1)
+			switch tt.resourceType {
+			case utils.RayJobKind:
+				objects = append(objects, &rayv1.RayJob{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: resourceName},
+					Status:     rayv1.RayJobStatus{RayClusterName: tt.rayJobClusterName},
+				})
+			case utils.RayServiceKind:
+				objects = append(objects, &rayv1.RayService{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: resourceName},
+					Status: rayv1.RayServiceStatuses{
+						ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: tt.activeClusterName},
+						PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: tt.pendingClusterName},
+					},
+				})
+			default:
+				t.Fatalf("unsupported test resource type %q", tt.resourceType)
+			}
+			for _, clusterName := range tt.existingClusterNames {
+				objects = append(objects, &rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: clusterName},
+				})
+			}
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+			var testClient client.Client = k8sClient
+			if tt.ownerGetErr != nil {
+				testClient = &errorClient{err: tt.ownerGetErr}
+			}
+			clientManager := &ClientManager{
+				clients: []client.Client{testClient},
+			}
+			handler := &ServerHandler{
+				enableLiveClusters: true,
+				clientManager:      clientManager,
+				reader:             &mockStorageReader{},
+			}
+
+			clusterInfo, _, err := handler.resolveSession(context.Background(), namespace, tt.resourceType, resourceName, "latest")
+			if tt.wantErrorContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrorContains) {
+					t.Fatalf("resolveSession() error = %v, want an error containing %q", err, tt.wantErrorContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveSession() returned an unexpected error: %v", err)
+			}
+			if clusterInfo.Name != tt.wantClusterName {
+				t.Errorf("resolveSession() selected RayCluster %q, want %q", clusterInfo.Name, tt.wantClusterName)
+			}
+			if tt.wantClusterName == "" {
+				return
+			}
+			if clusterInfo.OwnerKind != tt.resourceType || clusterInfo.OwnerName != resourceName {
+				t.Errorf("resolveSession() owner = %s/%s, want %s/%s", clusterInfo.OwnerKind, clusterInfo.OwnerName, tt.resourceType, resourceName)
+			}
+		})
+	}
+}
+
 // newDisabledLiveHandler returns a handler with live clusters disabled and a single RayCluster that
 // exists in both Kubernetes and storage. status controls what the fake session loader reports for
 // its stored session.
