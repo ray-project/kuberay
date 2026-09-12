@@ -22,11 +22,15 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
-	// IdleTerminate is set to true by the Ray autoscaler when the RayCluster has
-	// had no attached driver for noDriverTimeoutSeconds and the policy is
-	// Suspend. Setting it back to false resumes the RayCluster.
+	// IdleSuspend is set to true by the Ray autoscaler when the RayCluster has
+	// had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's
+	// IdleTerminationOptions.Policy is Suspend.
+	// Setting it back to false resumes the RayCluster.
 	// +optional
-	IdleTerminate *bool `json:"idleTerminate,omitempty"`
+	IdleSuspend *bool `json:"idleSuspend,omitempty"`
+	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
+	// A RayCluster is considered idle when no Ray driver is connected.
+	IdleTerminationOptions *IdleTerminationOptions `json:"idleTerminationOptions,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -497,12 +501,21 @@ type ScaleStrategy struct {
 }
 
 // +kubebuilder:validation:Enum=Delete;Suspend
-type NoDriverTimeoutPolicy string
+type IdleTerminationPolicy string
 
 const (
-	DeleteIdleTerminationPolicy  NoDriverTimeoutPolicy = "Delete"
-	SuspendIdleTerminationPolicy NoDriverTimeoutPolicy = "Suspend"
+	IdleTerminationPolicySuspend IdleTerminationPolicy = "Suspend"
+	IdleTerminationPolicyDelete  IdleTerminationPolicy = "Delete"
 )
+
+type IdleTerminationOptions struct {
+	// Policy is the action to take once the RayCluster has been idle for TimeoutSeconds.
+	TimeoutSeconds int32 `json:"timeoutSeconds"`
+
+	// Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds.
+	// +kubebuilder:default=Suspend
+	Policy *IdleTerminationPolicy `json:"policy,omitempty"`
+}
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
@@ -525,15 +538,6 @@ type AutoscalerOptions struct {
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
-	// NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before applying NoDriverTimeoutPolicy.
-	// +optional
-	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
-	// NoDriverTimeoutPolicy is "Delete" or "Suspend". It specifies the action to take when the cluster is idle.
-	// The default policy is "Delete".
-	// Delete: The Ray autoscaler will delete the RayCluster after no driver has been detected for IdleTimeoutSeconds.
-	// Suspend: The Ray autoscaler will patch RayCluster's spec.suspend to true once no driver has been detected for IdleTimeoutSeconds.
-	// +optional
-	NoDriverTimeoutPolicy *NoDriverTimeoutPolicy `json:"noDriverTimeoutPolicy,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.

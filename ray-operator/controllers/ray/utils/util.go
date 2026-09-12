@@ -164,9 +164,9 @@ func FindRayClusterSuspendStatus(instance *rayv1.RayCluster) rayv1.RayClusterCon
 	return ""
 }
 
-// IsRayClusterSuspendOrIdleTerminate returns true if either spec.Suspend=true or spec.IdleTerminate=true
+// IsRayClusterSuspendOrIdleTerminate returns true if either spec.Suspend=true or spec.IdleSuspend=true
 func IsRayClusterSuspendOrIdleTerminate(instance *rayv1.RayCluster) bool {
-	return instance.Spec.Suspend != nil && *instance.Spec.Suspend || instance.Spec.IdleTerminate != nil && *instance.Spec.IdleTerminate
+	return instance.Spec.Suspend != nil && *instance.Spec.Suspend || instance.Spec.IdleSuspend != nil && *instance.Spec.IdleSuspend
 }
 
 // IsRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
@@ -767,7 +767,7 @@ func IsAutoscalingV1Enabled(spec *rayv1.RayClusterSpec) bool {
 }
 
 func IsNoDriverTimeoutTerminationEnabled(spec *rayv1.RayClusterSpec) bool {
-	return IsAutoscalingEnabled(spec) && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds != nil
+	return IsAutoscalingEnabled(spec) && spec.IdleTerminationOptions != nil
 }
 
 // Check if the RayCluster has GCS fault tolerance enabled.

@@ -244,18 +244,18 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
-	// Validate AutoscalerOptions.NoDriverTimeoutPolicy has to be set alongside AutoscalerOptions.IdleTimeoutSeconds
-	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutPolicy != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds == nil {
-		return fmt.Errorf("autoscalerOptions.noDriverTimeoutPolicy requires autoscalerOptions.noDriverTimeoutSeconds to be set")
+	// Validate IdleTerminationOptions.Policy has to be set alongside IdleTerminationOptions.TimeoutSeconds
+	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.Policy != nil && spec.IdleTerminationOptions.TimeoutSeconds == 0 {
+		return fmt.Errorf("idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set")
 	}
 
-	// Validate AutoscalerOptions.NoDriverTimeoutSeconds (works only with v2 autoscaler)
-	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
-		if *spec.AutoscalerOptions.NoDriverTimeoutSeconds < 0 {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds must be non-negative, got %d", *spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+	// Validate IdleTerminationOptions.TimeoutSeconds (works only with v2 autoscaler)
+	if spec.IdleTerminationOptions != nil {
+		if spec.IdleTerminationOptions.TimeoutSeconds < 0 {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds must be non-negative, got %d", spec.IdleTerminationOptions.TimeoutSeconds)
 		}
 		if !isAutoscalingEnabled {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires enableInTreeAutoscaling to be true")
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true")
 		}
 
 		v2Enabled := IsAutoscalingV2Enabled(spec)
@@ -265,23 +265,23 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			}
 		}
 		if !v2Enabled {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
 		}
 
-		if spec.AutoscalerOptions.NoDriverTimeoutPolicy != nil {
-			policy := *spec.AutoscalerOptions.NoDriverTimeoutPolicy
-			if policy != rayv1.DeleteIdleTerminationPolicy && policy != rayv1.SuspendIdleTerminationPolicy {
-				return fmt.Errorf("autoscalerOptions.noDriverTimeoutPolicy is invalid. Please use either %s or %s", rayv1.DeleteIdleTerminationPolicy, rayv1.SuspendIdleTerminationPolicy)
+		if spec.IdleTerminationOptions.Policy != nil {
+			policy := *spec.IdleTerminationOptions.Policy
+			if policy != rayv1.IdleTerminationPolicyDelete && policy != rayv1.IdleTerminationPolicySuspend {
+				return fmt.Errorf("idleTerminationOptions.Policy is invalid. Please use either %s or %s", rayv1.IdleTerminationPolicyDelete, rayv1.IdleTerminationPolicySuspend)
 			}
 		}
 
 		rayVersion, err := version.ParseGeneric(spec.RayVersion)
 		if err != nil {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
 		}
-		minVersion := version.MustParseGeneric("2.56.0") // TODO: use 2.59.0 instead once Ray PR is merged
+		minVersion := version.MustParseGeneric("2.56.0") // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
 		if rayVersion.LessThan(minVersion) {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
 		}
 	}
 
@@ -647,8 +647,8 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
 			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
 		}
-		if rayJob.Spec.RayClusterSpec.AutoscalerOptions != nil && rayJob.Spec.RayClusterSpec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
-			return fmt.Errorf("The RayJob spec is invalid: autoscalerOptions.noDriverTimeoutSeconds is not supported for RayJob")
+		if rayJob.Spec.RayClusterSpec.IdleTerminationOptions != nil {
+			return fmt.Errorf("The RayJob spec is invalid: idleTerminationOptions is not supported for RayJob")
 		}
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
@@ -726,8 +726,8 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		return fmt.Errorf("The RayService spec is invalid: K8s token auth mode is currently not supported for RayService")
 	}
 
-	if rayService.Spec.RayClusterSpec.AutoscalerOptions != nil && rayService.Spec.RayClusterSpec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
-		return fmt.Errorf("The RayService spec is invalid: autoscalerOptions.noDriverTimeoutSeconds is not supported for RayService")
+	if rayService.Spec.RayClusterSpec.IdleTerminationOptions != nil {
+		return fmt.Errorf("The RayService spec is invalid: idleTerminationOptions is not supported for RayService")
 	}
 
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {

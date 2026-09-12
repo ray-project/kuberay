@@ -16,10 +16,14 @@ type RayClusterSpecApplyConfiguration struct {
 	// Suspend indicates whether a RayCluster should be suspended.
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	Suspend *bool `json:"suspend,omitempty"`
-	// IdleTerminate is set to true by the Ray autoscaler when the RayCluster has
-	// had no attached driver for noDriverTimeoutSeconds and the policy is
-	// Suspend. Setting it back to false resumes the RayCluster.
-	IdleTerminate *bool `json:"idleTerminate,omitempty"`
+	// IdleSuspend is set to true by the Ray autoscaler when the RayCluster has
+	// had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's
+	// IdleTerminationOptions.Policy is Suspend.
+	// Setting it back to false resumes the RayCluster.
+	IdleSuspend *bool `json:"idleSuspend,omitempty"`
+	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
+	// A RayCluster is considered idle when no Ray driver is connected.
+	IdleTerminationOptions *IdleTerminationOptionsApplyConfiguration `json:"idleTerminationOptions,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -86,11 +90,19 @@ func (b *RayClusterSpecApplyConfiguration) WithSuspend(value bool) *RayClusterSp
 	return b
 }
 
-// WithIdleTerminate sets the IdleTerminate field in the declarative configuration to the given value
+// WithIdleSuspend sets the IdleSuspend field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IdleTerminate field is set to the value of the last call.
-func (b *RayClusterSpecApplyConfiguration) WithIdleTerminate(value bool) *RayClusterSpecApplyConfiguration {
-	b.IdleTerminate = &value
+// If called multiple times, the IdleSuspend field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithIdleSuspend(value bool) *RayClusterSpecApplyConfiguration {
+	b.IdleSuspend = &value
+	return b
+}
+
+// WithIdleTerminationOptions sets the IdleTerminationOptions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the IdleTerminationOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithIdleTerminationOptions(value *IdleTerminationOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.IdleTerminationOptions = value
 	return b
 }
 

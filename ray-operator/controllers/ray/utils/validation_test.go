@@ -929,7 +929,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
+func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: new(true),
@@ -944,142 +944,160 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 		expectedErr string
 		spec        rayv1.RayClusterSpec
 	}{
-		"Valid: noDriverTimeoutSeconds with explicit v2": {
+		"Valid: idleTerminationOptions.TimeoutSeconds with explicit v2": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(600)),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
 			expectedErr: "",
 		},
-		"Valid: noDriverTimeoutSeconds with v2 enabled via env var": {
+		"Valid: idleTerminationOptions.TimeoutSeconds with v2 enabled via env var": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
 					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
 				}, nil)
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					NoDriverTimeoutSeconds: new(int32(600)),
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
 			expectedErr: "",
 		},
-		"Valid: zero noDriverTimeoutSeconds": {
+		"Valid: zero idleTerminationOptions.TimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(0)),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 0,
 				}
 				return s
 			}(),
 			expectedErr: "",
 		},
-		"Invalid: negative noDriverTimeoutSeconds": {
+		"Invalid: negative idleTerminationOptions.TimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(-1)),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: -1,
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds must be non-negative, got -1",
+			expectedErr: "idleTerminationOptions.TimeoutSeconds must be non-negative, got -1",
 		},
-		"Invalid: noDriverTimeoutSeconds without autoscaling": {
+		"Invalid: idleTerminationOptions.TimeoutSeconds without autoscaling": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.EnableInTreeAutoscaling = new(false)
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					NoDriverTimeoutSeconds: new(int32(600)),
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires enableInTreeAutoscaling to be true",
+			expectedErr: "idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true",
 		},
 		"Invalid: autoscaler v2 not enabled": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					NoDriverTimeoutSeconds: new(int32(600)),
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
+			expectedErr: "idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
 		},
-		"Invalid: noDriverTimeoutSeconds with autoscaler v1": {
+		"Invalid: idleTerminationOptions.TimeoutSeconds with autoscaler v1": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV1),
-					NoDriverTimeoutSeconds: new(int32(600)),
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
+			expectedErr: "idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
 		},
-		"Invalid: noDriverTimeoutSeconds with Ray version below minimum": {
+		"Invalid: idleTerminationOptions.TimeoutSeconds with Ray version below minimum": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.RayVersion = "2.55.0"
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(600)),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got 2.55.0",
+			expectedErr: "idleTerminationOptions.TimeoutSeconds requires minimum Ray version 2.56.0, got 2.55.0",
 		},
-		"Valid: noDriverTimeoutPolicy=Delete": {
+		"Valid: idleTerminationOptions.Policy=Delete": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(600)),
-					NoDriverTimeoutPolicy:  ptr.To(rayv1.DeleteIdleTerminationPolicy),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
+					Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
 				}
 				return s
 			}(),
 			expectedErr: "",
 		},
-		"Valid: noDriverTimeoutPolicy=Suspend": {
+		"Valid: idleTerminationOptions.Policy=Suspend": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(600)),
-					NoDriverTimeoutPolicy:  ptr.To(rayv1.SuspendIdleTerminationPolicy),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
+					Policy:         ptr.To(rayv1.IdleTerminationPolicySuspend),
 				}
 				return s
 			}(),
 			expectedErr: "",
 		},
-		"Invalid: unknown noDriverTimeoutPolicy value": {
+		"Invalid: unknown idleTerminationOptions.Policy value": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:                ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutSeconds: new(int32(600)),
-					NoDriverTimeoutPolicy:  ptr.To(rayv1.NoDriverTimeoutPolicy("Restart")),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
+					Policy:         ptr.To(rayv1.IdleTerminationPolicy("Bogus")),
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutPolicy is invalid. Please use either Delete or Suspend",
+			expectedErr: "idleTerminationOptions.Policy is invalid. Please use either Delete or Suspend",
 		},
-		"Invalid: noDriverTimeoutPolicy set without noDriverTimeoutSeconds": {
+		"Invalid: idleTerminationOptions.Policy set without idleTerminationOptions.TimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:               ptr.To(rayv1.AutoscalerVersionV2),
-					NoDriverTimeoutPolicy: ptr.To(rayv1.SuspendIdleTerminationPolicy),
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutPolicy requires autoscalerOptions.noDriverTimeoutSeconds to be set",
+			expectedErr: "idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set",
 		},
 	}
 
@@ -1432,8 +1450,8 @@ func TestValidateRayJobSpec(t *testing.T) {
 			name: "RayJob does not support noDriverTimeoutSeconds",
 			spec: func() rayv1.RayJobSpec {
 				clusterSpec := createBasicRayClusterSpec()
-				clusterSpec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					NoDriverTimeoutSeconds: ptr.To[int32](30),
+				clusterSpec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					TimeoutSeconds: 600,
 				}
 				return rayv1.RayJobSpec{
 					ShutdownAfterJobFinishes: true,
@@ -1443,11 +1461,11 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayJob rejects noDriverTimeoutPolicy set without noDriverTimeoutSeconds",
+			name: "RayJob rejects idleTerminationOptions.policy set without idleTerminationOptions.timeoutSeconds",
 			spec: func() rayv1.RayJobSpec {
 				clusterSpec := createBasicRayClusterSpec()
-				clusterSpec.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					NoDriverTimeoutPolicy: ptr.To(rayv1.SuspendIdleTerminationPolicy),
+				clusterSpec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+					Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
 				}
 				return rayv1.RayJobSpec{
 					ShutdownAfterJobFinishes: true,
@@ -2301,22 +2319,22 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayService does not support noDriverTimeoutSeconds",
+			name: "RayService does not support idleTerminationOptions.TimeoutSeconds",
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec: rayv1.RayClusterSpec{
-					AutoscalerOptions: &rayv1.AutoscalerOptions{
-						NoDriverTimeoutSeconds: ptr.To[int32](30),
+					IdleTerminationOptions: &rayv1.IdleTerminationOptions{
+						TimeoutSeconds: 600,
 					},
 				},
 			},
 			expectError: true,
 		},
 		{
-			name: "RayService rejects noDriverTimeoutPolicy set without noDriverTimeoutSeconds",
+			name: "RayService rejects idleTerminationOptions.Policy set without idleTerminationOptions.TimeoutSeconds",
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec: rayv1.RayClusterSpec{
-					AutoscalerOptions: &rayv1.AutoscalerOptions{
-						NoDriverTimeoutPolicy: ptr.To(rayv1.SuspendIdleTerminationPolicy),
+					IdleTerminationOptions: &rayv1.IdleTerminationOptions{
+						Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
 					},
 				},
 			},
