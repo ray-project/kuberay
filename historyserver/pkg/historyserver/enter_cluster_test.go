@@ -37,6 +37,10 @@ func (m *mockStorageReader) ListFiles(clusterId string, dir string) []string {
 	return nil
 }
 
+func (m *mockStorageReader) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+	return nil, nil
+}
+
 func TestEnterCluster(t *testing.T) {
 	// Reset default container to avoid polluting or using duplicate services across runs
 	restful.DefaultContainer = restful.NewContainer()

@@ -2,7 +2,9 @@ package eventserver
 
 import (
 	"bufio"
+	"context"
 	"io"
+	"sort"
 	"strings"
 	"testing"
 
@@ -15,8 +17,15 @@ import (
 // --- Test-local mock reader for LogEventReader tests ---
 
 type logEventMockReader struct {
-	files map[string]map[string]string
-	dirs  map[string]map[string][]string
+	files              map[string]map[string]string
+	dirs               map[string]map[string][]string
+	recursiveListCalls []listFilesCall
+	recursiveListErr   error
+}
+
+type listFilesCall struct {
+	clusterID string
+	dir       string
 }
 
 func newLogEventMockReader() *logEventMockReader {
@@ -58,6 +67,32 @@ func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
 		}
 	}
 	return []string{}
+}
+
+func (m *logEventMockReader) ListFilesRecursive(ctx context.Context, clusterID string, dir string) ([]string, error) {
+	m.recursiveListCalls = append(m.recursiveListCalls, listFilesCall{clusterID: clusterID, dir: dir})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if m.recursiveListErr != nil {
+		return nil, m.recursiveListErr
+	}
+
+	prefix := strings.TrimSuffix(dir, "/") + "/"
+	var files []string
+	for dirPath, entries := range m.dirs[clusterID] {
+		dirPath = strings.TrimSuffix(dirPath, "/") + "/"
+		if !strings.HasPrefix(dirPath, prefix) {
+			continue
+		}
+		for _, entry := range entries {
+			if !strings.HasSuffix(entry, "/") {
+				files = append(files, strings.TrimPrefix(dirPath, prefix)+entry)
+			}
+		}
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 // --- Tests ---

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -36,6 +37,14 @@ var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(-\d+)?(\.jso
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage
 const taskPrefix = "task::"
+
+type rayEventFileKind int
+
+const (
+	invalidRayEventFile rayEventFileKind = iota
+	jobEventFile
+	nodeEventFile
+)
 
 func isValidEventFile(fileName string) bool {
 	// Skip directories
@@ -100,6 +109,43 @@ func DecodeEventFileBytes(fileName string, raw []byte) ([]map[string]any, error)
 		return nil, fmt.Errorf("scan JSONL %s: %w", fileName, err)
 	}
 	return out, nil
+}
+
+func classifyRayEventFile(relativePath string) rayEventFileKind {
+	cleanPath := path.Clean(relativePath)
+	if cleanPath != relativePath || path.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "../") {
+		return invalidRayEventFile
+	}
+
+	nodeName, remainingPath, found := strings.Cut(cleanPath, "/")
+	if !found || nodeName == "" {
+		return invalidRayEventFile
+	}
+
+	eventDir, remainingPath, found := strings.Cut(remainingPath, "/")
+	if !found {
+		return invalidRayEventFile
+	}
+
+	switch eventDir {
+	case clusterlogs.JobEventsSubDir:
+		jobID, fileName, found := strings.Cut(remainingPath, "/")
+		if !found || jobID == "" || strings.Contains(fileName, "/") {
+			return invalidRayEventFile
+		}
+		if isValidEventFile(fileName) {
+			return jobEventFile
+		}
+	case clusterlogs.NodeEventsSubDir:
+		if strings.Contains(remainingPath, "/") {
+			return invalidRayEventFile
+		}
+		if isValidEventFile(remainingPath) {
+			return nodeEventFile
+		}
+	}
+
+	return invalidRayEventFile
 }
 
 func NewEventHandler(reader storage.StorageReader) *EventHandler {
@@ -525,62 +571,27 @@ func (h *EventHandler) getClusterLogPathPrefix(clusterInfo utils.ClusterInfo) st
 	return clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 }
 
-// getAllJobEventFiles get all the job event files for the given cluster.
-func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
-	var allJobFiles []string
+// getAllRayEventFiles retrieves all job and node event files for the given cluster session.
+func (h *EventHandler) getAllRayEventFiles(ctx context.Context, clusterInfo utils.ClusterInfo) ([]string, error) {
 	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
-
-	// Check candidate prefixes under each node (<sessionName>/<nodeName>/job_events/)
-	var candidatePrefixes []string
-	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
-			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelJobEventsDir(clusterInfo.SessionName, nodeName, "")+"/")
-		}
+	sessionFiles, err := h.reader.ListFilesRecursive(ctx, clusterLogPathPrefix, clusterInfo.SessionName)
+	if err != nil {
+		return nil, fmt.Errorf("list Ray event files for session %s: %w", clusterInfo.SessionName, err)
 	}
 
-	for _, jobEventDirPrefix := range candidatePrefixes {
-		jobDirList := h.reader.ListFiles(clusterLogPathPrefix, jobEventDirPrefix)
-		for _, jobDir := range jobDirList {
-			if !strings.HasSuffix(jobDir, "/") {
-				continue
-			}
-			jobDirPath := jobEventDirPrefix + jobDir
-			jobFiles := h.reader.ListFiles(clusterLogPathPrefix, jobDirPath)
-			for _, jobFile := range jobFiles {
-				if isValidEventFile(jobFile) {
-					allJobFiles = append(allJobFiles, jobDirPath+jobFile)
-				}
-			}
-		}
-	}
-	return allJobFiles
-}
-
-// getAllNodeEventFiles retrieves all node event files for the given cluster
-func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
-
-	// Check candidate prefixes under each node (<sessionName>/<nodeName>/node_events/)
-	var candidatePrefixes []string
-	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
-			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(clusterInfo.SessionName, nodeName)+"/")
-		}
-	}
-
+	var jobEventFiles []string
 	var nodeEventFiles []string
-	for _, nodeEventDirPrefix := range candidatePrefixes {
-		nodeEventFileNames := h.reader.ListFiles(clusterLogPathPrefix, nodeEventDirPrefix)
-		for _, fileName := range nodeEventFileNames {
-			if isValidEventFile(fileName) {
-				fullPath := nodeEventDirPrefix + fileName
-				nodeEventFiles = append(nodeEventFiles, fullPath)
-			}
+	for _, relativePath := range sessionFiles {
+		fullPath := path.Join(clusterInfo.SessionName, relativePath)
+		switch classifyRayEventFile(relativePath) {
+		case jobEventFile:
+			jobEventFiles = append(jobEventFiles, fullPath)
+		case nodeEventFile:
+			nodeEventFiles = append(nodeEventFiles, fullPath)
 		}
 	}
-	return nodeEventFiles
+
+	return append(jobEventFiles, nodeEventFiles...), nil
 }
 
 // GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
@@ -1143,9 +1154,6 @@ func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node
 
 // ProcessSingleSession reads all event files for a single session synchronously
 // and populates the handler's in-memory maps.
-//
-// TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
-// StorageReader interface surfacing errors.
 func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
 	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
@@ -1158,7 +1166,10 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 			clusterSessionKey, err)
 	}
 
-	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+	eventFileList, err := h.getAllRayEventFiles(ctx, clusterInfo)
+	if err != nil {
+		return err
+	}
 	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
 	rayEventsTotal := len(eventFileList)
