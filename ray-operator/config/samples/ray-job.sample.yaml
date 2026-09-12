@@ -110,6 +110,15 @@ spec:
   #     containers:
   #     - name: my-custom-rayjob-submitter-pod
   #       image: rayproject/ray:2.52.0
+  #       # In K8sJobMode, set this in the first container of spec.submitterPodTemplate
+  #       # to override the dashboard address used by the default submitter command.
+  #       # It must point to the same Ray cluster that the operator monitors.
+  #       # Use a dashboard base address (host:port or HTTP(S) URL), not the GCS port
+  #       # or /api/gcs_healthz path. Trailing slashes are removed; unset or empty
+  #       # values fall back to status.dashboardURL. This applies to new submitter Pods.
+  #       env:
+  #         - name: RAY_DASHBOARD_ADDRESS
+  #           value: "http://your-head-address:8265"
   #       # If Command is not specified, the correct command will be supplied at runtime using the RayJob spec `entrypoint` field.
   #       # Specifying Command is not recommended.
   #       # command: ["sh", "-c", "ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID -- echo hello world"]
