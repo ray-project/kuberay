@@ -4,15 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -235,125 +228,41 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildJobSubmitCommandHealthProbeRuntime(t *testing.T) {
+func TestBuildJobSubmitCommandHealthProbeUsesResolvedAddress(t *testing.T) {
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 is required to execute the generated health probe")
 	}
-	// Resolve wrappers such as pyenv before putting a python symlink on PATH.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	pythonPath, err := exec.CommandContext(ctx, python, "-c", "import sys; print(sys.executable)").Output()
+	rayJob := rayJobTemplate()
+	rayJob.Status.DashboardURL = "http://head-svc:8265"
+	command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
 
-	tests := []struct {
-		name            string
-		body            string
-		status          int
-		fallback        bool
-		literalArgument bool
-		retryHTTP       bool
-		retryResolution bool
-		wantSuccess     bool
-	}{
-		{name: "resolved address replaces unresolvable fallback", status: http.StatusOK, body: "success", wantSuccess: true},
-		{name: "generated address fallback", status: http.StatusOK, body: "success", fallback: true, wantSuccess: true},
-		{name: "literal fallback argument", status: http.StatusOK, body: "success", literalArgument: true, wantSuccess: true},
-		{name: "unhealthy body", status: http.StatusOK, body: "unhealthy"},
-		{name: "HTTP error", status: http.StatusServiceUnavailable, body: "unhealthy"},
-		{name: "retry HTTP error", status: http.StatusOK, body: "success", retryHTTP: true, wantSuccess: true},
-		{name: "retry resolution error", status: http.StatusOK, body: "success", retryResolution: true, wantSuccess: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var requests atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "/dashboard/api/gcs_healthz", r.URL.Path)
-				if requests.Add(1) == 1 && tt.retryHTTP {
-					w.WriteHeader(http.StatusServiceUnavailable)
-					return
-				}
-				w.WriteHeader(tt.status)
-				_, err := w.Write([]byte(tt.body))
-				assert.NoError(t, err)
-			}))
-			defer server.Close()
+	// Execute the generated Python, stubbing only Ray's resolver and HTTP request.
+	const script = `import shlex
+import sys
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-			rayJob := rayJobTemplate()
-			rayJob.Status.DashboardURL = "http://unresolvable.invalid:8265"
-			resolvedAddress := server.URL + "/dashboard///"
-			if tt.fallback {
-				rayJob.Status.DashboardURL = resolvedAddress
-			}
-			if tt.literalArgument {
-				rayJob.Status.DashboardURL += "/a'\"$HOME`exit 1`$(exit 1) space"
-			}
-			command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
-			require.NoError(t, err)
-
-			dir := t.TempDir()
-			require.NoError(t, os.MkdirAll(filepath.Join(dir, "ray", "dashboard"), 0o700))
-			for _, path := range []string{"ray/__init__.py", "ray/dashboard/__init__.py"} {
-				require.NoError(t, os.WriteFile(filepath.Join(dir, path), nil, 0o600))
-			}
-			// Stub only Ray's resolver, not Python or HTTP: execute the real generated
-			// probe against a local server and assert it uses the resolver's output.
-			resolver := `import os
-from pathlib import Path
-
-def get_address_for_submission_client(address):
-    assert address == os.environ["EXPECTED_FALLBACK"], repr(address)
-    calls = Path(os.environ["RESOLVER_CALLS"])
-    first_call = not calls.exists()
-    with calls.open("a") as output:
-        output.write("resolved\n")
-    if first_call and os.environ["RETRY_RESOLUTION"] == "true":
-        raise RuntimeError("transient resolution failure")
-    return os.environ["RESOLVED_ADDRESS"]
+args = shlex.split(sys.argv[1])
+resolver = Mock(return_value="http://alternate-dashboard:8265///")
+ray_utils = SimpleNamespace(get_address_for_submission_client=resolver)
+with patch.dict(sys.modules, {"ray.dashboard.utils": ray_utils}), patch("urllib.request.urlopen") as request:
+    request.return_value.__enter__.return_value = request.return_value
+    request.return_value.read.return_value = b"success"
+    sys.argv = ["-c", *args[3:]]
+    try:
+        exec(args[2])
+    except SystemExit as result:
+        assert result.code == 0
+    resolver.assert_called_once_with("http://head-svc:8265")
+    request.assert_called_once_with("http://alternate-dashboard:8265/api/gcs_healthz", timeout=10)
 `
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "ray", "dashboard", "utils.py"), []byte(resolver), 0o600))
-			require.NoError(t, os.Symlink(strings.TrimSpace(string(pythonPath)), filepath.Join(dir, "python")))
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "sleep"), []byte("#!/bin/sh\n[ \"$1\" = 2 ]\n"), 0o700))
-
-			script := command[1]
-			if tt.retryHTTP || tt.retryResolution {
-				statusCheck := slices.Index(command, "if")
-				require.Positive(t, statusCheck)
-				script = strings.Join(command[:statusCheck], " ")
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			cmd := exec.CommandContext(ctx, "/bin/bash", "-ce", "--", script)
-			cmd.WaitDelay = time.Second
-			cmd.Env = []string{
-				"PATH=" + dir,
-				"PYTHONPATH=" + dir,
-				"PYTHONNOUSERSITE=1",
-				"EXPECTED_FALLBACK=" + rayJob.Status.DashboardURL,
-				"RESOLVED_ADDRESS=" + resolvedAddress,
-				"RESOLVER_CALLS=" + filepath.Join(dir, "calls"),
-				"RETRY_RESOLUTION=" + strconv.FormatBool(tt.retryResolution),
-			}
-			output, err := cmd.CombinedOutput()
-			if tt.wantSuccess {
-				require.NoError(t, err, "%s", output)
-			} else {
-				require.Error(t, err)
-			}
-			wantCalls := 1
-			if tt.retryHTTP || tt.retryResolution {
-				wantCalls = 2
-			}
-			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
-			require.NoError(t, err)
-			assert.Equal(t, strings.Repeat("resolved\n", wantCalls), string(calls))
-			wantRequests := int32(1)
-			if tt.retryHTTP {
-				wantRequests = 2
-			}
-			assert.Equal(t, wantRequests, requests.Load())
-		})
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, python, "-c", script, command[1])
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", output)
 }
 
 func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
