@@ -145,14 +145,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		utils.RayDashboardGCSHealthCheckTimeoutSeconds,
 	)
 	if submissionMode == rayv1.K8sJobMode {
-		// Resolve inside the submitter so Ray's RAY_ADDRESS / RAY_API_SERVER_ADDRESS
-		// overrides have the same semantics as the installed Ray CLI. Pass the fallback
-		// as a shell-quoted argument instead of interpolating it into Python source.
-		addressArg := "'" + strings.ReplaceAll(address, "'", "'\"'\"'") + "'"
-		rayDashboardGCSHealthCommand = fmt.Sprintf(
-			`python -c "import sys, urllib.request; from ray.dashboard.utils import get_address_for_submission_client; address=get_address_for_submission_client(sys.argv[1]); r=urllib.request.urlopen(address.rstrip('/') + '/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)" %s`,
-			utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds, addressArg,
-		)
+		rayDashboardGCSHealthCommand = buildK8sJobDashboardHealthCommand(address)
 	}
 
 	waitLoop := []string{
@@ -219,6 +212,25 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	}
 
 	return cmd, nil
+}
+
+// buildK8sJobDashboardHealthCommand resolves the dashboard inside the submitter,
+// using the installed Ray CLI's RAY_ADDRESS / RAY_API_SERVER_ADDRESS semantics.
+func buildK8sJobDashboardHealthCommand(address string) string {
+	const command = `python -c '
+import sys
+import urllib.request
+from ray.dashboard.utils import get_address_for_submission_client
+
+address = get_address_for_submission_client(sys.argv[1])
+health_url = address.rstrip("/") + "/%s"
+with urllib.request.urlopen(health_url, timeout=%d) as response:
+    sys.exit(0 if b"success" in response.read() else 1)
+' %s`
+
+	// Keep the fallback address literal in the shell and pass it as Python data.
+	addressArg := "'" + strings.ReplaceAll(address, "'", `'"'"'`) + "'"
+	return fmt.Sprintf(command, utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds, addressArg)
 }
 
 // GetSubmitterTemplate creates a default submitter template for the Ray job.

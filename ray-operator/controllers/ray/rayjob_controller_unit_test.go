@@ -191,7 +191,16 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	expectedK8sJobModeArgs := []string{
-		`until python -c "import sys, urllib.request; from ray.dashboard.utils import get_address_for_submission_client; address=get_address_for_submission_client(sys.argv[1]); r=urllib.request.urlopen(address.rstrip('/') + '/api/gcs_healthz', timeout=10); exit(0 if b'success' in r.read() else 1)" 'http://test-url'` +
+		`until python -c '
+import sys
+import urllib.request
+from ray.dashboard.utils import get_address_for_submission_client
+
+address = get_address_for_submission_client(sys.argv[1])
+health_url = address.rstrip("/") + "/api/gcs_healthz"
+with urllib.request.urlopen(health_url, timeout=10) as response:
+    sys.exit(0 if b"success" in response.read() else 1)
+' 'http://test-url'` +
 			" >/dev/null 2>&1 ; do echo \"Waiting for Ray Dashboard GCS to become healthy at http://test-url ...\" ; sleep 2 ; done ; " +
 			"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id",
 	}

@@ -79,7 +79,16 @@ pip: ["python-multipart==0.0.6"]
 	assert.Equal(t, expectedMap, actualMap)
 }
 
-const expectedK8sJobHealthCommand = `python -c "import sys, urllib.request; from ray.dashboard.utils import get_address_for_submission_client; address=get_address_for_submission_client(sys.argv[1]); r=urllib.request.urlopen(address.rstrip('/') + '/api/gcs_healthz', timeout=10); exit(0 if b'success' in r.read() else 1)" 'http://127.0.0.1:8265'`
+const expectedK8sJobHealthCommand = `python -c '
+import sys
+import urllib.request
+from ray.dashboard.utils import get_address_for_submission_client
+
+address = get_address_for_submission_client(sys.argv[1])
+health_url = address.rstrip("/") + "/api/gcs_healthz"
+with urllib.request.urlopen(health_url, timeout=10) as response:
+    sys.exit(0 if b"success" in response.read() else 1)
+' 'http://127.0.0.1:8265'`
 
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
