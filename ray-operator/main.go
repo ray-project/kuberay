@@ -187,6 +187,7 @@ func main() {
 		exitOnError(err, "Unable to set flag gates for known features")
 	}
 	features.LogFeatureGates(setupLog)
+	warnOnKubernetesWASCapabilityGates()
 
 	// validate the batch scheduler configs,
 	// exit with error if the configs is invalid.
@@ -401,6 +402,13 @@ func exitOnError(err error, msg string, keysAndValues ...any) {
 	if err != nil {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
+	}
+}
+
+// warnOnKubernetesWASCapabilityGates warns when a WAS gate needs a cluster capability KubeRay does not probe.
+func warnOnKubernetesWASCapabilityGates() {
+	if features.Enabled(features.KubernetesWASPodGroupPreemptionPolicy) {
+		setupLog.Info("WARNING: KubernetesWASPodGroupPreemptionPolicy requires Kubernetes v1.37+ with the PodGroupPreemptionPolicy feature gate enabled; otherwise the preemptionPolicy field is silently ignored")
 	}
 }
 
