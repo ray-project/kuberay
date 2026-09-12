@@ -132,12 +132,19 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	// Wait until Ray Dashboard GCS is healthy before proceeding.
 	// In SidecarMode the submitter shares the head Pod's network namespace, so we
 	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
-	// reach the dashboard through the same address as the Ray job submission client.
-	var rayDashboardGCSHealthCommand string
+	// reach the dashboard through the head Service.
+	var healthURL string
 	if submissionMode == rayv1.SidecarMode {
-		healthURL := fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
-		rayDashboardGCSHealthCommand = fmt.Sprintf(utils.BasePythonHealthCommand, healthURL, utils.RayDashboardGCSHealthCheckTimeoutSeconds)
+		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
 	} else {
+		healthURL = address + "/" + utils.RayDashboardGCSHealthPath
+	}
+	rayDashboardGCSHealthCommand := fmt.Sprintf(
+		utils.BasePythonHealthCommand,
+		healthURL,
+		utils.RayDashboardGCSHealthCheckTimeoutSeconds,
+	)
+	if submissionMode == rayv1.K8sJobMode {
 		// Resolve inside the submitter so Ray's RAY_ADDRESS / RAY_API_SERVER_ADDRESS
 		// overrides have the same semantics as the installed Ray CLI. Pass the fallback
 		// as a shell-quoted argument instead of interpolating it into Python source.
