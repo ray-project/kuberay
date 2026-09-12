@@ -193,13 +193,17 @@ func TestReadLogEvents(t *testing.T) {
 		mock := newLogEventMockReader()
 
 		mock.addDir("session1", []string{"node1/", "node2/", "stray_file.txt"})
-		mock.addDir("session1/node1/logs/events", []string{"event_GCS.log", "debug.log"})
+		mock.addDir("session1/node1/logs/events",
+			[]string{"event_GCS.log", "debug.log", "event_GCS.rotated.1788398100000000000-4390125.log"})
 		mock.addDir("session1/node2/logs/events", []string{"event_RAYLET.log"})
 
 		mock.addFile("session1/node1/logs/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"from node1","timestamp":"1770635700"}`+"\n")
 		mock.addFile("session1/node2/logs/events/event_RAYLET.log",
 			`{"event_id":"e2","source_type":"RAYLET","severity":"WARNING","message":"from node2","timestamp":"1770635800"}`+"\n")
+		// A collected rotated generation of event_GCS.log is read like any other event file.
+		mock.addFile("session1/node1/logs/events/event_GCS.rotated.1788398100000000000-4390125.log",
+			`{"event_id":"e3","source_type":"GCS","severity":"INFO","message":"rotated generation","timestamp":"1770635600"}`+"\n")
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()
@@ -209,7 +213,7 @@ func TestReadLogEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		events := store.GetAllEvents("cluster_ns_session1")
-		assert.Len(t, events["global"], 2, "should read events from both nodes")
+		assert.Len(t, events["global"], 3, "should read active and rotated event files from both nodes, skipping non-event files")
 	})
 
 	t.Run("handles empty cluster with no nodes", func(t *testing.T) {
