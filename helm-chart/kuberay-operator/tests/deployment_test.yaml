@@ -487,3 +487,12 @@ tests:
       - notContains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "--node-event-forwarder-reasons"
+
+  - it: Should fail when nodeEventForwarder is enabled with singleNamespaceInstall
+    set:
+      singleNamespaceInstall: true
+      nodeEventForwarder:
+        enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace."

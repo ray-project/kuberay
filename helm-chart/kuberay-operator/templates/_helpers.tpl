@@ -141,6 +141,13 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- end }}
 {{- end }}
 {{- end }}
+{{- $nodeEventForwarderEnabled := false -}}
+{{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") -}}
+  {{- $nodeEventForwarderEnabled = .Values.nodeEventForwarder.enabled -}}
+{{- end -}}
+{{- if and .Values.singleNamespaceInstall $nodeEventForwarderEnabled }}
+{{- fail "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace." }}
+{{- end }}
 {{- end }}
 
 {{- /* Create the name of the node event forwarder role to use. */ -}}
