@@ -1,10 +1,20 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,11 +79,13 @@ pip: ["python-multipart==0.0.6"]
 	assert.Equal(t, expectedMap, actualMap)
 }
 
+const expectedK8sJobHealthCommand = `python -c "import sys, urllib.request; from ray.dashboard.utils import get_address_for_submission_client; address=get_address_for_submission_client(sys.argv[1]); r=urllib.request.urlopen(address.rstrip('/') + '/api/gcs_healthz', timeout=10); exit(0 if b'success' in r.read() else 1)" 'http://127.0.0.1:8265'`
+
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		expectedK8sJobHealthCommand,
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
@@ -214,6 +226,127 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
+func TestBuildJobSubmitCommandHealthProbeRuntime(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is required to execute the generated health probe")
+	}
+	// Resolve wrappers such as pyenv before putting a python symlink on PATH.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pythonPath, err := exec.CommandContext(ctx, python, "-c", "import sys; print(sys.executable)").Output()
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		body            string
+		status          int
+		fallback        bool
+		literalArgument bool
+		retryHTTP       bool
+		retryResolution bool
+		wantSuccess     bool
+	}{
+		{name: "resolved address replaces unresolvable fallback", status: http.StatusOK, body: "success", wantSuccess: true},
+		{name: "generated address fallback", status: http.StatusOK, body: "success", fallback: true, wantSuccess: true},
+		{name: "literal fallback argument", status: http.StatusOK, body: "success", literalArgument: true, wantSuccess: true},
+		{name: "unhealthy body", status: http.StatusOK, body: "unhealthy"},
+		{name: "HTTP error", status: http.StatusServiceUnavailable, body: "unhealthy"},
+		{name: "retry HTTP error", status: http.StatusOK, body: "success", retryHTTP: true, wantSuccess: true},
+		{name: "retry resolution error", status: http.StatusOK, body: "success", retryResolution: true, wantSuccess: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/dashboard/api/gcs_healthz", r.URL.Path)
+				if requests.Add(1) == 1 && tt.retryHTTP {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.WriteHeader(tt.status)
+				_, err := w.Write([]byte(tt.body))
+				assert.NoError(t, err)
+			}))
+			defer server.Close()
+
+			rayJob := rayJobTemplate()
+			rayJob.Status.DashboardURL = "http://unresolvable.invalid:8265"
+			resolvedAddress := server.URL + "/dashboard///"
+			if tt.fallback {
+				rayJob.Status.DashboardURL = resolvedAddress
+			}
+			if tt.literalArgument {
+				rayJob.Status.DashboardURL += "/a'\"$HOME`exit 1`$(exit 1) space"
+			}
+			command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, "ray", "dashboard"), 0o700))
+			for _, path := range []string{"ray/__init__.py", "ray/dashboard/__init__.py"} {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, path), nil, 0o600))
+			}
+			// Stub only Ray's resolver, not Python or HTTP: execute the real generated
+			// probe against a local server and assert it uses the resolver's output.
+			resolver := `import os
+from pathlib import Path
+
+def get_address_for_submission_client(address):
+    assert address == os.environ["EXPECTED_FALLBACK"], repr(address)
+    calls = Path(os.environ["RESOLVER_CALLS"])
+    first_call = not calls.exists()
+    with calls.open("a") as output:
+        output.write("resolved\n")
+    if first_call and os.environ["RETRY_RESOLUTION"] == "true":
+        raise RuntimeError("transient resolution failure")
+    return os.environ["RESOLVED_ADDRESS"]
+`
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "ray", "dashboard", "utils.py"), []byte(resolver), 0o600))
+			require.NoError(t, os.Symlink(strings.TrimSpace(string(pythonPath)), filepath.Join(dir, "python")))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "sleep"), []byte("#!/bin/sh\n[ \"$1\" = 2 ]\n"), 0o700))
+
+			script := command[1]
+			if tt.retryHTTP || tt.retryResolution {
+				statusCheck := slices.Index(command, "if")
+				require.Positive(t, statusCheck)
+				script = strings.Join(command[:statusCheck], " ")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "/bin/bash", "-ce", "--", script)
+			cmd.WaitDelay = time.Second
+			cmd.Env = []string{
+				"PATH=" + dir,
+				"PYTHONPATH=" + dir,
+				"PYTHONNOUSERSITE=1",
+				"EXPECTED_FALLBACK=" + rayJob.Status.DashboardURL,
+				"RESOLVED_ADDRESS=" + resolvedAddress,
+				"RESOLVER_CALLS=" + filepath.Join(dir, "calls"),
+				"RETRY_RESOLUTION=" + strconv.FormatBool(tt.retryResolution),
+			}
+			output, err := cmd.CombinedOutput()
+			if tt.wantSuccess {
+				require.NoError(t, err, "%s", output)
+			} else {
+				require.Error(t, err)
+			}
+			wantCalls := 1
+			if tt.retryHTTP || tt.retryResolution {
+				wantCalls = 2
+			}
+			calls, err := os.ReadFile(filepath.Join(dir, "calls"))
+			require.NoError(t, err)
+			assert.Equal(t, strings.Repeat("resolved\n", wantCalls), string(calls))
+			wantRequests := int32(1)
+			if tt.retryHTTP {
+				wantRequests = 2
+			}
+			assert.Equal(t, wantRequests, requests.Load())
+		})
+	}
+}
+
 func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
 	// Enable the SidecarSubmitterRestart feature gate for this test
 	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
@@ -284,7 +417,7 @@ pip: ["python-multipart==0.0.6"]
 	}
 	expected := []string{
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		expectedK8sJobHealthCommand,
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
