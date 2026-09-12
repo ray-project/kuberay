@@ -18,12 +18,11 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -274,7 +273,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 		logsPrefix := sessionPrefix
 		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 			Bucket: aws.String(S3BucketName),
-			Prefix: aws.String(logsPrefix),
+			Prefix: new(logsPrefix),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 
@@ -363,7 +362,7 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 	g.Eventually(func(gg Gomega) {
 		result, err := s3Client.GetObject(&s3.GetObjectInput{
 			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(metaKey),
+			Key:    new(metaKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer result.Body.Close()
@@ -373,14 +372,14 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 		gg.Expect(body).NotTo(BeEmpty(), "Cluster metadata file should not be empty")
 
 		// Verify it is valid JSON
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		err = json.Unmarshal(body, &metadata)
 		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
 
 		// The Ray dashboard returns {"result": true, "data": {"rayVersion": ..., "pythonVersion": ...}}.
 		// Verify the "data" sub-object contains expected fields.
 		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
-		data, ok := metadata["data"].(map[string]interface{})
+		data, ok := metadata["data"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("rayVersion"), "Cluster metadata should contain rayVersion")
 		gg.Expect(data).To(HaveKey("pythonVersion"), "Cluster metadata should contain pythonVersion")
@@ -422,7 +421,7 @@ func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3C
 	g.Eventually(func(gg Gomega) {
 		result, err := s3Client.GetObject(&s3.GetObjectInput{
 			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(timezoneKey),
+			Key:    new(timezoneKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer result.Body.Close()
@@ -432,7 +431,7 @@ func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3C
 		gg.Expect(body).NotTo(BeEmpty(), "Timezone file should not be empty")
 
 		// Verify it is valid JSON
-		var timezone map[string]interface{}
+		var timezone map[string]any
 		err = json.Unmarshal(body, &timezone)
 		gg.Expect(err).NotTo(HaveOccurred(), "Timezone data should be valid JSON")
 
@@ -547,8 +546,8 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 
 	// List all file objects in the directory.
 	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
-		Prefix: aws.String(prefix),
+		Bucket: new(bucket),
+		Prefix: new(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -562,8 +561,8 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 
 		// Get the file object content and decode it into Ray events.
 		content, err := s3Client.GetObject(&s3.GetObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(fileKey),
+			Bucket: new(bucket),
+			Key:    new(fileKey),
 		})
 		if err != nil {
 			return nil, err
@@ -607,7 +606,7 @@ func assertFileExist(test Test, g *WithT, s3Client *s3.S3, nodeLogDirPrefix stri
 	g.Eventually(func(gg Gomega) {
 		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
 			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(fileKey),
+			Key:    new(fileKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Verified file %s exists", fileKey)
@@ -638,7 +637,7 @@ func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 func readS3Object(g Gomega, s3Client *s3.S3, key string) []byte {
 	result, err := s3Client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(S3BucketName),
-		Key:    aws.String(key),
+		Key:    new(key),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 	defer result.Body.Close()
@@ -656,7 +655,7 @@ func listFetchedEndpoints(g Gomega, s3Client *s3.S3, clusterPrefix, storageKeyPr
 	var keys []string
 	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(S3BucketName),
-		Prefix: aws.String(clusterPrefix + "/"),
+		Prefix: new(clusterPrefix + "/"),
 	}, func(page *s3.ListObjectsV2Output, _ bool) bool {
 		for _, obj := range page.Contents {
 			key := aws.StringValue(obj.Key)

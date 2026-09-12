@@ -64,7 +64,7 @@ func (r *MockReader) GetContent(clusterId string, fileName string) io.Reader {
 	return strings.NewReader("")
 }
 
-func (r *MockReader) ListFiles(clusterId string, dir string) []string {
+func (r *MockReader) ListFiles(clusterId string, _ string) []string {
 	if clusterData, ok := r.data[clusterId]; ok {
 		files := make([]string, 0, len(clusterData))
 		for fileName := range clusterData {
@@ -76,6 +76,6 @@ func (r *MockReader) ListFiles(clusterId string, dir string) []string {
 }
 
 // NewReader creates a new StorageReader
-func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+func NewReader(_ *types.RayHistoryServerConfig, _ map[string]any) (storage.StorageReader, error) {
 	return NewMockReader(), nil
 }
