@@ -171,6 +171,8 @@ featureGates:
   enabled: false
 - name: RayClusterHistoryServer
   enabled: false
+- name: TopologyLabelDelivery
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:

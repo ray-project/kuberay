@@ -149,9 +149,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
 			return err
 		}
-		// the webhook validates topology; without webhooks the operator cannot deliver node labels
-		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 && strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "true" {
-			return fmt.Errorf("worker group %s sets topology, which requires the KubeRay operator to run with ENABLE_WEBHOOKS=true", workerGroup.GroupName)
+		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 {
+			if !features.Enabled(features.TopologyLabelDelivery) {
+				return fmt.Errorf("worker group %s sets topology, which requires the TopologyLabelDelivery feature gate to be enabled", workerGroup.GroupName)
+			}
+			// the webhook validates topology; without webhooks the operator cannot deliver node labels
+			if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "true" {
+				return fmt.Errorf("worker group %s sets topology, which requires the KubeRay operator to run with ENABLE_WEBHOOKS=true", workerGroup.GroupName)
+			}
 		}
 	}
 

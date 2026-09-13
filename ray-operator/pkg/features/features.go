@@ -96,6 +96,14 @@ const (
 	// selects the scheduler; it is mutually exclusive with --batch-scheduler and --enable-batch-scheduler.
 	// Requires a Kubernetes cluster that serves the scheduling.k8s.io API with GenericWorkload enabled.
 	KubernetesWAS featuregate.Feature = "KubernetesWAS"
+
+	// owner: @martinlhw
+	// rep: N/A
+	// alpha: v1.8
+	//
+	// Enables delivery of Kubernetes Node labels to Ray node labels (workerGroupSpecs[].topology).
+	// Requires ENABLE_WEBHOOKS=true and Ray 2.45.0 or later.
+	TopologyLabelDelivery featuregate.Feature = "TopologyLabelDelivery"
 )
 
 func init() {
@@ -114,6 +122,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 	KubernetesWAS:                    {Default: false, PreRelease: featuregate.Alpha},
+	TopologyLabelDelivery:            {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
