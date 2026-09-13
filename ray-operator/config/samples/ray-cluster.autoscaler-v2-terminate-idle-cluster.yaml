@@ -13,12 +13,12 @@ kind: RayCluster
 metadata:
   name: ray-cluster-autoscaler-v2-terminate-idle-cluster
 spec:
-  rayVersion: "2.56.0"
+  rayVersion: "2.58.0" # TODO(justinyeh1995): change this to 2.59.0 once released
   enableInTreeAutoscaling: true
   # Delete the RayCluster after no user driver has been attached for 30 seconds.
   idleTerminationOptions:
     timeoutSeconds: 30
-    policy: Delete
+    policy: Suspend
   autoscalerOptions:
     version: v2
     upscalingMode: Default
@@ -42,7 +42,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.56.0
+          image: rayproject/ray:idle-termination # TODO(justinyeh1995): change this to 2.59.0 once released
           ports:
           - containerPort: 6379
             name: gcs
@@ -69,7 +69,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.56.0
+          image: rayproject/ray:idle-termination # TODO(justinyeh1995): change this to 2.59.0 once released
           resources:
             limits:
               cpu: "1"
