@@ -4,8 +4,7 @@ This guide explains how to use KubeRay's Kubernetes Workload-Aware Scheduling (W
 RayCluster — the head and all worker groups — as a single atomic unit by integrating RayCluster pods with the in-tree
 Kubernetes `scheduling.k8s.io` Workload and PodGroup APIs and the default Kubernetes scheduler.
 
-> **Scope of this guide.** This release targets the `scheduling.k8s.io/v1alpha2` API only, which is served by
-> Kubernetes 1.36. Support for newer API versions (`v1alpha3`, `v1beta1`, `v1`) will follow.
+> **Scope of this guide.** This release targets the `scheduling.k8s.io/v1alpha3` API served by Kubernetes 1.37.
 
 ## Overview
 
@@ -19,10 +18,10 @@ Unlike Volcano, YuniKorn, or other external schedulers, it keeps pods on the Kub
 
 ## Prerequisites
 
-- Kubernetes 1.36. This is the release that serves `scheduling.k8s.io/v1alpha2`; the version is removed in 1.37.
-- `scheduling.k8s.io/v1alpha2=true` in the kube-apiserver runtime config so the alpha API is served.
-- `GenericWorkload=true` on the kube-apiserver and the kube-controller-manager.
-- `GangScheduling=true` on the kube-scheduler.
+- Kubernetes 1.37, which serves `scheduling.k8s.io/v1alpha3`.
+- `scheduling.k8s.io/v1beta1=true,scheduling.k8s.io/v1alpha3=true` in the kube-apiserver runtime config. KubeRay uses
+  v1alpha3, while kube-scheduler's GenericWorkload integration requires v1beta1 to be served as well.
+- `GenericWorkload=true` on the kube-apiserver, kube-controller-manager, and kube-scheduler.
 - Fixed-size RayCluster worker groups. Autoscaling RayClusters are not supported.
 
 ## Enable Kubernetes WAS
@@ -94,8 +93,7 @@ kubectl get pods -n <namespace> -l ray.io/cluster=<raycluster-name> \
 
 ## Limitations
 
-- This release is tied to the Kubernetes `scheduling.k8s.io/v1alpha2` alpha API, which is served only by Kubernetes
-  1.36. Support for newer API versions will follow.
+- This release is tied to the Kubernetes `scheduling.k8s.io/v1alpha3` alpha API served by Kubernetes 1.37.
 - Autoscaling RayClusters are skipped and any existing Workload/PodGroup resources for that RayCluster are cleaned up.
   Fixed-size worker groups only.
 - The entire RayCluster is scheduled as one gang. Partial scheduling of a subset of worker groups is not supported; if
@@ -115,7 +113,7 @@ kubectl describe pod <pod-name> -n <namespace>
 ```
 
 If pods are gated even though there appears to be capacity, confirm the cluster meets the [prerequisites](#prerequisites)
-(the alpha API is served and `GenericWorkload` / `GangScheduling` are enabled on the control plane).
+(the alpha API is served and `GenericWorkload` is enabled on the control plane).
 
 ### A running RayCluster did not start gang scheduling
 

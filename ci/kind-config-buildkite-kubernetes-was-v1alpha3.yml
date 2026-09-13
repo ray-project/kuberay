@@ -8,14 +8,14 @@ networking:
 # https://blog.scottlowe.org/2019/07/30/adding-a-name-to-kubernetes-api-server-certificate/
 nodes:
 - role: control-plane
-  image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+  image: kindest/node:v1.37.0
   kubeadmConfigPatches:
   - |
     kind: ClusterConfiguration
     apiServer:
       extraArgs:
         feature-gates: "GenericWorkload=true"
-        runtime-config: "scheduling.k8s.io/v1alpha2=true"
+        runtime-config: "scheduling.k8s.io/v1beta1=true,scheduling.k8s.io/v1alpha3=true"
       certSANs:
         - "docker"
     controllerManager:
@@ -23,4 +23,4 @@ nodes:
         feature-gates: "GenericWorkload=true"
     scheduler:
       extraArgs:
-        feature-gates: "GenericWorkload=true,GangScheduling=true"
+        feature-gates: "GenericWorkload=true"

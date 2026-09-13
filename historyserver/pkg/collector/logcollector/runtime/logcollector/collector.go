@@ -44,7 +44,12 @@ type RayLogHandler struct {
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
+	RotatedLogScanInterval time.Duration
 	mu                     sync.RWMutex
+	// rotatedMu serializes rotated log uploads so the periodic scan, shutdown
+	// and prev-logs paths cannot upload one generation twice.
+	rotatedMu       sync.Mutex
+	rotatedUploaded map[string]struct{}
 }
 
 func (r *RayLogHandler) GetRayNodeName() string {
@@ -82,6 +87,12 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	go r.PollActiveSessionChanges()
+
+	rotatedScanStopped := make(chan struct{})
+	go func() {
+		defer close(rotatedScanStopped)
+		r.scanRotatedLogs(stop)
+	}()
 	var periodicPollResults <-chan periodicPollResult
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
@@ -107,6 +118,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 			r.processAdditionalEndpoints(periodicResult)
 		})
 	}
+	// Join the scanner before the final collection so no scan outlives the collector.
+	<-rotatedScanStopped
 	r.processSessionLatestLogs()
 	wg.Wait()
 
@@ -171,6 +184,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		return
 	}
 
+	rotatedObjectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
+
 	// Walk through the logs directory and process all files
 	err = filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -180,6 +195,10 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 
 		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
 		if !info.Type().IsRegular() {
+			return nil
+		}
+
+		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 
@@ -597,6 +616,8 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 		return
 	}
 
+	rotatedObjectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
+
 	// Walk through the logs directory and process all files
 	err := filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -606,6 +627,10 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
 		if !info.Type().IsRegular() {
+			return nil
+		}
+
+		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
 			return nil
 		}
 
@@ -631,9 +656,12 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 	logrus.Infof("Finished processing all logs for session: %s, node: %s. Removing node directory.", sessionID, nodeID)
 	if err := os.RemoveAll(sessionNodeDir); err != nil {
 		logrus.Errorf("Failed to remove node directory %s: %v", sessionNodeDir, err)
-	} else {
-		logrus.Infof("Successfully removed node directory: %s", sessionNodeDir)
+		// Keep this session's dedup entries so a retry does not re-upload.
+		return
 	}
+	logrus.Infof("Successfully removed node directory: %s", sessionNodeDir)
+	// The directory is gone, so these entries can never be seen again.
+	r.pruneRotatedUploaded(rotatedObjectPrefix, nil)
 }
 
 // processPrevLogFile processes a single log file from prev-logs

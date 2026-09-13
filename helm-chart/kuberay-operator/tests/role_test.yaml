@@ -32,7 +32,7 @@ tests:
           kind: ClusterRole
           name: kuberay-operator
 
-  - it: Should include scheduling.k8s.io rules for Kubernetes WAS v1alpha2
+  - it: Should include scheduling.k8s.io rules for Kubernetes WAS v1alpha3
     set:
       rbacEnable: true
       singleNamespaceInstall: false
