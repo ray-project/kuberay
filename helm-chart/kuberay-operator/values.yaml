@@ -173,6 +173,8 @@ featureGates:
   enabled: false
 - name: RayNodeEventForwarder
   enabled: false
+- name: TopologyLabelDelivery
+  enabled: false
 
 # Configurations for KubeRay node event forwarder controller.
 # The controller forwards Kubernetes Node events to the corresponding RayCluster custom resources.
