@@ -29,6 +29,17 @@ tests:
               - patch
               - update
               - watch
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - priorityclasses
+            verbs:
+              - get
+              - list
+              - watch
 
   - it: Should include scheduling.k8s.io RBAC rules for Kubernetes WAS v1alpha3
     set:
@@ -53,4 +64,15 @@ tests:
               - list
               - patch
               - update
+              - watch
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - priorityclasses
+            verbs:
+              - get
+              - list
               - watch
