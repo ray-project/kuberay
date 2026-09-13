@@ -151,6 +151,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return err
 		}
 		if len(workerGroup.LabelRefs) > 0 {
+			if !features.Enabled(features.TopologyLabelDelivery) {
+				return fmt.Errorf("worker group %s sets labelRefs, which requires the TopologyLabelDelivery feature gate to be enabled", workerGroup.GroupName)
+			}
 			// the webhook validates labelRefs; without webhooks the operator cannot deliver node labels
 			if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "true" {
 				return fmt.Errorf("worker group %s sets labelRefs, which requires the KubeRay operator to run with ENABLE_WEBHOOKS=true", workerGroup.GroupName)

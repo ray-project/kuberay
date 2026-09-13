@@ -192,6 +192,8 @@ spec:
 | featureGates[7].enabled | bool | `false` |  |
 | featureGates[8].name | string | `"RayNodeEventForwarder"` |  |
 | featureGates[8].enabled | bool | `false` |  |
+| featureGates[9].name | string | `"TopologyLabelDelivery"` |  |
+| featureGates[9].enabled | bool | `false` |  |
 | nodeEventForwarder.enabled | bool | `false` | Whether KubeRay operator should forward Kubernetes Node events to RayCluster custom resources. Note: not supported when singleNamespaceInstall is true. |
 | nodeEventForwarder.sources | list | `[]` | Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources. |
 | nodeEventForwarder.reasons | list | `[]` | Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons. |
