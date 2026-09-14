@@ -770,9 +770,8 @@ _Appears in:_
 
 
 
-ScaleGate blocks a worker group from scaling up. It follows the shape of
-PodSchedulingGate: Name identifies the owner and is the merge key, so a gate is
-added and removed by exactly one controller.
+ScaleGate marks a worker group as not currently scalable. Name is the merge
+key, so a gate is added and removed by exactly one controller.
 
 
 
@@ -781,14 +780,14 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `name` _string_ | Name uniquely identifies this gate and its owner. It must be a<br />domain-prefixed path such as "kueue.k8s.io/quota-exceeded". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
+| `name` _string_ | Name uniquely identifies this gate and its owner. It must be a<br />domain-prefixed path, for example "example.com/gate-name". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
 
 
 #### ScaleStrategy
 
 
 
-ScaleStrategy to remove workers
+ScaleStrategy controls scaling of a worker group.
 
 
 
@@ -798,7 +797,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
-| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate blocks this worker group from scaling up while non-empty; the<br />Autoscaler then initiates fallback behavior. Kueue appends a gate named<br />"kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves<br />this field across reconciles but never reads or writes it.<br />Several controllers may gate the same group, so each gate is keyed by a<br />domain-prefixed name and a controller must add or remove only its own gates<br />via Server-Side Apply under a distinct field manager. Replacing the list<br />wholesale, or using read-modify-write Update, drops other owners' gates. |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by a domain-prefixed name. A writer must add or remove<br />only its own gates via Server-Side Apply under a distinct field manager;<br />replacing the list wholesale, or using read-modify-write Update, drops<br />gates owned by others. |  |  |
 
 
 #### SubmitterConfig
@@ -893,7 +892,7 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for this worker group.<br />These labels will also be added to the Pods of this worker group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: address, object-store-memory, ... |  |  |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
-| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy defines which pods to remove |  |  |
+| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
 
 

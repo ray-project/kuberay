@@ -42,7 +42,8 @@ type WorkerGroupSpecApplyConfiguration struct {
 	RayStartParams map[string]string `json:"rayStartParams,omitempty"`
 	// Template is a pod template for the worker
 	Template *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
-	// ScaleStrategy defines which pods to remove
+	// ScaleStrategy controls scaling of this worker group: which pods to remove,
+	// and whether the group can currently be scaled up.
 	ScaleStrategy *ScaleStrategyApplyConfiguration `json:"scaleStrategy,omitempty"`
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	NumOfHosts *int32 `json:"numOfHosts,omitempty"`

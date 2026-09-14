@@ -5,12 +5,11 @@ package v1
 // ScaleGateApplyConfiguration represents a declarative configuration of the ScaleGate type for use
 // with apply.
 //
-// ScaleGate blocks a worker group from scaling up. It follows the shape of
-// PodSchedulingGate: Name identifies the owner and is the merge key, so a gate is
-// added and removed by exactly one controller.
+// ScaleGate marks a worker group as not currently scalable. Name is the merge
+// key, so a gate is added and removed by exactly one controller.
 type ScaleGateApplyConfiguration struct {
 	// Name uniquely identifies this gate and its owner. It must be a
-	// domain-prefixed path such as "kueue.k8s.io/quota-exceeded".
+	// domain-prefixed path, for example "example.com/gate-name".
 	Name *string `json:"name,omitempty"`
 }
 

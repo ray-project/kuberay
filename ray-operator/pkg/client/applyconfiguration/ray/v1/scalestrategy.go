@@ -5,19 +5,19 @@ package v1
 // ScaleStrategyApplyConfiguration represents a declarative configuration of the ScaleStrategy type for use
 // with apply.
 //
-// ScaleStrategy to remove workers
+// ScaleStrategy controls scaling of a worker group.
 type ScaleStrategyApplyConfiguration struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
-	// ScaleGate blocks this worker group from scaling up while non-empty; the
-	// Autoscaler then initiates fallback behavior. Kueue appends a gate named
-	// "kueue.k8s.io/quota-exceeded" on a quota-exceeded error. KubeRay preserves
-	// this field across reconciles but never reads or writes it.
+	// ScaleGate is a signal written by an external controller to indicate that
+	// this worker group cannot currently be scaled up. KubeRay preserves the
+	// field across reconciles but never reads or writes it; the Ray Autoscaler
+	// consumes it and falls back to another worker group while it is non-empty.
 	//
-	// Several controllers may gate the same group, so each gate is keyed by a
-	// domain-prefixed name and a controller must add or remove only its own gates
-	// via Server-Side Apply under a distinct field manager. Replacing the list
-	// wholesale, or using read-modify-write Update, drops other owners' gates.
+	// Each gate is keyed by a domain-prefixed name. A writer must add or remove
+	// only its own gates via Server-Side Apply under a distinct field manager;
+	// replacing the list wholesale, or using read-modify-write Update, drops
+	// gates owned by others.
 	ScaleGate []ScaleGateApplyConfiguration `json:"scaleGate,omitempty"`
 }
 
