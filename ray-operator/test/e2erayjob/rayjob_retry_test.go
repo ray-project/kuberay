@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
@@ -206,6 +207,68 @@ func TestRayJobRetry(t *testing.T) {
 			Should(WithTransform(RayJobFailed, Equal(int32(3)))) // 2 retries + 1 initial attempt = 3 failures
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+
+		// Clean up
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Retrying RayJob with HttpMode and ReuseRayCluster keeps the same RayCluster", func(_ *testing.T) {
+		// With ReuseRayCluster, backoffLimit retries must re-submit the Ray job against the
+		// existing RayCluster instead of deleting and recreating it. We assert this by capturing
+		// the RayCluster identity when it is first created and verifying it is unchanged (same
+		// name and UID) after all retries are exhausted and the RayJob reaches Failed.
+		rayJobAC := rayv1ac.RayJob("reuse-raycluster-httpmode", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.HTTPMode).
+				WithRetryRayClusterStrategy(rayv1.ReuseRayCluster).
+				WithBackoffLimit(2).
+				WithEntrypoint("python /home/ray/jobs/fail.py").
+				WithShutdownAfterJobFinishes(false).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Capture the RayCluster as soon as it is created, before any retry can delete it.
+		var originalClusterName string
+		var originalClusterUID types.UID
+		g.Eventually(func(gg Gomega) {
+			rayjob, err := GetRayJob(test, rayJob.Namespace, rayJob.Name)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(rayjob.Status.RayClusterName).NotTo(BeEmpty())
+			cluster, err := GetRayCluster(test, namespace.Name, rayjob.Status.RayClusterName)
+			gg.Expect(err).NotTo(HaveOccurred())
+			originalClusterName = cluster.Name
+			originalClusterUID = cluster.UID
+		}, TestTimeoutMedium).Should(Succeed())
+		LogWithTimestamp(test.T(), "Observed RayCluster %s (UID %s) for RayJob %s/%s", originalClusterName, originalClusterUID, rayJob.Namespace, rayJob.Name)
+
+		// The RayJob fails on every attempt, so it should reach Failed after exhausting the retries.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutLong).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
+
+		// The retries must have actually happened: 1 initial attempt + 2 retries = 3 failures.
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobFailed, Equal(int32(3))))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobSucceeded, Equal(int32(0))))
+
+		// The RayCluster name must be unchanged (ReuseRayCluster never regenerates the name).
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobClusterName, Equal(originalClusterName)))
+
+		// The RayCluster must be the exact same object (same UID) across all retries, proving it
+		// was reused rather than deleted and recreated.
+		cluster, err := GetRayCluster(test, namespace.Name, originalClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(cluster.UID).To(Equal(originalClusterUID))
 
 		// Clean up
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})

@@ -9561,6 +9561,12 @@ spec:
                     required:
                     - headGroupSpec
                     type: object
+                  retryRayClusterStrategy:
+                    default: RecreateRayCluster
+                    enum:
+                    - RecreateRayCluster
+                    - ReuseRayCluster
+                    type: string
                   runtimeEnvYAML:
                     type: string
                   shutdownAfterJobFinishes:

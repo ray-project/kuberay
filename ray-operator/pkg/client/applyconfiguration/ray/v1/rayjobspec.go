@@ -16,8 +16,15 @@ type RayJobSpecApplyConfiguration struct {
 	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
 	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 	// Specifies the number of retries before marking this job failed.
-	// Each retry creates a new RayCluster.
+	// By default, each retry creates a new RayCluster; see RetryRayClusterStrategy
+	// to reuse the same RayCluster across retries.
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// RetryRayClusterStrategy controls RayCluster handling during backoffLimit retries.
+	// "RecreateRayCluster" (default) recreates the RayCluster each retry.
+	// "ReuseRayCluster" keeps the same RayCluster and only re-submits the Ray job,
+	// allowing RayCluster-level fault tolerance to handle recovery. Currently only
+	// supported in HTTPMode.
+	RetryRayClusterStrategy *rayv1.RetryRayClusterStrategy `json:"retryRayClusterStrategy,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpecApplyConfiguration `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
@@ -100,6 +107,14 @@ func (b *RayJobSpecApplyConfiguration) WithActiveDeadlineSeconds(value int32) *R
 // If called multiple times, the BackoffLimit field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithBackoffLimit(value int32) *RayJobSpecApplyConfiguration {
 	b.BackoffLimit = &value
+	return b
+}
+
+// WithRetryRayClusterStrategy sets the RetryRayClusterStrategy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RetryRayClusterStrategy field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithRetryRayClusterStrategy(value rayv1.RetryRayClusterStrategy) *RayJobSpecApplyConfiguration {
+	b.RetryRayClusterStrategy = &value
 	return b
 }
 

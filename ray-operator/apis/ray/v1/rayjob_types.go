@@ -86,6 +86,15 @@ const (
 	SidecarMode     JobSubmissionMode = "SidecarMode"     // Submit job via a sidecar container in the Ray head Pod
 )
 
+type RetryRayClusterStrategy string
+
+const (
+	// RecreateRayCluster deletes and recreates the RayCluster on each retry (current behavior).
+	RecreateRayCluster RetryRayClusterStrategy = "RecreateRayCluster"
+	// ReuseRayCluster keeps the RayCluster across retries and only re-submits the Ray job.
+	ReuseRayCluster RetryRayClusterStrategy = "ReuseRayCluster"
+)
+
 // DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 // Two mutually exclusive styles are supported:
 //
@@ -211,10 +220,20 @@ type RayJobSpec struct {
 	// +optional
 	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
 	// Specifies the number of retries before marking this job failed.
-	// Each retry creates a new RayCluster.
+	// By default, each retry creates a new RayCluster; see RetryRayClusterStrategy
+	// to reuse the same RayCluster across retries.
 	// +kubebuilder:default:=0
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// RetryRayClusterStrategy controls RayCluster handling during backoffLimit retries.
+	// "RecreateRayCluster" (default) recreates the RayCluster each retry.
+	// "ReuseRayCluster" keeps the same RayCluster and only re-submits the Ray job,
+	// allowing RayCluster-level fault tolerance to handle recovery. Currently only
+	// supported in HTTPMode.
+	// +kubebuilder:validation:Enum=RecreateRayCluster;ReuseRayCluster
+	// +kubebuilder:default:=RecreateRayCluster
+	// +optional
+	RetryRayClusterStrategy RetryRayClusterStrategy `json:"retryRayClusterStrategy,omitempty"`
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
