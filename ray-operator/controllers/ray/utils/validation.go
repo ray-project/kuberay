@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
@@ -188,6 +189,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateGcsFaultToleranceBackend(spec.GcsFaultToleranceOptions, headContainer, spec.HeadGroupSpec.Template.Spec.Volumes); err != nil {
 			return err
 		}
+
+		if err := validateGcsActivePassiveHead(spec.GcsFaultToleranceOptions); err != nil {
+			return err
+		}
 	}
 	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
 		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
@@ -328,8 +333,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 
 // validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
 // The embedded RocksDB backend rejects redis-only fields and operator-managed
-// env/mounts that users must not set. The redis backend (default) has no required
-// fields here (RedisAddress may be supplied via env vars/annotations elsewhere).
+// env/mounts that users must not set. The redis backend requires RedisAddress.
 func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container, headVolumes []corev1.Volume) error {
 	switch GetGcsFaultToleranceBackend(options) {
 	case rayv1.GcsFTBackendRocksDB:
@@ -370,7 +374,44 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 		if options != nil && options.Storage != nil {
 			return fmt.Errorf("cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend")
 		}
+		if options != nil && options.RedisAddress == "" {
+			return fmt.Errorf("GcsFaultToleranceOptions.RedisAddress must be set when backend is 'redis'")
+		}
 	}
+	return nil
+}
+
+// validateGcsActivePassiveHead validates the active-passive head HA configuration
+// on GcsFaultToleranceOptions. It enforces the feature gate, the redis backend
+// requirement, and the leader election lease timing invariants.
+// The RedisAddress requirement is enforced by validateGcsFaultToleranceBackend.
+func validateGcsActivePassiveHead(options *rayv1.GcsFaultToleranceOptions) error {
+	if options == nil {
+		return nil
+	}
+
+	apOpts := options.ActivePassiveHead
+	if apOpts == nil || !ptr.Deref(apOpts.Enabled, false) {
+		return nil
+	}
+
+	if !features.Enabled(features.GCSFaultToleranceActivePassiveHead) {
+		return fmt.Errorf("activePassiveHead requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
+	}
+
+	if GetGcsFaultToleranceBackend(options) != rayv1.GcsFTBackendRedis {
+		return fmt.Errorf("activePassiveHead is only supported with the 'redis' backend")
+	}
+
+	if apOpts.LeaseDurationSeconds != nil && apOpts.RenewDeadlineSeconds != nil &&
+		*apOpts.LeaseDurationSeconds <= *apOpts.RenewDeadlineSeconds {
+		return fmt.Errorf("activePassiveHead.leaseDurationSeconds must be greater than activePassiveHead.renewDeadlineSeconds")
+	}
+	if apOpts.RenewDeadlineSeconds != nil && apOpts.RetryPeriodSeconds != nil &&
+		*apOpts.RenewDeadlineSeconds <= *apOpts.RetryPeriodSeconds {
+		return fmt.Errorf("activePassiveHead.renewDeadlineSeconds must be greater than activePassiveHead.retryPeriodSeconds")
+	}
+
 	return nil
 }
 

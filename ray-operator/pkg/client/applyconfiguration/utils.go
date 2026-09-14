@@ -16,6 +16,8 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=ray.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("ActivePassiveHeadOptions"):
+		return &rayv1.ActivePassiveHeadOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AuthOptions"):
