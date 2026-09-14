@@ -83,12 +83,6 @@ func (m *mockWriter) fileKeys() []string {
 	return keys
 }
 
-func (m *mockWriter) failPending() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.failNext
-}
-
 type assertErr string
 
 func (e assertErr) Error() string { return string(e) }
@@ -602,12 +596,13 @@ func TestShutdown_DrainsRetriedTasks(t *testing.T) {
 		createdAt:   time.Date(2026, 5, 13, 10, 0, 0, 0, time.UTC),
 		size:        int64(len(payload)),
 	}
-	ec.rotationQueue <- task
 
-	// Wait until the worker has consumed the injected failure, so the retry
-	// goroutine exists before shutdown begins.
-	require.Eventually(t, func() bool { return !writer.failPending() },
-		2*time.Second, 10*time.Millisecond)
+	// Drive the failing attempt inline so retryProcess has registered the retry
+	// with consumerWG by the time shutdown runs. Enqueuing raced it: the mock
+	// clears failNext at the start of the failing write, so the test could
+	// resume and shut down before the retry was registered, and shutdown then
+	// declines an unregistered retry by design.
+	ec.processRotatedFile(task)
 
 	// Run's real shutdown sequence. Closing stopProducers cuts the retry's
 	// backoff short and triggers its final attempt.
