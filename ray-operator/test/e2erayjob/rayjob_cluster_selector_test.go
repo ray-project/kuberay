@@ -8,7 +8,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -70,20 +69,19 @@ env_vars:
 	})
 
 	test.T().Run("Successful RayJob with dashboard address override", func(t *testing.T) {
-		t.Parallel()
 		test := With(t)
 		g := NewWithT(t)
 
-		headServiceName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayCluster.Spec, rayCluster.Name)
+		// The default head Service is headless (ClusterIP: None), so use the
+		// head pod's IP as the reachable address that does not need DNS.
+		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
-		headService, err := test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), headServiceName, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(net.ParseIP(headService.Spec.ClusterIP)).NotTo(BeNil())
+		g.Expect(net.ParseIP(headPod.Status.PodIP)).NotTo(BeNil())
 
 		dashboardHost := utils.GenerateFQDNServiceName(test.Ctx(), *rayCluster, namespace.Name)
 		dashboardPort := strconv.Itoa(utils.DefaultDashboardPort)
 		dashboardAddress := net.JoinHostPort(dashboardHost, dashboardPort)
-		overrideAddress := "http://" + net.JoinHostPort(headService.Spec.ClusterIP, dashboardPort)
+		overrideAddress := "http://" + net.JoinHostPort(headPod.Status.PodIP, dashboardPort)
 
 		// We first create a normal submitter pod configuration
 		submitterTemplate := JobSubmitterPodTemplateApplyConfiguration()
@@ -109,8 +107,8 @@ env_vars:
 			rayJob.Namespace, rayJob.Name, overrideAddress, dashboardHost)
 
 		// Without the fix, the health check keeps retrying the broken hostname
-  		// and this wait times out. With the fix, it uses RAY_ADDRESS and the job
-  		// can submit and complete successfully.
+		// and this wait times out. With the fix, it uses RAY_ADDRESS and the job
+		// can submit and complete successfully.
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
 
