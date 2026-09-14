@@ -15,8 +15,9 @@
 
 ## Prerequisite
 
-You need write access to the [KubeRay repo](https://github.com/ray-project/kuberay) to cut a release branch
-and be a member of `ray-project` to create a release tag.
+You need write access to the [KubeRay repo](https://github.com/ray-project/kuberay). Cutting a release branch
+requires admin access because `release-*` branches are protected. Ask a committer with admin access to create
+the branch if you do not have it.
 
 ## Overview
 
