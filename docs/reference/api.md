@@ -401,7 +401,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `timeoutSeconds` _integer_ | Policy is the action to take once the RayCluster has been idle for TimeoutSeconds. |  |  |
+| `timeoutSeconds` _integer_ | TimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering Policy. |  |  |
 | `policy` _[IdleTerminationPolicy](#idleterminationpolicy)_ | Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds. | Suspend | Enum: [Delete Suspend] <br /> |
 
 

@@ -353,7 +353,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	// When the cluster has had no user driver attached for longer than spec.idleTerminationOptions.timeoutSeconds,
 	// the Ray autoscaler v2 sets the `ray.io/no-driver-idle-termination` finalizer.
-	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) {
+	if utils.IsIdleTerminationOptionsEnabled(&instance.Spec) {
 		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 			if r.hasNoDriverTimeoutFinalizer(instance) {
 				logger.Info("Deleting RayCluster because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds",
@@ -361,7 +361,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
 					string(utils.DeletedRayClusterNoDriverTimeout), string(utils.DeleteAction),
 					"Deleting RayCluster %s/%s because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds=%d",
-					instance.Namespace, instance.Name, instance.Spec.IdleTerminationOptions.TimeoutSeconds)
+					instance.Namespace, instance.Name, *instance.Spec.IdleTerminationOptions.TimeoutSeconds)
 
 				// Remove finalizer to allow deletion to proceed
 				controllerutil.RemoveFinalizer(instance, utils.NoDriverIdleTerminationFinalizer)
@@ -2096,7 +2096,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 				})
 				suspendReason := rayv1.RayClusterSuspended
 				if instance.Spec.IdleSuspend != nil && *instance.Spec.IdleSuspend {
-					suspendReason = rayv1.RayClusterIdleTerminated // TODO: check if this should be rayv1.RayClusterIdleSuspended
+					suspendReason = rayv1.RayClusterIdleSuspended
 				}
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),

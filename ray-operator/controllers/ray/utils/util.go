@@ -769,7 +769,7 @@ func IsAutoscalingV1Enabled(spec *rayv1.RayClusterSpec) bool {
 	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV1
 }
 
-func IsNoDriverTimeoutTerminationEnabled(spec *rayv1.RayClusterSpec) bool {
+func IsIdleTerminationOptionsEnabled(spec *rayv1.RayClusterSpec) bool {
 	return IsAutoscalingEnabled(spec) && spec.IdleTerminationOptions != nil
 }
 

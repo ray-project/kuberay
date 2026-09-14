@@ -260,14 +260,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	}
 
 	// Validate IdleTerminationOptions.Policy has to be set alongside IdleTerminationOptions.TimeoutSeconds
-	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.Policy != nil && spec.IdleTerminationOptions.TimeoutSeconds == 0 {
+	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.Policy != nil && spec.IdleTerminationOptions.TimeoutSeconds == nil {
 		return fmt.Errorf("idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set")
 	}
 
 	// Validate IdleTerminationOptions.TimeoutSeconds (works only with v2 autoscaler)
-	if spec.IdleTerminationOptions != nil {
-		if spec.IdleTerminationOptions.TimeoutSeconds < 0 {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds must be non-negative, got %d", spec.IdleTerminationOptions.TimeoutSeconds)
+	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.TimeoutSeconds != nil {
+		if *spec.IdleTerminationOptions.TimeoutSeconds < 0 {
+			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds must be non-negative, got %d", *spec.IdleTerminationOptions.TimeoutSeconds)
 		}
 		if !isAutoscalingEnabled {
 			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true")

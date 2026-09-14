@@ -30,6 +30,7 @@ type RayClusterSpec struct {
 	IdleSuspend *bool `json:"idleSuspend,omitempty"`
 	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
 	// A RayCluster is considered idle when no Ray driver is connected.
+	// +optional
 	IdleTerminationOptions *IdleTerminationOptions `json:"idleTerminationOptions,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
@@ -592,8 +593,8 @@ const (
 )
 
 type IdleTerminationOptions struct {
-	// Policy is the action to take once the RayCluster has been idle for TimeoutSeconds.
-	TimeoutSeconds int32 `json:"timeoutSeconds"`
+	// TimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering Policy.
+	TimeoutSeconds *int32 `json:"timeoutSeconds"`
 
 	// Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds.
 	// +kubebuilder:default=Suspend
@@ -771,8 +772,8 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
-	// RayClusterIdleTerminated indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
-	RayClusterIdleTerminated RayClusterConditionType = "RayClusterIdleTerminated"
+	// RayClusterIdleSuspended indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
+	RayClusterIdleSuspended RayClusterConditionType = "RayClusterIdleSuspended"
 )
 
 // HeadInfo gives info about head
