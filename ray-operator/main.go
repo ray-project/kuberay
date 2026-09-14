@@ -348,6 +348,9 @@ func main() {
 			"unable to create webhook", "webhook", "RayJob")
 		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr, config),
 			"unable to create webhook", "webhook", "RayService")
+		// node label delivery for worker groups with topology.labelMappings
+		exitOnError(webhooks.SetupPodWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "Pod")
 	}
 
 	if features.Enabled(features.RayCronJob) {
