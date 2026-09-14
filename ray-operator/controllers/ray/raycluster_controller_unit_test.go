@@ -3552,7 +3552,7 @@ func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
 		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-			TimeoutSeconds: 600,                                        // 1 min
+			TimeoutSeconds: ptr.To[int32](600),                         // 1 min
 			Policy:         ptr.To(rayv1.IdleTerminationPolicySuspend), // the default policy is Suspend, we explicitly set it for clarity
 		}
 		// Simulates the Ray autoscaler flipped spec.idleSuspend to true.
@@ -3566,12 +3566,12 @@ func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
 		expectReason    string
 	}{
 		{
-			name: "idleSuspend=true; the reason is RayClusterIdleTerminated",
+			name: "idleSuspend=true; the reason is RayClusterIdleSuspended",
 			mutate: func(c *rayv1.RayCluster) {
 				enableIdleSuspendPolicy(c)
 			},
 			expectSuspended: true,
-			expectReason:    string(rayv1.RayClusterIdleTerminated),
+			expectReason:    string(rayv1.RayClusterIdleSuspended),
 		},
 	}
 	for _, tc := range tests {
@@ -3633,7 +3633,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
 		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-			TimeoutSeconds: 600, // 1 min
+			TimeoutSeconds: ptr.To[int32](600), // 1 min
 			Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
 		}
 	}

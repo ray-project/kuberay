@@ -1104,7 +1104,7 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 	}
 }
 
-func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
+func TestIsIdleTerminationOptionsEnabled(t *testing.T) {
 	tests := map[string]struct {
 		spec     *rayv1.RayClusterSpec
 		expected bool
@@ -1116,7 +1116,7 @@ func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
 		"should be false when autoscaling is disabled": {
 			spec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(false),
-				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: 600},
+				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: ptr.To[int32](600)},
 			},
 			expected: false,
 		},
@@ -1129,7 +1129,7 @@ func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
 		"should be true when autoscaling is enabled and idleTerminationOptions is set": {
 			spec: &rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: new(true),
-				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: 600},
+				IdleTerminationOptions:  &rayv1.IdleTerminationOptions{TimeoutSeconds: ptr.To[int32](600)},
 			},
 			expected: true,
 		},
@@ -1137,7 +1137,7 @@ func TestIsNoDriverTimeoutTerminationEnabled(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, IsNoDriverTimeoutTerminationEnabled(tc.spec))
+			assert.Equal(t, tc.expected, IsIdleTerminationOptionsEnabled(tc.spec))
 		})
 	}
 }

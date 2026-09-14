@@ -951,7 +951,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -964,7 +964,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
 				}, nil)
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -977,7 +977,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 0,
+					TimeoutSeconds: ptr.To[int32](0),
 				}
 				return s
 			}(),
@@ -990,7 +990,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: -1,
+					TimeoutSeconds: ptr.To[int32](-1),
 				}
 				return s
 			}(),
@@ -1001,7 +1001,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				s := createSpec()
 				s.EnableInTreeAutoscaling = new(false)
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -1011,7 +1011,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -1024,7 +1024,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV1),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -1038,7 +1038,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return s
 			}(),
@@ -1051,7 +1051,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 					Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
 				}
 				return s
@@ -1065,7 +1065,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 					Policy:         ptr.To(rayv1.IdleTerminationPolicySuspend),
 				}
 				return s
@@ -1079,7 +1079,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
 				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 					Policy:         ptr.To(rayv1.IdleTerminationPolicy("Bogus")),
 				}
 				return s
@@ -1451,7 +1451,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 			spec: func() rayv1.RayJobSpec {
 				clusterSpec := createBasicRayClusterSpec()
 				clusterSpec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: 600,
+					TimeoutSeconds: ptr.To[int32](600),
 				}
 				return rayv1.RayJobSpec{
 					ShutdownAfterJobFinishes: true,
@@ -2323,7 +2323,7 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec: rayv1.RayClusterSpec{
 					IdleTerminationOptions: &rayv1.IdleTerminationOptions{
-						TimeoutSeconds: 600,
+						TimeoutSeconds: ptr.To[int32](600),
 					},
 				},
 			},
