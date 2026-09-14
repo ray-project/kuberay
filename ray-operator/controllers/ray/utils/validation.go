@@ -371,10 +371,10 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 			}
 		}
 	default: // redis
-		if options != nil && options.Storage != nil {
+		if options.Storage != nil {
 			return fmt.Errorf("cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend")
 		}
-		if options != nil && options.RedisAddress == "" {
+		if options.RedisAddress == "" {
 			return fmt.Errorf("GcsFaultToleranceOptions.RedisAddress must be set when backend is 'redis'")
 		}
 	}
@@ -382,34 +382,26 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 }
 
 // validateGcsActivePassiveHead validates the active-passive head HA configuration
-// on GcsFaultToleranceOptions. It enforces the feature gate, the redis backend
-// requirement, and the leader election lease timing invariants.
-// The RedisAddress requirement is enforced by validateGcsFaultToleranceBackend.
+// on GcsFaultToleranceOptions. It enforces the feature gate and the redis backend
+// requirement. The lease timing invariants are enforced by CEL rules on
+// ActivePassiveHeadOptions, and the RedisAddress requirement by
+// validateGcsFaultToleranceBackend.
 func validateGcsActivePassiveHead(options *rayv1.GcsFaultToleranceOptions) error {
 	if options == nil {
 		return nil
 	}
 
-	apOpts := options.ActivePassiveHead
+	apOpts := options.ActivePassiveOptions
 	if apOpts == nil || !ptr.Deref(apOpts.Enabled, false) {
 		return nil
 	}
 
 	if !features.Enabled(features.GCSFaultToleranceActivePassiveHead) {
-		return fmt.Errorf("activePassiveHead requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
+		return fmt.Errorf("activePassiveOptions requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
 	}
 
 	if GetGcsFaultToleranceBackend(options) != rayv1.GcsFTBackendRedis {
-		return fmt.Errorf("activePassiveHead is only supported with the 'redis' backend")
-	}
-
-	if apOpts.LeaseDurationSeconds != nil && apOpts.RenewDeadlineSeconds != nil &&
-		*apOpts.LeaseDurationSeconds <= *apOpts.RenewDeadlineSeconds {
-		return fmt.Errorf("activePassiveHead.leaseDurationSeconds must be greater than activePassiveHead.renewDeadlineSeconds")
-	}
-	if apOpts.RenewDeadlineSeconds != nil && apOpts.RetryPeriodSeconds != nil &&
-		*apOpts.RenewDeadlineSeconds <= *apOpts.RetryPeriodSeconds {
-		return fmt.Errorf("activePassiveHead.renewDeadlineSeconds must be greater than activePassiveHead.retryPeriodSeconds")
+		return fmt.Errorf("activePassiveOptions is only supported with the 'redis' backend")
 	}
 
 	return nil

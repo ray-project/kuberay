@@ -180,15 +180,16 @@ type GcsFaultToleranceOptions struct {
 
 	// ----- Active-Passive Head HA fields -----
 
-	// ActivePassiveHead configures active-passive high availability for the GCS.
+	// ActivePassiveOptions configures active-passive high availability for the GCS.
 	// It is only supported with the "redis" backend, not with "rocksdb".
 	// +optional
-	ActivePassiveHead *ActivePassiveHeadOptions `json:"activePassiveHead,omitempty"`
+	ActivePassiveOptions *ActivePassiveHeadOptions `json:"activePassiveOptions,omitempty"`
 }
 
 // ActivePassiveHeadOptions configures active-passive head high availability for
-// the GCS via leader election. The default lease timings mirror those of the
-// leader election configuration used by Kubernetes components.
+// the GCS via leader election.
+// +kubebuilder:validation:XValidation:rule="self.leaseDurationSeconds > self.renewDeadlineSeconds",message="leaseDurationSeconds must be greater than renewDeadlineSeconds"
+// +kubebuilder:validation:XValidation:rule="self.renewDeadlineSeconds > self.retryPeriodSeconds",message="renewDeadlineSeconds must be greater than retryPeriodSeconds"
 type ActivePassiveHeadOptions struct {
 	// Enabled controls whether active-passive high availability is active for the
 	// GCS. Defaults to false when omitted. When enabled, KubeRay will provision a

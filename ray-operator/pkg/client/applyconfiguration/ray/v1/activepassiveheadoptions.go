@@ -6,8 +6,7 @@ package v1
 // with apply.
 //
 // ActivePassiveHeadOptions configures active-passive head high availability for
-// the GCS via leader election. The default lease timings mirror those of the
-// leader election configuration used by Kubernetes components.
+// the GCS via leader election.
 type ActivePassiveHeadOptionsApplyConfiguration struct {
 	// Enabled controls whether active-passive high availability is active for the
 	// GCS. Defaults to false when omitted. When enabled, KubeRay will provision a

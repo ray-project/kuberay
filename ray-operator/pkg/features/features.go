@@ -102,7 +102,7 @@ const (
 	// alpha: v1.7
 	//
 	// Enables active-passive head high availability for the GCS
-	// (GcsFaultToleranceOptions.ActivePassiveHead and its leader election tuning
+	// (GcsFaultToleranceOptions.ActivePassiveOptions and its leader election tuning
 	// fields).
 	GCSFaultToleranceActivePassiveHead featuregate.Feature = "GCSFaultToleranceActivePassiveHead" //nolint:gosec // G101 -- feature gate name, not a credential
 )

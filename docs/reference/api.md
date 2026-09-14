@@ -22,8 +22,7 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 
 ActivePassiveHeadOptions configures active-passive head high availability for
-the GCS via leader election. The default lease timings mirror those of the
-leader election configuration used by Kubernetes components.
+the GCS via leader election.
 
 
 
@@ -347,7 +346,7 @@ _Appears in:_
 | `externalStorageNamespace` _string_ |  |  |  |
 | `redisAddress` _string_ | RedisAddress is the address of the external Redis service. Required when<br />Backend is "redis"; must be empty for "rocksdb". |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
-| `activePassiveHead` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveHead configures active-passive high availability for the GCS.<br />It is only supported with the "redis" backend, not with "rocksdb". |  |  |
+| `activePassiveOptions` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveOptions configures active-passive high availability for the GCS.<br />It is only supported with the "redis" backend, not with "rocksdb". |  |  |
 
 
 #### HeadGroupSpec

@@ -387,8 +387,8 @@ func (in *GcsFaultToleranceOptions) DeepCopyInto(out *GcsFaultToleranceOptions) 
 		*out = new(GcsEmbeddedStorage)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ActivePassiveHead != nil {
-		in, out := &in.ActivePassiveHead, &out.ActivePassiveHead
+	if in.ActivePassiveOptions != nil {
+		in, out := &in.ActivePassiveOptions, &out.ActivePassiveOptions
 		*out = new(ActivePassiveHeadOptions)
 		(*in).DeepCopyInto(*out)
 	}
