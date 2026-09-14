@@ -323,6 +323,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if spec.TLSOptions != nil && !features.Enabled(features.RayClusterMTLS) {
 		return fmt.Errorf("spec.tlsOptions requires the RayClusterMTLS feature gate to be enabled")
 	}
+	if err := validatePodFQDN(spec); err != nil {
+		return err
+	}
 	return validateTLSOptions(spec)
 }
 
@@ -440,6 +443,22 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
+	return nil
+}
+
+// validatePodFQDN rejects user-set pod DNS identity when the operator manages per-pod FQDNs
+// (enablePodFQDN or using mTLS).
+func validatePodFQDN(spec *rayv1.RayClusterSpec) error {
+	if !IsPodFQDNEnabled(spec) {
+		return nil
+	}
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if worker.Template.Spec.Hostname != "" || worker.Template.Spec.Subdomain != "" {
+			return fmt.Errorf("cannot set spec.hostname or spec.subdomain in worker group %q when enablePodFQDN or tlsOptions is set "+
+				"- the operator manages per-pod DNS names", worker.GroupName)
+		}
+	}
 	return nil
 }
 

@@ -617,9 +617,9 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
 		}
 	}
-	// Set hostname and subdomain to get a per-Pod FQDN. Skip if a Subdomain is already set
-	// (e.g. TPU multi-host webhook) to avoid breaking that setup.
-	if utils.IsPodFQDNEnabled(&instance.Spec) && podTemplate.Spec.Subdomain == "" {
+	// Set hostname and subdomain to get a per-Pod FQDN. validatePodFQDN rejects templates
+	// that set their own hostname or subdomain.
+	if utils.IsPodFQDNEnabled(&instance.Spec) {
 		// We want to make the Hostname the same as the Pod name for easier debugging. Therefore we need
 		// to generate the suffix here instead of using GenerateName. A name collision will fail with
 		// AlreadyExists in createWorkerPod, and the next reconcile retries with a new suffix.

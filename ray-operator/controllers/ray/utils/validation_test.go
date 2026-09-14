@@ -3774,6 +3774,50 @@ func TestValidateTLSOptions(t *testing.T) {
 	}
 }
 
+func TestValidatePodFQDN(t *testing.T) {
+	workerWith := func(hostname, subdomain string) []rayv1.WorkerGroupSpec {
+		return []rayv1.WorkerGroupSpec{{
+			GroupName: "wg",
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Hostname:   hostname,
+					Subdomain:  subdomain,
+					Containers: []corev1.Container{{Name: "ray-worker", Image: "rayproject/ray:latest"}},
+				},
+			},
+		}}
+	}
+
+	tests := map[string]struct {
+		spec        rayv1.RayClusterSpec
+		expectError bool
+	}{
+		"preset subdomain - error": {
+			spec:        rayv1.RayClusterSpec{EnablePodFQDN: new(true), WorkerGroupSpecs: workerWith("", "my-svc")},
+			expectError: true,
+		},
+		"preset hostname - error": {
+			spec:        rayv1.RayClusterSpec{EnablePodFQDN: new(true), WorkerGroupSpecs: workerWith("fixed", "")},
+			expectError: true,
+		},
+		"preset subdomain with per-pod DNS disabled - valid": {
+			spec: rayv1.RayClusterSpec{WorkerGroupSpecs: workerWith("", "my-svc")},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := validatePodFQDN(&tt.spec)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "cannot set spec.hostname or spec.subdomain")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterSpec_TLSOptionsRequiresFeatureGate(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, false)
 	cluster := &rayv1.RayCluster{

@@ -1549,7 +1549,6 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 
 	tests := map[string]struct {
 		userNodeIPAddress  string
-		presetSubdomain    string
 		clusterName        string
 		enablePodFQDN      bool
 		tlsEnabled         bool
@@ -1571,10 +1570,6 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 			userNodeIPAddress: "1.2.3.4",
 			expectPerPodDNS:   true,
 		},
-		"skipped when subdomain is preset": {
-			tlsEnabled:      true,
-			presetSubdomain: "tpu-webhook-svc",
-		},
 		"long cluster name stays within 63 chars": {
 			enablePodFQDN:   true,
 			clusterName:     strings.Repeat("a", 60),
@@ -1595,7 +1590,6 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 				cluster.Name = tc.clusterName
 			}
 			worker := *cluster.Spec.WorkerGroupSpecs[0].DeepCopy()
-			worker.Template.Spec.Subdomain = tc.presetSubdomain
 			if tc.userNodeIPAddress != "" {
 				worker.RayStartParams["node-ip-address"] = tc.userNodeIPAddress
 			}
@@ -1610,7 +1604,7 @@ func TestDefaultWorkerPodTemplate_PodFQDN(t *testing.T) {
 				assert.Empty(t, podTemplateSpec.Name)
 				assert.Equal(t, podName, podTemplateSpec.GenerateName)
 				assert.Empty(t, podTemplateSpec.Spec.Hostname)
-				assert.Equal(t, tc.presetSubdomain, podTemplateSpec.Spec.Subdomain)
+				assert.Empty(t, podTemplateSpec.Spec.Subdomain)
 				assert.Empty(t, nodeIPAddress)
 				return
 			}
