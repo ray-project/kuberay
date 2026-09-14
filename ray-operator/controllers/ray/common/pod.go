@@ -257,8 +257,6 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// Under mTLS the autoscaler must dial GCS by the head service DNS name so the TLS
 		// handshake matches the head certificate's DNS SAN; by default it would use the pod IP.
-		// Requires a Ray version whose `ray kuberay-autoscaler` accepts --gcs-address.
-		// TODO: put the Ray version here
 		gcsAddress := ""
 		if utils.IsTLSEnabled(&instance.Spec) {
 			gcsAddress = fmt.Sprintf("%s:%s", utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace), headPort)
@@ -895,6 +893,8 @@ func BuildAutoscalerContainer(autoscalerImage string, gcsAddress string) corev1.
 	//   args: ["ulimit -n 65536; $KUBERAY_GEN_AUTOSCALER_START_CMD"]
 	// This mirrors the KUBERAY_GEN_RAY_START_CMD pattern for Ray head/worker containers.
 	autoscalerStartCmd := "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)"
+	// --gcs-address requires Ray > 2.60 (https://github.com/ray-project/ray/pull/65894),
+	// older versions reject the flag and the sidecar fails to start.
 	if gcsAddress != "" {
 		autoscalerStartCmd += " --gcs-address=" + gcsAddress
 	}

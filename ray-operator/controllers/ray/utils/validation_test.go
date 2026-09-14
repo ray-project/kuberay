@@ -3614,6 +3614,44 @@ func TestValidateTLSOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "TLS with autoscaling on Ray 2.60.0 - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+				s.EnableInTreeAutoscaling = new(true)
+				s.RayVersion = "2.60.0"
+			},
+		},
+		{
+			name: "TLS with autoscaling on Ray 2.59.0 - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+				s.EnableInTreeAutoscaling = new(true)
+				s.RayVersion = "2.59.0"
+			},
+			expectError: true,
+			errorMsg:    "requires Ray 2.60.0 or later",
+		},
+		{
+			name: "TLS with autoscaling without rayVersion - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+				s.EnableInTreeAutoscaling = new(true)
+			},
+			expectError: true,
+			errorMsg:    "requires rayVersion to be set",
+		},
+		{
+			name: "TLS with autoscaler v1 - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+				s.EnableInTreeAutoscaling = new(true)
+				s.RayVersion = "2.60.0"
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{Version: new(rayv1.AutoscalerVersionV1)}
+			},
+			expectError: true,
+			errorMsg:    "requires autoscaler v2",
+		},
+		{
 			name: "tlsOptions set but enabled is false - valid (disables TLS)",
 			modify: func(s *rayv1.RayClusterSpec) {
 				s.TLSOptions = &rayv1.TLSOptions{Enabled: new(false)}
