@@ -85,10 +85,12 @@ env_vars:
 		dashboardAddress := net.JoinHostPort(dashboardHost, dashboardPort)
 		overrideAddress := "http://" + net.JoinHostPort(headService.Spec.ClusterIP, dashboardPort)
 
-		// Break only the submitter's default dashboard address. The operator can
-		// still reach the head Service, and RAY_ADDRESS bypasses DNS via its IP.
-		// Without address resolution in the health probe, submission never starts.
+		// We first create a normal submitter pod configuration
 		submitterTemplate := JobSubmitterPodTemplateApplyConfiguration()
+
+		// We then purposefully break the dashboard API hostname. We set it to be
+		// the submitter's own loopback address (where no dashboard API is running).
+		// The healthcheck must honor RAY_ADDRESS to reach the real dashboard and allow job submission to proceed.
 		submitterTemplate.Spec.WithHostAliases(corev1ac.HostAlias().
 			WithIP("127.0.0.1").WithHostnames(dashboardHost))
 		submitterTemplate.Spec.Containers[0].WithEnv(corev1ac.EnvVar().
@@ -105,6 +107,10 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(t, "Waiting for RayJob %s/%s to succeed with RAY_ADDRESS=%s and %s mapped to loopback",
 			rayJob.Namespace, rayJob.Name, overrideAddress, dashboardHost)
+
+		// Without the fix, the health check keeps retrying the broken hostname
+  		// and this wait times out. With the fix, it uses RAY_ADDRESS and the job
+  		// can submit and complete successfully.
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
 
