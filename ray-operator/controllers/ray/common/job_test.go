@@ -233,9 +233,8 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 }
 
 func TestBuildK8sJobDashboardHealthCommand(t *testing.T) {
-	if _, err := exec.LookPath("python"); err != nil {
-		t.Skip("python is required to execute the generated health probe")
-	}
+	_, err := exec.LookPath("python")
+	require.NoError(t, err, "python is required to execute the generated health probe")
 
 	tests := []struct {
 		name         string
