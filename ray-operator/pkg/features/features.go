@@ -105,6 +105,13 @@ const (
 	// (GcsFaultToleranceOptions.ActivePassiveHead and its leader election tuning
 	// fields).
 	GCSFaultToleranceActivePassiveHead featuregate.Feature = "GCSFaultToleranceActivePassiveHead" //nolint:gosec // G101 -- feature gate name, not a credential
+
+	// owner: @richabanker
+	// rep: N/A
+	// alpha: v1.8
+	//
+	// Enables selective forwarding of Kubernetes Node infrastructure events to RayCluster custom resources.
+	RayNodeEventForwarder featuregate.Feature = "RayNodeEventForwarder"
 )
 
 func init() {
@@ -124,6 +131,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterHistoryServer:            {Default: false, PreRelease: featuregate.Alpha},
 	KubernetesWAS:                      {Default: false, PreRelease: featuregate.Alpha},
 	GCSFaultToleranceActivePassiveHead: {Default: false, PreRelease: featuregate.Alpha},
+	RayNodeEventForwarder:              {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

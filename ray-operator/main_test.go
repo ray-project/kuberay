@@ -262,6 +262,74 @@ reconcileConcurrency: 100
 			},
 			expectErr: false,
 		},
+		{
+			name: "config with nodeEventForwarder",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+nodeEventForwarder:
+  enabled: true
+  sources:
+  - node-problem-detector
+  - nvidia-gpu-device-plugin
+  reasons:
+  - XIDError
+  - KernelDeadlock
+  types:
+  - Warning
+  - Normal
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: new(true),
+				ReconcileConcurrency: 1,
+				NodeEventForwarder: configapi.NodeEventForwarderConfiguration{
+					Enabled: true,
+					Sources: []string{"node-problem-detector", "nvidia-gpu-device-plugin"},
+					Reasons: []string{"XIDError", "KernelDeadlock"},
+					Types:   []string{"Warning", "Normal"},
+				},
+				QPS:   ptr.To(configapi.DefaultQPS),
+				Burst: ptr.To(configapi.DefaultBurst),
+			},
+			expectErr: false,
+		},
+		{
+			name: "invalid type for nodeEventForwarder",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+nodeEventForwarder: true
+`,
+			expectErr:   true,
+			errContains: "cannot unmarshal bool into Go struct field",
+		},
+		{
+			name: "invalid type for nodeEventForwarder.sources (space-separated string instead of list)",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+nodeEventForwarder:
+  enabled: true
+  sources: "node-problem-detector nvidia-gpu-device-plugin"
+`,
+			expectErr:   true,
+			errContains: "cannot unmarshal string into Go struct field",
+		},
 	}
 
 	for _, testcase := range testcases {

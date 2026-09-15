@@ -98,6 +98,32 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// NodeEventForwarder contains configuration for the Node Event Forwarder, which re-emits
+	// Kubernetes Node events (e.g. GPU XID errors reported by node-problem-detector)
+	// onto the RayCluster custom resources whose Pods run on the affected node, so they
+	// surface in the Ray Dashboard.
+	NodeEventForwarder NodeEventForwarderConfiguration `json:"nodeEventForwarder,omitempty"`
+}
+
+// NodeEventForwarderConfiguration specifies options for the Node Event Forwarder.
+type NodeEventForwarderConfiguration struct {
+	// Enabled indicates whether KubeRay operator should forward Kubernetes Node events
+	// to RayCluster custom resources.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Sources restricts event forwarding to Node events emitted by these components
+	// (matched against source.component and reportingController, e.g. "node-problem-detector").
+	// Empty means all sources.
+	Sources []string `json:"sources,omitempty"`
+
+	// Reasons restricts event forwarding to Node events with these reasons
+	// (e.g. "XIDError", "KernelDeadlock"). Empty means all reasons.
+	Reasons []string `json:"reasons,omitempty"`
+
+	// Types restricts event forwarding to Node events of these types ("Warning", "Normal").
+	// Empty means all types.
+	Types []string `json:"types,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {

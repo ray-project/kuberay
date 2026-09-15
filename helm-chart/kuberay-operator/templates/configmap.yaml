@@ -20,6 +20,24 @@ data:
     {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
     enableMetrics: {{ .Values.metrics.enabled }}
     {{- end }}
+    {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
+    nodeEventForwarder:
+      enabled: {{ .Values.nodeEventForwarder.enabled }}
+      {{- if .Values.nodeEventForwarder.enabled }}
+      {{- if .Values.nodeEventForwarder.sources }}
+      sources:
+        {{- toYaml .Values.nodeEventForwarder.sources | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nodeEventForwarder.reasons }}
+      reasons:
+        {{- toYaml .Values.nodeEventForwarder.reasons | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nodeEventForwarder.types }}
+      types:
+        {{- toYaml .Values.nodeEventForwarder.types | nindent 8 }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
     {{- if hasKey .Values "reconcileConcurrency" }}
     reconcileConcurrency: {{ .Values.reconcileConcurrency }}
     {{- end }}
