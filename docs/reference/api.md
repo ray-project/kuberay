@@ -771,7 +771,9 @@ _Appears in:_
 
 
 ScaleGate marks a worker group as not currently scalable. Type is the merge
-key, so a gate is added and removed by exactly one controller.
+key, so a gate is added and removed by exactly one controller. This API is
+intended to be consistent with PodCondition:
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
 
 
 
@@ -780,7 +782,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type uniquely identifies this gate and its owner. It must be a<br />domain-prefixed path, for example "example.com/gate-name". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
+| `type` _string_ | Type uniquely identifies this gate and its owner. It must be a<br />path, for example "example.com/gate-name". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
 
 
 #### ScaleStrategy
@@ -797,7 +799,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
-| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by a domain-prefixed type. A writer must add or remove<br />only its own gates via Server-Side Apply under a distinct field manager;<br />replacing the list wholesale, or using read-modify-write Update, drops<br />gates owned by others. |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by its type. A writer must add or remove only its own<br />gates via Server-Side Apply under a distinct field manager; replacing the<br />list wholesale, or using read-modify-write Update, drops gates owned by<br />others. |  |  |
 
 
 #### SubmitterConfig

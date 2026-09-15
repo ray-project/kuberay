@@ -6,10 +6,12 @@ package v1
 // with apply.
 //
 // ScaleGate marks a worker group as not currently scalable. Type is the merge
-// key, so a gate is added and removed by exactly one controller.
+// key, so a gate is added and removed by exactly one controller. This API is
+// intended to be consistent with PodCondition:
+// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
 type ScaleGateApplyConfiguration struct {
 	// Type uniquely identifies this gate and its owner. It must be a
-	// domain-prefixed path, for example "example.com/gate-name".
+	// path, for example "example.com/gate-name".
 	Type *string `json:"type,omitempty"`
 }
 

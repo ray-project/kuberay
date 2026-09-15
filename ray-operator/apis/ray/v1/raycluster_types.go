@@ -495,10 +495,10 @@ type ScaleStrategy struct {
 	// field across reconciles but never reads or writes it; the Ray Autoscaler
 	// consumes it and falls back to another worker group while it is non-empty.
 	//
-	// Each gate is keyed by a domain-prefixed type. A writer must add or remove
-	// only its own gates via Server-Side Apply under a distinct field manager;
-	// replacing the list wholesale, or using read-modify-write Update, drops
-	// gates owned by others.
+	// Each gate is keyed by its type. A writer must add or remove only its own
+	// gates via Server-Side Apply under a distinct field manager; replacing the
+	// list wholesale, or using read-modify-write Update, drops gates owned by
+	// others.
 	// +optional
 	// +listType=map
 	// +listMapKey=type
@@ -506,10 +506,12 @@ type ScaleStrategy struct {
 }
 
 // ScaleGate marks a worker group as not currently scalable. Type is the merge
-// key, so a gate is added and removed by exactly one controller.
+// key, so a gate is added and removed by exactly one controller. This API is
+// intended to be consistent with PodCondition:
+// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
 type ScaleGate struct {
 	// Type uniquely identifies this gate and its owner. It must be a
-	// domain-prefixed path, for example "example.com/gate-name".
+	// path, for example "example.com/gate-name".
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=316
 	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
