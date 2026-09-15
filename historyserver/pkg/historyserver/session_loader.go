@@ -217,7 +217,7 @@ func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cache.Add(clusterSessionKey, &cacheEntry{encoded: encoded})
+	s.cache.Add(clusterSessionKey, &cacheEntry{encoded: encoded, decoded: weak.Make(snap)})
 	s.evictToByteBudget()
 	return nil
 }
