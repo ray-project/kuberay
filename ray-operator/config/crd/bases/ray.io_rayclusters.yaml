@@ -347,7 +347,7 @@ spec:
                 type: boolean
               gcsFaultToleranceOptions:
                 properties:
-                  activePassiveHead:
+                  activePassiveHeadOptions:
                     properties:
                       enabled:
                         type: boolean
@@ -367,6 +367,11 @@ spec:
                         minimum: 1
                         type: integer
                     type: object
+                    x-kubernetes-validations:
+                    - message: leaseDurationSeconds must be greater than renewDeadlineSeconds
+                      rule: self.leaseDurationSeconds > self.renewDeadlineSeconds
+                    - message: renewDeadlineSeconds must be greater than retryPeriodSeconds
+                      rule: self.renewDeadlineSeconds > self.retryPeriodSeconds
                   backend:
                     enum:
                     - redis

@@ -321,7 +321,6 @@ func TestValidateRayClusterSpecEmbeddedGCSFeatureGate(t *testing.T) {
 func TestValidateGcsActivePassiveHead(t *testing.T) {
 	enabled := true
 	disabled := false
-	ptr := func(v int32) *int32 { return &v }
 
 	tests := []struct {
 		options      *rayv1.GcsFaultToleranceOptions
@@ -331,88 +330,42 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 		expectError  bool
 	}{
 		{
-			name:        "nil options",
-			options:     nil,
-			gateEnabled: true,
-		},
-		{
-			name:        "activePassiveHead not set",
+			name:        "activePassiveHeadOptions not set",
 			options:     &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			gateEnabled: true,
 		},
 		{
 			name: "disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &disabled},
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &disabled},
 			},
 			gateEnabled: true,
 		},
 		{
 			name: "feature gate disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress:      "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
+				RedisAddress:             "redis:6379",
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  false,
 			expectError:  true,
-			errorMessage: "activePassiveHead requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
+			errorMessage: "activePassiveHeadOptions requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
 		},
 		{
 			name: "rocksdb backend not supported",
 			options: &rayv1.GcsFaultToleranceOptions{
-				Backend:           rayv1.GcsFTBackendRocksDB,
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
+				Backend:                  rayv1.GcsFTBackendRocksDB,
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  true,
 			expectError:  true,
-			errorMessage: "activePassiveHead is only supported with the 'redis' backend",
+			errorMessage: "activePassiveHeadOptions is only supported with the 'redis' backend",
 		},
 		{
-			name: "leaseDuration not greater than renewDeadline",
+			name: "valid",
 			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enabled:              &enabled,
-					LeaseDurationSeconds: ptr(10),
-					RenewDeadlineSeconds: ptr(10),
-				},
-			},
-			gateEnabled:  true,
-			expectError:  true,
-			errorMessage: "activePassiveHead.leaseDurationSeconds must be greater than activePassiveHead.renewDeadlineSeconds",
-		},
-		{
-			name: "renewDeadline not greater than retryPeriod",
-			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enabled:              &enabled,
-					RenewDeadlineSeconds: ptr(5),
-					RetryPeriodSeconds:   ptr(5),
-				},
-			},
-			gateEnabled:  true,
-			expectError:  true,
-			errorMessage: "activePassiveHead.renewDeadlineSeconds must be greater than activePassiveHead.retryPeriodSeconds",
-		},
-		{
-			name: "valid with unset timings",
-			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress:      "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
-			},
-			gateEnabled: true,
-		},
-		{
-			name: "valid with explicit values",
-			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress: "redis:6379",
-				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
-					Enabled:              &enabled,
-					LeaseDurationSeconds: ptr(20),
-					RenewDeadlineSeconds: ptr(15),
-					RetryPeriodSeconds:   ptr(3),
-				},
+				RedisAddress:             "redis:6379",
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled: true,
 		},
@@ -998,7 +951,8 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			expectedErr: fmt.Sprintf(
 				"autoscalerOptions.env must not contain %s: "+
 					"it is managed by KubeRay and injected automatically into the autoscaler container",
-				KUBERAY_GEN_AUTOSCALER_START_CMD),
+				KUBERAY_GEN_AUTOSCALER_START_CMD,
+			),
 		},
 		fmt.Sprintf("should return error if %s is set in autoscalerOptions.env even when autoscalerOptions.args is absent", KUBERAY_GEN_AUTOSCALER_START_CMD): {
 			spec: rayv1.RayClusterSpec{
@@ -1020,7 +974,8 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			expectedErr: fmt.Sprintf(
 				"autoscalerOptions.env must not contain %s: "+
 					"it is managed by KubeRay and injected automatically into the autoscaler container",
-				KUBERAY_GEN_AUTOSCALER_START_CMD),
+				KUBERAY_GEN_AUTOSCALER_START_CMD,
+			),
 		},
 	}
 
