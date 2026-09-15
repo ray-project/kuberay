@@ -72,26 +72,11 @@ pip: ["python-multipart==0.0.6"]
 	assert.Equal(t, expectedMap, actualMap)
 }
 
-const expectedK8sJobHealthCommand = `python -c '
-import os
-import sys
-import urllib.request
-
-address = (
-    os.environ.get("RAY_API_SERVER_ADDRESS")
-    or os.environ.get("RAY_ADDRESS")
-    or sys.argv[1]
-)
-health_url = address.rstrip("/") + "/api/gcs_healthz"
-with urllib.request.urlopen(health_url, timeout=10) as response:
-    sys.exit(0 if b"success" in response.read() else 1)
-' 'http://127.0.0.1:8265'`
-
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
 		"until",
-		expectedK8sJobHealthCommand,
+		fmt.Sprintf(utils.K8sJobDashboardHealthCommand, utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds, "http://127.0.0.1:8265"),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
@@ -232,7 +217,7 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildK8sJobDashboardHealthCommand(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobModeDashboardAddressOverrides(t *testing.T) {
 	_, err := exec.LookPath("python")
 	require.NoError(t, err, "python is required to execute the generated health probe")
 
@@ -264,9 +249,13 @@ func TestBuildK8sJobDashboardHealthCommand(t *testing.T) {
 			}
 
 			// Only the expected address returns success; other paths return HTTP 404.
-			command := buildK8sJobDashboardHealthCommand(server.URL + "/fallback")
+			rayJob := rayJobTemplate()
+			rayJob.Status.DashboardURL = server.URL + "/fallback"
+			command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(command), 2)
 			//nolint:gosec // G204: intentionally execute the generated probe using only a fixed template and the local test server URL.
-			cmd := exec.CommandContext(t.Context(), "/bin/bash", "-c", "exec "+command)
+			cmd := exec.CommandContext(t.Context(), "/bin/bash", "-c", "exec "+command[1])
 			output, err := cmd.CombinedOutput()
 			require.NoError(t, err, "%s", output)
 		})
@@ -343,7 +332,7 @@ pip: ["python-multipart==0.0.6"]
 	}
 	expected := []string{
 		"until",
-		expectedK8sJobHealthCommand,
+		fmt.Sprintf(utils.K8sJobDashboardHealthCommand, utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds, "http://127.0.0.1:8265"),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",

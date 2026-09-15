@@ -341,7 +341,25 @@ const (
 	// BasePythonHealthCommand checks a single health URL; args: url, timeout_sec.
 	// This is used when wget is not available (e.g. slim Ray images).
 	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
-	RayNodeHealthPath       = "/api/healthz"
+	// K8sJobDashboardHealthCommand checks dashboard health using submitter environment overrides.
+	// Args: health path (no leading slash), timeout_sec, generated fallback Service URL.
+	// Prefers RAY_API_SERVER_ADDRESS over RAY_ADDRESS, then the fallback address, following Ray's get_address_for_submission_client:
+	// https://github.com/ray-project/ray/blob/9634fa77aab2ece9759b380d20d315d4e27c912b/python/ray/dashboard/utils.py#L726-L734
+	K8sJobDashboardHealthCommand = `python -c '
+import os
+import sys
+import urllib.request
+
+address = (
+    os.environ.get("RAY_API_SERVER_ADDRESS")
+    or os.environ.get("RAY_ADDRESS")
+    or sys.argv[1]
+)
+health_url = address.rstrip("/") + "/%s"
+with urllib.request.urlopen(health_url, timeout=%d) as response:
+    sys.exit(0 if b"success" in response.read() else 1)
+' '%s'`
+	RayNodeHealthPath = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
