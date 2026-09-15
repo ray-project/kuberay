@@ -5588,17 +5588,17 @@ spec:
                             scaleGate:
                               items:
                                 properties:
-                                  name:
+                                  type:
                                     maxLength: 316
                                     minLength: 1
                                     pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$
                                     type: string
                                 required:
-                                - name
+                                - type
                                 type: object
                               type: array
                               x-kubernetes-list-map-keys:
-                              - name
+                              - type
                               x-kubernetes-list-type: map
                             workersToDelete:
                               items:

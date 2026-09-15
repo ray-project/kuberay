@@ -14,7 +14,7 @@ type ScaleStrategyApplyConfiguration struct {
 	// field across reconciles but never reads or writes it; the Ray Autoscaler
 	// consumes it and falls back to another worker group while it is non-empty.
 	//
-	// Each gate is keyed by a domain-prefixed name. A writer must add or remove
+	// Each gate is keyed by a domain-prefixed type. A writer must add or remove
 	// only its own gates via Server-Side Apply under a distinct field manager;
 	// replacing the list wholesale, or using read-modify-write Update, drops
 	// gates owned by others.

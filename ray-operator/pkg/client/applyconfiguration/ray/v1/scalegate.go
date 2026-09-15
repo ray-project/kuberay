@@ -5,12 +5,12 @@ package v1
 // ScaleGateApplyConfiguration represents a declarative configuration of the ScaleGate type for use
 // with apply.
 //
-// ScaleGate marks a worker group as not currently scalable. Name is the merge
+// ScaleGate marks a worker group as not currently scalable. Type is the merge
 // key, so a gate is added and removed by exactly one controller.
 type ScaleGateApplyConfiguration struct {
-	// Name uniquely identifies this gate and its owner. It must be a
+	// Type uniquely identifies this gate and its owner. It must be a
 	// domain-prefixed path, for example "example.com/gate-name".
-	Name *string `json:"name,omitempty"`
+	Type *string `json:"type,omitempty"`
 }
 
 // ScaleGateApplyConfiguration constructs a declarative configuration of the ScaleGate type for use with
@@ -19,10 +19,10 @@ func ScaleGate() *ScaleGateApplyConfiguration {
 	return &ScaleGateApplyConfiguration{}
 }
 
-// WithName sets the Name field in the declarative configuration to the given value
+// WithType sets the Type field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Name field is set to the value of the last call.
-func (b *ScaleGateApplyConfiguration) WithName(value string) *ScaleGateApplyConfiguration {
-	b.Name = &value
+// If called multiple times, the Type field is set to the value of the last call.
+func (b *ScaleGateApplyConfiguration) WithType(value string) *ScaleGateApplyConfiguration {
+	b.Type = &value
 	return b
 }

@@ -495,25 +495,25 @@ type ScaleStrategy struct {
 	// field across reconciles but never reads or writes it; the Ray Autoscaler
 	// consumes it and falls back to another worker group while it is non-empty.
 	//
-	// Each gate is keyed by a domain-prefixed name. A writer must add or remove
+	// Each gate is keyed by a domain-prefixed type. A writer must add or remove
 	// only its own gates via Server-Side Apply under a distinct field manager;
 	// replacing the list wholesale, or using read-modify-write Update, drops
 	// gates owned by others.
 	// +optional
 	// +listType=map
-	// +listMapKey=name
+	// +listMapKey=type
 	ScaleGate []ScaleGate `json:"scaleGate,omitempty"`
 }
 
-// ScaleGate marks a worker group as not currently scalable. Name is the merge
+// ScaleGate marks a worker group as not currently scalable. Type is the merge
 // key, so a gate is added and removed by exactly one controller.
 type ScaleGate struct {
-	// Name uniquely identifies this gate and its owner. It must be a
+	// Type uniquely identifies this gate and its owner. It must be a
 	// domain-prefixed path, for example "example.com/gate-name".
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=316
 	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
-	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
