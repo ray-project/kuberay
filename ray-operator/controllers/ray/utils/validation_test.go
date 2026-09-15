@@ -4173,3 +4173,22 @@ func TestValidateCollectorOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a topology group
+func TestValidateRayClusterSpec_Topology(t *testing.T) {
+	spec := createBasicRayClusterSpec()
+	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
+		GroupName:   "test",
+		MinReplicas: new(int32(1)),
+		MaxReplicas: new(int32(1)),
+		Template:    corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
+		Topology:    &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}}},
+	}}
+
+	spec.RayVersion = ""
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "is unset or invalid")
+	spec.RayVersion = "2.44.0"
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "minimum Ray version is 2.45.0")
+	spec.RayVersion = "2.45.0"
+	require.NoError(t, ValidateRayClusterSpec(spec, nil))
+}

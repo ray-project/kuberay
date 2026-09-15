@@ -472,3 +472,17 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace."
+
+  - it: Should include allowedNodeLabels from values.configuration
+    set:
+      configuration:
+        enabled: true
+        allowedNodeLabels:
+          - topology.kubernetes.io/zone
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "allowedNodeLabels:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "- topology.kubernetes.io/zone"
