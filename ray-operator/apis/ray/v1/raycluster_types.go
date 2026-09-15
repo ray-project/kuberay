@@ -180,10 +180,10 @@ type GcsFaultToleranceOptions struct {
 
 	// ----- Active-Passive Head HA fields -----
 
-	// ActivePassiveOptions configures active-passive high availability for the GCS.
+	// ActivePassiveHeadOptions configures active-passive high availability for the GCS.
 	// It is only supported with the "redis" backend, not with "rocksdb".
 	// +optional
-	ActivePassiveOptions *ActivePassiveHeadOptions `json:"activePassiveOptions,omitempty"`
+	ActivePassiveHeadOptions *ActivePassiveHeadOptions `json:"activePassiveHeadOptions,omitempty"`
 }
 
 // ActivePassiveHeadOptions configures active-passive head high availability for
@@ -191,9 +191,8 @@ type GcsFaultToleranceOptions struct {
 // +kubebuilder:validation:XValidation:rule="self.leaseDurationSeconds > self.renewDeadlineSeconds",message="leaseDurationSeconds must be greater than renewDeadlineSeconds"
 // +kubebuilder:validation:XValidation:rule="self.renewDeadlineSeconds > self.retryPeriodSeconds",message="renewDeadlineSeconds must be greater than retryPeriodSeconds"
 type ActivePassiveHeadOptions struct {
-	// Enabled controls whether active-passive high availability is active for the
-	// GCS. Defaults to false when omitted. When enabled, KubeRay will provision a
-	// standby head node to ensure quick recovery.
+	// Enabled turns on active-passive head HA for the RayCluster. When true, KubeRay
+	// provisions a standby head Pod. Defaults to false.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 	// LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.

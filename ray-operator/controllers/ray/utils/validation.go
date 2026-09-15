@@ -381,27 +381,20 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 	return nil
 }
 
-// validateGcsActivePassiveHead validates the active-passive head HA configuration
-// on GcsFaultToleranceOptions. It enforces the feature gate and the redis backend
-// requirement. The lease timing invariants are enforced by CEL rules on
-// ActivePassiveHeadOptions, and the RedisAddress requirement by
-// validateGcsFaultToleranceBackend.
+// validateGcsActivePassiveHead enforces the feature gate and redis-backend
+// requirement for active-passive head HA.
 func validateGcsActivePassiveHead(options *rayv1.GcsFaultToleranceOptions) error {
-	if options == nil {
-		return nil
-	}
-
-	apOpts := options.ActivePassiveOptions
+	apOpts := options.ActivePassiveHeadOptions
 	if apOpts == nil || !ptr.Deref(apOpts.Enabled, false) {
 		return nil
 	}
 
 	if !features.Enabled(features.GCSFaultToleranceActivePassiveHead) {
-		return fmt.Errorf("activePassiveOptions requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
+		return fmt.Errorf("activePassiveHeadOptions requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
 	}
 
 	if GetGcsFaultToleranceBackend(options) != rayv1.GcsFTBackendRedis {
-		return fmt.Errorf("activePassiveOptions is only supported with the 'redis' backend")
+		return fmt.Errorf("activePassiveHeadOptions is only supported with the 'redis' backend")
 	}
 
 	return nil

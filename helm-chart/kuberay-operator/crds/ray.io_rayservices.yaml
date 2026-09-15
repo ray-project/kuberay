@@ -335,7 +335,7 @@ spec:
                     type: boolean
                   gcsFaultToleranceOptions:
                     properties:
-                      activePassiveOptions:
+                      activePassiveHeadOptions:
                         properties:
                           enabled:
                             type: boolean

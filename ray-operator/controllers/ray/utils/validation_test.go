@@ -330,47 +330,42 @@ func TestValidateGcsActivePassiveHead(t *testing.T) {
 		expectError  bool
 	}{
 		{
-			name:        "nil options",
-			options:     nil,
-			gateEnabled: true,
-		},
-		{
-			name:        "activePassiveOptions not set",
+			name:        "activePassiveHeadOptions not set",
 			options:     &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			gateEnabled: true,
 		},
 		{
 			name: "disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
-				ActivePassiveOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &disabled},
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &disabled},
 			},
 			gateEnabled: true,
 		},
 		{
 			name: "feature gate disabled",
 			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress:         "redis:6379",
-				ActivePassiveOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
+				RedisAddress:             "redis:6379",
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  false,
 			expectError:  true,
-			errorMessage: "activePassiveOptions requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
+			errorMessage: "activePassiveHeadOptions requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
 		},
 		{
 			name: "rocksdb backend not supported",
 			options: &rayv1.GcsFaultToleranceOptions{
-				Backend:              rayv1.GcsFTBackendRocksDB,
-				ActivePassiveOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
+				Backend:                  rayv1.GcsFTBackendRocksDB,
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled:  true,
 			expectError:  true,
-			errorMessage: "activePassiveOptions is only supported with the 'redis' backend",
+			errorMessage: "activePassiveHeadOptions is only supported with the 'redis' backend",
 		},
 		{
 			name: "valid",
 			options: &rayv1.GcsFaultToleranceOptions{
-				RedisAddress:         "redis:6379",
-				ActivePassiveOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
+				RedisAddress:             "redis:6379",
+				ActivePassiveHeadOptions: &rayv1.ActivePassiveHeadOptions{Enabled: &enabled},
 			},
 			gateEnabled: true,
 		},
