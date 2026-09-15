@@ -246,7 +246,18 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 
 	go func() {
 		logrus.Infof("Starting event collector on port %d", port)
-		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		server := &http.Server{
+			Addr:              fmt.Sprintf(":%d", port),
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second, // Allow time to read a full batch of events.
+			// WriteTimeout is measured from when request headers are read, the same
+			// starting point as ReadTimeout, not from when the handler begins writing.
+			// It must stay >= ReadTimeout plus real write time, or a slow request body
+			// can eat the whole write budget before the response is ever sent.
+			WriteTimeout: 40 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+		logrus.Fatal(server.ListenAndServe())
 	}()
 
 	ec.producersWG.Add(1)

@@ -127,6 +127,12 @@ linters:
       - linters: [misspell]
         path: historyserver/
         text: '(?i)`cancelled` is a misspelling'
+      # Both filepath.Walk callbacks here only read the os.FileInfo the walk itself
+      # already provides; neither re-opens or otherwise re-touches the path
+      # afterward, so there's no time-of-check-to-time-of-use race for gosec to flag.
+      - linters: [gosec]
+        path: '^historyserver/pkg/collector/eventcollector/eventcollector\.go$'
+        text: '^G122:'
       # The rules below cover findings that need a real code or design change
       # rather than a mechanical edit. Each names what that change is; delete the
       # rule once it lands.
@@ -143,10 +149,6 @@ linters:
       - linters: [gosec]
         path: '^historyserver/pkg/compression/compression\.go$'
         text: '^G110:'
-
-      - linters: [gosec]
-        path: '^historyserver/pkg/collector/eventcollector/eventcollector\.go$'
-        text: '^G(114|122):'
 
       - linters: [gosec]
         path: '^historyserver/cmd/collector/main\.go$'
