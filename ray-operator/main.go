@@ -295,7 +295,7 @@ func main() {
 		)
 	}
 
-	batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient())
+	batchSchedulerManager, err = batchscheduler.NewSchedulerManager(ctx, config, restConfig, mgr.GetClient(), mgr.GetEventRecorder("batch-scheduler"))
 	exitOnError(err, "unable to create batch scheduler manager")
 	batchSchedulerManager.AddToScheme(mgr.GetScheme())
 

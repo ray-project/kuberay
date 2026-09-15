@@ -14,6 +14,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +40,8 @@ const (
 )
 
 type KubernetesWASV1Alpha3Scheduler struct {
-	cli client.Client
+	cli      client.Client
+	recorder events.EventRecorder
 }
 
 // Provider implements kuberneteswas.Provider for scheduling.k8s.io/v1alpha3.
@@ -85,6 +87,10 @@ func (k *KubernetesWASV1Alpha3Scheduler) CleanupOnCompletion(ctx context.Context
 	return k.deleteSchedulingResources(ctx, rayCluster)
 }
 
+func (k *KubernetesWASV1Alpha3Scheduler) SchedulingConditions(_ context.Context, _ *rayv1.RayCluster) ([]metav1.Condition, error) {
+	return nil, nil
+}
+
 // The methods below adapt this package to kuberneteswas.Provider.
 
 func (p *Provider) GroupVersion() schema.GroupVersion {
@@ -99,8 +105,8 @@ func (p *Provider) AddToScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(schedulingv1alpha3.AddToScheme(scheme))
 }
 
-func (p *Provider) NewScheduler(cli client.Client) schedulerinterface.BatchScheduler {
-	return &KubernetesWASV1Alpha3Scheduler{cli: cli}
+func (p *Provider) NewScheduler(cli client.Client, recorder events.EventRecorder) schedulerinterface.BatchScheduler {
+	return &KubernetesWASV1Alpha3Scheduler{cli: cli, recorder: recorder}
 }
 
 func (p *Provider) ConfigureReconciler(b *builder.Builder) *builder.Builder {

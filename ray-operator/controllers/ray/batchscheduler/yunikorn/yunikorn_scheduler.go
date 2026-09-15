@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -141,7 +142,11 @@ func (y *YuniKornScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Obje
 	return false, nil
 }
 
-func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
+func (y *YuniKornScheduler) SchedulingConditions(_ context.Context, _ *rayv1.RayCluster) ([]metav1.Condition, error) {
+	return nil, nil
+}
+
+func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client, _ events.EventRecorder) (schedulerinterface.BatchScheduler, error) {
 	return &YuniKornScheduler{}, nil
 }
 

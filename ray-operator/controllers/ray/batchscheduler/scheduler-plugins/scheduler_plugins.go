@@ -10,6 +10,7 @@ import (
 	ktypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
@@ -118,7 +119,11 @@ func (k *KubeScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) 
 	return false, nil
 }
 
-func (kf *KubeSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
+func (k *KubeScheduler) SchedulingConditions(_ context.Context, _ *rayv1.RayCluster) ([]metav1.Condition, error) {
+	return nil, nil
+}
+
+func (kf *KubeSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client, _ events.EventRecorder) (schedulerinterface.BatchScheduler, error) {
 	if err := v1alpha1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, err
 	}
