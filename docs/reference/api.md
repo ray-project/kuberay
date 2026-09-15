@@ -782,7 +782,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type uniquely identifies this gate and its owner. It must be a<br />path, for example "example.com/gate-name". |  | MaxLength: 316 <br />MinLength: 1 <br />Pattern: `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$` <br /> |
+| `type` _string_ | Type uniquely identifies this gate and its owner, for example<br />"example.com/gate-name". |  |  |
 
 
 #### ScaleStrategy

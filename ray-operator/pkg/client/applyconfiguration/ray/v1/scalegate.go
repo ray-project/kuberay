@@ -10,8 +10,8 @@ package v1
 // intended to be consistent with PodCondition:
 // https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
 type ScaleGateApplyConfiguration struct {
-	// Type uniquely identifies this gate and its owner. It must be a
-	// path, for example "example.com/gate-name".
+	// Type uniquely identifies this gate and its owner, for example
+	// "example.com/gate-name".
 	Type *string `json:"type,omitempty"`
 }
 

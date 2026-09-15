@@ -510,11 +510,8 @@ type ScaleStrategy struct {
 // intended to be consistent with PodCondition:
 // https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
 type ScaleGate struct {
-	// Type uniquely identifies this gate and its owner. It must be a
-	// path, for example "example.com/gate-name".
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=316
-	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`
+	// Type uniquely identifies this gate and its owner, for example
+	// "example.com/gate-name".
 	Type string `json:"type"`
 }
 
