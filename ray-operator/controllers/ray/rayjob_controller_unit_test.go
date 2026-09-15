@@ -192,11 +192,15 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
 	expectedK8sJobModeArgs := []string{
 		`until python -c '
+import os
 import sys
 import urllib.request
-from ray.dashboard.utils import get_address_for_submission_client
 
-address = get_address_for_submission_client(sys.argv[1])
+address = (
+    os.environ.get("RAY_API_SERVER_ADDRESS")
+    or os.environ.get("RAY_ADDRESS")
+    or sys.argv[1]
+)
 health_url = address.rstrip("/") + "/api/gcs_healthz"
 with urllib.request.urlopen(health_url, timeout=10) as response:
     sys.exit(0 if b"success" in response.read() else 1)

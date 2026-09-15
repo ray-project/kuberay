@@ -73,11 +73,15 @@ pip: ["python-multipart==0.0.6"]
 }
 
 const expectedK8sJobHealthCommand = `python -c '
+import os
 import sys
 import urllib.request
-from ray.dashboard.utils import get_address_for_submission_client
 
-address = get_address_for_submission_client(sys.argv[1])
+address = (
+    os.environ.get("RAY_API_SERVER_ADDRESS")
+    or os.environ.get("RAY_ADDRESS")
+    or sys.argv[1]
+)
 health_url = address.rstrip("/") + "/api/gcs_healthz"
 with urllib.request.urlopen(health_url, timeout=10) as response:
     sys.exit(0 if b"success" in response.read() else 1)
@@ -228,7 +232,7 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildJobSubmitCommandHealthProbeUsesResolvedAddress(t *testing.T) {
+func TestBuildJobSubmitCommandHealthProbeUsesEnvironmentAddress(t *testing.T) {
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 is required to execute the generated health probe")
@@ -238,16 +242,65 @@ func TestBuildJobSubmitCommandHealthProbeUsesResolvedAddress(t *testing.T) {
 	command, err := BuildJobSubmitCommand(rayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
 
-	// Execute the generated Python, stubbing only Ray's resolver and HTTP request.
-	const script = `import shlex
+	tests := []struct {
+		name        string
+		env         map[string]string
+		expectedURL string
+	}{
+		{
+			name:        "no overrides",
+			env:         map[string]string{},
+			expectedURL: "http://head-svc:8265/api/gcs_healthz",
+		},
+		{
+			name:        "Ray address",
+			env:         map[string]string{"RAY_ADDRESS": "http://ray-dashboard:8265"},
+			expectedURL: "http://ray-dashboard:8265/api/gcs_healthz",
+		},
+		{
+			name:        "API server address",
+			env:         map[string]string{"RAY_API_SERVER_ADDRESS": "http://api-dashboard:8265"},
+			expectedURL: "http://api-dashboard:8265/api/gcs_healthz",
+		},
+		{
+			name: "API server address takes precedence",
+			env: map[string]string{
+				"RAY_API_SERVER_ADDRESS": "http://api-dashboard:8265",
+				"RAY_ADDRESS":            "http://ray-dashboard:8265",
+			},
+			expectedURL: "http://api-dashboard:8265/api/gcs_healthz",
+		},
+		{
+			name: "empty API server address",
+			env: map[string]string{
+				"RAY_API_SERVER_ADDRESS": "",
+				"RAY_ADDRESS":            "http://ray-dashboard:8265",
+			},
+			expectedURL: "http://ray-dashboard:8265/api/gcs_healthz",
+		},
+		{
+			name:        "empty overrides",
+			env:         map[string]string{"RAY_API_SERVER_ADDRESS": "", "RAY_ADDRESS": ""},
+			expectedURL: "http://head-svc:8265/api/gcs_healthz",
+		},
+		{
+			name:        "HTTPS and trailing slashes",
+			env:         map[string]string{"RAY_API_SERVER_ADDRESS": "https://api-dashboard:8265///"},
+			expectedURL: "https://api-dashboard:8265/api/gcs_healthz",
+		},
+	}
+
+	// Execute the generated Python with an isolated environment, mocking only HTTP.
+	const script = `import json
+import os
+import shlex
 import sys
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 args = shlex.split(sys.argv[1])
-resolver = Mock(return_value="http://alternate-dashboard:8265///")
-ray_utils = SimpleNamespace(get_address_for_submission_client=resolver)
-with patch.dict(sys.modules, {"ray.dashboard.utils": ray_utils}), patch("urllib.request.urlopen") as request:
+env = json.loads(sys.argv[2])
+expected_url = sys.argv[3]
+with patch.dict(os.environ, env, clear=True), patch("urllib.request.urlopen") as request:
     request.return_value.__enter__.return_value = request.return_value
     request.return_value.read.return_value = b"success"
     sys.argv = ["-c", *args[3:]]
@@ -255,14 +308,22 @@ with patch.dict(sys.modules, {"ray.dashboard.utils": ray_utils}), patch("urllib.
         exec(args[2])
     except SystemExit as result:
         assert result.code == 0
-    resolver.assert_called_once_with("http://head-svc:8265")
-    request.assert_called_once_with("http://alternate-dashboard:8265/api/gcs_healthz", timeout=10)
+    else:
+        raise AssertionError("probe did not exit")
+    request.assert_called_once_with(expected_url, timeout=10)
 `
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, python, "-c", script, command[1])
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "%s", output)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := json.Marshal(tt.env)
+			require.NoError(t, err)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			// Disable site packages so the probe cannot depend on an installed Ray package.
+			cmd := exec.CommandContext(ctx, python, "-S", "-c", script, command[1], string(env), tt.expectedURL)
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "%s", output)
+		})
+	}
 }
 
 func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {

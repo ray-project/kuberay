@@ -131,8 +131,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	// Wait until Ray Dashboard GCS is healthy before proceeding.
 	// In SidecarMode the submitter shares the head Pod's network namespace, so we
-	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
-	// reach the dashboard through the head Service.
+	// probe localhost. In K8sJobMode the submitter probes the dashboard URL from
+	// its environment overrides, falling back to the head Service address.
 	var healthURL string
 	if submissionMode == rayv1.SidecarMode {
 		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
@@ -214,15 +214,22 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	return cmd, nil
 }
 
-// buildK8sJobDashboardHealthCommand resolves the dashboard inside the submitter,
-// using the installed Ray CLI's RAY_ADDRESS / RAY_API_SERVER_ADDRESS semantics.
+// buildK8sJobDashboardHealthCommand reads dashboard URL overrides inside the submitter,
+// preferring RAY_API_SERVER_ADDRESS over RAY_ADDRESS, then the fallback address.
+// This follows the environment-variable precedence in Ray's get_address_for_submission_client:
+// https://github.com/ray-project/ray/blob/9634fa77aab2ece9759b380d20d315d4e27c912b/python/ray/dashboard/utils.py#L726-L734
+// Overrides must be HTTP(S) dashboard URLs; Ray Client and GCS addresses are not resolved.
 func buildK8sJobDashboardHealthCommand(address string) string {
 	const command = `python -c '
+import os
 import sys
 import urllib.request
-from ray.dashboard.utils import get_address_for_submission_client
 
-address = get_address_for_submission_client(sys.argv[1])
+address = (
+    os.environ.get("RAY_API_SERVER_ADDRESS")
+    or os.environ.get("RAY_ADDRESS")
+    or sys.argv[1]
+)
 health_url = address.rstrip("/") + "/%s"
 with urllib.request.urlopen(health_url, timeout=%d) as response:
     sys.exit(0 if b"success" in response.read() else 1)
