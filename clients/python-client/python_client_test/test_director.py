@@ -120,3 +120,19 @@ class TestDirector(unittest.TestCase):
         ][0]["resources"]["requests"]["cpu"]
         expected = "3"
         self.assertEqual(actual, expected)
+
+
+class TestClusterBuilder(unittest.TestCase):
+    def test_build_worker_keeps_existing_worker_groups(self):
+        cluster = (
+            kuberay_cluster_builder.ClusterBuilder()
+            .build_meta(name="multi-group-cluster")
+            .build_head()
+            .build_worker(group_name="cpu-workers")
+            .build_worker(group_name="gpu-workers")
+            .get_cluster()
+        )
+
+        actual = [group["groupName"] for group in cluster["spec"]["workerGroupSpecs"]]
+        expected = ["cpu-workers", "gpu-workers"]
+        self.assertEqual(actual, expected)

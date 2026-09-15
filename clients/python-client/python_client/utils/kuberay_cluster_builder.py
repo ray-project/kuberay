@@ -154,7 +154,7 @@ class ClusterBuilder(IClusterBuilder):
             max_replicas = int(replicas * 3)
 
         if "spec" in self.cluster.keys():
-            if "workerGroupSpecs" not in self.cluster.keys():
+            if "workerGroupSpecs" not in self.cluster["spec"]:
                 log.info(
                     "setting the workerGroupSpecs for group_name {}".format(group_name)
                 )
