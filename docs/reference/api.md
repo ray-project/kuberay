@@ -787,11 +787,30 @@ _Appears in:_
 | `value` _string_ |  |  |  |
 
 
+#### ScaleGate
+
+
+
+ScaleGate marks a worker group as not currently scalable. Type is the merge
+key, so a gate is added and removed by exactly one controller. This API is
+intended to be consistent with PodCondition:
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
+
+
+
+_Appears in:_
+- [ScaleStrategy](#scalestrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _string_ | Type uniquely identifies this gate and its owner, for example<br />"example.com/gate-name". |  |  |
+
+
 #### ScaleStrategy
 
 
 
-ScaleStrategy to remove workers
+ScaleStrategy controls scaling of a worker group.
 
 
 
@@ -801,6 +820,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by its type. A writer must add or remove only its own<br />gates via Server-Side Apply under a distinct field manager; replacing the<br />list wholesale, or using read-modify-write Update, drops gates owned by<br />others. |  |  |
 
 
 #### SubmitterConfig
@@ -895,7 +915,7 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for this worker group.<br />These labels will also be added to the Pods of this worker group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: address, object-store-memory, ... |  |  |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
-| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy defines which pods to remove |  |  |
+| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
 
 

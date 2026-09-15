@@ -509,7 +509,8 @@ type WorkerGroupSpec struct {
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is a pod template for the worker
 	Template corev1.PodTemplateSpec `json:"template"`
-	// ScaleStrategy defines which pods to remove
+	// ScaleStrategy controls scaling of this worker group: which pods to remove,
+	// and whether the group can currently be scaled up.
 	// +optional
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
@@ -518,10 +519,33 @@ type WorkerGroupSpec struct {
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
 }
 
-// ScaleStrategy to remove workers
+// ScaleStrategy controls scaling of a worker group.
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+	// ScaleGate is a signal written by an external controller to indicate that
+	// this worker group cannot currently be scaled up. KubeRay preserves the
+	// field across reconciles but never reads or writes it; the Ray Autoscaler
+	// consumes it and falls back to another worker group while it is non-empty.
+	//
+	// Each gate is keyed by its type. A writer must add or remove only its own
+	// gates via Server-Side Apply under a distinct field manager; replacing the
+	// list wholesale, or using read-modify-write Update, drops gates owned by
+	// others.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	ScaleGate []ScaleGate `json:"scaleGate,omitempty"`
+}
+
+// ScaleGate marks a worker group as not currently scalable. Type is the merge
+// key, so a gate is added and removed by exactly one controller. This API is
+// intended to be consistent with PodCondition:
+// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
+type ScaleGate struct {
+	// Type uniquely identifies this gate and its owner, for example
+	// "example.com/gate-name".
+	Type string `json:"type"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
