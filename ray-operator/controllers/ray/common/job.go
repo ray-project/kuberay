@@ -218,7 +218,6 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 // preferring RAY_API_SERVER_ADDRESS over RAY_ADDRESS, then the fallback address.
 // This follows the environment-variable precedence in Ray's get_address_for_submission_client:
 // https://github.com/ray-project/ray/blob/9634fa77aab2ece9759b380d20d315d4e27c912b/python/ray/dashboard/utils.py#L726-L734
-// Overrides must be HTTP(S) dashboard URLs; Ray Client and GCS addresses are not resolved.
 func buildK8sJobDashboardHealthCommand(address string) string {
 	const command = `python -c '
 import os

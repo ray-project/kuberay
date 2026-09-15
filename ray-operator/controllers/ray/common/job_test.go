@@ -3,6 +3,9 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os/exec"
 	"strconv"
 	"testing"
 
@@ -227,6 +230,47 @@ func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
 	assert.Contains(t, command[1], "127.0.0.1:8265")
 	assert.NotContains(t, command[1], "wget")
+}
+
+func TestBuildK8sJobDashboardHealthCommand(t *testing.T) {
+	if _, err := exec.LookPath("python"); err != nil {
+		t.Skip("python is required to execute the generated health probe")
+	}
+
+	tests := []struct {
+		name         string
+		env          map[string]string
+		expectedPath string
+	}{
+		{"fallback", nil, "/fallback/api/gcs_healthz"},
+		{"Ray address", map[string]string{"RAY_ADDRESS": "/ray"}, "/ray/api/gcs_healthz"},
+		{"API server address", map[string]string{"RAY_API_SERVER_ADDRESS": "/api"}, "/api/api/gcs_healthz"},
+		{"API server takes precedence", map[string]string{"RAY_ADDRESS": "/ray", "RAY_API_SERVER_ADDRESS": "/api"}, "/api/api/gcs_healthz"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(tt.expectedPath, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte("success"))
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			t.Setenv("RAY_ADDRESS", "")
+			t.Setenv("RAY_API_SERVER_ADDRESS", "")
+			t.Setenv("no_proxy", "*")
+			for name, path := range tt.env {
+				t.Setenv(name, server.URL+path)
+			}
+
+			// Only the expected address returns success; other paths return HTTP 404.
+			command := buildK8sJobDashboardHealthCommand(server.URL + "/fallback")
+			cmd := exec.CommandContext(t.Context(), "/bin/bash", "-c", "exec "+command)
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "%s", output)
+		})
+	}
 }
 
 func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
