@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -80,6 +81,7 @@ func main() {
 	var nodeEventForwarderSources string
 	var nodeEventForwarderReasons string
 	var nodeEventForwarderTypes string
+	var allowedNodeLabels string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -122,6 +124,8 @@ func main() {
 		"Comma-separated list of event reasons to forward, e.g. XIDError,KernelDeadlock. Empty means all reasons.")
 	flag.StringVar(&nodeEventForwarderTypes, "node-event-forwarder-types", "",
 		"Comma-separated list of event types to forward (Warning, Normal). Empty means all types.")
+	flag.StringVar(&allowedNodeLabels, "allowed-node-labels", "",
+		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through topology.labelMappings. If left empty, every mapping is rejected.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -158,6 +162,7 @@ func main() {
 		config.NodeEventForwarder.Sources = splitCommaSeparated(nodeEventForwarderSources)
 		config.NodeEventForwarder.Reasons = splitCommaSeparated(nodeEventForwarderReasons)
 		config.NodeEventForwarder.Types = splitCommaSeparated(nodeEventForwarderTypes)
+		config.AllowedNodeLabels = splitCommaSeparated(allowedNodeLabels)
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -210,6 +215,12 @@ func main() {
 	// exit with error if the configs is invalid.
 	if err := configapi.ValidateBatchSchedulerConfig(setupLog, config); err != nil {
 		exitOnError(err, "batch scheduler configs validation failed")
+	}
+	// every allowedNodeLabels entry must be a valid label key
+	for _, key := range config.AllowedNodeLabels {
+		if errs := validation.IsQualifiedName(key); len(errs) > 0 {
+			exitOnError(fmt.Errorf("allowedNodeLabels entry %q: %s", key, strings.Join(errs, "; ")), "allowedNodeLabels validation failed")
+		}
 	}
 
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
