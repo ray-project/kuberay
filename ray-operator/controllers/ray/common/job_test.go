@@ -266,6 +266,7 @@ func TestBuildK8sJobDashboardHealthCommand(t *testing.T) {
 
 			// Only the expected address returns success; other paths return HTTP 404.
 			command := buildK8sJobDashboardHealthCommand(server.URL + "/fallback")
+			//nolint:gosec // G204: intentionally execute the generated probe using only a fixed template and the local test server URL.
 			cmd := exec.CommandContext(t.Context(), "/bin/bash", "-c", "exec "+command)
 			output, err := cmd.CombinedOutput()
 			require.NoError(t, err, "%s", output)
