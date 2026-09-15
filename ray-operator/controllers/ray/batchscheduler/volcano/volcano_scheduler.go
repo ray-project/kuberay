@@ -189,6 +189,11 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 		return
 	}
 
+	// Pre-v1.14 Volcano CRDs prune SubGroupPolicy, so a nonempty desired policy causes
+	// a redundant PUT on each reconciliation while global gang settings remain usable.
+	// We do not cache CRD capabilities: after a CRD upgrade, the next reconciliation
+	// can persist the policy without restarting KubeRay. Upgrade Volcano and its matching
+	// CRDs to use subgroup scheduling and avoid these redundant requests.
 	if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) || !apiequality.Semantic.DeepEqual(podGroup.Spec.SubGroupPolicy, subGroupPolicy) {
 		podGroup.Spec.MinMember = size
 		podGroup.Spec.MinResources = &totalResource
