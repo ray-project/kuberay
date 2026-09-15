@@ -136,3 +136,20 @@ class TestClusterBuilder(unittest.TestCase):
         actual = [group["groupName"] for group in cluster["spec"]["workerGroupSpecs"]]
         expected = ["cpu-workers", "gpu-workers"]
         self.assertEqual(actual, expected)
+
+    def test_build_worker_replaces_group_with_same_name(self):
+        cluster = (
+            kuberay_cluster_builder.ClusterBuilder()
+            .build_meta(name="replaced-group-cluster")
+            .build_head()
+            .build_worker(group_name="workers", replicas=1)
+            .build_worker(group_name="gpu-workers")
+            .build_worker(group_name="workers", replicas=3)
+            .get_cluster()
+        )
+
+        worker_groups = cluster["spec"]["workerGroupSpecs"]
+        actual = [group["groupName"] for group in worker_groups]
+        expected = ["workers", "gpu-workers"]
+        self.assertEqual(actual, expected)
+        self.assertEqual(worker_groups[0]["replicas"], 3)

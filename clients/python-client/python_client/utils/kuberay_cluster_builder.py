@@ -184,7 +184,15 @@ class ClusterBuilder(IClusterBuilder):
         )
 
         if self.succeeded:
-            self.cluster["spec"]["workerGroupSpecs"].append(worker_group)
+            worker_groups = self.cluster["spec"]["workerGroupSpecs"]
+            # Calling build_worker again with an existing group_name replaces that
+            # group, since RayCluster rejects duplicate worker group names.
+            for index, existing_group in enumerate(worker_groups):
+                if existing_group["groupName"] == group_name:
+                    worker_groups[index] = worker_group
+                    break
+            else:
+                worker_groups.append(worker_group)
         return self
 
     def get_cluster(self):
