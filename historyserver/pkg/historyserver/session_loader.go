@@ -135,7 +135,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	}
 
 	// TODO(jiangjiawei1103): No graceful drain on shutdown. When the pod receives
-	// SIGTERM, serverCtx is cancelled immediately, causing any in-flight cold-load
+	// SIGTERM, serverCtx is canceled immediately, causing any in-flight cold-load
 	// requests to return ctx.Err() and clients to receive HTTP 500.
 	ch := s.sf.DoChan(clusterSessionKey, func() (any, error) {
 		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.processTimeout)
