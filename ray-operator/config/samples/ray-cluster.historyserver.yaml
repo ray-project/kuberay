@@ -13,11 +13,10 @@ spec:
   rayVersion: "2.52.0"
   historyServerOptions:
     collectorOptions:
-      # The collector image is optional. If it is not set, KubeRay uses the collector image
-      # configured on the operator, which defaults to the collector image matching the operator
-      # version. Configure it once for all RayClusters with the operator CLI flag
-      # --collector-image or the Helm value collectorImage, for example when Docker Hub or
-      # quay.io is not reachable from your cluster.
+      # Optional collector image. Defaults to the image configured on the operator
+      # (--collector-image flag or Helm value collectorImage), which itself defaults
+      # to the collector image matching the operator version.
+      # image: quay.io/kuberay/collector:nightly
       imagePullPolicy: IfNotPresent
       resources:
         requests:

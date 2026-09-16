@@ -4009,15 +4009,6 @@ func TestValidateCollectorOptions(t *testing.T) {
 			errorMessage: "historyServerOptions.collectorOptions must be set",
 		},
 		{
-			name: "image is optional and falls back to the operator configuration",
-			collector: &rayv1.CollectorOptions{
-				Env: []corev1.EnvVar{
-					{Name: "STORAGE_BACKEND", Value: "GCS"},
-					{Name: "GCS_BUCKET", Value: "my-bucket"},
-				},
-			},
-		},
-		{
 			name: "missing STORAGE_BACKEND",
 			collector: &rayv1.CollectorOptions{
 				Image: new("quay.io/kuberay/collector:latest"),

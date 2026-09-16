@@ -3268,6 +3268,16 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 }
 
 func TestSetDefaultCollectorImage(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HistoryServerOptions: &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{},
+			},
+		},
+	}
+
 	tests := []struct {
 		name           string
 		collectorImage string
@@ -3296,7 +3306,7 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 				},
 			}
 
-			SetDefaultCollectorImage(&podTemplate, "quay.io/kuberay/collector:nightly")
+			SetDefaultCollectorImage(cluster, &podTemplate, "quay.io/kuberay/collector:nightly")
 
 			assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
 			assert.Equal(t, tc.expectedImage, podTemplate.Spec.Containers[1].Image)
@@ -3312,9 +3322,25 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 			},
 		}
 
-		SetDefaultCollectorImage(&podTemplate, "quay.io/kuberay/collector:nightly")
+		SetDefaultCollectorImage(cluster, &podTemplate, "quay.io/kuberay/collector:nightly")
 
 		assert.Len(t, podTemplate.Spec.Containers, 1)
 		assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
+	})
+
+	t.Run("no-op when the RayCluster does not opt in to the collector", func(t *testing.T) {
+		// The operator must not manage a collector container the RayCluster author defined
+		// by hand, so the empty image is left as is.
+		podTemplate := corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: utils.CollectorContainerName, Image: ""},
+				},
+			},
+		}
+
+		SetDefaultCollectorImage(&rayv1.RayCluster{}, &podTemplate, "quay.io/kuberay/collector:nightly")
+
+		assert.Equal(t, "", podTemplate.Spec.Containers[0].Image)
 	})
 }
