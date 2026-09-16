@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -222,7 +223,9 @@ func (ec *EventCollector) UpdateNodeID(newNodeID string) {
 	}
 	logrus.Infof("Node ID changed from %s to %s, rotating active files", ec.currentNodeID, newNodeID)
 	ec.currentNodeID = newNodeID
-	ec.rotateAllFilesLocked()
+	if err := ec.rotateAllFilesLocked(); err != nil {
+		logrus.Errorf("Failed to rotate active files after node ID change: %v", err)
+	}
 }
 
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
@@ -243,7 +246,18 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 
 	go func() {
 		logrus.Infof("Starting event collector on port %d", port)
-		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+		server := &http.Server{
+			Addr:              fmt.Sprintf(":%d", port),
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second, // Allow time to read a full batch of events.
+			// WriteTimeout is measured from when request headers are read, the same
+			// starting point as ReadTimeout, not from when the handler begins writing.
+			// It must stay >= ReadTimeout plus real write time, or a slow request body
+			// can eat the whole write budget before the response is ever sent.
+			WriteTimeout: 40 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+		logrus.Fatal(server.ListenAndServe())
 	}()
 
 	ec.producersWG.Add(1)
@@ -324,7 +338,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	var eventDatas []map[string]interface{}
+	var eventDatas []map[string]any
 	if err := json.Unmarshal(body, &eventDatas); err != nil {
 		logrus.Errorf("Failed to unmarshal event: %v", err)
 		resp.WriteError(http.StatusBadRequest, err)
@@ -450,7 +464,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 // - NODE_* events → "node_events"
 // - others with a jobID → "job_events/{jobID}"
 // - fallback → "node_events" (matches previous behavior)
-func (ec *EventCollector) categorize(eventData map[string]interface{}) string {
+func (ec *EventCollector) categorize(eventData map[string]any) string {
 	if isNodeEvent(eventData) {
 		return categoryNodeEvents
 	}
@@ -1010,23 +1024,18 @@ func (ec *EventCollector) underDiskPressure() bool {
 }
 
 // isNodeEvent checks if event is node-related.
-func isNodeEvent(eventData map[string]interface{}) bool {
+func isNodeEvent(eventData map[string]any) bool {
 	eventType, ok := eventData["eventType"].(string)
 	if !ok {
 		return false
 	}
-	for _, nodeEvent := range nodeEventType {
-		if eventType == nodeEvent {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(nodeEventType, eventType)
 }
 
 // getJobID extracts a jobId from known nested event payloads.
-func getJobID(eventData map[string]interface{}) string {
+func getJobID(eventData map[string]any) string {
 	for _, eventType := range eventTypesWithJobID {
-		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
+		if nestedEvent, ok := eventData[eventType].(map[string]any); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
 				id := fmt.Sprintf("%v", jobID)
 				// Payload job IDs arrive base64-encoded (e.g. "AQAAAA=="). Normalize to hex for safe path validation.
