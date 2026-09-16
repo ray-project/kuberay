@@ -1067,9 +1067,6 @@ func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
 		return nil
 	}
 
-	// The collector image is optional: when it is not set, KubeRay falls back to the collector image
-	// configured on the operator.
-
 	envMap := make(map[string]corev1.EnvVar)
 	for _, env := range collectorOpts.Env {
 		envMap[env.Name] = env

@@ -48,12 +48,13 @@ helm install kuberay-operator kuberay/kuberay-operator \
 > operator. See the `featureGates` value of the `kuberay-operator` chart.
 
 > [!WARNING]
-> KubeRay recognizes the collector by container name: the injected container is named
-> `ray-history-collector`, and validation rejects a RayCluster that already defines a container with
-> that name while `collectorOptions` is set. A collector sidecar you added manually under any other
-> name is not detected. Enabling `collectorOptions` on such a RayCluster keeps the manual container
-> and adds a second collector to every Ray Pod. Remove the manual sidecar in the same patch that
-> enables `collectorOptions`.
+> The operator only manages the collector container of a RayCluster that sets
+> `historyServerOptions.collectorOptions`, and it recognizes that container by name: the injected
+> container is named `ray-history-collector`, and validation rejects a RayCluster that already
+> defines a container with that name while `collectorOptions` is set. A collector sidecar you added
+> manually under any other name is not detected: enabling `collectorOptions` on such a RayCluster
+> keeps the manual container and adds a second collector to every Ray Pod. Remove the manual sidecar
+> in the same patch that enables `collectorOptions`.
 
 ## Supported storage backends
 
