@@ -518,16 +518,21 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		gateway := &gwv1.Gateway{}
 		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
-			allDeleted = false
-			if gateway.DeletionTimestamp.IsZero() {
-				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
-				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
-					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway), string(utils.DeleteAction),
-						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
-					return false, err
+			if !common.IsGatewayResourceOwnedByRayService(gateway, rayServiceInstance) {
+				logger.Info("Skipping Gateway deletion during suspend: existing Gateway is not owned by this RayService",
+					"name", gateway.Name, "namespace", gateway.Namespace)
+			} else {
+				allDeleted = false
+				if gateway.DeletionTimestamp.IsZero() {
+					logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
+					if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+						r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway), string(utils.DeleteAction),
+							"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
+						return false, err
+					}
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
+						"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 				}
-				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
-					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 			}
 		} else if !errors.IsNotFound(err) {
 			return false, err
@@ -535,16 +540,21 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 
 		httpRoute := &gwv1.HTTPRoute{}
 		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
-			allDeleted = false
-			if httpRoute.DeletionTimestamp.IsZero() {
-				logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
-				if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
-					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute), string(utils.DeleteAction),
-						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
-					return false, err
+			if !common.IsGatewayResourceOwnedByRayService(httpRoute, rayServiceInstance) {
+				logger.Info("Skipping HTTPRoute deletion during suspend: existing HTTPRoute is not owned by this RayService",
+					"name", httpRoute.Name, "namespace", httpRoute.Namespace)
+			} else {
+				allDeleted = false
+				if httpRoute.DeletionTimestamp.IsZero() {
+					logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
+					if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+						r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute), string(utils.DeleteAction),
+							"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
+						return false, err
+					}
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute), string(utils.DeleteAction),
+						"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
 				}
-				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute), string(utils.DeleteAction),
-					"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
 			}
 		} else if !errors.IsNotFound(err) {
 			return false, err
@@ -908,6 +918,7 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gatewayName,
 			Namespace: rayServiceInstance.Namespace,
+			Labels:    common.RayServiceGatewayLabels(rayServiceInstance),
 		},
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: gwv1.ObjectName(options.GatewayClassName),
@@ -957,6 +968,17 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedGateway), string(utils.CreateAction), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
 			return nil
 		}
+		return err
+	}
+
+	if !common.IsGatewayResourceOwnedByRayService(existingGateway, rayServiceInstance) {
+		err := fmt.Errorf("found an existing Gateway %s/%s that is not owned by RayService %s; "+
+			"KubeRay associates Gateways via the %q and %q labels and will not modify a resource it does not own. "+
+			"Please remove or rename the conflicting Gateway",
+			existingGateway.Namespace, existingGateway.Name, rayServiceInstance.Name,
+			utils.RayOriginatedFromCRNameLabelKey, utils.RayOriginatedFromCRDLabelKey)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), string(utils.UpdateAction),
+			"Gateway %s/%s already exists and is not owned by RayService %s", existingGateway.Namespace, existingGateway.Name, rayServiceInstance.Name)
 		return err
 	}
 
@@ -1119,7 +1141,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 
 	httpRouteName := rayServiceInstance.Name + "-httproute"
 	desiredHTTPRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace, Labels: common.RayServiceGatewayLabels(rayServiceInstance)},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
 				ParentRefs: []gwv1.ParentReference{
@@ -1178,6 +1200,17 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedHTTPRoute), string(utils.CreateAction), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
 			return desiredHTTPRoute, nil
 		}
+		return nil, err
+	}
+
+	if !common.IsGatewayResourceOwnedByRayService(existingHTTPRoute, rayServiceInstance) {
+		err := fmt.Errorf("found an existing HTTPRoute %s/%s that is not owned by RayService %s; "+
+			"KubeRay associates HTTPRoutes via the %q and %q labels and will not modify a resource it does not own. "+
+			"Please remove or rename the conflicting HTTPRoute",
+			existingHTTPRoute.Namespace, existingHTTPRoute.Name, rayServiceInstance.Name,
+			utils.RayOriginatedFromCRNameLabelKey, utils.RayOriginatedFromCRDLabelKey)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), string(utils.UpdateAction),
+			"HTTPRoute %s/%s already exists and is not owned by RayService %s", existingHTTPRoute.Namespace, existingHTTPRoute.Name, rayServiceInstance.Name)
 		return nil, err
 	}
 
