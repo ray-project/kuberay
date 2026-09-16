@@ -57,7 +57,7 @@ func (w *RayServiceWebhook) validateRayService(rayService *rayv1.RayService) err
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), rayService.Name, err.Error()))
 	}
 
-	if err := validateTopology(&rayService.Spec.RayClusterSpec, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
+	if err := validateTopology(&rayService.Spec.RayClusterSpec, rayService.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 

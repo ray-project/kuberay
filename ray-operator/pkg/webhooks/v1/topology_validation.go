@@ -12,8 +12,8 @@ import (
 )
 
 // validateTopology checks the topology field of every worker group in spec against the operator allowlist.
-// base is the field path of spec in the admitted object
-func validateTopology(spec *rayv1.RayClusterSpec, allowed []string, base *field.Path) *field.Error {
+// annotations are the admitted object's metadata annotations, base is the field path of spec in that object
+func validateTopology(spec *rayv1.RayClusterSpec, annotations map[string]string, allowed []string, base *field.Path) *field.Error {
 	for i := range spec.WorkerGroupSpecs {
 		group := &spec.WorkerGroupSpecs[i]
 		if group.Topology == nil || len(group.Topology.LabelMappings) == 0 {
@@ -21,8 +21,9 @@ func validateTopology(spec *rayv1.RayClusterSpec, allowed []string, base *field.
 		}
 		path := base.Child("workerGroupSpecs").Index(i).Child("topology")
 
-		// node label delivery rewrites the KubeRay-generated ray start command, so the user must not replace it
-		if v, ok := group.Template.Annotations[utils.RayOverwriteContainerCmdAnnotationKey]; ok && strings.ToLower(v) == "true" {
+		// node label delivery rewrites the KubeRay-generated ray start command, so the user must not replace it.
+		// the annotation is read from the CR metadata and copied onto the pod template, so check both
+		if overwritesContainerCmd(annotations) || overwritesContainerCmd(group.Template.Annotations) {
 			return field.Forbidden(path, fmt.Sprintf("cannot be combined with the %s annotation; node label delivery needs the KubeRay-generated ray start command", utils.RayOverwriteContainerCmdAnnotationKey))
 		}
 		if len(group.Template.Spec.Containers) > utils.RayContainerIndex {
@@ -50,4 +51,9 @@ func validateTopology(spec *rayv1.RayClusterSpec, allowed []string, base *field.
 		}
 	}
 	return nil
+}
+
+func overwritesContainerCmd(annotations map[string]string) bool {
+	v, ok := annotations[utils.RayOverwriteContainerCmdAnnotationKey]
+	return ok && strings.ToLower(v) == "true"
 }
