@@ -58,7 +58,7 @@ func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
-		if err := validateTopology(rayJob.Spec.RayClusterSpec, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
+		if err := validateTopology(rayJob.Spec.RayClusterSpec, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
 			allErrs = append(allErrs, err)
 		}
 	}
