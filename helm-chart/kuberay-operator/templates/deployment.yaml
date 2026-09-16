@@ -129,6 +129,20 @@ spec:
             {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
             {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
+            {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
+            {{- $argList = append $argList (printf "--enable-node-event-forwarder=%t" .Values.nodeEventForwarder.enabled) -}}
+            {{- if .Values.nodeEventForwarder.enabled }}
+            {{- if .Values.nodeEventForwarder.sources -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-sources=%s" (join "," .Values.nodeEventForwarder.sources)) -}}
+            {{- end -}}
+            {{- if .Values.nodeEventForwarder.reasons -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-reasons=%s" (join "," .Values.nodeEventForwarder.reasons)) -}}
+            {{- end -}}
+            {{- if .Values.nodeEventForwarder.types -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-types=%s" (join "," .Values.nodeEventForwarder.types)) -}}
+            {{- end -}}
+            {{- end -}}
+            {{- end -}}
             {{- if hasKey .Values "reconcileConcurrency" -}}
             {{- $argList = append $argList (printf "--reconcile-concurrency=%v" .Values.reconcileConcurrency) -}}
             {{- end -}}
