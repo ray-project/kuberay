@@ -61,7 +61,7 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
-	if err := validateTopology(&rayCluster.Spec, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
+	if err := validateTopology(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
