@@ -27,6 +27,7 @@ func TestValidateTopology(t *testing.T) {
 
 	tests := []struct {
 		mutate        func(group *rayv1.WorkerGroupSpec)
+		annotations   map[string]string
 		name          string
 		errorContains string
 	}{
@@ -38,6 +39,11 @@ func TestValidateTopology(t *testing.T) {
 			mutate: func(g *rayv1.WorkerGroupSpec) {
 				g.Template.Annotations = map[string]string{utils.RayOverwriteContainerCmdAnnotationKey: "true"}
 			},
+			errorContains: utils.RayOverwriteContainerCmdAnnotationKey,
+		},
+		{
+			name:          "overwrite-container-cmd annotation on the CR",
+			annotations:   map[string]string{utils.RayOverwriteContainerCmdAnnotationKey: "true"},
 			errorContains: utils.RayOverwriteContainerCmdAnnotationKey,
 		},
 		{
@@ -68,7 +74,7 @@ func TestValidateTopology(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(&spec.WorkerGroupSpecs[0])
 			}
-			err := validateTopology(spec, allowed, field.NewPath("spec"))
+			err := validateTopology(spec, tt.annotations, allowed, field.NewPath("spec"))
 			if tt.errorContains == "" {
 				require.Nil(t, err)
 				return
