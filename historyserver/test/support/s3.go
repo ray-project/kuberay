@@ -1,7 +1,9 @@
 package support
 
 import (
+	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 	"testing"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -24,7 +27,139 @@ const (
 	MinioAPIEndpoint  = "http://localhost:9000"
 	MinioAPIPort      = 9000
 	S3BucketName      = "ray-historyserver"
+
+	// The MinIO server container (config/minio.yaml).
+	MinioContainerName = "minio"
+	// Alias configured via the MC_HOST_local env var on the MinIO container.
+	minioMCAlias = "local"
 )
+
+// S3TestClient verifies bucket contents by executing mc commands in the MinIO container.
+type S3TestClient struct {
+	test Test
+}
+
+func NewS3TestClient(test Test) *S3TestClient {
+	return &S3TestClient{test: test}
+}
+
+// minioPod returns the running MinIO pod.
+func (c *S3TestClient) minioPod() (*corev1.Pod, error) {
+	pods, err := c.test.Client().Core().CoreV1().Pods(MinioNamespace).List(
+		c.test.Ctx(), metav1.ListOptions{LabelSelector: "app=minio"},
+	)
+	if err != nil {
+		return nil, err
+	}
+	for i := range pods.Items {
+		// A terminating pod still reports phase Running, but exec into it fails.
+		if pods.Items[i].Status.Phase == corev1.PodRunning && pods.Items[i].DeletionTimestamp == nil {
+			return &pods.Items[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no running MinIO pod found in namespace %s", MinioNamespace)
+}
+
+// execMC runs an mc command in the MinIO container and returns its stdout.
+func (c *S3TestClient) execMC(args ...string) (string, error) {
+	pod, err := c.minioPod()
+	if err != nil {
+		return "", err
+	}
+	cmd := append([]string{"mc"}, args...)
+	stdout, stderr, err := ExecPodCmdWithError(c.test, pod, MinioContainerName, cmd)
+	if err != nil {
+		return "", fmt.Errorf("%q failed: %w (stderr: %s)", strings.Join(cmd, " "), err, stderr.String())
+	}
+	return stdout.String(), nil
+}
+
+// StatObject returns nil if the object exists. An empty key checks the bucket itself.
+func (c *S3TestClient) StatObject(bucket, key string) error {
+	_, err := c.execMC("stat", "-q", path.Join(minioMCAlias, bucket, key))
+	return err
+}
+
+// ReadObject returns the object's content.
+func (c *S3TestClient) ReadObject(bucket, key string) ([]byte, error) {
+	out, err := c.execMC("cat", path.Join(minioMCAlias, bucket, key))
+	if err != nil {
+		return nil, err
+	}
+	return []byte(out), nil
+}
+
+// mcListEntry is one line of `mc ls --json` output.
+type mcListEntry struct {
+	Type string `json:"type"` // "file" or "folder"
+	Key  string `json:"key"`  // path relative to the listed prefix
+}
+
+// listEntries runs `mc ls --json` under bucket/prefix and parses the entries.
+func (c *S3TestClient) listEntries(bucket, prefix string, recursive bool) ([]mcListEntry, error) {
+	args := []string{"ls", "--json"}
+	if recursive {
+		args = append(args, "--recursive")
+	}
+	// Trailing slash makes mc list the prefix's contents rather than the entry itself.
+	args = append(args, path.Join(minioMCAlias, bucket, prefix)+"/")
+
+	out, err := c.execMC(args...)
+	if err != nil {
+		return nil, err
+	}
+	var entries []mcListEntry
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry mcListEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			return nil, fmt.Errorf("failed to parse mc ls output line %q: %w", line, err)
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// ListObjectKeys returns the full keys of all objects under bucket/prefix, recursively.
+func (c *S3TestClient) ListObjectKeys(bucket, prefix string) ([]string, error) {
+	entries, err := c.listEntries(bucket, prefix, true)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	for _, entry := range entries {
+		if entry.Type == "file" {
+			keys = append(keys, path.Join(prefix, entry.Key))
+		}
+	}
+	return keys, nil
+}
+
+// ListDirectories returns the names of the immediate subdirectories under bucket/prefix.
+func (c *S3TestClient) ListDirectories(bucket, prefix string) ([]string, error) {
+	entries, err := c.listEntries(bucket, prefix, false)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if entry.Type == "folder" {
+			dirs = append(dirs, strings.TrimSuffix(entry.Key, "/"))
+		}
+	}
+	return dirs, nil
+}
+
+// DeleteBucket removes the bucket and everything in it. A missing bucket is not an error.
+func (c *S3TestClient) DeleteBucket(bucket string) error {
+	_, err := c.execMC("rb", "--force", path.Join(minioMCAlias, bucket))
+	if err != nil && strings.Contains(err.Error(), "does not exist") {
+		return nil
+	}
+	return err
+}
 
 // ApplyMinIO deploys minio once per test namespace, making sure it's idempotent.
 func ApplyMinIO(test Test, g *WithT) {
