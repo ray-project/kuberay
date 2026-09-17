@@ -234,3 +234,41 @@ func TestRayClusterConditionProvisioned(t *testing.T) {
 		})
 	}
 }
+
+// TestRayClusterMetricsManagerDescribeIncludesAllEmittedDescriptors enforces
+// the prometheus.Collector contract: the descriptor of each metric sent in
+// Collect() must be one of those returned by Describe(). A pedantic registry
+// checks this when gathering; the collector used to fail here because
+// rayClusterConditionProvisioned was missing from Describe().
+func TestRayClusterMetricsManagerDescribeIncludesAllEmittedDescriptors(t *testing.T) {
+	k8sScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(k8sScheme))
+
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-ray-cluster",
+			Namespace: "default",
+			UID:       types.UID("test-ray-cluster-uid"),
+		},
+	}
+	cluster.Status.Conditions = []metav1.Condition{{
+		Type:   string(rayv1.RayClusterProvisioned),
+		Status: metav1.ConditionTrue,
+	}}
+
+	client := fake.NewClientBuilder().WithScheme(k8sScheme).WithObjects(&cluster).Build()
+	manager := NewRayClusterMetricsManager(context.Background(), client)
+
+	reg := prometheus.NewPedanticRegistry()
+	require.NoError(t, reg.Register(manager))
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	emitted := map[string]bool{}
+	for _, family := range families {
+		emitted[family.GetName()] = true
+	}
+	assert.True(t, emitted["kuberay_cluster_info"], "expected kuberay_cluster_info to be gathered")
+	assert.True(t, emitted["kuberay_cluster_condition_provisioned"], "expected kuberay_cluster_condition_provisioned to be gathered")
+}
