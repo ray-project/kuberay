@@ -1254,12 +1254,7 @@ func IsResourceReservationTimeoutPod(pod corev1.Pod) bool {
 // HasResourceReservationTimeoutPods reports whether any Pod in the list failed
 // with Reason ResourceReservationTimeout.
 func HasResourceReservationTimeoutPods(pods corev1.PodList) bool {
-	for _, pod := range pods.Items {
-		if IsResourceReservationTimeoutPod(pod) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(pods.Items, IsResourceReservationTimeoutPod)
 }
 
 // IsRayClusterBatchSchedulingFailed reports whether the RayCluster status indicates
