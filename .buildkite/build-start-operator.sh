@@ -20,8 +20,9 @@ if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly-extra-py310-cpu"
     export KUBERAY_TEST_RAY_IMAGE
 else
-    IMG=kuberay/operator:nightly make docker-image
-    kind load docker-image kuberay/operator:nightly
-    echo "Deploying operator with test overrides (feature gates via test-overrides overlay)"
-    IMG=kuberay/operator:nightly make deploy-with-override
+    exit 1
+    # IMG=kuberay/operator:nightly make docker-image
+    # kind load docker-image kuberay/operator:nightly
+    # echo "Deploying operator with test overrides (feature gates via test-overrides overlay)"
+    # IMG=kuberay/operator:nightly make deploy-with-override
 fi

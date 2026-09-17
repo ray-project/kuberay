@@ -9,7 +9,7 @@
     - pushd ray-operator
     - |
       for attempt in 1 2; do
-        if source ../.buildkite/build-start-operator.sh; then
+        if bash ../.buildkite/build-start-operator.sh; then
           break
         fi
         if [ "$attempt" -eq 2 ]; then
