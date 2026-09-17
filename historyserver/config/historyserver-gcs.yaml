@@ -59,7 +59,7 @@ spec:
         # Uncomment to route live pass-through through the Kubernetes API
         # server instead of dialing the namespace-qualified head Service
         # directly. Requires the services/proxy rule in
-        # config/service_account.yaml.
+        # config/service_account_kubernetes_proxy.yaml.
         # - --use-kubernetes-proxy
         resources:
           requests:

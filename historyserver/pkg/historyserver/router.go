@@ -418,6 +418,19 @@ func (s *ServerHandler) RegisterRouter() {
 	routerLogical(s)
 }
 
+// dashboardTargetURL builds the target URL of a live-cluster dashboard request, either
+// through the Kubernetes API server proxy or through the namespace-qualified head
+// Service. Both paths use the resolved dashboard port number: referring to the port by
+// its name ("dashboard") would 404 for Services that declare unnamed ports.
+func (s *ServerHandler) dashboardTargetURL(svc ServiceInfo, path string) string {
+	if s.useKubernetesProxy {
+		return fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:%d/proxy%s",
+			s.clientManager.configs[0].Host, svc.Namespace, svc.ServiceName, svc.Port, path)
+	}
+	return fmt.Sprintf("http://%s.%s.svc:%d%s",
+		svc.ServiceName, svc.Namespace, svc.Port, path)
+}
+
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
 	if !s.enableLiveClusters {
 		resp.WriteErrorString(http.StatusForbidden, "live cluster access is disabled on this History Server")
@@ -431,24 +444,9 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	var targetURL string
-	if s.useKubernetesProxy {
-		// Use Kubernetes API server proxy to access the in-cluster RayDashboard services.
-		targetURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
-			s.clientManager.configs[0].Host,
-			svcInfo.Namespace,
-			svcInfo.ServiceName,
-			req.Request.URL.String())
-		logrus.Infof("Using Kubernetes API server proxy to access service %s/%s: %s",
-			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
-	} else {
-		// Include the namespace so in-cluster DNS can resolve Services outside the
-		// History Server's namespace without assuming a particular cluster domain.
-		targetURL = fmt.Sprintf("http://%s.%s.svc:%d%s",
-			svcInfo.ServiceName, svcInfo.Namespace, svcInfo.Port, req.Request.URL.String())
-		logrus.Infof("Using in-cluster service discovery to access service %s/%s: %s",
-			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
-	}
+	targetURL := s.dashboardTargetURL(svcInfo, req.Request.URL.String())
+	logrus.Infof("Proxying live-cluster request for %s/%s: %s",
+		svcInfo.Namespace, svcInfo.ServiceName, targetURL)
 
 	// Create a new request to the target URL.
 	proxyReq, err := http.NewRequest(req.Request.Method, targetURL, req.Request.Body)
