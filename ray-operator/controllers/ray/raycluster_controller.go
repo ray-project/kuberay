@@ -352,10 +352,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	// When the cluster has had no user driver attached for longer than spec.idleTerminationOptions.timeoutSeconds,
-	// the Ray autoscaler v2 sets the `ray.io/no-driver-idle-termination` finalizer.
+	// the Ray autoscaler v2 sets the `ray.io/idle-termination-cleanup-finalizer` finalizer.
 	if utils.IsIdleTerminationOptionsEnabled(&instance.Spec) {
 		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-			if r.hasNoDriverTimeoutFinalizer(instance) {
+			if r.hasIdleTerminationCleanupFinalizer(instance) {
 				logger.Info("Deleting RayCluster because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds",
 					"namespace", instance.Namespace, "name", instance.Name, "timeoutSeconds", instance.Spec.IdleTerminationOptions.TimeoutSeconds)
 				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
@@ -364,7 +364,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 					instance.Namespace, instance.Name, *instance.Spec.IdleTerminationOptions.TimeoutSeconds)
 
 				// Remove finalizer to allow deletion to proceed
-				controllerutil.RemoveFinalizer(instance, utils.NoDriverIdleTerminationFinalizer)
+				controllerutil.RemoveFinalizer(instance, utils.IdleTerminationCleanupFinalizer)
 				if err := r.Update(ctx, instance); err != nil {
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 				}
@@ -2499,7 +2499,7 @@ func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, in
 	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
 }
 
-// hasNoDriverTimeoutFinalizer reports whether the no dirver idle termination finalizer is presented in the RayCluster
-func (r *RayClusterReconciler) hasNoDriverTimeoutFinalizer(cluster *rayv1.RayCluster) bool {
-	return controllerutil.ContainsFinalizer(cluster, utils.NoDriverIdleTerminationFinalizer)
+// hasIdleTerminationCleanupFinalizer reports whether the idle termination cleanup finalizer is presented in the RayCluster
+func (r *RayClusterReconciler) hasIdleTerminationCleanupFinalizer(cluster *rayv1.RayCluster) bool {
+	return controllerutil.ContainsFinalizer(cluster, utils.IdleTerminationCleanupFinalizer)
 }

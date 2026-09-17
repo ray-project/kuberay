@@ -3651,7 +3651,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			name: "finalizer present, deletionTimestamp set, noDriverTimeout enabled: finalizer is removed and deletion proceeds",
 			mutate: func(c *rayv1.RayCluster) {
 				enableIdleDeletePolicy(c)
-				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				controllerutil.AddFinalizer(c, utils.IdleTerminationCleanupFinalizer)
 				setDeletionTimestamp(c)
 			},
 			expectDeleted: true,
@@ -3661,7 +3661,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			mutate: func(c *rayv1.RayCluster) {
 				c.Spec.EnableInTreeAutoscaling = new(false)
 				c.Spec.AutoscalerOptions = nil
-				controllerutil.AddFinalizer(c, utils.NoDriverIdleTerminationFinalizer)
+				controllerutil.AddFinalizer(c, utils.IdleTerminationCleanupFinalizer)
 				setDeletionTimestamp(c)
 			},
 			expectDeleted: false,
@@ -3705,7 +3705,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			if tc.expectDeleted {
 				assert.True(t, k8serrors.IsNotFound(err))
 				if err == nil {
-					assert.False(t, controllerutil.ContainsFinalizer(got, utils.NoDriverIdleTerminationFinalizer))
+					assert.False(t, controllerutil.ContainsFinalizer(got, utils.IdleTerminationCleanupFinalizer))
 				}
 				event := <-recorder.Events
 				assert.Contains(t, event, string(utils.DeletedRayClusterNoDriverTimeout)) // TODO: check if this is still valid
