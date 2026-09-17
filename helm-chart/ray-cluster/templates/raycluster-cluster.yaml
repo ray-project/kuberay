@@ -40,6 +40,13 @@ spec:
     headService:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+    {{- with .Values.head.enableIngress }}
+    enableIngress: {{ . }}
+    {{- end }}
+    {{- with .Values.head.ingressOptions }}
+    ingressOptions:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     {{- with .Values.service.type }}
     serviceType: {{ . }}
     {{- end }}

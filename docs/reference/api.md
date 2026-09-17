@@ -17,6 +17,26 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 
 
+#### ActivePassiveHeadOptions
+
+
+
+ActivePassiveHeadOptions configures active-passive head high availability for
+the GCS via leader election.
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled turns on active-passive head HA for the RayCluster. When true, KubeRay<br />provisions a standby head Pod. Defaults to false. |  |  |
+| `leaseDurationSeconds` _integer_ | LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition. | 15 | Minimum: 1 <br /> |
+| `renewDeadlineSeconds` _integer_ | RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences. | 10 | Minimum: 1 <br /> |
+| `retryPeriodSeconds` _integer_ | RetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts. | 2 | Minimum: 1 <br /> |
+
+
 #### AuthMode
 
 _Underlying type:_ _string_
@@ -324,8 +344,9 @@ _Appears in:_
 | `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
-| `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
+| `redisAddress` _string_ | RedisAddress is the address of the external Redis service. Required when<br />Backend is "redis"; must be empty for "rocksdb". |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
+| `activePassiveHeadOptions` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveHeadOptions configures active-passive high availability for the GCS.<br />It is only supported with the "redis" backend, not with "rocksdb". |  |  |
 
 
 #### HeadGroupSpec
@@ -766,11 +787,30 @@ _Appears in:_
 | `value` _string_ |  |  |  |
 
 
+#### ScaleGate
+
+
+
+ScaleGate marks a worker group as not currently scalable. Type is the merge
+key, so a gate is added and removed by exactly one controller. This API is
+intended to be consistent with PodCondition:
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
+
+
+
+_Appears in:_
+- [ScaleStrategy](#scalestrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _string_ | Type uniquely identifies this gate and its owner, for example<br />"example.com/gate-name". |  |  |
+
+
 #### ScaleStrategy
 
 
 
-ScaleStrategy to remove workers
+ScaleStrategy controls scaling of a worker group.
 
 
 
@@ -780,6 +820,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by its type. A writer must add or remove only its own<br />gates via Server-Side Apply under a distinct field manager; replacing the<br />list wholesale, or using read-modify-write Update, drops gates owned by<br />others. |  |  |
 
 
 #### SubmitterConfig
@@ -816,6 +857,39 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled controls whether mTLS is active for this RayCluster.<br />Defaults to false when omitted. Set to true to enable mTLS. |  |  |
+
+
+#### TopologyLabelMapping
+
+
+
+TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
+
+
+
+_Appears in:_
+- [TopologySpec](#topologyspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `nodeLabel` _string_ | NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels. |  |  |
+| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.<br />The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file. |  | MaxLength: 317 <br /> |
+
+
+#### TopologySpec
+
+
+
+TopologySpec selects the node labels delivered to a worker group's Ray nodes.
+
+
+
+_Appears in:_
+- [WorkerGroupSpec](#workergroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `labelMappings` _[TopologyLabelMapping](#topologylabelmapping) array_ | LabelMappings lists the node labels to deliver. An empty list delivers nothing. Every listed label is<br />required: a pod bound to a node missing one exits before ray start. |  |  |
 
 
 #### UpscalingMode
@@ -874,8 +948,9 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for this worker group.<br />These labels will also be added to the Pods of this worker group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: address, object-store-memory, ... |  |  |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
-| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy defines which pods to remove |  |  |
+| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
+| `topology` _[TopologySpec](#topologyspec)_ | Topology delivers labels of the node each worker pod is bound to as Ray node labels.<br />While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.<br />Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`). |  |  |
 
 
 

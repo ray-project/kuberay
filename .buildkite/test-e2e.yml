@@ -165,26 +165,26 @@
     - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1; fi
     - echo "--- END:Autoscaler E2E Part 2 (nightly operator) tests finished"
 
-- label: 'Test E2E Operator Version Upgrade (v1.6.0)'
+- label: 'Test E2E Operator Version Upgrade (v1.7.0)'
   instance_size: large
   image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
-    # Deploy previous KubeRay operator release (v1.5.1) using helm
+    # Deploy previous KubeRay operator release (v1.6.2) using helm
     - echo Deploying KubeRay operator
     - pushd ray-operator
-    - helm install kuberay-operator kuberay/kuberay-operator --version 1.5.1
+    - helm install kuberay-operator kuberay/kuberay-operator --version 1.6.2
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
-    - echo "--- START:Running e2e Operator upgrade (v1.5.1 to v1.6.0 operator) tests"
+    - echo "--- START:Running e2e Operator upgrade (v1.6.2 to v1.7.0 operator) tests"
     - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
-    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.6.0 bash ../.buildkite/run-gotest.sh 30m ./test/e2eupgrade || TEST_EXIT_CODE=$$?
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.7.0 bash ../.buildkite/run-gotest.sh 30m ./test/e2eupgrade || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
     - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-upgrade-log.tar -T - && exit 1; fi
-    - echo "--- END:e2e Operator upgrade (v1.5.1 to v1.6.0 operator) tests finished"
+    - echo "--- END:e2e Operator upgrade (v1.6.2 to v1.7.0 operator) tests finished"
 
 - label: 'Test Apiserver E2E (nightly operator)'
   instance_size: large
@@ -208,7 +208,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - E2E_API_SERVER_URL="http://localhost:8888" bash ../.buildkite/run-gotest.sh 60m -parallel 4 ./test/e2e/... || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T - && exit 1; fi
     - echo "--- END:Apiserver e2e (nightly operator) tests finished"
 
 - label: 'Test RayJob Light Weight Submitter E2E (nightly operator)'

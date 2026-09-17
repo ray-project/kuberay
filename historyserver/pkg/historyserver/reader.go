@@ -118,19 +118,21 @@ func crdLabelValueFor(kindLower string) string {
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
-	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
-	liveClusters, err := s.clientManager.ListRayClusters(ctx)
-	if err != nil {
-		logrus.Errorf("Failed to list live RayClusters: %v", err)
+	if s.enableLiveClusters {
+		ctx := context.Background()
+		liveClusterNames := []string{}
+		liveClusters, err := s.clientManager.ListRayClusters(ctx)
+		if err != nil {
+			logrus.Errorf("Failed to list live RayClusters: %v", err)
+		}
+		for _, liveCluster := range liveClusters {
+			liveClusterInfo := buildLiveClusterInfo(liveCluster)
+			liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
+			liveClusterNames = append(liveClusterNames, liveCluster.Name)
+		}
+		logrus.Infof("live clusters: %v", liveClusterNames)
 	}
-	for _, liveCluster := range liveClusters {
-		liveClusterInfo := buildLiveClusterInfo(liveCluster)
-		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
-		liveClusterNames = append(liveClusterNames, liveCluster.Name)
-	}
-	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
@@ -149,8 +151,13 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
 	}
 
+	// "live" is not a valid session while --enable-live-clusters is disabled.
+	if session == "live" && !s.enableLiveClusters {
+		return utils.ClusterInfo{}, false, nil
+	}
+
 	// Check live clusters first if applicable
-	if isLatestOrEmpty || session == "live" {
+	if s.enableLiveClusters && (isLatestOrEmpty || session == "live") {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
 			if err == nil {
@@ -482,6 +489,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterLogPathPrefix, sessionID, n
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
 	for _, file := range files {
+		// A rotated generation is never the canonical stream for a pid.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasSuffix(file, pidSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -699,6 +710,11 @@ func (s *ServerHandler) findWorkerLogFile(clusterLogPathPrefix, sessionID, nodeI
 	workerSuffix := fmt.Sprintf(".%s", suffix)
 
 	for _, file := range files {
+		// A worker stream can span several rotated generations, so none of them is
+		// the canonical file a task or actor lookup should resolve to.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasPrefix(file, workerPrefix) && strings.HasSuffix(file, workerSuffix) {
 			return nodeIDHex, file, nil
 		}

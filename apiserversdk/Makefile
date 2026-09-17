@@ -34,7 +34,7 @@ GOVERSION := $(shell go env GOVERSION)
 export GOTOOLCHAIN := $(GOVERSION)+auto
 
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
-test: ENVTEST_K8S_VERSION ?= 1.34.1
+test: ENVTEST_K8S_VERSION ?= 1.37.0
 test: envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -v $(WHAT) -coverprofile cover.out
 

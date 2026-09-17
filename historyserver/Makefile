@@ -159,7 +159,7 @@ todolist: install-golint ## Run go lint against code.
 
 install-golint: ## check golint if not exist install golint tools
 ifneq ("$(wildcard $(GOBIN_GOLANGCILINT))","")
-ifeq ($(shell $(GOBIN_GOLANGCILINT) version --format short), $(GOLANGCILINT_VERSION))
+ifeq (v$(shell $(GOBIN_GOLANGCILINT) version --short), $(GOLANGCILINT_VERSION))
 	@echo "golangci-lint version match"
 else
 	@echo "golangci-lint version do not match"
