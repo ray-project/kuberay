@@ -17,7 +17,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 30m ./test/e2e || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T -; exit 1; fi
     - echo "--- END:RayCluster and GCS E2E (nightly operator) tests finished"
 
 - label: 'Test RayJob E2E (nightly operator)'
@@ -39,7 +39,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 60m ./test/e2erayjob || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T -; exit 1; fi
     - echo "--- END:RayJob E2E (nightly operator) tests finished"
 
 - label: 'Test E2E rayservice (nightly operator)'
@@ -61,7 +61,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 30m -skip Suspend ./test/e2erayservice || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-log.tar -T -; exit 1; fi
     - echo "--- END:e2e rayservice (nightly operator) tests finished"
 
 - label: 'Test E2E rayservice suspend (nightly operator)'
@@ -83,7 +83,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 30m -run Suspend ./test/e2erayservice || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-suspend-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-suspend-log.tar -T -; exit 1; fi
     - echo "--- END:e2e rayservice suspend (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade E2E (nightly operator)'
@@ -118,7 +118,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=10m KUBERAY_TEST_TIMEOUT_LONG=20m bash ../.buildkite/run-gotest.sh 60m ./test/e2eincrementalupgrade || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T -; exit 1; fi
     - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
 
 - label: 'Test Autoscaler E2E Part 1 (nightly operator)'
@@ -140,7 +140,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 60m ./test/e2eautoscaler/raycluster_autoscaler_test.go ./test/e2eautoscaler/support.go || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T -; exit 1; fi
     - echo "--- END:Autoscaler E2E Part 1 (nightly operator) tests finished"
 
 - label: 'Test Autoscaler E2E Part 2 (nightly operator)'
@@ -162,7 +162,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 60m ./test/e2eautoscaler/raycluster_autoscaler_part2_test.go ./test/e2eautoscaler/support.go || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-autoscaler-log.tar -T -; exit 1; fi
     - echo "--- END:Autoscaler E2E Part 2 (nightly operator) tests finished"
 
 - label: 'Test E2E Operator Version Upgrade (v1.7.0)'
@@ -183,7 +183,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m KUBERAY_TEST_UPGRADE_IMAGE=v1.7.0 bash ../.buildkite/run-gotest.sh 30m ./test/e2eupgrade || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-upgrade-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-upgrade-log.tar -T -; exit 1; fi
     - echo "--- END:e2e Operator upgrade (v1.6.2 to v1.7.0 operator) tests finished"
 
 - label: 'Test Apiserver E2E (nightly operator)'
@@ -208,7 +208,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - E2E_API_SERVER_URL="http://localhost:8888" bash ../.buildkite/run-gotest.sh 60m -parallel 4 ./test/e2e/... || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-apiserver-log.tar -T -; exit 1; fi
     - echo "--- END:Apiserver e2e (nightly operator) tests finished"
 
 - label: 'Test RayJob Light Weight Submitter E2E (nightly operator)'
@@ -231,7 +231,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 30m ./test/e2erayjobsubmitter || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T -; exit 1; fi
     - echo "--- END:RayJob Light Weight Submitter E2E (nightly operator) tests finished"
 
 - label: 'Test RayCluster mTLS E2E (nightly operator)'
@@ -254,7 +254,7 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 30m -run TLS ./test/e2e || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-mtls-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-mtls-log.tar -T -; exit 1; fi
     - echo "--- END:RayCluster mTLS E2E (nightly operator) tests finished"
 
 - label: 'Test RayCronJob E2E (nightly operator)'
@@ -276,5 +276,5 @@
     - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m bash ../.buildkite/run-gotest.sh 40m ./test/e2eraycronjob || TEST_EXIT_CODE=$$?
     # JUnit results are uploaded to Buildkite Test Engine by .buildkite/hooks/pre-exit
-    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-raycronjob-log.tar -T - && exit 1; fi
+    - if [ -n "$$TEST_EXIT_CODE" ]; then kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-raycronjob-log.tar -T -; exit 1; fi
     - echo "--- END:RayCronJob E2E (nightly operator) tests finished"
