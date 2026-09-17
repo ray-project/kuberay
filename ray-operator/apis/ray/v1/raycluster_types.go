@@ -22,10 +22,8 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
-	// IdleSuspend is set to true by the Ray autoscaler when the RayCluster has
-	// had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's
-	// IdleTerminationOptions.Policy is Suspend.
-	// Setting it back to false resumes the RayCluster.
+	// IdleSuspend indicates whether a RayCluster should be suspended due to idleness.
+	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	IdleSuspend *bool `json:"idleSuspend,omitempty"`
 	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
@@ -593,10 +591,10 @@ const (
 )
 
 type IdleTerminationOptions struct {
-	// TimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering Policy.
+	// TimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle RayCluster.
 	TimeoutSeconds *int32 `json:"timeoutSeconds"`
 
-	// Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds.
+	// Policy is the action taken once the RayCluster has been idle for TimeoutSeconds.
 	// +kubebuilder:default=Suspend
 	Policy *IdleTerminationPolicy `json:"policy,omitempty"`
 }

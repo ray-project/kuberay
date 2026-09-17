@@ -3708,7 +3708,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 					assert.False(t, controllerutil.ContainsFinalizer(got, utils.IdleTerminationCleanupFinalizer))
 				}
 				event := <-recorder.Events
-				assert.Contains(t, event, string(utils.DeletedRayClusterNoDriverTimeout)) // TODO: check if this is still valid
+				assert.Contains(t, event, string(utils.DeletedIdleRayCluster))
 				assert.Contains(t, event, "TimeoutSeconds=600")
 			} else {
 				require.NoError(t, err)
