@@ -174,6 +174,7 @@ spec:
 | configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | configuration.allowedNodeLabels | list | `[]` | Node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].topology. Enforced by the validating webhooks, so it requires ENABLE_WEBHOOKS to be enabled. Empty disables delivery. Example: allowedNodeLabels: - nvidia.com/gpu.clique - topology.kubernetes.io/zone |
+| webhooks.enabled | bool | `false` | Deploy the admission webhooks. Requires cert-manager in the cluster for the serving certificate and CA injection. Creates cluster-scoped webhook configurations, so it is not supported with singleNamespaceInstall. |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
@@ -192,6 +193,8 @@ spec:
 | featureGates[7].enabled | bool | `false` |  |
 | featureGates[8].name | string | `"RayNodeEventForwarder"` |  |
 | featureGates[8].enabled | bool | `false` |  |
+| featureGates[9].name | string | `"TopologyLabelDelivery"` |  |
+| featureGates[9].enabled | bool | `false` |  |
 | nodeEventForwarder.enabled | bool | `false` | Whether KubeRay operator should forward Kubernetes Node events to RayCluster custom resources. Note: not supported when singleNamespaceInstall is true. |
 | nodeEventForwarder.sources | list | `[]` | Only forward Node events emitted by these components, matched against both source.component and reportingController. Empty means all sources. |
 | nodeEventForwarder.reasons | list | `[]` | Only forward Node events with these reasons, e.g. ["XIDError"]. Empty means all reasons. |
