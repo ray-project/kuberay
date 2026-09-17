@@ -359,7 +359,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 				logger.Info("Deleting RayCluster because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds",
 					"namespace", instance.Namespace, "name", instance.Name, "timeoutSeconds", instance.Spec.IdleTerminationOptions.TimeoutSeconds)
 				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
-					string(utils.DeletedRayClusterNoDriverTimeout), string(utils.DeleteAction),
+					string(utils.DeletedIdleRayCluster), string(utils.DeleteAction),
 					"Deleting RayCluster %s/%s because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds=%d",
 					instance.Namespace, instance.Name, *instance.Spec.IdleTerminationOptions.TimeoutSeconds)
 
