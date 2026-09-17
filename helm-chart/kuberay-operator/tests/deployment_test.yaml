@@ -496,3 +496,37 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace."
+
+  - it: Should not enable webhooks by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].env[?(@.name=="ENABLE_WEBHOOKS")]
+      - notExists:
+          path: spec.template.spec.containers[0].ports[?(@.name=="webhook-server")]
+      - notExists:
+          path: spec.template.spec.volumes[?(@.name=="cert")]
+
+  - it: Should enable webhooks and mount the serving certificate if `webhooks.enabled` is true
+    set:
+      webhooks:
+        enabled: true
+      env:
+        - name: FOO
+          value: bar
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: ENABLE_WEBHOOKS
+              value: "true"
+            - name: FOO
+              value: bar
+      - equal:
+          path: spec.template.spec.containers[0].ports[?(@.name=="webhook-server")].containerPort
+          value: 9443
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[?(@.name=="cert")].mountPath
+          value: /tmp/k8s-webhook-server/serving-certs
+      - equal:
+          path: spec.template.spec.volumes[?(@.name=="cert")].secret.secretName
+          value: kuberay-operator-webhook-server-cert
