@@ -33,10 +33,22 @@ func TestMergeStateTransitions(t *testing.T) {
 			expected: []mockT{{state: "PENDING", timestamp: t1}, {state: "RUNNING", timestamp: t2}, {state: "STOPPED", timestamp: t3}},
 		},
 		{
-			name:     "deduplicate_identical_states",
+			name:     "deduplicate_same_state_and_timestamp",
 			existing: []mockT{{state: "PENDING", timestamp: t1}},
 			new:      []mockT{{state: "PENDING", timestamp: t1}, {state: "RUNNING", timestamp: t2}},
 			expected: []mockT{{state: "PENDING", timestamp: t1}, {state: "RUNNING", timestamp: t2}},
+		},
+		{
+			name:     "same_state_different_timestamp",
+			existing: []mockT{{state: "PENDING", timestamp: t1}},
+			new:      []mockT{{state: "PENDING", timestamp: t2}},
+			expected: []mockT{{state: "PENDING", timestamp: t1}, {state: "PENDING", timestamp: t2}},
+		},
+		{
+			name:     "different_state_same_timestamp",
+			existing: []mockT{{state: "PENDING", timestamp: t1}},
+			new:      []mockT{{state: "RUNNING", timestamp: t1}},
+			expected: []mockT{{state: "PENDING", timestamp: t1}, {state: "RUNNING", timestamp: t1}},
 		},
 		{
 			name:     "empty",
