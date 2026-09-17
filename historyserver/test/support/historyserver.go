@@ -174,7 +174,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 	// Wait for port-forward to be ready
 	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
 	g.Eventually(func() error {
-		resp, err := http.Get(historyServerURL + "/readz")
+		resp, err := HTTPGet(test.Ctx(), nil, historyServerURL+"/readz")
 		if err != nil {
 			return err
 		}
@@ -247,8 +247,8 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
 // If headNode is true, it iterates over all nodes and returns the one with isHeadNode == true.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
-	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
+func GetOneOfNodeID(test Test, g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -295,8 +295,8 @@ func getRayletFromNode(g *WithT, node any) map[string]any {
 // GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
 // The history server returns actors from the in-memory ClusterActorMap, which is populated
 // by the Event Handler processing events from S3.
-func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+func GetOneOfActorID(test Test, g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+EndpointLogicalActors)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -331,7 +331,7 @@ func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Clien
 
 	g.Eventually(func(gg Gomega) {
 		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp, err := client.Get(logFileURL)
+		resp, err := HTTPGet(test.Ctx(), client, logFileURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -351,7 +351,7 @@ func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http
 	for _, malicious := range maliciousPaths {
 		g.Eventually(func(gg Gomega) {
 			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				io.Copy(io.Discard, resp.Body)
@@ -379,8 +379,8 @@ func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName 
 }
 
 // GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
-func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + "/api/jobs/")
+func GetOneOfJobID(test Test, g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/api/jobs/")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
