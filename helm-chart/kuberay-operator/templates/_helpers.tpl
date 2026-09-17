@@ -178,6 +178,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - nodes
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - persistentvolumeclaims
   - pods/status
   - services

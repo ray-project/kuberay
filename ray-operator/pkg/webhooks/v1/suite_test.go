@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +25,7 @@ import (
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -41,6 +43,7 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, true)
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Webhook Suite")
@@ -73,6 +76,10 @@ var _ = BeforeSuite(func() {
 	err = admissionv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	// pods for the node label delivery webhook
+	err = clientgoscheme.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	//+kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
@@ -100,6 +107,10 @@ var _ = BeforeSuite(func() {
 	err = SetupRayJobWebhookWithManager(mgr, testConfig)
 	Expect(err).NotTo(HaveOccurred())
 	err = SetupRayServiceWebhookWithManager(mgr, testConfig)
+	Expect(err).NotTo(HaveOccurred())
+	err = SetupPodWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+	err = SetupPodBindingWebhookWithManager(mgr, testConfig)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:webhook

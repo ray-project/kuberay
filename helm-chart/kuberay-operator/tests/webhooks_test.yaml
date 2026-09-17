@@ -1,0 +1,115 @@
+suite: Test Webhooks
+
+templates:
+  - webhooks.yaml
+
+release:
+  name: kuberay-operator
+  namespace: kuberay-system
+
+tests:
+  - it: Should not render anything by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Should render the webhook Service, cert-manager objects and webhook configurations if `webhooks.enabled` is true
+    set:
+      webhooks:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 5
+      - containsDocument:
+          apiVersion: v1
+          kind: Service
+          name: kuberay-operator-webhook
+          namespace: kuberay-system
+          any: true
+      - containsDocument:
+          apiVersion: cert-manager.io/v1
+          kind: Issuer
+          name: kuberay-operator-selfsigned-issuer
+          namespace: kuberay-system
+          any: true
+      - containsDocument:
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          name: kuberay-operator-serving-cert
+          namespace: kuberay-system
+          any: true
+      - containsDocument:
+          apiVersion: admissionregistration.k8s.io/v1
+          kind: MutatingWebhookConfiguration
+          name: kuberay-operator-mutating-webhook-configuration
+          any: true
+      - containsDocument:
+          apiVersion: admissionregistration.k8s.io/v1
+          kind: ValidatingWebhookConfiguration
+          name: kuberay-operator-validating-webhook-configuration
+          any: true
+
+  - it: Should point the Certificate at the webhook Service and the secret the Deployment mounts
+    set:
+      webhooks:
+        enabled: true
+    documentSelector:
+      path: kind
+      value: Certificate
+    asserts:
+      - equal:
+          path: spec.dnsNames
+          value:
+            - kuberay-operator-webhook.kuberay-system.svc
+            - kuberay-operator-webhook.kuberay-system.svc.cluster.local
+      - equal:
+          path: spec.secretName
+          value: kuberay-operator-webhook-server-cert
+
+  - it: Should scope the fail-closed pods CREATE webhook to Ray node pods and inject the CA
+    set:
+      webhooks:
+        enabled: true
+    documentSelector:
+      path: kind
+      value: MutatingWebhookConfiguration
+    asserts:
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: kuberay-system/kuberay-operator-serving-cert
+      - equal:
+          path: webhooks[?(@.name=="mpod.kb.io")].failurePolicy
+          value: Fail
+      - equal:
+          path: webhooks[?(@.name=="mpod.kb.io")].objectSelector.matchLabels["ray.io/is-ray-node"]
+          value: "yes"
+      - equal:
+          path: webhooks[?(@.name=="mpodbinding.kb.io")].failurePolicy
+          value: Ignore
+      - equal:
+          path: webhooks[?(@.name=="mpodbinding.kb.io")].rules[0].resources
+          value: ["pods/binding"]
+      - equal:
+          path: webhooks[*].clientConfig.service.name
+          value: kuberay-operator-webhook
+
+  - it: Should validate RayCluster, RayJob and RayService
+    set:
+      webhooks:
+        enabled: true
+    documentSelector:
+      path: kind
+      value: ValidatingWebhookConfiguration
+    asserts:
+      - lengthEqual:
+          path: webhooks
+          count: 3
+      - equal:
+          path: webhooks[0].name
+          value: vraycluster.kb.io
+      - equal:
+          path: webhooks[1].name
+          value: vrayjob.kb.io
+      - equal:
+          path: webhooks[2].name
+          value: vrayservice.kb.io
