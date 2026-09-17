@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -194,7 +192,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 
 // PrepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
 	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, map[string]string{})
 
@@ -206,17 +204,14 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(s3Client.StatObject(S3BucketName, "")).To(Succeed())
 
 	return rayCluster
 }
 
 // PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) *rayv1.RayCluster {
 
 	InstallGrafanaAndPrometheus(test, g)
 
@@ -237,10 +232,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(s3Client.StatObject(S3BucketName, "")).To(Succeed())
 
 	return rayCluster
 }
