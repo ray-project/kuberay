@@ -3269,3 +3269,131 @@ func TestHandleSuspendObservedGeneration(t *testing.T) {
 		assert.Equal(t, int64(4), rayService.Status.ObservedGeneration)
 	})
 }
+
+func TestApplyServeTargetCapacityUsesAppliedCapacity(t *testing.T) {
+	for _, clusterName := range []string{"active", "pending"} {
+		for _, capacity := range []*int32{nil, new(int32(40)), new(int32(50))} {
+			for _, cached := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/capacity=%v/cached=%t", clusterName, ptr.Deref(capacity, -1), cached), func(t *testing.T) {
+					service := &rayv1.RayService{
+						Spec: rayv1.RayServiceSpec{ServeConfigV2: `{"target_capacity":40,"applications":[]}`},
+						Status: rayv1.RayServiceStatuses{
+							ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: "active", TargetCapacity: new(int32(50))},
+							PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: "pending", TargetCapacity: new(int32(50))},
+						},
+					}
+					status := &service.Status.ActiveServiceStatus
+					if clusterName == "pending" {
+						status = &service.Status.PendingServiceStatus
+					}
+					status.TargetCapacity = capacity
+					cluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName}}
+					dashboard := &utils.FakeRayDashboardClient{}
+					reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+					if cached {
+						reconciler.cacheServeConfig(service, cluster.Name)
+						service.Spec.ServeConfigV2 = `{"target_capacity":0}`
+					}
+					require.NoError(t, reconciler.applyServeTargetCapacity(context.Background(), service, cluster, dashboard, 50))
+					if capacity != nil && *capacity == 50 {
+						assert.Empty(t, dashboard.LastUpdatedConfig, "an applied capacity must not trigger another update")
+					} else {
+						assert.JSONEq(t, `{"target_capacity":50,"applications":[]}`, string(dashboard.LastUpdatedConfig))
+					}
+					require.NotNil(t, status.TargetCapacity)
+					assert.EqualValues(t, 50, *status.TargetCapacity)
+
+					// A successful update is also idempotent when the original config is cached.
+					dashboard.LastUpdatedConfig = nil
+					require.NoError(t, reconciler.applyServeTargetCapacity(context.Background(), service, cluster, dashboard, 50))
+					assert.Empty(t, dashboard.LastUpdatedConfig)
+				})
+			}
+		}
+	}
+}
+
+// failingCapacityDashboard lets a reconciliation retry a failed deployment update.
+type failingCapacityDashboard struct {
+	utils.FakeRayDashboardClient
+	updateErr error
+}
+
+func (d *failingCapacityDashboard) UpdateDeployments(ctx context.Context, config []byte) error {
+	if d.updateErr != nil {
+		return d.updateErr
+	}
+	return d.FakeRayDashboardClient.UpdateDeployments(ctx, config)
+}
+
+func TestReconcileServeTargetCapacityReturnsToConfiguredCapacity(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+	for _, cached := range []bool{false, true} {
+		for _, failFirst := range []bool{false, true} {
+			t.Run(fmt.Sprintf("cached=%t/failFirst=%t", cached, failFirst), func(t *testing.T) {
+				service := &rayv1.RayService{
+					Spec: rayv1.RayServiceSpec{
+						ServeConfigV2: `{"target_capacity":60,"applications":[]}`,
+						UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+							Type:                  ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+							ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{MaxSurgePercent: new(int32(20))},
+						},
+					},
+					Status: rayv1.RayServiceStatuses{
+						ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: "active", TargetCapacity: new(int32(80))},
+						PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: "pending", TargetCapacity: new(int32(30)), TrafficRoutedPercent: new(int32(30))},
+					},
+				}
+				cluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}
+				reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+				if cached {
+					reconciler.cacheServeConfig(service, cluster.Name)
+					service.Spec.ServeConfigV2 = `{"target_capacity":0,"applications":[]}`
+				}
+				dashboard := &failingCapacityDashboard{}
+				if failFirst {
+					dashboard.updateErr = fmt.Errorf("dashboard unavailable")
+					require.ErrorContains(t, reconciler.reconcileServeTargetCapacity(context.Background(), service, cluster, dashboard), "dashboard unavailable")
+					assert.EqualValues(t, 80, *service.Status.ActiveServiceStatus.TargetCapacity)
+					assert.EqualValues(t, 30, *service.Status.PendingServiceStatus.TargetCapacity)
+					dashboard.updateErr = nil
+				}
+				require.NoError(t, reconciler.reconcileServeTargetCapacity(context.Background(), service, cluster, dashboard))
+				assert.JSONEq(t, `{"target_capacity":60,"applications":[]}`, string(dashboard.LastUpdatedConfig))
+				assert.EqualValues(t, 60, *service.Status.ActiveServiceStatus.TargetCapacity)
+				assert.EqualValues(t, 30, *service.Status.PendingServiceStatus.TargetCapacity)
+			})
+		}
+	}
+}
+
+func TestReconcileServeTargetCapacityDoesNotApplyDefaultsToStatus(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+	service := &rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			ServeConfigV2: `{"target_capacity":100}`,
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type:                  ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{MaxSurgePercent: new(int32(20))},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus:  rayv1.RayServiceStatus{RayClusterName: "active", TrafficRoutedPercent: new(int32(100))},
+			PendingServiceStatus: rayv1.RayServiceStatus{RayClusterName: "pending"},
+			Conditions:           []metav1.Condition{{Type: string(rayv1.RollbackInProgress), Status: metav1.ConditionTrue}},
+		},
+	}
+	cluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}
+	reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+	dashboard := &failingCapacityDashboard{updateErr: fmt.Errorf("dashboard unavailable")}
+	require.ErrorContains(t, reconciler.reconcileServeTargetCapacity(context.Background(), service, cluster, dashboard), "dashboard unavailable")
+	assert.Nil(t, service.Status.ActiveServiceStatus.TargetCapacity)
+	assert.Nil(t, service.Status.PendingServiceStatus.TargetCapacity)
+
+	dashboard.updateErr = nil
+	require.NoError(t, reconciler.reconcileServeTargetCapacity(context.Background(), service, cluster, dashboard))
+	assert.JSONEq(t, `{"target_capacity":100}`, string(dashboard.LastUpdatedConfig))
+	require.NotNil(t, service.Status.ActiveServiceStatus.TargetCapacity)
+	assert.EqualValues(t, 100, *service.Status.ActiveServiceStatus.TargetCapacity)
+	assert.Nil(t, service.Status.PendingServiceStatus.TargetCapacity)
+}
