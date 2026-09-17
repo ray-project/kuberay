@@ -668,7 +668,7 @@ func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1
 	clusterInfo := getClusterFromList(test, g, historyServerURL, clusterName, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
 		utils.RayServiceKind, rayService.Name, clusterName, clusterInfo.SessionName)
 
@@ -739,7 +739,7 @@ func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, clusterName, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after shutdown")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	enterClusterForOwner(test, g, client, historyServerURL, namespace.Name,
 		utils.RayJobKind, rayJob.Name, clusterName, clusterInfo.SessionName)
 

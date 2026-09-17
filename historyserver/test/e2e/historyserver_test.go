@@ -160,7 +160,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
@@ -178,7 +178,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerGrafanaHealthEndpoint(test, g, client, historyServerURL, sessionID)
 	DeleteS3Bucket(test, g, s3Client)
@@ -194,7 +194,7 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerPrometheusHealthEndpoint(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
@@ -209,7 +209,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -507,7 +507,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1020,7 +1020,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1108,7 +1108,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1367,7 +1367,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	jobID := GetOneOfJobID(g, client, historyServerURL)
 
@@ -1430,7 +1430,7 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	jobID := GetOneOfJobID(g, client, historyServerURL)
 
@@ -1598,7 +1598,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return actors from history server", func(t *testing.T) {
@@ -1734,7 +1734,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	endpointURL := historyServerURL + endpoint
 	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
@@ -1797,7 +1797,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyDeadClusterTaskLogInfo(g, client, historyServerURL)
 
@@ -2004,7 +2004,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	LogWithTimestamp(test.T(), "Verifying /nodes response schema for live cluster (isLive=true)")
@@ -2051,7 +2051,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + EndpointNodes
@@ -2098,7 +2098,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
@@ -2154,7 +2154,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
@@ -2181,7 +2181,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpoint := "/api/v0/cluster_metadata"
@@ -2246,7 +2246,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpoint := "/api/v0/cluster_metadata"
@@ -2326,7 +2326,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	// Use the same query params as the frontend to match the storage key.
@@ -2391,7 +2391,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2435,7 +2435,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2470,7 +2470,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	endpointURL := historyServerURL + endpoint
 	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
@@ -2517,7 +2517,7 @@ func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2623,10 +2623,11 @@ func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *ht
 func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, namespace string) *utils.ClusterInfo {
 	LogWithTimestamp(test.T(), "Getting cluster %s/%s from /clusters/ endpoint", namespace, clusterName)
 
+	client := CreateHTTPClientWithCookieJar(test, g)
 	var result *utils.ClusterInfo
 	g.Eventually(func(gg Gomega) {
 		result = nil // Reset to avoid stale value from previous iteration
-		resp, err := http.Get(historyServerURL + "/clusters/")
+		resp, err := client.Get(historyServerURL + "/clusters/")
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -3192,7 +3193,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return events", func(t *testing.T) {
@@ -3258,7 +3259,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return events from storage", func(t *testing.T) {
@@ -3388,7 +3389,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointTimezone)
@@ -3454,7 +3455,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
@@ -3509,7 +3510,7 @@ func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)

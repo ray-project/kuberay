@@ -165,14 +165,17 @@ func podHasArgs(pod corev1.Pod, args []string) bool {
 	return true
 }
 
-// GetHistoryServerURL sets up port-forwarding to the history server and waits for it to be ready.
+// GetHistoryServerURL waits for the history server to be ready and returns its
+// base URL, which routes through the API server's service proxy. Callers must
+// request it with an API-server-authenticated client.
 func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) string {
-	PortForwardService(test, g, namespace.Name, "historyserver", HistoryServerPort)
+	cfg := test.Client().Config()
+	historyServerURL := fmt.Sprintf("%s/api/v1/namespaces/%s/services/historyserver:%d/proxy",
+		cfg.Host, namespace.Name, HistoryServerPort)
 
-	// Wait for port-forward to be ready
-	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	g.Eventually(func() error {
-		resp, err := http.Get(historyServerURL + "/readz")
+		resp, err := client.Get(historyServerURL + "/readz")
 		if err != nil {
 			return err
 		}
@@ -185,7 +188,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 		}
 		return nil
 	}, TestTimeoutMedium).Should(Succeed(), "HistoryServer should be ready")
-	LogWithTimestamp(test.T(), "Port-forwarded HistoryServer API port to %s successfully", historyServerURL)
+	LogWithTimestamp(test.T(), "HistoryServer reachable through the API server proxy at %s", historyServerURL)
 
 	return historyServerURL
 }
