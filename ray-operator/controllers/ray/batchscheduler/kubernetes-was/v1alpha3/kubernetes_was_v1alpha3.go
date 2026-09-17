@@ -121,6 +121,7 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncSchedulingResources(ctx context.Con
 	}
 	return k.syncPodGroup(ctx, rayCluster, podGroup)
 }
+
 func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.Workload) error {
 	existing := &schedulingv1alpha3.Workload{}
 	found, err := k.getSchedulingResource(ctx, "Workload", client.ObjectKeyFromObject(desired), existing)

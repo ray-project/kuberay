@@ -159,12 +159,12 @@ func TestAddMetadataToChildResourceSetsSchedulingGroup(t *testing.T) {
 	// Both head and worker pods reference the single whole-cluster PodGroup.
 	headPod := &corev1.Pod{}
 	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, headPod, utils.RayNodeHeadGroupLabelValue)
-	assertPodGroupMembership(t, headPod, "test-cluster-cluster")
+	assertPodGroupMembership(t, headPod)
 	assert.Equal(t, corev1.DefaultSchedulerName, headPod.Spec.SchedulerName)
 
 	workerPod := &corev1.Pod{}
 	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, workerPod, "workers")
-	assertPodGroupMembership(t, workerPod, "test-cluster-cluster")
+	assertPodGroupMembership(t, workerPod)
 }
 
 func TestAddMetadataToChildResourceSetsTemplateSchedulingGroup(t *testing.T) {
@@ -174,7 +174,7 @@ func TestAddMetadataToChildResourceSetsTemplateSchedulingGroup(t *testing.T) {
 	template := &corev1.PodTemplateSpec{}
 	scheduler.AddMetadataToChildResource(context.Background(), rayCluster, template, "workers")
 
-	assertPodGroupMembership(t, template, "test-cluster-cluster")
+	assertPodGroupMembership(t, template)
 	assert.Equal(t, corev1.DefaultSchedulerName, template.Spec.SchedulerName)
 }
 
@@ -189,7 +189,7 @@ func TestAddMetadataToChildResourceSetsSchedulingGroupWhenAutoscalingEnabled(t *
 
 	// Autoscaling clusters are gang scheduled at the floor, so their pods still join
 	// the whole-cluster PodGroup and get the default scheduler name.
-	assertPodGroupMembership(t, pod, "test-cluster-cluster")
+	assertPodGroupMembership(t, pod)
 	assert.Equal(t, corev1.DefaultSchedulerName, pod.Spec.SchedulerName)
 }
 
@@ -684,9 +684,9 @@ func TestResolveGangPriority(t *testing.T) {
 		wantPolicy        *schedulingv1alpha3.PreemptionPolicy
 	}{
 		{name: "no priority class on pods", priorityClassName: "", wantName: "", wantPolicy: nil},
-		{name: "never class", priorityClassName: "never-pc", priorityClass: newPriorityClass("never-pc", corev1.PreemptNever), wantName: "never-pc", wantPolicy: ptrPreemptionPolicy(schedulingv1alpha3.PreemptNever)},
-		{name: "preempt-lower class", priorityClassName: "low-pc", priorityClass: newPriorityClass("low-pc", corev1.PreemptLowerPriority), wantName: "low-pc", wantPolicy: ptrPreemptionPolicy(schedulingv1alpha3.PreemptLowerPriority)},
-		{name: "class without preemptionPolicy defaults to PreemptLowerPriority", priorityClassName: "bare-pc", priorityClass: &schedulingv1.PriorityClass{ObjectMeta: metav1.ObjectMeta{Name: "bare-pc"}, Value: 1000}, wantName: "bare-pc", wantPolicy: ptrPreemptionPolicy(schedulingv1alpha3.PreemptLowerPriority)},
+		{name: "never class", priorityClassName: "never-pc", priorityClass: newPriorityClass("never-pc", corev1.PreemptNever), wantName: "never-pc", wantPolicy: new(schedulingv1alpha3.PreemptNever)},
+		{name: "preempt-lower class", priorityClassName: "low-pc", priorityClass: newPriorityClass("low-pc", corev1.PreemptLowerPriority), wantName: "low-pc", wantPolicy: new(schedulingv1alpha3.PreemptLowerPriority)},
+		{name: "class without preemptionPolicy defaults to PreemptLowerPriority", priorityClassName: "bare-pc", priorityClass: &schedulingv1.PriorityClass{ObjectMeta: metav1.ObjectMeta{Name: "bare-pc"}, Value: 1000}, wantName: "bare-pc", wantPolicy: new(schedulingv1alpha3.PreemptLowerPriority)},
 		{name: "missing class is ignored", priorityClassName: "ghost-pc", priorityClass: nil, wantName: "", wantPolicy: nil},
 	}
 
@@ -784,10 +784,6 @@ func newPriorityClass(name string, policy corev1.PreemptionPolicy) *schedulingv1
 		Value:            1000,
 		PreemptionPolicy: &policy,
 	}
-}
-
-func ptrPreemptionPolicy(policy schedulingv1alpha3.PreemptionPolicy) *schedulingv1alpha3.PreemptionPolicy {
-	return &policy
 }
 
 func TestSchedulingV1alpha3Available(t *testing.T) {
@@ -903,7 +899,7 @@ func newTestScheduler(t *testing.T, objects ...client.Object) (*KubernetesWASV1A
 
 // assertPodGroupMembership asserts that a pod or pod template carries the whole-cluster
 // scheduling group.
-func assertPodGroupMembership(t *testing.T, obj metav1.Object, expectedPodGroupName string) {
+func assertPodGroupMembership(t *testing.T, obj metav1.Object) {
 	t.Helper()
 	var schedulingGroup *corev1.PodSchedulingGroup
 	switch o := obj.(type) {
@@ -916,7 +912,7 @@ func assertPodGroupMembership(t *testing.T, obj metav1.Object, expectedPodGroupN
 	}
 	require.NotNil(t, schedulingGroup)
 	require.NotNil(t, schedulingGroup.PodGroupName)
-	assert.Equal(t, expectedPodGroupName, *schedulingGroup.PodGroupName)
+	assert.Equal(t, "test-cluster-cluster", *schedulingGroup.PodGroupName)
 }
 
 func TestSchedulingSkippedWhenGangSchedulingDisabled(t *testing.T) {
