@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -579,8 +580,8 @@ func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
 	})
 }
 
-func TestCleanupOnCompletion(t *testing.T) {
-	t.Run("RayCluster - should be no-op", func(t *testing.T) {
+func TestCleanupOnSuspend(t *testing.T) {
+	t.Run("RayCluster - no PodGroup - should be no-op", func(t *testing.T) {
 		a := assert.New(t)
 		require := require.New(t)
 
@@ -593,10 +594,137 @@ func TestCleanupOnCompletion(t *testing.T) {
 
 		ctx := context.Background()
 
-		// Call CleanupOnCompletion with RayCluster - should be no-op
+		// Nothing is reserved, so there is nothing to release and no PodGroup to create.
+		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		require.NoError(err)
+		a.False(didUpdate)
+
+		podGroup := volcanoschedulingv1beta1.PodGroup{}
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}, &podGroup)
+		a.True(errors.IsNotFound(err), "CleanupOnSuspend must not create a PodGroup, got err=%v", err)
+	})
+
+	// Regression test for https://github.com/ray-project/kuberay/issues/5183.
+	t.Run("RayCluster - suspended - releases the reserved capacity", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayCluster := createTestRayCluster(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// The running cluster reserves its full size.
+		require.NoError(scheduler.DoBatchSchedulingOnSubmission(ctx, &rayCluster))
+
+		podGroupKey := client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}
+		podGroup := volcanoschedulingv1beta1.PodGroup{}
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &podGroup))
+		require.Equal(utils.CalculateDesiredReplicas(&rayCluster)+1, podGroup.Spec.MinMember)
+		require.NotEmpty(*podGroup.Spec.MinResources)
+
+		// Suspending it must hand that capacity back.
+		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		require.NoError(err)
+		a.True(didUpdate)
+
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &podGroup))
+		a.Equal(int32(0), podGroup.Spec.MinMember)
+		a.Empty(*podGroup.Spec.MinResources)
+
+		// Idempotent, so a suspended cluster does not write (or emit an event) every reconcile.
+		didUpdate, err = scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		require.NoError(err)
+		a.False(didUpdate)
+	})
+
+	t.Run("RayCluster - originated from a RayJob - should be no-op", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		// The cluster shares the RayJob's PodGroup, so it must not zero out the RayJob's reservation.
+		rayJob := createTestRayJob(1)
+		rayCluster := createTestRayClusterWithLabels(map[string]string{
+			utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+			utils.RayOriginatedFromCRNameLabelKey: rayJob.Name,
+		})
+
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		require.NoError(scheduler.DoBatchSchedulingOnSubmission(ctx, &rayJob))
+
+		podGroupKey := client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}
+		before := volcanoschedulingv1beta1.PodGroup{}
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &before))
+		require.NotEmpty(*before.Spec.MinResources)
+
+		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		require.NoError(err)
+		a.False(didUpdate)
+
+		after := volcanoschedulingv1beta1.PodGroup{}
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &after))
+		a.Equal(before.Spec.MinMember, after.Spec.MinMember)
+		a.Equal(before.Spec.MinResources, after.Spec.MinResources)
+	})
+
+	t.Run("RayJob - should be no-op", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		// RayJob capacity is released through CleanupOnCompletion by the RayJob reconciler.
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		didUpdate, err := scheduler.CleanupOnSuspend(context.Background(), &rayJob)
+		require.NoError(err)
+		a.False(didUpdate)
+	})
+}
+
+func TestCleanupOnCompletion(t *testing.T) {
+	t.Run("RayCluster - should be no-op", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		// RayCluster capacity is released through CleanupOnSuspend by the RayCluster reconciler.
+		rayCluster := createTestRayCluster(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		require.NoError(scheduler.DoBatchSchedulingOnSubmission(ctx, &rayCluster))
+
+		podGroupKey := client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}
+		before := volcanoschedulingv1beta1.PodGroup{}
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &before))
+
 		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)
-		a.False(didUpdate) // No cleanup should have happened for RayCluster
+		a.False(didUpdate)
+
+		after := volcanoschedulingv1beta1.PodGroup{}
+		require.NoError(fakeCli.Get(ctx, podGroupKey, &after))
+		a.Equal(before.Spec.MinMember, after.Spec.MinMember)
+		a.Equal(before.Spec.MinResources, after.Spec.MinResources)
 	})
 
 	t.Run("RayJob - RayJob has been deleted before calling CleanupOnCompletion", func(t *testing.T) {

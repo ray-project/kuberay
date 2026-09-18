@@ -267,12 +267,35 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
-// CleanupOnCompletion recalculates and updates the PodGroup resources when a RayJob finishes.
-// This is called when the RayJob reaches terminal state (Complete/Failed).
+// CleanupOnSuspend zeroes out a suspended RayCluster's PodGroup so it stops reserving queue
+// capacity. The suspended RayCluster still exists, so its OwnerReference cannot do this.
+func (v *VolcanoBatchScheduler) CleanupOnSuspend(ctx context.Context, object metav1.Object) (bool, error) {
+	rayCluster, ok := object.(*rayv1.RayCluster)
+	if !ok {
+		return false, nil
+	}
+
+	// A RayCluster created by a RayJob shares the RayJob's PodGroup, which the RayJob reconciler owns.
+	if crdType, ok := rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok && crdType == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
+		return false, nil
+	}
+
+	// A cluster without a PodGroup reserves nothing; don't let syncPodGroup create an empty one.
+	podGroupName := getAppPodGroupName(rayCluster)
+	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: podGroupName}, &volcanoschedulingv1beta1.PodGroup{}); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return v.syncPodGroup(ctx, rayCluster, 0, corev1.ResourceList{})
+}
+
+// CleanupOnCompletion recalculates and updates the PodGroup resources when the RayJob no longer
+// needs the capacity it reserved: it reached a terminal state (Complete/Failed) or was suspended.
 //
-// For RayCluster objects, this is a no-op because the PodGroup is cleaned up by the OwnerReference of the RayCluster.
-//
-// For RayJob objects, the PodGroup's MinMember and MinResources are recalculated based on the
+// The PodGroup's MinMember and MinResources are recalculated based on the
 // live RayCluster state. This correctly handles deletion strategies:
 //   - If workers are suspended by DeleteWorkers policy, calculatePodGroupParams automatically
 //     excludes suspended groups, so the PodGroup reflects only the head pod.
@@ -281,7 +304,7 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
 
-	// Only handle RayJob. RayCluster PodGroups will be cleaned up by the OwnerReference.
+	// Only handle RayJob. RayCluster PodGroups are handled by CleanupOnSuspend and the OwnerReference.
 	rayJob, ok := object.(*rayv1.RayJob)
 	if !ok {
 		return false, nil

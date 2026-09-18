@@ -57,6 +57,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
@@ -4656,4 +4657,138 @@ func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
 		}
 	}
 	assert.True(t, foundEvent, "expected a warning event about cert-manager")
+}
+
+// TestReconcilePodsReleasesBatchSchedulerOnSuspend is a regression test for
+// https://github.com/ray-project/kuberay/issues/5183. reconcilePods returns early on suspend, so
+// each of those early returns has to release the batch scheduler's reservation explicitly.
+func TestReconcilePodsReleasesBatchSchedulerOnSuspend(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	trueCondition := func(condType rayv1.RayClusterConditionType) []metav1.Condition {
+		return []metav1.Condition{{
+			Type:               string(condType),
+			Status:             metav1.ConditionTrue,
+			Reason:             string(condType),
+			LastTransitionTime: metav1.Now(),
+		}}
+	}
+
+	tests := []struct {
+		name                string
+		suspendErr          error
+		conditions          []metav1.Condition
+		statusConditions    bool
+		suspend             bool
+		expectSuspendCalled bool
+		expectErr           bool
+	}{
+		{
+			name:                "suspending releases the reserved capacity",
+			statusConditions:    true,
+			suspend:             true,
+			conditions:          trueCondition(rayv1.RayClusterSuspending),
+			expectSuspendCalled: true,
+		},
+		{
+			// A cluster suspended before this operator started never goes through the Suspending branch.
+			name:                "already suspended releases the reserved capacity",
+			statusConditions:    true,
+			suspend:             true,
+			conditions:          trueCondition(rayv1.RayClusterSuspended),
+			expectSuspendCalled: true,
+		},
+		{
+			name:                "suspended with the status condition gate disabled",
+			statusConditions:    false,
+			suspend:             true,
+			expectSuspendCalled: true,
+		},
+		{
+			name:                "a failure is surfaced so the reconcile is requeued",
+			statusConditions:    true,
+			suspend:             true,
+			conditions:          trueCondition(rayv1.RayClusterSuspended),
+			suspendErr:          errors.New("failed to update PodGroup"),
+			expectSuspendCalled: true,
+			expectErr:           true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, tc.statusConditions)
+
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.Suspend = new(tc.suspend)
+			cluster.Status.Conditions = tc.conditions
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(cluster).
+				Build()
+
+			fakeScheduler := &fakeBatchScheduler{suspendDidUpdate: true, suspendErr: tc.suspendErr}
+			reconciler := &RayClusterReconciler{
+				Client:                     fakeClient,
+				Recorder:                   events.NewFakeRecorder(100),
+				Scheme:                     newScheme,
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+				options: RayClusterReconcilerOptions{
+					BatchSchedulerManager: batchscheduler.NewSchedulerManagerForTest(fakeScheduler),
+				},
+			}
+
+			err := reconciler.reconcilePods(context.Background(), cluster)
+			if tc.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tc.expectSuspendCalled, fakeScheduler.suspendCalled)
+			assert.False(t, fakeScheduler.cleanupCalled, "suspending a RayCluster must not run the RayJob completion cleanup")
+			if tc.expectSuspendCalled {
+				require.NotNil(t, fakeScheduler.suspendObject)
+				assert.Equal(t, cluster.Name, fakeScheduler.suspendObject.GetName())
+				assert.Equal(t, cluster.Namespace, fakeScheduler.suspendObject.GetNamespace())
+			}
+		})
+	}
+}
+
+// TestReconcilePodsKeepsBatchSchedulerReservationWhenRunning is the counterpart to
+// TestReconcilePodsReleasesBatchSchedulerOnSuspend: a running gang must keep its reservation.
+func TestReconcilePodsKeepsBatchSchedulerReservationWhenRunning(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.Suspend = new(false)
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(cluster).
+		Build()
+
+	fakeScheduler := &fakeBatchScheduler{suspendDidUpdate: true}
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   events.NewFakeRecorder(100),
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+		options: RayClusterReconcilerOptions{
+			BatchSchedulerManager: batchscheduler.NewSchedulerManagerForTest(fakeScheduler),
+		},
+	}
+
+	require.NoError(t, reconciler.reconcilePods(context.Background(), cluster))
+	assert.False(t, fakeScheduler.suspendCalled, "a running RayCluster must keep its reserved capacity")
 }

@@ -928,6 +928,34 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 	return nil
 }
 
+// releaseBatchSchedulerResources releases the capacity the batch scheduler reserved for this
+// suspended RayCluster (e.g. a Volcano PodGroup). Callers must propagate the error to requeue,
+// since the capacity stays reserved until this succeeds.
+func (r *RayClusterReconciler) releaseBatchSchedulerResources(ctx context.Context, instance *rayv1.RayCluster) error {
+	if r.options.BatchSchedulerManager == nil {
+		return nil
+	}
+
+	scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+	if err != nil {
+		return err
+	}
+
+	didCleanup, err := scheduler.CleanupOnSuspend(ctx, instance)
+	if err != nil {
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler), string(utils.CleanupAction),
+			"Failed releasing batch scheduler resources for suspended RayCluster %s/%s, %v",
+			instance.Namespace, instance.Name, err)
+		return err
+	}
+	if didCleanup {
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp), string(utils.CleanupAction),
+			"Released batch scheduler resources for suspended RayCluster %s/%s",
+			instance.Namespace, instance.Name)
+	}
+	return nil
+}
+
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -952,12 +980,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted Pods for RayCluster %s/%s due to suspension",
 			instance.Namespace, instance.Name)
-		return nil
+		return r.releaseBatchSchedulerResources(ctx, instance)
 	}
 
 	if statusConditionGateEnabled {
 		if suspendStatus == rayv1.RayClusterSuspended {
-			return nil // stop reconcilePods because the cluster is suspended.
+			// Also release here: a cluster suspended before this operator started never went
+			// through the Suspending branch above.
+			return r.releaseBatchSchedulerResources(ctx, instance)
 		}
 		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
 		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {

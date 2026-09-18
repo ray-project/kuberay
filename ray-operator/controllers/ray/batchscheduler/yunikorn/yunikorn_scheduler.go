@@ -141,6 +141,11 @@ func (y *YuniKornScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Obje
 	return false, nil
 }
 
+func (y *YuniKornScheduler) CleanupOnSuspend(_ context.Context, _ metav1.Object) (bool, error) {
+	// YuniKorn doesn't need cleanup
+	return false, nil
+}
+
 func (yf *YuniKornSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
 	return &YuniKornScheduler{}, nil
 }
