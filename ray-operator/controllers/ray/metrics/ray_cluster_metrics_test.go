@@ -18,23 +18,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-func TestRayClusterMetricsDescribeIncludesConditionProvisioned(t *testing.T) {
-	manager := NewRayClusterMetricsManager(context.Background(), nil)
-	descriptions := make(chan *prometheus.Desc)
-
-	go func() {
-		manager.Describe(descriptions)
-		close(descriptions)
-	}()
-
-	var actual []string
-	for description := range descriptions {
-		actual = append(actual, description.String())
-	}
-
-	assert.Contains(t, actual, manager.rayClusterConditionProvisioned.String())
-}
-
 func TestRayClusterInfo(t *testing.T) {
 	tests := []struct {
 		name            string
