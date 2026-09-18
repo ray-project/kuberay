@@ -572,13 +572,28 @@ var _ = Context("Inside the default namespace", func() {
 	testSuspendRayCluster := func(withConditionDisabled bool) {
 		ctx := context.Background()
 		namespace := "default"
-		rayCluster := rayClusterTemplate("raycluster-suspend", namespace)
+		// envtest runs no garbage collector, so a deleted RayCluster's resources outlive
+		// the spec that made them. Without distinct names the second mode would inherit
+		// them and pass its assertions before doing any work.
+		clusterName := "raycluster-suspend"
+		if withConditionDisabled {
+			clusterName = "raycluster-suspend-no-condition"
+		}
+		rayCluster := rayClusterTemplate(clusterName, namespace)
 		headPods := corev1.PodList{}
 		workerPods := corev1.PodList{}
 		allPods := corev1.PodList{}
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+		headServices := corev1.ServiceList{}
+		headServiceFilters := common.RayClusterHeadServiceListOptions(rayCluster)
+		numHeadServices := func() (int, error) {
+			if err := k8sClient.List(ctx, &headServices, headServiceFilters...); err != nil {
+				return -1, err
+			}
+			return len(headServices.Items), nil
+		}
 
 		if withConditionDisabled {
 			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterStatusConditions, false)
@@ -610,6 +625,12 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(numWorkerPods), fmt.Sprintf("workerGroup %v", workerPods.Items))
 		})
 
+		By("Check that the head Service is created", func() {
+			Eventually(
+				numHeadServices,
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head services %v", headServices.Items))
+		})
+
 		By("Should delete all head and worker Pods if suspended", func() {
 			// suspend a Raycluster and check that all Pods are deleted.
 			err := updateRayClusterSuspendField(ctx, rayCluster, true)
@@ -627,6 +648,12 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("all pods %v", allPods.Items))
 		})
 
+		By("Should delete the head Service if suspended", func() {
+			Eventually(
+				numHeadServices,
+				time.Second*3, time.Millisecond*500).Should(Equal(0), fmt.Sprintf("head services %v", headServices.Items))
+		})
+
 		By("RayCluster's .status.state should be updated to 'suspended' shortly after all Pods are terminated", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
@@ -638,6 +665,9 @@ var _ = Context("Inside the default namespace", func() {
 				// rayCluster.Status.Head.PodName will be cleared.
 				// rayCluster.Status.Head.PodIP will also be cleared, but we don't test it here since we don't have IPs in tests.
 				Expect(rayCluster.Status.Head.PodName).To(BeEmpty())
+				// The status derived from the head Service goes with it.
+				Expect(rayCluster.Status.Head.ServiceName).To(BeEmpty())
+				Expect(rayCluster.Status.Endpoints).To(BeEmpty())
 			}
 		})
 
@@ -692,6 +722,10 @@ var _ = Context("Inside the default namespace", func() {
 			err := updateRayClusterSuspendField(ctx, rayCluster, false)
 			Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster")
 
+			Eventually(
+				numHeadServices,
+				time.Second*3, time.Millisecond*500).Should(Equal(1), fmt.Sprintf("head services %v", headServices.Items))
+
 			// check that all pods are created
 			Eventually(
 				listResourceFunc(ctx, &headPods, headFilters...),
@@ -724,6 +758,7 @@ var _ = Context("Inside the default namespace", func() {
 				// rayCluster.Status.Head.PodName should have a value now.
 				// rayCluster.Status.Head.PodIP should also have a value now, but we don't test it here since we don't have IPs in tests.
 				Expect(rayCluster.Status.Head.PodName).NotTo(BeEmpty())
+				Expect(rayCluster.Status.Head.ServiceName).NotTo(BeEmpty())
 			}
 		})
 
@@ -748,6 +783,14 @@ var _ = Context("Inside the default namespace", func() {
 			rayCluster := rayClusterTemplate("raycluster-suspend-atomically", namespace)
 			allPods := corev1.PodList{}
 			allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
+			headServices := corev1.ServiceList{}
+			headServiceFilters := common.RayClusterHeadServiceListOptions(rayCluster)
+			numHeadServices := func() (int, error) {
+				if err := k8sClient.List(ctx, &headServices, headServiceFilters...); err != nil {
+					return -1, err
+				}
+				return len(headServices.Items), nil
+			}
 			numPods := 4 // 1 Head + 3 Workers
 			Expect(features.Enabled(features.RayClusterStatusConditions)).To(BeTrue())
 
@@ -778,6 +821,11 @@ var _ = Context("Inside the default namespace", func() {
 
 				Eventually(findRayClusterSuspendStatus, time.Second*3, time.Millisecond*500).
 					WithArguments(ctx, rayCluster).Should(Equal(rayv1.RayClusterSuspending))
+
+				// Both teardowns answer to the same condition, so this one proceeds even
+				// while the Pods are pinned by finalizers.
+				Eventually(numHeadServices, time.Second*3, time.Millisecond*500).
+					Should(Equal(0), fmt.Sprintf("head services %v", headServices.Items))
 			})
 
 			By("Should keep RayClusterSuspending consistently if we set `.Spec.Suspend` back to false", func() {
@@ -816,6 +864,10 @@ var _ = Context("Inside the default namespace", func() {
 					newNames = append(newNames, pod.Name)
 				}
 				Expect(newNames).NotTo(ConsistOf(oldNames))
+
+				// The head Service comes back with them.
+				Eventually(numHeadServices, time.Second*3, time.Millisecond*500).
+					Should(Equal(1), fmt.Sprintf("head services %v", headServices.Items))
 			})
 
 			By("Set suspend to true and all Pods should be deleted again", func() {
