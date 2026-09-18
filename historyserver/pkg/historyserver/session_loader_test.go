@@ -312,21 +312,22 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_ReturnsCachedPointer verifies that GetSnapshot hands out the
-// cached snapshot itself (no per-request decode or copy).
-func TestGetSnapshot_ReturnsCachedPointer(t *testing.T) {
+// TestGetSnapshot_SharesDecodedCopyWhileHeld verifies that while a caller still
+// holds the decoded snapshot, further GetSnapshot calls return that same pointer
+// instead of decoding again.
+func TestGetSnapshot_SharesDecodedCopyWhileHeld(t *testing.T) {
 	key := testClusterSessionKey()
-
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-	stored := testSnapshot(key)
-	sl.putSnapshot(key, stored)
+	sl.putSnapshot(key, testSnapshot(key))
 
-	got, ok := sl.GetSnapshot(key)
+	want, ok := sl.GetSnapshot(key)
 	if !ok {
 		t.Fatal("GetSnapshot: ok=false")
 	}
-	if got != stored {
-		t.Fatal("GetSnapshot should return the cached snapshot pointer, not a copy")
+	for i := 0; i < 3; i++ {
+		if got, ok := sl.GetSnapshot(key); !ok || got != want {
+			t.Fatalf("GetSnapshot #%d returned a different decoded copy", i+1)
+		}
 	}
 }
 
@@ -334,6 +335,21 @@ func TestGetSnapshot_ReturnsCachedPointer(t *testing.T) {
 func TestGetSnapshot_ColdMiss(t *testing.T) {
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
 	requireSnapshotCached(t, sl, testClusterSessionKey(), false)
+}
+
+// TestGetSnapshot_CorruptEntry_TreatedAsMiss verifies that a non-decodable cache
+// entry is dropped and reported as a miss instead of panicking.
+func TestGetSnapshot_CorruptEntry_TreatedAsMiss(t *testing.T) {
+	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
+	sl.cache.Add("corrupt", &cacheEntry{encoded: []byte("{not valid json")})
+
+	snap, ok := sl.GetSnapshot("corrupt")
+	if ok || snap != nil {
+		t.Fatalf("corrupt entry: got (%v, %v), want (nil, false)", snap, ok)
+	}
+	if _, stillCached := sl.cache.Get("corrupt"); stillCached {
+		t.Fatal("corrupt entry should have been dropped")
+	}
 }
 
 // TestGetSnapshot_PutOverwrites verifies that putSnapshot replaces any prior entry.
@@ -504,7 +520,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 
 	// Budget large enough for one richSnapshot but not two.
 	enc1, _ := json.Marshal(s1)
-	maxBytes := estimateHeapBytes(len(enc1)) + 1
+	maxBytes := len(enc1) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
 	sl.putSnapshot(olderKey, s1)
