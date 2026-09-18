@@ -121,7 +121,8 @@ History Server supports multiple storage backends:
 
 1. **S3/MinIO**: For AWS S3 or MinIO compatible storage
 2. **Aliyun OSS**: For Alibaba Cloud Object Storage Service
-3. **Local Test**: For local testing and development
+3. **OCI Object Storage**: For Oracle Cloud Infrastructure Object Storage
+4. **Local Test**: For local testing and development
 
 Each backend requires specific configuration parameters passed through environment variables or configuration files.
 
