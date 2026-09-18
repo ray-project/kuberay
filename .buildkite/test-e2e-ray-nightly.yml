@@ -1,0 +1,84 @@
+# Nightly Ray Image E2E Tests
+#
+# This pipeline tests KubeRay (main branch) against the nightly Ray image.
+# It should runs on a schedule to catch compatibility issues early before
+# Ray releases.
+#
+# Environment variables:
+#   KUBERAY_TEST_RAY_IMAGE: rayproject/ray:nightly
+
+- label: 'Test RayCluster and GCS E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "RayCluster and GCS E2E (nightly Ray image)" 30m "./test/e2e" e2e-nightly-raycluster-log.tar
+
+- label: 'Test RayJob E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "RayJob E2E (nightly Ray image)" 60m "./test/e2erayjob" e2e-nightly-rayjob-log.tar
+
+- label: 'Test RayService E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "RayService E2E (nightly Ray image)" 30m "./test/e2erayservice" e2e-nightly-ray-rayservice-log.tar
+
+- label: 'Test Autoscaler E2E Part 1 (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "Autoscaler E2E Part 1 (nightly Ray image)" 60m "./test/e2eautoscaler/raycluster_autoscaler_test.go ./test/e2eautoscaler/support.go" e2e-nightly-ray-autoscaler-part1-log.tar
+
+- label: 'Test Autoscaler E2E Part 2 (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "Autoscaler E2E Part 2 (nightly Ray image)" 60m "./test/e2eautoscaler/raycluster_autoscaler_part2_test.go ./test/e2eautoscaler/support.go" e2e-nightly-ray-autoscaler-part2-log.tar
+
+- label: 'Test RayJob Light Weight Submitter E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/build-load-light-weight-submitter.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "RayJob Light Weight Submitter E2E (nightly Ray image)" 30m "./test/e2erayjobsubmitter" e2e-nightly-rayjob-submitter-log.tar
+
+- label: 'Test RayCronJob E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-nightly-test.sh
+    - bash ../.buildkite/run-e2e-nightly-test.sh "RayCronJob E2E (nightly Ray image)" 40m "./test/e2eraycronjob" e2e-nightly-ray-cronjob-log.tar
+
+- label: 'Test Apiserver E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export E2E_API_SERVER_RAY_IMAGE="rayproject/ray:nightly-py310"
+    - source .buildkite/setup-nightly-test.sh
+    # Build and start apiserver
+    - pushd ../apiserver
+    - KIND_CLUSTER_NAME=kind KIND=kind make install-apiserver-e2e
+    - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
+    # Run e2e tests and print KubeRay api server logs if tests fail
+    - echo "--- START:Running Apiserver E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${E2E_API_SERVER_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - E2E_API_SERVER_URL="http://localhost:8888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-apiserver-log.tar -T - && exit 1)
+    - echo "--- END:Apiserver E2E (nightly Ray image) tests finished"
