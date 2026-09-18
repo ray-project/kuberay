@@ -1066,9 +1066,6 @@ func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
 	if collectorOpts == nil {
 		return nil
 	}
-	if collectorOpts.Image == nil || *collectorOpts.Image == "" {
-		return fmt.Errorf("historyServerOptions.collectorOptions.image must be set")
-	}
 
 	envMap := make(map[string]corev1.EnvVar)
 	for _, env := range collectorOpts.Env {

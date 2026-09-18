@@ -192,6 +192,11 @@ nodeEventForwarder:
   types:
     - Warning
 
+# -- Default image for the History Server collector sidecar. A RayCluster can override it with
+# `spec.historyServerOptions.collectorOptions.image`. If empty, defaults to
+# `quay.io/kuberay/collector` with the tag matching the operator version.
+collectorImage: ""
+
 # Configurations for KubeRay operator metrics.
 metrics:
   # -- Whether KubeRay operator should emit control plane metrics.
