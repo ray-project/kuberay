@@ -34,15 +34,10 @@ Make sure you are under the `kuberay` directory.
 # Spin up the kind cluster.
 kind create cluster --image=kindest/node:v1.29.0
 
-# Build and load the operator.
-IMG=kuberay/operator:latest make -C ray-operator docker-build
-kind load docker-image kuberay/operator:latest
-
 # Install via Helm.
-helm install kuberay-operator \
-  --set image.repository=kuberay/operator \
-  --set image.tag=latest \
-  ./helm-chart/kuberay-operator
+helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+helm repo update
+helm install kuberay-operator kuberay/kuberay-operator --version 1.6.0
 ```
 
 ## Step 2: Build and Load Images
