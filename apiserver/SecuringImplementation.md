@@ -8,8 +8,8 @@ The solution is based on the architecture below:
 
 It essentially adds an Authorization sidecar to the KubeRay APIServer pod. This architecture is highly flexible and allows users to integrate sidecar implementations that meet their specific security requirements, which can vary significantly across organizations.
 
-Here, we will use a very simple [sidecar implementation](../experimental/cmd/main.go) with
-a reverse proxy using token-based authorization. This is a basic authorization mechanism
+Here, we will use a very simple sidecar implementation with a reverse proxy using
+token-based authorization. This is a basic authorization mechanism
 based on a string token shared between the proxy and the client. This implementation is not intended for
 production but serves as a demonstration. Additional examples of reverse proxy
 implementations can be found [here](https://github.com/blublinsky/auth-reverse-proxy).
