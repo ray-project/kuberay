@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,14 +31,14 @@ type SchedulerManager struct {
 }
 
 // NewSchedulerManager maintains a specific scheduler plugin based on config
-func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration, config *rest.Config, cli client.Client) (*SchedulerManager, error) {
+func NewSchedulerManager(ctx context.Context, rayConfigs configapi.Configuration, config *rest.Config, cli client.Client, recorder events.EventRecorder) (*SchedulerManager, error) {
 	// init the scheduler factory from config
 	factory, err := getSchedulerFactory(rayConfigs)
 	if err != nil {
 		return nil, err
 	}
 
-	scheduler, err := factory.New(ctx, config, cli)
+	scheduler, err := factory.New(ctx, config, cli, recorder)
 	if err != nil {
 		return nil, err
 	}

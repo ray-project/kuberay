@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -75,7 +76,11 @@ func (k *KaiScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (
 	return false, nil
 }
 
-func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
+func (k *KaiScheduler) SchedulingConditions(_ context.Context, _ *rayv1.RayCluster) ([]metav1.Condition, error) {
+	return nil, nil
+}
+
+func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client, _ events.EventRecorder) (schedulerinterface.BatchScheduler, error) {
 	return &KaiScheduler{}, nil
 }
 

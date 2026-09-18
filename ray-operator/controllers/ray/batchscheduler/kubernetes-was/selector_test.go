@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -27,11 +28,13 @@ var (
 	v1Provider       = &fakeProvider{gv: schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1"}}
 )
 
-func (f *fakeProvider) GroupVersion() schema.GroupVersion                            { return f.gv }
-func (f *fakeProvider) Available(*rest.Config) error                                 { return f.available }
-func (f *fakeProvider) AddToScheme(*runtime.Scheme)                                  {}
-func (f *fakeProvider) ConfigureReconciler(b *builder.Builder) *builder.Builder      { return b }
-func (f *fakeProvider) NewScheduler(client.Client) schedulerinterface.BatchScheduler { return nil }
+func (f *fakeProvider) GroupVersion() schema.GroupVersion                       { return f.gv }
+func (f *fakeProvider) Available(*rest.Config) error                            { return f.available }
+func (f *fakeProvider) AddToScheme(*runtime.Scheme)                             {}
+func (f *fakeProvider) ConfigureReconciler(b *builder.Builder) *builder.Builder { return b }
+func (f *fakeProvider) NewScheduler(client.Client, events.EventRecorder) schedulerinterface.BatchScheduler {
+	return nil
+}
 
 // withProviders swaps the package registry for the duration of a test.
 func withProviders(t *testing.T, providers ...Provider) {

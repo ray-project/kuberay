@@ -57,6 +57,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
@@ -84,6 +86,18 @@ var (
 	workerSelector          labels.Selector
 	workersToDelete         []string
 )
+
+type conditionBatchScheduler struct {
+	schedulerinterface.DefaultBatchScheduler
+	conditions []metav1.Condition
+	err        error
+	calls      int
+}
+
+func (s *conditionBatchScheduler) SchedulingConditions(_ context.Context, _ *rayv1.RayCluster) ([]metav1.Condition, error) {
+	s.calls++
+	return s.conditions, s.err
+}
 
 const (
 	// MultiKueueController represents the vaue of the MultiKueue controller
@@ -1670,11 +1684,23 @@ func TestCalculateStatus(t *testing.T) {
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.Background()
 
+	conditionScheduler := &conditionBatchScheduler{
+		conditions: []metav1.Condition{{
+			Type:    "BatchSchedulerReady",
+			Status:  metav1.ConditionTrue,
+			Reason:  "Ready",
+			Message: "Batch scheduler resources are ready",
+		}},
+	}
+
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
+		options: RayClusterReconcilerOptions{
+			BatchSchedulerManager: batchscheduler.NewSchedulerManagerForTest(conditionScheduler),
+		},
 	}
 
 	// Test head information
@@ -1690,6 +1716,7 @@ func TestCalculateStatus(t *testing.T) {
 	newInstance, err = r.calculateStatus(ctx, testRayCluster, errors.Join(utils.ErrFailedCreateHeadPod, errors.New("invalid")))
 	require.NoError(t, err)
 	assert.Empty(t, newInstance.Status.Conditions)
+	assert.Zero(t, conditionScheduler.calls)
 
 	// enable feature gate for the following tests
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
@@ -1697,6 +1724,16 @@ func TestCalculateStatus(t *testing.T) {
 	// Test CheckRayHeadRunningAndReady with head pod running and ready
 	newInstance, _ = r.calculateStatus(ctx, testRayCluster, nil)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, "BatchSchedulerReady", metav1.ConditionTrue))
+	assert.Equal(t, 1, conditionScheduler.calls)
+
+	// Test batch scheduler condition errors don't block core status calculation.
+	conditionScheduler.err = errors.New("conditions unavailable")
+	newInstance, err = r.calculateStatus(ctx, testRayCluster, nil)
+	require.NoError(t, err)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, string(rayv1.HeadPodReady), metav1.ConditionTrue))
+	assert.False(t, meta.IsStatusConditionPresentAndEqual(newInstance.Status.Conditions, "BatchSchedulerReady", metav1.ConditionTrue))
+	conditionScheduler.err = nil
 
 	// Test CheckRayHeadRunningAndReady with head pod not ready
 	headPod.Status.Conditions = []corev1.PodCondition{
