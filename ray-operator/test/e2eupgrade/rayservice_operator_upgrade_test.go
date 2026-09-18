@@ -75,7 +75,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
-	test.T().Logf("Checking that the K8s serve service %s has three ready endpoints", svcName)
+	test.T().Logf("Checking that the K8s serve service %s has two ready endpoints", svcName)
 	g.Eventually(func() int {
 		readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 		g.Expect(err).NotTo(HaveOccurred())
