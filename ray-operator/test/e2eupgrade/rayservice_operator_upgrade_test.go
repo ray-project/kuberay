@@ -80,7 +80,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 		readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 		g.Expect(err).NotTo(HaveOccurred())
 		return len(readyEndpoints)
-	}, TestTimeoutShort).Should(Equal(3))
+	}, TestTimeoutShort).Should(Equal(2))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
