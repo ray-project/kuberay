@@ -2481,6 +2481,21 @@ func TestIsGCSFaultToleranceEmbedded(t *testing.T) {
 	assert.True(t, IsGCSFaultToleranceEmbedded(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB}))
 }
 
+func TestSupportsFlexibleRestartPolicy(t *testing.T) {
+	// Empty / unspecified version → original behavior (restrict to Never).
+	assert.False(t, SupportsFlexibleRestartPolicy(""))
+	// Invalid version string → treated as unsupported.
+	assert.False(t, SupportsFlexibleRestartPolicy("not-a-version"))
+	// Below the minimum → restrict to Never.
+	assert.False(t, SupportsFlexibleRestartPolicy("2.55.0"))
+	assert.False(t, SupportsFlexibleRestartPolicy("2.55.9"))
+	// Exactly the minimum → flexible policy allowed.
+	assert.True(t, SupportsFlexibleRestartPolicy("2.56.0"))
+	// Above the minimum → flexible policy allowed.
+	assert.True(t, SupportsFlexibleRestartPolicy("2.57.0"))
+	assert.True(t, SupportsFlexibleRestartPolicy("3.0.0"))
+}
+
 func TestGetGCSStoragePVCName(t *testing.T) {
 	instance := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster"},
