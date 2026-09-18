@@ -201,6 +201,10 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
 See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
 
+> [!Warning]
+> Skip step 1 below for a patch release (e.g. `v1.4.1`): the `release-1.4` branch already exists in `kuberay-helm`.
+> Only run it when cutting a new minor release.
+
 1. **Create Release Branch (if it doesn't exist):**
     * Clone the `kuberay-helm` repository if you haven't already.
     * Set up an `upstream` remote: `git remote add upstream git@github.com:ray-project/kuberay-helm.git`
@@ -266,9 +270,9 @@ See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below
     * Open a Pull Request from your fork. See [example PR #89](https://github.com/ray-project/kuberay-helm/pull/89/files).
 
 4. **Merge and Verify:**
-    * Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
+    *Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
         * [`chart-release`](https://github.com/ray-project/kuberay-helm/actions/workflows/chart-release.yaml)
-        * [`pages-build-deployment`](https://github.com/ray-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
+        *[`pages-build-deployment`](https://github.com/ray-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
     * Verify that both workflows succeed. This indicates the charts have been packaged and added to the Helm repository index hosted via GitHub Pages.
 
 ---
