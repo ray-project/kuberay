@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -35,7 +36,17 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	test.T().Logf("Detected upgrade version: %s", upgradeVersion)
 
 	// Create RayService custom resource
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfigurationWithWorker())
+	specAC := rayServiceSampleYamlApplyConfigurationWithWorker()
+	originalYAML := *specAC.ServeConfigV2
+	haYAML := strings.ReplaceAll(originalYAML,
+		"num_replicas: 1",
+		"num_replicas: 2\n            max_replicas_per_node: 1",
+	)
+	specAC.WithServeConfigV2(haYAML)
+
+	specAC.RayClusterSpec.WorkerGroupSpecs[0].WithReplicas(2).WithMinReplicas(2).WithMaxReplicas(2)
+
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(specAC)
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -64,10 +75,12 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
-	test.T().Logf("Checking that the K8s serve service %s has two ready endpoints", svcName)
-	readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(readyEndpoints).To(HaveLen(2))
+	test.T().Logf("Checking that the K8s serve service %s has three ready endpoints", svcName)
+	g.Eventually(func() int {
+		readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
+		g.Expect(err).NotTo(HaveOccurred())
+		return len(readyEndpoints)
+	}, TestTimeoutShort).Should(Equal(3))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
