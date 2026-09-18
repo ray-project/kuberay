@@ -60,15 +60,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
 
 	// Find candidate nodes under {sessionName}/
-	var nodeIDs []string
-	for _, entry := range r.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if strings.HasSuffix(entry, "/") {
-			nodeID := strings.TrimSuffix(entry, "/")
-			if nodeID != "" {
-				nodeIDs = append(nodeIDs, nodeID)
-			}
-		}
-	}
+	nodeIDs := clusterlogs.ListSessionNodeDirs(r.reader, clusterLogPathPrefix, clusterInfo.SessionName)
 	logrus.Debugf("Found candidate node directories for cluster %s: %v", clusterSessionKey, nodeIDs)
 
 	total := 0
