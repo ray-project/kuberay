@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/internal/storagetest"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -38,7 +39,7 @@ import (
 // GetContent tests, the assertions are on the requests that reach the server,
 // so a change that stops rooting a key or drops a bucket operation shows up.
 
-const metadataPrefix = testRootDir + "/cluster-metadata/"
+const metadataPrefix = storagetest.RootDir + "/cluster-metadata/"
 
 // writeHierarchicalListResult answers a delimiter listing: object keys go in
 // Contents, "subdirectories" in CommonPrefixes.
@@ -62,12 +63,12 @@ func writeHierarchicalListResult(w http.ResponseWriter, prefix string, keys []st
 // writes and a listing rooted at that directory returns as a key, is neither.
 func TestListFilesSeparatesFilesFromDirectories(t *testing.T) {
 	const dir = "session_2026-05-08_18-35-06_774618_1/logs/node123/events"
-	wantPrefix := path.Join(testRootDir, testClusterPrefix, dir) + "/"
+	wantPrefix := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, dir) + "/"
 
-	var listed recorder
+	var listed storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := r.URL.Query().Get("prefix")
-		listed.add(prefix)
+		listed.Add(prefix)
 		if prefix != wantPrefix {
 			writeEmptyListResult(w, prefix)
 			return
@@ -87,13 +88,13 @@ func TestListFilesSeparatesFilesFromDirectories(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got := newTestHandler(t, srv).ListFiles(testClusterPrefix, dir)
+	got := newTestHandler(t, srv).ListFiles(storagetest.ClusterPrefix, dir)
 
 	// Order is up to the backend; the contract is which entries come back and
 	// whether each carries the trailing slash.
 	want := []string{"event_GCS.log", "event_RAYLET.log", "old/"}
 	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
-		t.Errorf("ListFiles() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.snapshot())
+		t.Errorf("ListFiles() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.Snapshot())
 	}
 }
 
@@ -106,10 +107,10 @@ func TestListReadsClusterMetadataUnderRootDir(t *testing.T) {
 	newer := time.Date(2026, 5, 8, 18, 35, 6, 774618000, time.UTC)
 	older := time.Date(2026, 5, 7, 9, 0, 0, 1000, time.UTC)
 
-	var listed recorder
+	var listed storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := r.URL.Query().Get("prefix")
-		listed.add(prefix)
+		listed.Add(prefix)
 		if prefix != metadataPrefix {
 			writeEmptyListResult(w, prefix)
 			return
@@ -144,7 +145,7 @@ func TestListReadsClusterMetadataUnderRootDir(t *testing.T) {
 		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("List() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.snapshot())
+		t.Errorf("List() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.Snapshot())
 	}
 }
 
@@ -152,7 +153,7 @@ func TestCreateDirectoryWritesPlaceholderWhenMissing(t *testing.T) {
 	const dir = "ray-logs/ray_cluster_history/raycluster/default/my-cluster/session_1/logs/node123/events"
 	wantKey := dir + "/"
 
-	var puts recorder
+	var puts storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key, _ := requestKey(r)
 		switch r.Method {
@@ -160,7 +161,7 @@ func TestCreateDirectoryWritesPlaceholderWhenMissing(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		case http.MethodPut:
 			body, _ := io.ReadAll(r.Body)
-			puts.add(fmt.Sprintf("%s|%d", key, len(body)))
+			puts.Add(fmt.Sprintf("%s|%d", key, len(body)))
 		default:
 			t.Errorf("unexpected %s request for %q", r.Method, key)
 		}
@@ -174,7 +175,7 @@ func TestCreateDirectoryWritesPlaceholderWhenMissing(t *testing.T) {
 	// The placeholder is what makes the directory visible to tools that list by
 	// prefix; it carries no content.
 	want := []string{wantKey + "|0"}
-	if diff := cmp.Diff(want, puts.snapshot()); diff != "" {
+	if diff := cmp.Diff(want, puts.Snapshot()); diff != "" {
 		t.Errorf("objects written diff (-want +got):\n%s", diff)
 	}
 }
@@ -182,7 +183,7 @@ func TestCreateDirectoryWritesPlaceholderWhenMissing(t *testing.T) {
 func TestCreateDirectoryLeavesExistingDirectoryAlone(t *testing.T) {
 	const dir = "ray-logs/ray_cluster_history/raycluster/default/my-cluster/session_1/logs"
 
-	var puts recorder
+	var puts storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key, _ := requestKey(r)
 		switch r.Method {
@@ -193,7 +194,7 @@ func TestCreateDirectoryLeavesExistingDirectoryAlone(t *testing.T) {
 			w.Header().Set("Content-Length", "0")
 			w.WriteHeader(http.StatusOK)
 		case http.MethodPut:
-			puts.add(key)
+			puts.Add(key)
 		default:
 			t.Errorf("unexpected %s request for %q", r.Method, key)
 		}
@@ -204,7 +205,7 @@ func TestCreateDirectoryLeavesExistingDirectoryAlone(t *testing.T) {
 		t.Fatalf("CreateDirectory: %v", err)
 	}
 
-	if written := puts.snapshot(); len(written) != 0 {
+	if written := puts.Snapshot(); len(written) != 0 {
 		t.Errorf("CreateDirectory rewrote an existing directory: %v", written)
 	}
 }
@@ -213,7 +214,7 @@ func TestWriteFileUploadsBodyToGivenKey(t *testing.T) {
 	const key = "ray-logs/ray_cluster_history/raycluster/default/my-cluster/session_1/logs/node123/raylet.out"
 	const content = "raylet line one\nraylet line two\n"
 
-	var uploads recorder
+	var uploads storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotKey, _ := requestKey(r)
 		if r.Method != http.MethodPut {
@@ -225,7 +226,7 @@ func TestWriteFileUploadsBodyToGivenKey(t *testing.T) {
 			t.Errorf("reading uploaded body: %v", err)
 			return
 		}
-		uploads.add(gotKey + "|" + string(body))
+		uploads.Add(gotKey + "|" + string(body))
 	}))
 	defer srv.Close()
 
@@ -234,7 +235,7 @@ func TestWriteFileUploadsBodyToGivenKey(t *testing.T) {
 	}
 
 	want := []string{key + "|" + content}
-	if diff := cmp.Diff(want, uploads.snapshot()); diff != "" {
+	if diff := cmp.Diff(want, uploads.Snapshot()); diff != "" {
 		t.Errorf("uploads diff (-want +got):\n%s", diff)
 	}
 }

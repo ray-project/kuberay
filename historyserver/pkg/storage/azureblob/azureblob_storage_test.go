@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/internal/storagetest"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -21,7 +22,7 @@ import (
 // the gcs backend: List, ListFiles, CreateDirectory and WriteFile. As in the
 // GetContent tests, the assertions are on the requests that reach the server.
 
-const metadataPrefix = testRootDir + "/cluster-metadata/"
+const metadataPrefix = storagetest.RootDir + "/cluster-metadata/"
 
 // writeHierarchicalListResult answers a delimiter listing: blobs go in Blobs,
 // "subdirectories" in BlobPrefix entries.
@@ -46,12 +47,12 @@ func writeHierarchicalListResult(w http.ResponseWriter, prefix string, names []s
 // them behind, so a listing may still return one.
 func TestListFilesSeparatesFilesFromDirectories(t *testing.T) {
 	const dir = "session_2026-05-08_18-35-06_774618_1/logs/node123/events"
-	wantPrefix := path.Join(testRootDir, testClusterPrefix, dir) + "/"
+	wantPrefix := path.Join(storagetest.RootDir, storagetest.ClusterPrefix, dir) + "/"
 
-	var listed recorder
+	var listed storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := r.URL.Query().Get("prefix")
-		listed.add(prefix)
+		listed.Add(prefix)
 		if prefix != wantPrefix {
 			writeListResult(w, prefix)
 			return
@@ -72,13 +73,13 @@ func TestListFilesSeparatesFilesFromDirectories(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got := newTestHandler(t, srv).ListFiles(testClusterPrefix, dir)
+	got := newTestHandler(t, srv).ListFiles(storagetest.ClusterPrefix, dir)
 
 	// Order is up to the backend; the contract is which entries come back and
 	// whether each carries the trailing slash.
 	want := []string{"event_GCS.log", "event_RAYLET.log", "old/"}
 	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
-		t.Errorf("ListFiles() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.snapshot())
+		t.Errorf("ListFiles() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.Snapshot())
 	}
 }
 
@@ -91,10 +92,10 @@ func TestListReadsClusterMetadataUnderRootDir(t *testing.T) {
 	newer := time.Date(2026, 5, 8, 18, 35, 6, 774618000, time.UTC)
 	older := time.Date(2026, 5, 7, 9, 0, 0, 1000, time.UTC)
 
-	var listed recorder
+	var listed storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := r.URL.Query().Get("prefix")
-		listed.add(prefix)
+		listed.Add(prefix)
 		if prefix != metadataPrefix {
 			writeListResult(w, prefix)
 			return
@@ -129,7 +130,7 @@ func TestListReadsClusterMetadataUnderRootDir(t *testing.T) {
 		},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("List() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.snapshot())
+		t.Errorf("List() diff (-want +got):\n%s\nprefixes listed: %v", diff, listed.Snapshot())
 	}
 }
 
@@ -138,19 +139,19 @@ func TestListReadsClusterMetadataUnderRootDir(t *testing.T) {
 // "<no name>" in Azure Storage Explorer. Pin that down so the empty body is
 // read as a decision rather than as something left unfinished.
 func TestCreateDirectoryWritesNothing(t *testing.T) {
-	var requests recorder
+	var requests storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		name, _ := blobPath(r)
-		requests.add(r.Method + " " + name)
+		requests.Add(r.Method + " " + name)
 	}))
 	defer srv.Close()
 
 	handler := newTestHandler(t, srv)
-	if err := handler.CreateDirectory(path.Join(testRootDir, testClusterPrefix, "session_1/logs/node123/events")); err != nil {
+	if err := handler.CreateDirectory(path.Join(storagetest.RootDir, storagetest.ClusterPrefix, "session_1/logs/node123/events")); err != nil {
 		t.Fatalf("CreateDirectory: %v", err)
 	}
 
-	if sent := requests.snapshot(); len(sent) != 0 {
+	if sent := requests.Snapshot(); len(sent) != 0 {
 		t.Errorf("CreateDirectory talked to the container: %v", sent)
 	}
 }
@@ -159,7 +160,7 @@ func TestWriteFileUploadsBodyToGivenBlob(t *testing.T) {
 	const name = "ray-logs/ray_cluster_history/raycluster/default/my-cluster/session_1/logs/node123/raylet.out"
 	const content = "raylet line one\nraylet line two\n"
 
-	var uploads recorder
+	var uploads storagetest.Recorder
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotName, _ := blobPath(r)
 		if r.Method != http.MethodPut {
@@ -171,7 +172,7 @@ func TestWriteFileUploadsBodyToGivenBlob(t *testing.T) {
 			t.Errorf("reading uploaded body: %v", err)
 			return
 		}
-		uploads.add(gotName + "|" + string(body))
+		uploads.Add(gotName + "|" + string(body))
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer srv.Close()
@@ -181,7 +182,7 @@ func TestWriteFileUploadsBodyToGivenBlob(t *testing.T) {
 	}
 
 	want := []string{name + "|" + content}
-	if diff := cmp.Diff(want, uploads.snapshot()); diff != "" {
+	if diff := cmp.Diff(want, uploads.Snapshot()); diff != "" {
 		t.Errorf("uploads diff (-want +got):\n%s", diff)
 	}
 }
