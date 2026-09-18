@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 	"time"
+	"weak"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sirupsen/logrus"
@@ -33,7 +34,8 @@ const (
 	// Real usage can exceed it in three ways:
 	//   - add-then-evict: cache momentarily holds oldTotal + newEntry
 	//   - one large session: a single snapshot bigger than the whole budget is kept
-	//   - per-request decode: every GET unmarshals cached bytes into a full *SessionSnapshot
+	//   - decoded copies: in-flight requests hold a decoded *SessionSnapshot outside the
+	//     budget; concurrent requests for one session share a single copy
 	DefaultSessionCacheMaxMemory = "2Gi"
 )
 
@@ -58,12 +60,19 @@ type processor interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
+// cacheEntry holds the snapshot as JSON bytes plus a weak reference to its decoded form.
+type cacheEntry struct {
+	encoded []byte
+	mu      sync.Mutex // one decode at a time per entry
+	decoded weak.Pointer[eventserver.SessionSnapshot]
+}
+
 // SessionLoader caches dead-session snapshots in a size-bounded LRU with optional
 // TTL expiry and triggers session processing on cache miss. Concurrent callers
 // for the same session are coalesced via singleflight.
 type SessionLoader struct {
 	processor processor
-	cache     *expirable.LRU[string, []byte]
+	cache     *expirable.LRU[string, *cacheEntry]
 	maxBytes  int
 	// mu guards only the byte-budget read-modify-write; expirable.LRU is
 	// independently thread-safe. A lone Get/Add/Peek does not need mu.
@@ -77,24 +86,29 @@ type SessionLoader struct {
 func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize, cacheMaxBytes int, cacheTTL time.Duration) *SessionLoader {
 	return &SessionLoader{
 		processor:      p,
-		cache:          expirable.NewLRU[string, []byte](cacheSize, nil, cacheTTL),
+		cache:          expirable.NewLRU[string, *cacheEntry](cacheSize, nil, cacheTTL),
 		maxBytes:       cacheMaxBytes,
 		serverCtx:      serverCtx,
 		processTimeout: processTimeout,
 	}
 }
 
-// GetSnapshot returns a per-request view of the cached snapshot, which is
-// a freshly decoded copy, safe for concurrent use.
+// GetSnapshot returns the decoded snapshot. It is shared by concurrent callers
+// and must be treated as read-only.
 func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.SessionSnapshot, bool) {
-	encoded, ok := s.cache.Get(clusterSessionKey)
+	entry, ok := s.cache.Get(clusterSessionKey)
 	if !ok {
 		return nil, false
 	}
 	s.renewTTL(clusterSessionKey)
 
-	snap, err := decodeSnapshot(encoded)
-	if err != nil {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if snap := entry.decoded.Value(); snap != nil {
+		return snap, true
+	}
+	snap := new(eventserver.SessionSnapshot)
+	if err := json.Unmarshal(entry.encoded, snap); err != nil {
 		// A corrupt entry should be impossible since we encoded it ourselves.
 		// If it ever happens, report a miss so it can be re-processed.
 		logrus.Errorf("Dropping corrupt cache entry for session %q: %v", clusterSessionKey, err)
@@ -103,6 +117,8 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 		s.mu.Unlock()
 		return nil, false
 	}
+	// freed by GC once no request holds snap, the next caller decodes again
+	entry.decoded = weak.Make(snap)
 	return snap, true
 }
 
@@ -188,9 +204,12 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 	}
 }
 
-// putSnapshot stores encoded session snapshot bytes in the LRU cache.
+// putSnapshot encodes a snapshot and caches the bytes.
+//
+// Use JSON, not gob since snapshots have map[string]any CustomFields and gob requires
+// registering concrete types and fails to round-trip the arbitrary nested values reliably.
 func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) error {
-	encoded, err := encodeSnapshot(snap)
+	encoded, err := json.Marshal(snap)
 	if err != nil {
 		logrus.Errorf("Failed to encode snapshot for session %q: %v", clusterSessionKey, err)
 		return fmt.Errorf("encode snapshot for session %q: %w", clusterSessionKey, err)
@@ -198,7 +217,7 @@ func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cache.Add(clusterSessionKey, encoded)
+	s.cache.Add(clusterSessionKey, &cacheEntry{encoded: encoded, decoded: weak.Make(snap)})
 	s.evictToByteBudget()
 	return nil
 }
@@ -226,28 +245,11 @@ func (s *SessionLoader) evictToByteBudget() {
 	}
 }
 
-// totalBytes sums the length of every cached entry.
+// totalBytes sums the encoded size of every cached entry.
 func (s *SessionLoader) totalBytes() int {
 	total := 0
-	for _, encoded := range s.cache.Values() {
-		total += len(encoded)
+	for _, entry := range s.cache.Values() {
+		total += len(entry.encoded)
 	}
 	return total
-}
-
-// encodeSnapshot serializes a snapshot to its cached byte form.
-//
-// Use JSON, not gob since snapshots have map[string]any CustomFields and gob requires
-// registering concrete types and fails to round-trip the arbitrary nested values reliably.
-func encodeSnapshot(snap *eventserver.SessionSnapshot) ([]byte, error) {
-	return json.Marshal(snap)
-}
-
-// decodeSnapshot reconstructs a snapshot from its cached byte form.
-func decodeSnapshot(encoded []byte) (*eventserver.SessionSnapshot, error) {
-	var snap eventserver.SessionSnapshot
-	if err := json.Unmarshal(encoded, &snap); err != nil {
-		return nil, err
-	}
-	return &snap, nil
 }

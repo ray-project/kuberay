@@ -25,6 +25,7 @@ type ServerHandler struct {
 
 	useKubernetesProxy bool
 	useAuthTokenMode   bool
+	enableLiveClusters bool
 }
 
 func NewServerHandler(
@@ -35,7 +36,7 @@ func NewServerHandler(
 	sessionLoader *SessionLoader,
 	useKubernetesProxy bool,
 	useAuthTokenMode bool,
-) (*ServerHandler, error) {
+	enableLiveClusters bool) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
@@ -46,7 +47,8 @@ func NewServerHandler(
 		// TODO: make this configurable
 		maxClusters: 100,
 
-		useAuthTokenMode: useAuthTokenMode,
+		useAuthTokenMode:   useAuthTokenMode,
+		enableLiveClusters: enableLiveClusters,
 	}
 
 	if len(clientManager.configs) > 0 {

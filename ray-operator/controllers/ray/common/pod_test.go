@@ -1352,6 +1352,7 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
+
 	clusterAutoscalingVersionNotSet := instance.DeepCopy()
 	clusterAutoscalingVersionNotSet.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV1 := instance.DeepCopy()
@@ -1359,6 +1360,8 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV1),
 	}
+
+	// clusterAutoscalingV2 has autoscaler V2 enabled: env var is injected AND RestartPolicy is set to Never.
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1368,12 +1371,18 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	ctx := context.Background()
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 
+	// clusterAutoscalingV2WithCustomRestartPolicy has autoscaler V2 enabled and a custom RestartPolicy
+	// set in the head pod template — used to verify the feature flag preserves the user value.
+	clusterAutoscalingV2WithCustomRestartPolicy := clusterAutoscalingV2.DeepCopy()
+	clusterAutoscalingV2WithCustomRestartPolicy.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyAlways
+
 	tests := map[string]struct {
 		expectedRestartPolicy      corev1.RestartPolicy
 		cluster                    rayv1.RayCluster
 		expectedHeadContainers     int
 		expectedAutoscalerV2EnvVar bool
 		expectedAutoscalerV1EnvVar bool
+		rayVersion                 string
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:                    *clusterNoAutoscaling,
@@ -1389,28 +1398,56 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      "",
 		},
-		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
+		"Pod template with autoscaling v1 enabled should have the correct autoscaler v1 fields": {
 			cluster:                    *clusterAutoscalingV1,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: false,
 			expectedAutoscalerV1EnvVar: true,
 			expectedRestartPolicy:      "",
 		},
-		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
+		"Pod template with autoscaling v2 enabled and no Ray version should set RestartPolicy to Never": {
 			cluster:                    *clusterAutoscalingV2,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: true,
 			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      corev1.RestartPolicyNever,
 		},
+		"Pod template with autoscaling v2 enabled and Ray < 2.56.0 should set RestartPolicy to Never": {
+			cluster:                    *clusterAutoscalingV2,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.55.0",
+			expectedRestartPolicy:      corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should not force RestartPolicy to Never": {
+			cluster:                    *clusterAutoscalingV2,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.56.0",
+			// RestartPolicy is not set in the cluster template, so it should remain empty.
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should preserve user-set RestartPolicy": {
+			cluster:                    *clusterAutoscalingV2WithCustomRestartPolicy,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.56.0",
+			// RestartPolicy is set to Always in the cluster template and should be kept as-is.
+			expectedRestartPolicy: corev1.RestartPolicyAlways,
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			podTemplateSpec := DefaultHeadPodTemplate(ctx, tc.cluster, tc.cluster.Spec.HeadGroupSpec, podName, "6379")
+			cluster := tc.cluster.DeepCopy()
+			cluster.Spec.RayVersion = tc.rayVersion
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 			// if autoscaling is enabled, the head pod should have the autoscaler container appended for a total of 2 containers
-			if utils.IsAutoscalingEnabled(&tc.cluster.Spec) {
+			if utils.IsAutoscalingEnabled(&cluster.Spec) {
 				assert.Len(t, podTemplateSpec.Spec.Containers, tc.expectedHeadContainers)
 			}
 
@@ -1639,9 +1676,15 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + utils.FormatInt32(0))
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
 
+	// clusterAutoscalingV2WithCustomRestartPolicy has a non-Never RestartPolicy set on the first
+	// worker group template — used to verify the feature flag preserves the user value.
+	clusterAutoscalingV2WithWorkerCustomRestartPolicy := clusterAutoscalingV2.DeepCopy()
+	clusterAutoscalingV2WithWorkerCustomRestartPolicy.Spec.WorkerGroupSpecs[0].Template.Spec.RestartPolicy = corev1.RestartPolicyAlways
+
 	tests := map[string]struct {
 		expectedRestartPolicy corev1.RestartPolicy
 		cluster               rayv1.RayCluster
+		rayVersion            string
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:               *clusterNoAutoscaling,
@@ -1655,9 +1698,26 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			cluster:               *clusterAutoscalingV1WithRestartPolicy,
 			expectedRestartPolicy: corev1.RestartPolicyAlways,
 		},
-		"Pod template with autoscaling v2 enabled should set RestartPolicy to Never": {
+		"Pod template with autoscaling v2 enabled and no Ray version should set RestartPolicy to Never": {
 			cluster:               *clusterAutoscalingV2,
 			expectedRestartPolicy: corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray < 2.56.0 should set RestartPolicy to Never": {
+			cluster:               *clusterAutoscalingV2,
+			rayVersion:            "2.55.0",
+			expectedRestartPolicy: corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should not force RestartPolicy to Never": {
+			cluster:    *clusterAutoscalingV2,
+			rayVersion: "2.56.0",
+			// RestartPolicy is not set in the worker template, so it should remain empty.
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should preserve user-set RestartPolicy": {
+			cluster:    *clusterAutoscalingV2WithWorkerCustomRestartPolicy,
+			rayVersion: "2.56.0",
+			// RestartPolicy is set to Always in the worker template and should be kept as-is.
+			expectedRestartPolicy: corev1.RestartPolicyAlways,
 		},
 		"Pod template with autoscaling enabled and version not set should not set RestartPolicy": {
 			cluster:               *clusterAutoscalingVersionNotSet,
@@ -1667,7 +1727,9 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			podTemplateSpec := DefaultWorkerPodTemplate(ctx, tc.cluster, tc.cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379", "", 0, 0)
+			cluster := tc.cluster.DeepCopy()
+			cluster.Spec.RayVersion = tc.rayVersion
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379", "", 0, 0)
 			assert.Equal(t, tc.expectedRestartPolicy, podTemplateSpec.Spec.RestartPolicy)
 		})
 	}
@@ -2364,6 +2426,80 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			resource: corev1.ResourceRequirements{},
 			expected: "ray start --head  --include-log-monitor=true ",
 		},
+		{
+			name:           "WorkerNode with Ascend910B NPU",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/Ascend910B": resource.MustParse("2"),
+				},
+			},
+			expected: `ray start  --resources='{"NPU":2}' `,
+		},
+		{
+			name:           "WorkerNode with Ascend NPU (huawei.com/npu)",
+			nodeType:       rayv1.WorkerNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/npu": resource.MustParse("2"),
+				},
+			},
+			expected: `ray start  --resources='{"NPU":2}' `,
+		},
+		{
+			name:           "HeadNode with Ascend910B and GPU",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/Ascend910B": resource.MustParse("2"),
+					"nvidia.com/gpu":        resource.MustParse("1"),
+				},
+			},
+			expected: `ray start --head  --num-gpus=1  --resources='{"NPU":2}' `,
+		},
+		{
+			name:     "HeadNode with existing resources and Ascend910B",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `'{"custom_resource":2}'`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/Ascend910B": resource.MustParse("2"),
+				},
+			},
+			expected: `ray start --head  --resources='{"NPU":2,"custom_resource":2}' `,
+		},
+		{
+			name:     "HeadNode with existing NPU resources",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"resources": `'{"NPU":3,"custom_resource":2}'`,
+			},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/Ascend910B": resource.MustParse("2"),
+				},
+			},
+			expected: `ray start --head  --resources='{"NPU":3,"custom_resource":2}' `,
+		},
+		{
+			name:           "HeadNode with multiple accelerators including Ascend910B",
+			nodeType:       rayv1.HeadNode,
+			rayStartParams: map[string]string{},
+			resource: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"huawei.com/Ascend910B":     resource.MustParse("2"),
+					"google.com/tpu":            resource.MustParse("8"),
+					"aws.amazon.com/neuroncore": resource.MustParse("4"),
+					"nvidia.com/gpu":            resource.MustParse("1"),
+				},
+			},
+			expected: `ray start --head  --num-gpus=1  --resources='{"neuron_cores":4}' `,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2644,6 +2780,35 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 				"num-cpus":  "4",
 				"memory":    "1000", // preserved
 				"resources": "'{\"Custom-Resource\":5}'",
+			},
+		},
+		"Ascend910B NPU resource set in `Resources`": {
+			initialRayStartParams: map[string]string{},
+			groupResources: map[string]string{
+				"huawei.com/Ascend910B": "2",
+			},
+			expectedRayStartParams: map[string]string{
+				"resources": "'{\"NPU\":2}'",
+			},
+		},
+		"Ascend910c NPU resource set in `Resources`": {
+			initialRayStartParams: map[string]string{},
+			groupResources: map[string]string{
+				"huawei.com/Ascend910c": "4",
+			},
+			expectedRayStartParams: map[string]string{
+				"resources": "'{\"NPU\":4}'",
+			},
+		},
+		"GPU and Ascend910B NPU resource set in `Resources`": {
+			initialRayStartParams: map[string]string{},
+			groupResources: map[string]string{
+				"nvidia.com/gpu":        "1",
+				"huawei.com/Ascend910B": "2",
+			},
+			expectedRayStartParams: map[string]string{
+				"num-gpus":  "1",
+				"resources": "'{\"NPU\":2}'",
 			},
 		},
 	}
@@ -2983,4 +3148,121 @@ func TestBuildCollectorContainerAndPodInjection(t *testing.T) {
 	workerEventTypesV2Env, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, ok)
 	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, workerEventTypesV2Env.Value)
+}
+
+func TestIsNPUResourceKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		resourceKey string
+		expected    bool
+	}{
+		{
+			name:        "huawei.com/Ascend910B",
+			resourceKey: "huawei.com/Ascend910B",
+			expected:    true,
+		},
+		{
+			name:        "huawei.com/Ascend910B-power",
+			resourceKey: "huawei.com/Ascend910B-power",
+			expected:    true,
+		},
+		{
+			name:        "huawei.com/npu",
+			resourceKey: "huawei.com/npu",
+			expected:    true,
+		},
+		{
+			name:        "huawei.com/NPU",
+			resourceKey: "huawei.com/NPU",
+			expected:    true,
+		},
+		{
+			name:        "huawei.com/ascend-memory excluded",
+			resourceKey: "huawei.com/ascend-memory",
+			expected:    false,
+		},
+		{
+			name:        "huawei.com/ascend-core excluded",
+			resourceKey: "huawei.com/ascend-core",
+			expected:    false,
+		},
+		{
+			name:        "huawei.com/Ascend910B-memory excluded",
+			resourceKey: "huawei.com/Ascend910B-memory",
+			expected:    false,
+		},
+		{
+			name:        "huawei.com/Ascend910B-core excluded",
+			resourceKey: "huawei.com/Ascend910B-core",
+			expected:    false,
+		},
+		{
+			name:        "nvidia gpu not NPU",
+			resourceKey: "nvidia.com/gpu",
+			expected:    false,
+		},
+		{
+			name:        "cpu not NPU",
+			resourceKey: "cpu",
+			expected:    false,
+		},
+		{
+			name:        "memory not NPU",
+			resourceKey: "memory",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isNPUResourceKey(tt.resourceKey)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		expected string
+	}{
+		{
+			name:     "nvidia neuron core direct match",
+			key:      "aws.amazon.com/neuroncore",
+			expected: "neuron_cores",
+		},
+		{
+			name:     "google TPU direct match",
+			key:      "google.com/tpu",
+			expected: "TPU",
+		},
+		{
+			name:     "huawei Ascend910B NPU",
+			key:      "huawei.com/Ascend910B",
+			expected: "NPU",
+		},
+		{
+			name:     "huawei.com/npu NPU",
+			key:      "huawei.com/npu",
+			expected: "NPU",
+		},
+		{
+			name:     "huawei ascend-memory returns empty",
+			key:      "huawei.com/ascend-memory",
+			expected: "",
+		},
+		{
+			name:     "unknown resource returns empty",
+			key:      "unknown.com/accelerator",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCustomAcceleratorRayResourceName(tt.key)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
