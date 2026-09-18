@@ -1,6 +1,7 @@
 package gcs
 
 import (
+	"context"
 	"io"
 	"sort"
 	"strings"
@@ -210,6 +211,57 @@ func TestListFiles(t *testing.T) {
 				t.Errorf("ListFiles(%q, %q) returned diff (-want +got):\n%s", tc.clusterID, tc.directory, diff)
 			}
 		})
+	}
+}
+
+func TestListFilesRecursive(t *testing.T) {
+	initialObjects := []fakestorage.Object{
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster1/session1/",
+			},
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster1/session1/node-a/job_events/job-1/events.gz",
+			},
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster1/session1/node-b/node_events/events.gz",
+			},
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster1/session2/node-c/node_events/events.gz",
+			},
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster2/session1/node-d/node_events/events.gz",
+			},
+		},
+	}
+	_, client, bucketName := setupFakeGCS(t, initialObjects...)
+	handler := createRayLogsHandler(client, bucketName)
+
+	got, err := handler.ListFilesRecursive(context.Background(), "cluster1", "session1")
+	if err != nil {
+		t.Fatalf("ListFilesRecursive() failed: %v", err)
+	}
+	sort.Strings(got)
+	want := []string{
+		"node-a/job_events/job-1/events.gz",
+		"node-b/node_events/events.gz",
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("ListFilesRecursive() returned diff (-want +got):\n%s", diff)
 	}
 }
 

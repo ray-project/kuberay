@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"io"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -22,5 +23,8 @@ type StorageReader interface {
 	//
 	GetContent(clusterId string, fileName string) io.Reader
 
+	// ListFiles returns the immediate files and directories under dir.
 	ListFiles(clusterId string, dir string) []string
+	// ListFilesRecursive returns paths relative to dir and propagates listing errors.
+	ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error)
 }

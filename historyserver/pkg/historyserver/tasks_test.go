@@ -1,6 +1,7 @@
 package historyserver
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -26,6 +27,10 @@ func (r *taskLogStorageReader) GetContent(_ string, filename string) io.Reader {
 }
 
 func (r *taskLogStorageReader) ListFiles(_, _ string) []string { return r.files }
+
+func (*taskLogStorageReader) ListFilesRecursive(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
 
 func TestTaskLogBasename(t *testing.T) {
 	tests := map[string]struct {
