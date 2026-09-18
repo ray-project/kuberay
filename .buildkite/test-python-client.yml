@@ -1,4 +1,5 @@
-- label: 'Test Python Client'
+- &python-client-e2e
+  label: 'Test Python Client'
   instance_size: large
   image: golang:1.26-bookworm
   commands:
@@ -41,3 +42,42 @@
     - set -o pipefail
     - pytest python_client_test/ -v || (kubectl logs --tail=50 -l app.kubernetes.io/name=kuberay && exit 1)
     - echo "--- END:Python client tests finished"
+
+- <<: *python-client-e2e
+  label: 'Test Python Client 02/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 03/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 04/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 05/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 06/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 07/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 08/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 09/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 10/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 11/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 12/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 13/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 14/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 15/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 16/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 17/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 18/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 19/20'
+- <<: *python-client-e2e
+  label: 'Test Python Client 20/20'
