@@ -152,6 +152,7 @@
     - echo "--- END:Autoscaler E2E Part 2 (nightly operator) tests finished"
 
 - label: 'Test E2E Operator Version Upgrade (v1.7.0)'
+  parallelism: 20
   instance_size: large
   image: golang:1.26-bookworm
   commands:
