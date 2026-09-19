@@ -38,21 +38,21 @@ func rayServiceSampleYamlApplyConfigurationWithWorker() *rayv1ac.RayServiceSpecA
         deployments:
           - name: MangoStand
             num_replicas: 2
-			max_replicas_per_node: 1
+            max_replicas_per_node: 1
             user_config:
               price: 3
             ray_actor_options:
               num_cpus: 0.1
           - name: OrangeStand
             num_replicas: 2
-			max_replicas_per_node: 1
+            max_replicas_per_node: 1
             user_config:
               price: 2
             ray_actor_options:
               num_cpus: 0.1
           - name: FruitMarket
             num_replicas: 2
-			max_replicas_per_node: 1
+            max_replicas_per_node: 1
             ray_actor_options:
               num_cpus: 0.1
       - name: math_app
@@ -63,14 +63,14 @@ func rayServiceSampleYamlApplyConfigurationWithWorker() *rayv1ac.RayServiceSpecA
         deployments:
           - name: Adder
             num_replicas: 2
-			max_replicas_per_node: 1
+            max_replicas_per_node: 1
             user_config:
               increment: 3
             ray_actor_options:
               num_cpus: 0.1
           - name: Multiplier
             num_replicas: 2
-			max_replicas_per_node: 1
+            max_replicas_per_node: 1
             user_config:
               factor: 5
             ray_actor_options:
@@ -79,7 +79,7 @@ func rayServiceSampleYamlApplyConfigurationWithWorker() *rayv1ac.RayServiceSpecA
             ray_actor_options:
               num_cpus: 0.1
             num_replicas: 2
-			max_replicas_per_node: 1`).
+            max_replicas_per_node: 1`).
 		WithRayClusterSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
