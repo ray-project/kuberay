@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -37,13 +36,6 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Create RayService custom resource
 	specAC := rayServiceSampleYamlApplyConfigurationWithWorker()
-	originalYAML := *specAC.ServeConfigV2
-	haYAML := strings.ReplaceAll(originalYAML,
-		"num_replicas: 1",
-		"num_replicas: 2\n            max_replicas_per_node: 1",
-	)
-	specAC.WithServeConfigV2(haYAML)
-
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(specAC)
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
