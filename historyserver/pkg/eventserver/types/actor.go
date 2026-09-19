@@ -33,11 +33,11 @@ type Address struct {
 // - DeathCause: JSON string containing death details (only in DEAD state)
 type ActorStateEvent struct {
 	State      ActorState `json:"state"`
-	Timestamp  time.Time `json:"timestamp"`
-	NodeID     string    `json:"nodeId,omitempty"`
-	WorkerID   string    `json:"workerId,omitempty"`
-	ReprName   string    `json:"reprName,omitempty"`
-	DeathCause string    `json:"deathCause,omitempty"`
+	Timestamp  time.Time  `json:"timestamp"`
+	NodeID     string     `json:"nodeId,omitempty"`
+	WorkerID   string     `json:"workerId,omitempty"`
+	ReprName   string     `json:"reprName,omitempty"`
+	DeathCause string     `json:"deathCause,omitempty"`
 }
 
 type Actor struct {
