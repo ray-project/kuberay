@@ -44,7 +44,6 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	)
 	specAC.WithServeConfigV2(haYAML)
 
-	specAC.RayClusterSpec.WorkerGroupSpecs[0].WithReplicas(2).WithMinReplicas(2).WithMaxReplicas(2)
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(specAC)
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
