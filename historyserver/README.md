@@ -168,7 +168,7 @@ make test
 To run lint checks:
 
 ```bash
-make alllint
+make lint
 ```
 
 ## Smoke Tests
