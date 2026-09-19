@@ -80,6 +80,7 @@ env_vars:
 			_, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
 			return err
 		}).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+		LogWithTimestamp(test.T(), "RayCluster %s/%s is no longer present", namespace.Name, rayJob.Status.RayClusterName)
 	})
 
 	test.T().Run("Failing RayJob without cluster shutdown after finished", func(_ *testing.T) {
