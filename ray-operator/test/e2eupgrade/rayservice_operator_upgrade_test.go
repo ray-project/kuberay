@@ -35,9 +35,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	test.T().Logf("Detected upgrade version: %s", upgradeVersion)
 
 	// Create RayService custom resource
-	specAC := rayServiceSampleYamlApplyConfigurationWithWorker()
-
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(specAC)
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSampleYamlApplyConfigurationWithWorker())
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
