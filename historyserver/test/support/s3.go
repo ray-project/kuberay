@@ -94,7 +94,9 @@ func (c *S3TestClient) execMC(args ...string) (string, error) {
 
 // StatObject returns nil if the object exists. An empty key checks the bucket itself.
 func (c *S3TestClient) StatObject(bucket, key string) error {
-	_, err := c.execMC("stat", "-q", path.Join(minioMCAlias, bucket, key))
+	// When the key itself is absent, mc falls back to a LIST and succeeds if the key is a
+	// prefix of anything. --no-list disables that fallback.
+	_, err := c.execMC("stat", "-q", "--no-list", path.Join(minioMCAlias, bucket, key))
 	return err
 }
 
