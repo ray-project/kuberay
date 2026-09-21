@@ -219,6 +219,27 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	// Please do NOT modify `originalRayClusterInstance` in the following code.
 	originalRayClusterInstance := instance.DeepCopy()
 
+	// When the cluster has had no user driver attached for longer than spec.idleTerminationOptions.timeoutSeconds,
+	// the Ray autoscaler v2 sets the `ray.io/idle-termination-cleanup-finalizer` finalizer.
+	if utils.IsIdleTerminationOptionsEnabled(&instance.Spec) {
+		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
+			if r.hasIdleTerminationCleanupFinalizer(instance) {
+				logger.Info("Deleting RayCluster because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds",
+					"namespace", instance.Namespace, "name", instance.Name, "timeoutSeconds", instance.Spec.IdleTerminationOptions.TimeoutSeconds)
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
+					string(utils.DeletedIdleRayCluster), string(utils.DeleteAction),
+					"Deleting RayCluster %s/%s because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds=%d",
+					instance.Namespace, instance.Name, *instance.Spec.IdleTerminationOptions.TimeoutSeconds)
+
+				// Remove finalizer to allow deletion to proceed
+				controllerutil.RemoveFinalizer(instance, utils.IdleTerminationCleanupFinalizer)
+				if err := r.Update(ctx, instance); err != nil {
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				}
+			}
+		}
+	}
+
 	// The `enableGCSFTRedisCleanup` is a feature flag introduced in KubeRay v1.0.0. It determines whether
 	// the Redis cleanup job should be activated. Users can disable the feature by setting the environment
 	// variable `ENABLE_GCS_FT_REDIS_CLEANUP` to `false`, and undertake the Redis storage namespace cleanup
@@ -348,29 +369,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedRedisCleanupJob), string(utils.CreateAction),
 				"Created Redis cleanup Job %s/%s", redisCleanupJob.Namespace, redisCleanupJob.Name)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
-		}
-	}
-
-	// When the cluster has had no user driver attached for longer than spec.idleTerminationOptions.timeoutSeconds,
-	// the Ray autoscaler v2 sets the `ray.io/idle-termination-cleanup-finalizer` finalizer.
-	if utils.IsIdleTerminationOptionsEnabled(&instance.Spec) {
-		if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-			if r.hasIdleTerminationCleanupFinalizer(instance) {
-				logger.Info("Deleting RayCluster because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds",
-					"namespace", instance.Namespace, "name", instance.Name, "timeoutSeconds", instance.Spec.IdleTerminationOptions.TimeoutSeconds)
-				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal,
-					string(utils.DeletedIdleRayCluster), string(utils.DeleteAction),
-					"Deleting RayCluster %s/%s because no user driver has been attached for longer than IdleTerminationOptions.TimeoutSeconds=%d",
-					instance.Namespace, instance.Name, *instance.Spec.IdleTerminationOptions.TimeoutSeconds)
-
-				// Remove finalizer to allow deletion to proceed
-				controllerutil.RemoveFinalizer(instance, utils.IdleTerminationCleanupFinalizer)
-				if err := r.Update(ctx, instance); err != nil {
-					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-				}
-			}
-
-			return ctrl.Result{}, nil
 		}
 	}
 
