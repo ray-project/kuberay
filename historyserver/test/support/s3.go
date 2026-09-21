@@ -1,6 +1,7 @@
 package support
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -10,6 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -59,8 +62,31 @@ func (c *S3TestClient) execMC(args ...string) (string, error) {
 		return "", err
 	}
 	cmd := append([]string{"mc"}, args...)
-	stdout, stderr, err := ExecPodCmdWithError(c.test, pod, MinioContainerName, cmd)
+
+	req := c.test.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: MinioContainerName,
+			Stdout:    true,
+			Stderr:    true,
+		}, clientgoscheme.ParameterCodec)
+
+	cfg := c.test.Client().Config()
+	executor, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
 	if err != nil {
+		return "", fmt.Errorf("failed to create executor for %q: %w", strings.Join(cmd, " "), err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := executor.StreamWithContext(c.test.Ctx(), remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}); err != nil {
 		return "", fmt.Errorf("%q failed: %w (stderr: %s)", strings.Join(cmd, " "), err, stderr.String())
 	}
 	return stdout.String(), nil
