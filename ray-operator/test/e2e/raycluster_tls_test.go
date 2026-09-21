@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/version"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -425,6 +426,11 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 	t.Run("mTLS with autoscaler enabled", func(t *testing.T) {
 		if !certManagerAvailable(test) {
 			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
+		// mTLS with autoscaling requires `ray kuberay-autoscaler --gcs-address` (Ray >= 2.60.0);
+		// validation rejects older versions.
+		if v, err := version.ParseGeneric(GetRayVersion()); err != nil || !v.AtLeast(version.MustParseGeneric("2.60.0")) {
+			t.Skipf("mTLS with autoscaler requires Ray >= 2.60.0, test Ray version is %q", GetRayVersion())
 		}
 		t.Parallel()
 		g := NewWithT(t)
