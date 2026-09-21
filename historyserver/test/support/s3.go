@@ -141,9 +141,6 @@ func (c *S3TestClient) ListObjectKeys(bucket, prefix string) ([]string, error) {
 // DeleteBucket removes the bucket and everything in it. A missing bucket is not an error.
 func (c *S3TestClient) DeleteBucket(bucket string) error {
 	_, err := c.execMC("rb", "--force", path.Join(minioMCAlias, bucket))
-	if err != nil && strings.Contains(err.Error(), "does not exist") {
-		return nil
-	}
 	return err
 }
 
