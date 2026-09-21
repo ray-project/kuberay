@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,7 +40,7 @@ type Provider interface {
 	ConfigureReconciler(b *builder.Builder) *builder.Builder
 
 	// NewScheduler builds the batch scheduler backed by this provider.
-	NewScheduler(cli client.Client) schedulerinterface.BatchScheduler
+	NewScheduler(cli client.Client, recorder events.EventRecorder) schedulerinterface.BatchScheduler
 }
 
 var registeredProviders []Provider
@@ -58,13 +59,13 @@ type SchedulerFactory struct {
 	provider Provider
 }
 
-func (f *SchedulerFactory) New(_ context.Context, config *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
+func (f *SchedulerFactory) New(_ context.Context, config *rest.Config, cli client.Client, recorder events.EventRecorder) (schedulerinterface.BatchScheduler, error) {
 	provider, err := selectProvider(config)
 	if err != nil {
 		return nil, err
 	}
 	f.provider = provider
-	return provider.NewScheduler(cli), nil
+	return provider.NewScheduler(cli, recorder), nil
 }
 
 func (f *SchedulerFactory) AddToScheme(scheme *runtime.Scheme) {

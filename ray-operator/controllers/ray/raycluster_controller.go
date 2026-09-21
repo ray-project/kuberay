@@ -2105,6 +2105,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 				})
 			}
 		}
+
+		if r.options.BatchSchedulerManager != nil {
+			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+				conditions, err := scheduler.SchedulingConditions(ctx, newInstance)
+				if err != nil {
+					logger.Error(err, "Failed to get batch scheduler conditions")
+				} else {
+					for _, condition := range conditions {
+						meta.SetStatusCondition(&newInstance.Status.Conditions, condition)
+					}
+				}
+			}
+		}
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
