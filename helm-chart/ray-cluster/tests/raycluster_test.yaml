@@ -97,6 +97,50 @@ tests:
               seccompProfile:
                 type: RuntimeDefault
 
+  - it: Should set upgradeStrategy when `upgradeStrategy` is set
+    set:
+      upgradeStrategy:
+        type: Recreate
+    asserts:
+      - equal:
+          path: spec.upgradeStrategy
+          value:
+            type: Recreate
+
+  - it: Should set upgradeStrategy type None when configured
+    set:
+      upgradeStrategy:
+        type: None
+    asserts:
+      - equal:
+          path: spec.upgradeStrategy
+          value:
+            type: None
+
+  - it: Should set authOptions when `authOptions` is set
+    set:
+      authOptions:
+        mode: token
+        secretName: ray-cluster-token
+    asserts:
+      - equal:
+          path: spec.authOptions
+          value:
+            mode: token
+            secretName: ray-cluster-token
+
+  - it: Should set Kubernetes token auth when `authOptions.enableK8sTokenAuth` is true
+    set:
+      authOptions:
+        mode: token
+        enableK8sTokenAuth: true
+    asserts:
+      - equal:
+          path: spec.authOptions
+          value:
+            mode: token
+            enableK8sTokenAuth: true
+
   - it: Should add GCS fault tolerance options when `gcsFaultTolerance.enabled` is `true`
     set:
       gcsFaultTolerance:

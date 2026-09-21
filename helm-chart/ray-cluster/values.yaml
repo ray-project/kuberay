@@ -23,6 +23,23 @@ fullnameOverride: ""
 imagePullSecrets: []
   # - name: an-existing-secret
 
+# -- Recreate all Pods on RayCluster spec change. Intended for GitOps; running workloads are lost.
+upgradeStrategy: {}
+  # Recreate | None
+  # type: Recreate
+
+# See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-auth.html
+# for more details.
+# -- Token authentication for the RayCluster.
+authOptions: {}
+  # disabled | token
+  # mode: token
+  # Kubernetes RBAC via client's own ServiceAccount tokens.
+  # Required Ray >= 2.55.0. Mutually exclusive with secretName.
+  # enableK8sTokenAuth: true
+  # Existing Secret with data key `auth_token`.
+  # secretName: ray-cluster-token
+
 # gcsFaultTolerance specifies configuration for GCS fault tolerance.
 # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-gcs-ft.html#kuberay-gcs-ft
 # for more details.
@@ -47,7 +64,6 @@ gcsFaultTolerance:
     #   secretKeyRef:
     #     name: redis-username-secret
     #     key: username
-
 
 # common defined values shared between the head and worker
 common:
