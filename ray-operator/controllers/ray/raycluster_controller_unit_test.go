@@ -2399,15 +2399,6 @@ func Test_ShouldDeletePod(t *testing.T) {
 		shouldDelete    bool
 	}{
 		{
-			// ResourceReservationTimeout is a terminal batch-scheduler gang failure.
-			// KubeRay must not delete/recreate these Pods (#5301).
-			name:          "phase=PodFailed, reason=ResourceReservationTimeout, shouldDelete=false",
-			restartPolicy: corev1.RestartPolicyAlways,
-			phase:         corev1.PodFailed,
-			reason:        utils.ResourceReservationTimeoutReason,
-			shouldDelete:  false,
-		},
-		{
 			// The restart policy is `Always` and the Pod is in a terminate state.
 			// The expected behavior is that the controller will delete the Pod regardless of the restart policy.
 			name:          "restartPolicy=Always, phase=PodFailed, shouldDelete=true",

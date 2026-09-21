@@ -213,7 +213,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of RayCluster before submitting.
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
-			if utils.IsRayClusterBatchSchedulingFailed(rayClusterInstance.Status) {
+			if utils.IsRayClusterResourceReservationTimeout(rayClusterInstance.Status) {
 				logger.Info("RayCluster batch scheduler gang reservation failed terminally; marking RayJob Failed.",
 					"RayCluster", rayClusterInstance.Name, "Reason", rayClusterInstance.Status.Reason)
 				rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed

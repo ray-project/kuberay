@@ -2515,7 +2515,7 @@ func TestHasResourceReservationTimeoutPods(t *testing.T) {
 	assert.False(t, HasResourceReservationTimeoutPods(corev1.PodList{}))
 }
 
-func TestIsRayClusterBatchSchedulingFailed(t *testing.T) {
-	assert.True(t, IsRayClusterBatchSchedulingFailed(rayv1.RayClusterStatus{Reason: ResourceReservationTimeoutReason}))
-	assert.False(t, IsRayClusterBatchSchedulingFailed(rayv1.RayClusterStatus{}))
+func TestIsRayClusterResourceReservationTimeout(t *testing.T) {
+	assert.True(t, IsRayClusterResourceReservationTimeout(rayv1.RayClusterStatus{Reason: ResourceReservationTimeoutReason}))
+	assert.False(t, IsRayClusterResourceReservationTimeout(rayv1.RayClusterStatus{}))
 }

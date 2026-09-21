@@ -1257,8 +1257,8 @@ func HasResourceReservationTimeoutPods(pods corev1.PodList) bool {
 	return slices.ContainsFunc(pods.Items, IsResourceReservationTimeoutPod)
 }
 
-// IsRayClusterBatchSchedulingFailed reports whether the RayCluster status indicates
-// a terminal batch-scheduler gang reservation failure.
-func IsRayClusterBatchSchedulingFailed(status rayv1.RayClusterStatus) bool {
+// IsRayClusterResourceReservationTimeout reports whether the RayCluster status
+// Reason is ResourceReservationTimeout (YuniKorn hard-gang timeout).
+func IsRayClusterResourceReservationTimeout(status rayv1.RayClusterStatus) bool {
 	return status.Reason == ResourceReservationTimeoutReason
 }
