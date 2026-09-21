@@ -1,6 +1,7 @@
 package support
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,6 +13,18 @@ import (
 
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
+
+// HTTPGet issues a GET with ctx. client may be nil to use http.DefaultClient.
+func HTTPGet(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	return client.Do(req)
+}
 
 // CreateHTTPClientWithCookieJar creates an HTTP client with cookie jar to maintain session.
 func CreateHTTPClientWithCookieJar(g *WithT) *http.Client {
@@ -37,7 +50,8 @@ func GetContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 }
 
 func PortForwardService(test Test, g *WithT, namespace, serviceName string, port int) {
-	kubectlCmd := exec.Command(
+	kubectlCmd := exec.CommandContext(
+		test.Ctx(),
 		"kubectl",
 		"-n", namespace,
 		"port-forward",
@@ -58,7 +72,7 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 // InstallGrafanaAndPrometheus installs Grafana and Prometheus in the cluster for testing.
 func InstallGrafanaAndPrometheus(test Test, g *WithT) {
 	test.T().Cleanup(func() {
-		cleanCMD := exec.Command("kubectl", "delete", "ns", "prometheus-system")
+		cleanCMD := exec.CommandContext(context.Background(), "kubectl", "delete", "ns", "prometheus-system")
 		output, err := cleanCMD.CombinedOutput()
 		if err != nil {
 			LogWithTimestamp(test.T(), "Failed to clean up Prometheus and Grafana installation with %v because %s",

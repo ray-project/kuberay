@@ -214,7 +214,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -326,7 +326,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			g := NewWithT(t)
 
 			url := tc.buildURL(historyServerURL, nodeID)
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			g.Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				io.Copy(io.Discard, resp.Body)
@@ -352,7 +352,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 
 		// Get all eligible task IDs
-		taskIDs := getAllEligibleTaskIDs(g, client, historyServerURL)
+		taskIDs := getAllEligibleTaskIDs(test, g, client, historyServerURL)
 		LogWithTimestamp(t, "Found %d eligible task IDs for testing", len(taskIDs))
 
 		var successCount int
@@ -363,7 +363,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			LogWithTimestamp(t, "Testing task_id: %s", taskID)
 
 			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
 				continue
@@ -391,7 +391,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 
 		// Get all eligible actor IDs
-		actorIDs := getAllEligibleActorIDs(g, client, historyServerURL)
+		actorIDs := getAllEligibleActorIDs(test, g, client, historyServerURL)
 		LogWithTimestamp(t, "Found %d eligible actor IDs for testing", len(actorIDs))
 
 		var successCount int
@@ -402,7 +402,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
 
 			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogsFile, url.QueryEscape(actorID))
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
 				continue
@@ -430,12 +430,12 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 
 		// Get an eligible worker PID and its node ID
-		pid, nodeID := getEligibleWorkerPID(g, client, historyServerURL)
+		pid, nodeID := getEligibleWorkerPID(test, g, client, historyServerURL)
 		LogWithTimestamp(t, "Found eligible worker PID %d on node %s for testing", pid, nodeID)
 
 		// Test successful case
 		url := fmt.Sprintf("%s%s?pid=%d&node_id=%s", historyServerURL, EndpointLogsFile, pid, nodeID)
-		resp, err := client.Get(url)
+		resp, err := HTTPGet(test.Ctx(), client, url)
 		g.Expect(err).NotTo(HaveOccurred())
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -444,7 +444,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Test missing node_id
 		url = fmt.Sprintf("%s%s?pid=%d", historyServerURL, EndpointLogsFile, pid)
-		resp, err = client.Get(url)
+		resp, err = HTTPGet(test.Ctx(), client, url)
 		g.Expect(err).NotTo(HaveOccurred())
 		resp.Body.Close()
 		g.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
@@ -464,7 +464,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Test successful case: node_ip + filename
 		url := fmt.Sprintf("%s%s?node_ip=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeIP, filename)
-		resp, err := client.Get(url)
+		resp, err := HTTPGet(test.Ctx(), client, url)
 		g.Expect(err).NotTo(HaveOccurred())
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -512,7 +512,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -627,7 +627,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			g := NewWithT(t)
 
 			url := tc.buildURL(historyServerURL, nodeID)
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			g.Expect(err).NotTo(HaveOccurred())
 			defer func() {
 				io.Copy(io.Discard, resp.Body)
@@ -657,7 +657,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		// Test with download_filename parameter set
 		customFilename := "custom_download.log"
 		urlWithDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=%s", historyServerURL, EndpointLogsFile, nodeID, filename, customFilename)
-		resp, err := client.Get(urlWithDownload)
+		resp, err := HTTPGet(test.Ctx(), client, urlWithDownload)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -671,7 +671,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 		// Fetch with filter_ansi_code=false (original content with ANSI codes)
 		urlWithoutFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp, err := client.Get(urlWithoutFilter)
+		resp, err := HTTPGet(test.Ctx(), client, urlWithoutFilter)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -681,7 +681,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Fetch with filter_ansi_code=true (ANSI codes should be removed)
 		urlWithFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp2, err := client.Get(urlWithFilter)
+		resp2, err := HTTPGet(test.Ctx(), client, urlWithFilter)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp2.Body.Close()
 
@@ -706,7 +706,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 		// Test with attempt_number=0
 		urlAttempt0 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp, err := client.Get(urlAttempt0)
+		resp, err := HTTPGet(test.Ctx(), client, urlAttempt0)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -718,7 +718,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// attempt_number=1 should fail as retry log doesn't exist for normal execution
 		urlAttempt1 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", historyServerURL, EndpointLogsFile, nodeID, filename)
-		resp2, err := client.Get(urlAttempt1)
+		resp2, err := HTTPGet(test.Ctx(), client, urlAttempt1)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp2.Body.Close()
 
@@ -732,7 +732,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 
 		// Get all eligible task IDs
-		taskIDs := getAllEligibleTaskIDs(g, client, historyServerURL)
+		taskIDs := getAllEligibleTaskIDs(test, g, client, historyServerURL)
 		LogWithTimestamp(t, "Found %d eligible task IDs for testing", len(taskIDs))
 
 		var successCount int
@@ -743,7 +743,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			LogWithTimestamp(t, "Testing task_id: %s", taskID)
 
 			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
 				continue
@@ -771,7 +771,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 
 		// Get all eligible actor IDs
-		actorIDs := getAllEligibleActorIDs(g, client, historyServerURL)
+		actorIDs := getAllEligibleActorIDs(test, g, client, historyServerURL)
 		LogWithTimestamp(t, "Found %d eligible actor IDs for testing", len(actorIDs))
 
 		var successCount int
@@ -782,7 +782,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
 
 			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogsFile, url.QueryEscape(actorID))
-			resp, err := client.Get(url)
+			resp, err := HTTPGet(test.Ctx(), client, url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
 				continue
@@ -823,7 +823,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Test successful case: node_ip + filename
 		url := fmt.Sprintf("%s%s?node_ip=%s&filename=%s", historyServerURL, EndpointLogsFile, savedNodeIP, filename)
-		resp, err := client.Get(url)
+		resp, err := HTTPGet(test.Ctx(), client, url)
 		g.Expect(err).NotTo(HaveOccurred())
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -832,7 +832,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Test that node_ip and node_id point to the same node (should return same content)
 		urlWithNodeID := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, savedNodeID, filename)
-		resp2, err := client.Get(urlWithNodeID)
+		resp2, err := HTTPGet(test.Ctx(), client, urlWithNodeID)
 		g.Expect(err).NotTo(HaveOccurred())
 		bodyWithNodeID, _ := io.ReadAll(resp2.Body)
 		resp2.Body.Close()
@@ -848,9 +848,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 // Returns a list of task IDs that are eligible for log file testing.
 // Note: We filter out actor tasks because they don't have task_log_info by default
 // (unless RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set).
-func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+func getAllEligibleTaskIDs(test Test, g *WithT, client *http.Client, historyServerURL string) []string {
 	var taskIDs []string
-	resp, err := client.Get(historyServerURL + "/api/v0/tasks")
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/api/v0/tasks")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 
@@ -912,9 +912,9 @@ func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL strin
 
 // getAllEligibleActorIDs retrieves all actor IDs from the /logical/actors endpoint.
 // Returns a list of actor IDs.
-func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+func getAllEligibleActorIDs(test Test, g *WithT, client *http.Client, historyServerURL string) []string {
 	var actorIDs []string
-	resp, err := client.Get(historyServerURL + "/logical/actors")
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/logical/actors")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 
@@ -948,8 +948,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 
 // getEligibleWorkerPID retrieves an eligible worker PID and its node ID for log testing.
 // It queries the /api/v0/tasks endpoint to find any task with a valid worker_pid and node_id.
-func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string) (pid int, nodeID string) {
-	resp, err := client.Get(historyServerURL + "/api/v0/tasks")
+func getEligibleWorkerPID(test Test, g *WithT, client *http.Client, historyServerURL string) (pid int, nodeID string) {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/api/v0/tasks")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 
@@ -1025,7 +1025,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -1033,7 +1033,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	test.T().Run("live cluster", func(t *testing.T) {
 		g := NewWithT(t)
 
-		resp, err := client.Get(streamURL)
+		resp, err := HTTPGet(test.Ctx(), client, streamURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Live cluster should support log streaming")
 
@@ -1061,7 +1061,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	// Test dead cluster streaming endpoint - should return 501
 	test.T().Run("dead cluster", func(t *testing.T) {
 		g := NewWithT(t)
-		resp2, err := client.Get(streamURL)
+		resp2, err := HTTPGet(test.Ctx(), client, streamURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp2.Body.Close()
 
@@ -1113,14 +1113,14 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(test, g, client, historyServerURL, false)
 
 	// Case A: subdirectory + filename search — glob=events/*RAYLET*
 	test.T().Run("Case A: glob=events/*RAYLET* matches RAYLET event file in subdirectory", func(t *testing.T) {
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*RAYLET*"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1143,7 +1143,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("*dashboard*"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1174,7 +1174,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1196,7 +1196,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s", historyServerURL, EndpointLogs, nodeID)
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1214,7 +1214,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("raylet*"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1237,7 +1237,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g := NewWithT(t)
 
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("nonexistent-*.xyz"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1260,9 +1260,9 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		//
 		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
 		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
-		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+		headNodeID := GetOneOfNodeID(test, g, client, historyServerURL, true)
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1287,7 +1287,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// Expected response contains .out files across multiple categories, e.g.:
 		//   {"data":{"result":{"agent":[...],"autoscaler":[...],"dashboard":[...],...}},"msg":"","result":true}
 		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("**/*.out"))
-		resp, err := client.Get(logsURL)
+		resp, err := HTTPGet(test.Ctx(), client, logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1371,25 +1371,25 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	jobID := GetOneOfJobID(g, client, historyServerURL)
+	jobID := GetOneOfJobID(test, g, client, historyServerURL)
 
 	test.T().Run("should return valid timeline data", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, "", false)
+		verifyTimelineResponse(test, g, client, historyServerURL, "", false)
 	})
 	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
+		verifyTimelineResponse(test, g, client, historyServerURL, jobID, false)
 	})
 
 	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, "", true)
+		verifyTimelineResponse(test, g, client, historyServerURL, "", true)
 	})
 
 	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
+		verifyTimelineResponse(test, g, client, historyServerURL, jobID, true)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -1434,25 +1434,25 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	jobID := GetOneOfJobID(g, client, historyServerURL)
+	jobID := GetOneOfJobID(test, g, client, historyServerURL)
 
 	test.T().Run("should return timeline data from S3", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, "", false)
+		verifyTimelineResponse(test, g, client, historyServerURL, "", false)
 	})
 	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
+		verifyTimelineResponse(test, g, client, historyServerURL, jobID, false)
 	})
 
 	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, "", true)
+		verifyTimelineResponse(test, g, client, historyServerURL, "", true)
 	})
 
 	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
+		verifyTimelineResponse(test, g, client, historyServerURL, jobID, true)
 	})
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
@@ -1461,7 +1461,7 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 // verifyTimelineResponse verifies the timeline endpoint returns valid Chrome Tracing format.
 // jobID: optional filter; empty means no job_id query param.
 // download: if true, adds download=1 and asserts Content-Disposition header and filename.
-func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL string, jobID string, download bool) {
+func verifyTimelineResponse(test Test, g *WithT, client *http.Client, historyServerURL string, jobID string, download bool) {
 	baseURL := historyServerURL + "/api/v0/tasks/timeline"
 	if jobID != "" || download {
 		params := url.Values{}
@@ -1475,7 +1475,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 	}
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(baseURL)
+		resp, err := HTTPGet(test.Ctx(), client, baseURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -1606,7 +1606,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 	test.T().Run("should return actors from history server", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+EndpointLogicalActors)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -1649,12 +1649,12 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 	test.T().Run("should return single actor from history server", func(t *testing.T) {
 		g := NewWithT(t)
 
-		actorID := GetOneOfActorID(g, client, historyServerURL)
+		actorID := GetOneOfActorID(test, g, client, historyServerURL)
 
 		// Now test the single actor endpoint
 		g.Eventually(func(gg Gomega) {
 			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, actorID)
-			resp, err := client.Get(singleActorURL)
+			resp, err := HTTPGet(test.Ctx(), client, singleActorURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -1693,7 +1693,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 		g.Eventually(func(gg Gomega) {
 			fakeActorID := "ffffffffffffffffffffffffffffffffffffffff"
 			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, fakeActorID)
-			resp, err := client.Get(singleActorURL)
+			resp, err := HTTPGet(test.Ctx(), client, singleActorURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -1743,7 +1743,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	var tasksResp map[string]any
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(endpointURL)
+		resp, err := HTTPGet(test.Ctx(), client, endpointURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -1801,9 +1801,9 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	verifyDeadClusterTaskLogInfo(g, client, historyServerURL)
+	verifyDeadClusterTaskLogInfo(test, g, client, historyServerURL)
 
-	jobIDs := getAllEligibleJobIDs(g, client, historyServerURL)
+	jobIDs := getAllEligibleJobIDs(test, g, client, historyServerURL)
 	jobIDForFilter := jobIDs[0]
 
 	verifyTasksEndpoint := func(
@@ -1816,7 +1816,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 		g := NewWithT(t)
 
 		url := historyServerURL + EndpointTasks + "?" + queryParams
-		resp, err := client.Get(url)
+		resp, err := HTTPGet(test.Ctx(), client, url)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			io.Copy(io.Discard, resp.Body)
@@ -1904,8 +1904,8 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks tests completed successfully")
 }
 
-func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerURL string) {
-	resp, err := client.Get(historyServerURL + EndpointTasks + "?detail=1")
+func verifyDeadClusterTaskLogInfo(test Test, g *WithT, client *http.Client, historyServerURL string) {
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+EndpointTasks+"?detail=1")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -1956,7 +1956,7 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 		url.QueryEscape(nodeID),
 		url.QueryEscape(path.Base(stdoutFile)),
 	)
-	workerLogResp, err := client.Get(workerLogURL)
+	workerLogResp, err := HTTPGet(test.Ctx(), client, workerLogURL)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer workerLogResp.Body.Close()
 	g.Expect(workerLogResp.StatusCode).To(Equal(http.StatusOK))
@@ -1968,7 +1968,7 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 
 	logURL := fmt.Sprintf("%s%s?task_id=%s&suffix=out&lines=-1",
 		historyServerURL, EndpointLogsFile, url.QueryEscape(taskID))
-	logResp, err := client.Get(logURL)
+	logResp, err := HTTPGet(test.Ctx(), client, logURL)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer logResp.Body.Close()
 	g.Expect(logResp.StatusCode).To(Equal(http.StatusOK))
@@ -2190,7 +2190,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Testing live cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + endpoint)
+		resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2259,7 +2259,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + endpoint)
+		resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2344,7 +2344,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + endpoint)
+		resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2547,7 +2547,7 @@ func setClusterContext(test Test, g *WithT, client *http.Client, historyServerUR
 	LogWithTimestamp(test.T(), "Setting cluster context: %s", enterURL)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(enterURL)
+		resp, err := HTTPGet(test.Ctx(), client, enterURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -2570,7 +2570,7 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 	for _, endpoint := range HistoryServerEndpoints {
 		LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + endpoint)
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
@@ -2590,7 +2590,7 @@ func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.
 	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + endpoint)
+		resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2611,7 +2611,7 @@ func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *ht
 	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + endpoint)
+		resp, err := HTTPGet(test.Ctx(), client, historyServerURL+endpoint)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2636,7 +2636,7 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	var result *utils.ClusterInfo
 	g.Eventually(func(gg Gomega) {
 		result = nil // Reset to avoid stale value from previous iteration
-		resp, err := http.Get(historyServerURL + "/clusters/")
+		resp, err := HTTPGet(test.Ctx(), nil, historyServerURL+"/clusters/")
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -2662,10 +2662,10 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 }
 
 // getAllEligibleJobIDs retrieves all job IDs from the /api/v0/tasks endpoint for the task filtering test cases.
-func getAllEligibleJobIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+func getAllEligibleJobIDs(test Test, g *WithT, client *http.Client, historyServerURL string) []string {
 	var jobIDs []string
 
-	resp, err := client.Get(historyServerURL + EndpointTasks)
+	resp, err := HTTPGet(test.Ctx(), client, historyServerURL+EndpointTasks)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 
@@ -2763,7 +2763,7 @@ func verifyTasksRespSchema(test Test, g *WithT, tasksResp map[string]any, detail
 func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL string, verifySchema func(test Test, g *WithT, data map[string]any)) {
 	var respData map[string]any
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(endpointURL)
+		resp, err := HTTPGet(test.Ctx(), client, endpointURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -3208,7 +3208,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 	test.T().Run("should return events", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + "/events")
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/events")
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -3274,7 +3274,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 	test.T().Run("should return events from storage", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + "/events")
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/events")
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -3318,7 +3318,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
 			// Use a non-existent job_id to test the filter
-			resp, err := client.Get(historyServerURL + "/events?job_id=nonexistent")
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/events?job_id=nonexistent")
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -3346,7 +3346,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 		// It should align with Ray Dashboard behavior: filter by empty string (return empty)
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + "/events?job_id=")
+			resp, err := HTTPGet(test.Ctx(), client, historyServerURL+"/events?job_id=")
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))

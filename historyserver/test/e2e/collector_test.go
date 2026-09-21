@@ -679,7 +679,7 @@ func enterClusterForOwner(test Test, g *WithT, client *http.Client, historyServe
 
 	g.Eventually(func(gg Gomega) {
 		var result map[string]any
-		gg.Expect(json.Unmarshal(getHistoryServerJSON(gg, client, enterURL), &result)).To(Succeed())
+		gg.Expect(json.Unmarshal(getHistoryServerJSON(test, gg, client, enterURL), &result)).To(Succeed())
 		gg.Expect(result["result"]).To(Equal("success"))
 		gg.Expect(result["name"]).To(Equal(clusterName), "enter_cluster should resolve the owner to its generated cluster")
 		gg.Expect(result["session"]).To(Equal(session))
@@ -687,8 +687,8 @@ func enterClusterForOwner(test Test, g *WithT, client *http.Client, historyServe
 }
 
 // getHistoryServerJSON GETs a history server URL and returns the body, requiring 200.
-func getHistoryServerJSON(g Gomega, client *http.Client, url string) []byte {
-	resp, err := client.Get(url)
+func getHistoryServerJSON(test Test, g Gomega, client *http.Client, url string) []byte {
+	resp, err := HTTPGet(test.Ctx(), client, url)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -730,7 +730,7 @@ func testCollectorStoresServeApplications(test Test, g *WithT, namespace *corev1
 
 	LogWithTimestamp(test.T(), "Replaying /api/serve/applications/ through the history server")
 	g.Eventually(func(gg Gomega) {
-		assertServeAppConverged(gg, getHistoryServerJSON(gg, client, historyServerURL+"/api/serve/applications/"))
+		assertServeAppConverged(gg, getHistoryServerJSON(test, gg, client, historyServerURL+"/api/serve/applications/"))
 	}, TestTimeoutShort).Should(Succeed())
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -802,7 +802,7 @@ func testCollectorStoresDataDatasets(test Test, g *WithT, namespace *corev1.Name
 	datasetsURL := fmt.Sprintf("%s/api/data/datasets/%s", historyServerURL, jobID)
 	LogWithTimestamp(test.T(), "Replaying %s through the history server", datasetsURL)
 	g.Eventually(func(gg Gomega) {
-		assertDatasetsNonEmpty(gg, getHistoryServerJSON(gg, client, datasetsURL))
+		assertDatasetsNonEmpty(gg, getHistoryServerJSON(test, gg, client, datasetsURL))
 	}, TestTimeoutShort).Should(Succeed())
 
 	DeleteS3Bucket(test, g, s3Client)
