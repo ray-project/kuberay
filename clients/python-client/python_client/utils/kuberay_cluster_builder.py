@@ -162,7 +162,7 @@ class ClusterBuilder(IClusterBuilder):
         else:
             log.error(
                 "error creating custom resource: {meta}, the spec section is missing, did you run build_head()?".format(
-                    self.cluster["metadata"]
+                    meta=self.cluster.get("metadata")
                 )
             )
             self.succeeded = False

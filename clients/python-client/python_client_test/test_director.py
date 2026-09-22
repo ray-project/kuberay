@@ -120,3 +120,12 @@ class TestDirector(unittest.TestCase):
         ][0]["resources"]["requests"]["cpu"]
         expected = "3"
         self.assertEqual(actual, expected)
+
+
+class TestClusterBuilder(unittest.TestCase):
+    def test_build_worker_without_head_reports_failure(self):
+        builder = kuberay_cluster_builder.ClusterBuilder()
+
+        builder.build_worker(group_name="workers")
+
+        self.assertFalse(builder.succeeded)
