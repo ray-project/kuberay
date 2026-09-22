@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
@@ -148,6 +149,16 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
 			return err
 		}
+		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 {
+			// ray start --labels-file was added in Ray 2.45.0
+			rayVersion, err := version.ParseGeneric(spec.RayVersion)
+			if err != nil {
+				return fmt.Errorf("worker group %s sets topology, but RayVersion %q is unset or invalid. Ray version 2.45.0 or later is required: %w", workerGroup.GroupName, spec.RayVersion, err)
+			}
+			if rayVersion.LessThan(version.MustParseGeneric("2.45.0")) {
+				return fmt.Errorf("worker group %s sets topology, but minimum Ray version is 2.45.0, got %s", workerGroup.GroupName, spec.RayVersion)
+			}
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -188,6 +199,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateGcsFaultToleranceBackend(spec.GcsFaultToleranceOptions, headContainer, spec.HeadGroupSpec.Template.Spec.Volumes); err != nil {
 			return err
 		}
+
+		if err := validateGcsActivePassiveHead(spec.GcsFaultToleranceOptions); err != nil {
+			return err
+		}
 	}
 	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
 		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
@@ -223,7 +238,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2)
 		}
 
-		if IsAutoscalingV2Enabled(spec) {
+		if IsAutoscalingV2Enabled(spec) && !SupportsFlexibleRestartPolicy(spec.RayVersion) {
 			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
 				return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using autoscaler V2")
 			}
@@ -328,8 +343,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 
 // validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
 // The embedded RocksDB backend rejects redis-only fields and operator-managed
-// env/mounts that users must not set. The redis backend (default) has no required
-// fields here (RedisAddress may be supplied via env vars/annotations elsewhere).
+// env/mounts that users must not set. The redis backend requires RedisAddress.
 func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container, headVolumes []corev1.Volume) error {
 	switch GetGcsFaultToleranceBackend(options) {
 	case rayv1.GcsFTBackendRocksDB:
@@ -367,10 +381,32 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 			}
 		}
 	default: // redis
-		if options != nil && options.Storage != nil {
+		if options.Storage != nil {
 			return fmt.Errorf("cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend")
 		}
+		if options.RedisAddress == "" {
+			return fmt.Errorf("GcsFaultToleranceOptions.RedisAddress must be set when backend is 'redis'")
+		}
 	}
+	return nil
+}
+
+// validateGcsActivePassiveHead enforces the feature gate and redis-backend
+// requirement for active-passive head HA.
+func validateGcsActivePassiveHead(options *rayv1.GcsFaultToleranceOptions) error {
+	apOpts := options.ActivePassiveHeadOptions
+	if apOpts == nil || !ptr.Deref(apOpts.Enabled, false) {
+		return nil
+	}
+
+	if !features.Enabled(features.GCSFaultToleranceActivePassiveHead) {
+		return fmt.Errorf("activePassiveHeadOptions requires the %s feature gate to be enabled", features.GCSFaultToleranceActivePassiveHead)
+	}
+
+	if GetGcsFaultToleranceBackend(options) != rayv1.GcsFTBackendRedis {
+		return fmt.Errorf("activePassiveHeadOptions is only supported with the 'redis' backend")
+	}
+
 	return nil
 }
 

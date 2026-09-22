@@ -9,7 +9,8 @@
     - pushd ray-operator
     - |
       for attempt in 1 2; do
-        if source ../.buildkite/build-start-operator.sh; then
+        # Use bash to propagate the script's failure status and trigger the retry on failure.
+        if bash ../.buildkite/build-start-operator.sh; then
           break
         fi
         if [ "$attempt" -eq 2 ]; then

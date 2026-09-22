@@ -20,6 +20,14 @@ spec:
   autoscalerOptions:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- with .Values.upgradeStrategy }}
+  upgradeStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.authOptions }}
+  authOptions:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   {{- if .Values.gcsFaultTolerance.enabled }}
   gcsFaultToleranceOptions:
     redisAddress: {{ .Values.gcsFaultTolerance.redisAddress | quote }}
@@ -38,6 +46,13 @@ spec:
   headGroupSpec:
     {{- with .Values.head.headService }}
     headService:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.head.enableIngress }}
+    enableIngress: {{ . }}
+    {{- end }}
+    {{- with .Values.head.ingressOptions }}
+    ingressOptions:
       {{- toYaml . | nindent 6 }}
     {{- end }}
     {{- with .Values.service.type }}

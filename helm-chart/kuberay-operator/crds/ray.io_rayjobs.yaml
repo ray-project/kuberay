@@ -442,6 +442,31 @@ spec:
                     type: boolean
                   gcsFaultToleranceOptions:
                     properties:
+                      activePassiveHeadOptions:
+                        properties:
+                          enabled:
+                            type: boolean
+                          leaseDurationSeconds:
+                            default: 15
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          renewDeadlineSeconds:
+                            default: 10
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          retryPeriodSeconds:
+                            default: 2
+                            format: int32
+                            minimum: 1
+                            type: integer
+                        type: object
+                        x-kubernetes-validations:
+                        - message: leaseDurationSeconds must be greater than renewDeadlineSeconds
+                          rule: self.leaseDurationSeconds > self.renewDeadlineSeconds
+                        - message: renewDeadlineSeconds must be greater than retryPeriodSeconds
+                          rule: self.renewDeadlineSeconds > self.retryPeriodSeconds
                       backend:
                         enum:
                         - redis
@@ -5585,6 +5610,18 @@ spec:
                           type: object
                         scaleStrategy:
                           properties:
+                            scaleGate:
+                              items:
+                                properties:
+                                  type:
+                                    type: string
+                                required:
+                                - type
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - type
+                              x-kubernetes-list-type: map
                             workersToDelete:
                               items:
                                 type: string
@@ -9531,6 +9568,24 @@ spec:
                               required:
                               - containers
                               type: object
+                          type: object
+                        topology:
+                          properties:
+                            labelMappings:
+                              items:
+                                properties:
+                                  mapTo:
+                                    maxLength: 317
+                                    type: string
+                                  nodeLabel:
+                                    type: string
+                                required:
+                                - nodeLabel
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - nodeLabel
+                              x-kubernetes-list-type: map
                           type: object
                       required:
                       - groupName

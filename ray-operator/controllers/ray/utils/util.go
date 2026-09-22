@@ -658,6 +658,9 @@ func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		// External controllers like Kueue may set ScaleGate to signal quota exhaustion,
+		// which should not trigger a new RayCluster preparation.
+		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.ScaleGate = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Tolerations = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.SchedulingGates = nil
 	}
@@ -1210,6 +1213,24 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		}
 	}
 	return true
+}
+
+// SupportsFlexibleRestartPolicy returns true when the Ray version is 2.56.0 or later,
+// meaning the RestartPolicy for head and worker pods is no longer forced to Never
+// when autoscaler V2 is active.
+// If the version is unspecified or below 2.56.0 the original behavior (restrict to Never) applies.
+// https://github.com/ray-project/ray/pull/63764 fixes the issue we ran into here and is merged into Ray 2.56.0,
+// even though that PR was not intended to address this issue.
+func SupportsFlexibleRestartPolicy(rayVersion string) bool {
+	if rayVersion == "" {
+		return false
+	}
+	v, err := utilversion.ParseGeneric(rayVersion)
+	if err != nil {
+		return false
+	}
+	minVersion := utilversion.MustParseGeneric("2.56.0")
+	return v.AtLeast(minVersion)
 }
 
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.

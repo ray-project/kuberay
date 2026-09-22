@@ -16,6 +16,8 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=ray.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("ActivePassiveHeadOptions"):
+		return &rayv1.ActivePassiveHeadOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AuthOptions"):
@@ -84,6 +86,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayServiceUpgradeStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RedisCredential"):
 		return &rayv1.RedisCredentialApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ScaleGate"):
+		return &rayv1.ScaleGateApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ScaleStrategy"):
 		return &rayv1.ScaleStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ServeDeploymentStatus"):
@@ -92,6 +96,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.SubmitterConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TLSOptions"):
 		return &rayv1.TLSOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("TopologyLabelMapping"):
+		return &rayv1.TopologyLabelMappingApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("TopologySpec"):
+		return &rayv1.TopologySpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupNetworkPolicyRules"):
 		return &rayv1.WorkerGroupNetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupSpec"):
