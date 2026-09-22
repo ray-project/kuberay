@@ -938,7 +938,7 @@ func (r *RayClusterReconciler) releaseBatchSchedulerResources(ctx context.Contex
 
 	scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get batch scheduler: %w", err)
 	}
 
 	didCleanup, err := scheduler.CleanupOnSuspend(ctx, instance)
@@ -946,7 +946,7 @@ func (r *RayClusterReconciler) releaseBatchSchedulerResources(ctx context.Contex
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler), string(utils.CleanupAction),
 			"Failed releasing batch scheduler resources for suspended RayCluster %s/%s, %v",
 			instance.Namespace, instance.Name, err)
-		return err
+		return fmt.Errorf("failed to release batch scheduler resources: %w", err)
 	}
 	if didCleanup {
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp), string(utils.CleanupAction),
@@ -970,7 +970,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if suspendStatus == rayv1.RayClusterSuspending ||
 		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
-		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
+		pods, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance))
+		if err != nil {
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection), string(utils.DeleteAction),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
@@ -980,6 +981,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted Pods for RayCluster %s/%s due to suspension",
 			instance.Namespace, instance.Name)
+
+		// Terminating Pods still hold node capacity, so keep the reservation until they are gone.
+		// The last Pod deletion triggers the reconcile that releases it.
+		if len(pods.Items) > 0 {
+			return nil
+		}
 		return r.releaseBatchSchedulerResources(ctx, instance)
 	}
 

@@ -4682,6 +4682,7 @@ func TestReconcilePodsReleasesBatchSchedulerOnSuspend(t *testing.T) {
 		name                string
 		suspendErr          error
 		conditions          []metav1.Condition
+		pods                []runtime.Object
 		statusConditions    bool
 		suspend             bool
 		expectSuspendCalled bool
@@ -4693,6 +4694,15 @@ func TestReconcilePodsReleasesBatchSchedulerOnSuspend(t *testing.T) {
 			suspend:             true,
 			conditions:          trueCondition(rayv1.RayClusterSuspending),
 			expectSuspendCalled: true,
+		},
+		{
+			// Terminating Pods still hold node capacity; releasing now would over-admit the queue.
+			name:                "suspending keeps the reservation while Pods are still around",
+			statusConditions:    true,
+			suspend:             true,
+			conditions:          trueCondition(rayv1.RayClusterSuspending),
+			pods:                testPods,
+			expectSuspendCalled: false,
 		},
 		{
 			// A cluster suspended before this operator started never goes through the Suspending branch.
@@ -4727,9 +4737,13 @@ func TestReconcilePodsReleasesBatchSchedulerOnSuspend(t *testing.T) {
 			cluster.Spec.Suspend = new(tc.suspend)
 			cluster.Status.Conditions = tc.conditions
 
+			runtimeObjects := []runtime.Object{cluster}
+			for _, pod := range tc.pods {
+				runtimeObjects = append(runtimeObjects, pod.DeepCopyObject())
+			}
 			fakeClient := clientFake.NewClientBuilder().
 				WithScheme(newScheme).
-				WithRuntimeObjects(cluster).
+				WithRuntimeObjects(runtimeObjects...).
 				Build()
 
 			fakeScheduler := &fakeBatchScheduler{suspendDidUpdate: true, suspendErr: tc.suspendErr}
