@@ -194,6 +194,45 @@ class TestUtils(unittest.TestCase):
         expected = 1
         self.assertEqual(actual, expected)
 
+    def test_populate_worker_group_zero_replicas(self):
+        for max_replicas in (0, 3):
+            with self.subTest(max_replicas=max_replicas):
+                worker_group, succeeded = self.utils.populate_worker_group(
+                    group_name="small-group",
+                    ray_image="rayproject/ray:2.46.0",
+                    ray_command=["/bin/bash", "-lc"],
+                    init_image="busybox:1.28",
+                    cpu_requests="1",
+                    memory_requests="1G",
+                    cpu_limits="1",
+                    memory_limits="1G",
+                    replicas=0,
+                    min_replicas=0,
+                    max_replicas=max_replicas,
+                    ray_start_params={},
+                )
+                self.assertTrue(succeeded)
+                self.assertEqual(worker_group["replicas"], 0)
+                self.assertEqual(worker_group["minReplicas"], 0)
+                self.assertEqual(worker_group["maxReplicas"], max_replicas)
+
+    def test_update_worker_group_zero_replicas(self):
+        for max_replicas in (0, 3):
+            with self.subTest(max_replicas=max_replicas):
+                cluster = self.director.build_small_cluster(name="small-cluster")
+                cluster, succeeded = self.utils.update_worker_group_replicas(
+                    cluster,
+                    group_name="small-cluster-workers",
+                    replicas=0,
+                    min_replicas=0,
+                    max_replicas=max_replicas,
+                )
+                self.assertTrue(succeeded)
+                worker_group = cluster["spec"]["workerGroupSpecs"][0]
+                self.assertEqual(worker_group["replicas"], 0)
+                self.assertEqual(worker_group["minReplicas"], 0)
+                self.assertEqual(worker_group["maxReplicas"], max_replicas)
+
     def test_update_worker_group_resources(self):
         cluster: dict = copy.deepcopy(test_cluster_body)
         actual = cluster["metadata"]["name"]
