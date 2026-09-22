@@ -117,6 +117,9 @@ var (
 		# Generate Ray job with specifications and print out the generated RayJob YAML
 		kubectl ray job submit --dry-run --name rayjob-sample --ray-version %s --image %s --head-cpu 1 --head-memory 5Gi --worker-replicas 3 --worker-cpu 1 --worker-memory 5Gi --runtime-env path/to/runtimeEnv.yaml -- python my_script.py
 	`, util.RayVersion, util.RayImage, util.RayVersion, util.RayImage))
+
+	defaultImage        = "rayproject/ray"
+	defaultImageWithTag = fmt.Sprintf("%s:%s", defaultImage, util.RayVersion)
 )
 
 func NewJobSubmitOptions(cmdFactory cmdutil.Factory, streams genericiooptions.IOStreams) *SubmitJobOptions {
@@ -168,7 +171,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 
 	cmd.Flags().StringVar(&options.rayjobName, "name", "", "Ray job name")
 	cmd.Flags().StringVar(&options.rayVersion, "ray-version", util.RayVersion, "Ray version to use")
-	cmd.Flags().StringVar(&options.image, "image", fmt.Sprintf("rayproject/ray:%s", options.rayVersion), "container image to use")
+	cmd.Flags().StringVar(&options.image, "image", defaultImageWithTag, "container image to use")
 	cmd.Flags().StringVar(&options.headCPU, "head-cpu", "2", "number of CPUs in the Ray head")
 	cmd.Flags().StringVar(&options.headMemory, "head-memory", "4Gi", "amount of memory in the Ray head")
 	cmd.Flags().StringVar(&options.headGPU, "head-gpu", "0", "number of GPUs in the Ray head")
@@ -199,6 +202,12 @@ func (options *SubmitJobOptions) Complete() error {
 	if options.fileName != "" {
 		options.fileName = filepath.Clean(options.fileName)
 	}
+
+	// If the image is the default, align its tag with the configured Ray version.
+	if options.image == defaultImageWithTag {
+		options.image = fmt.Sprintf("%s:%s", defaultImage, options.rayVersion)
+	}
+
 	return nil
 }
 
