@@ -26,24 +26,24 @@ func newLogEventMockReader() *logEventMockReader {
 	}
 }
 
-func (m *logEventMockReader) addFile(clusterID, filePath, content string) {
-	if m.files[clusterID] == nil {
-		m.files[clusterID] = make(map[string]string)
+func (m *logEventMockReader) addFile(prefix, filePath, content string) {
+	if m.files[prefix] == nil {
+		m.files[prefix] = make(map[string]string)
 	}
-	m.files[clusterID][filePath] = content
+	m.files[prefix][filePath] = content
 }
 
-func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string) {
-	if m.dirs[clusterID] == nil {
-		m.dirs[clusterID] = make(map[string][]string)
+func (m *logEventMockReader) addDir(prefix, dirPath string, entries []string) {
+	if m.dirs[prefix] == nil {
+		m.dirs[prefix] = make(map[string][]string)
 	}
-	m.dirs[clusterID][dirPath] = entries
+	m.dirs[prefix][dirPath] = entries
 }
 
 func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
 
-func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
-	if cd, ok := m.files[clusterID]; ok {
+func (m *logEventMockReader) GetContent(prefix string, fileName string) io.Reader {
+	if cd, ok := m.files[prefix]; ok {
 		if content, ok := cd[fileName]; ok {
 			return strings.NewReader(content)
 		}
@@ -51,8 +51,8 @@ func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Re
 	return nil
 }
 
-func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
-	if cd, ok := m.dirs[clusterID]; ok {
+func (m *logEventMockReader) ListFiles(prefix string, dir string) []string {
+	if cd, ok := m.dirs[prefix]; ok {
 		if entries, ok := cd[dir]; ok {
 			return entries
 		}
