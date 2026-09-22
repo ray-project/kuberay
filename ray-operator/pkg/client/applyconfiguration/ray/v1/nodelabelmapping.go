@@ -2,11 +2,11 @@
 
 package v1
 
-// TopologyLabelMappingApplyConfiguration represents a declarative configuration of the TopologyLabelMapping type for use
+// NodeLabelMappingApplyConfiguration represents a declarative configuration of the NodeLabelMapping type for use
 // with apply.
 //
-// TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
-type TopologyLabelMappingApplyConfiguration struct {
+// NodeLabelMapping maps one Kubernetes node label to a Ray node label.
+type NodeLabelMappingApplyConfiguration struct {
 	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
 	NodeLabel *string `json:"nodeLabel,omitempty"`
 	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
@@ -14,16 +14,16 @@ type TopologyLabelMappingApplyConfiguration struct {
 	MapTo *string `json:"mapTo,omitempty"`
 }
 
-// TopologyLabelMappingApplyConfiguration constructs a declarative configuration of the TopologyLabelMapping type for use with
+// NodeLabelMappingApplyConfiguration constructs a declarative configuration of the NodeLabelMapping type for use with
 // apply.
-func TopologyLabelMapping() *TopologyLabelMappingApplyConfiguration {
-	return &TopologyLabelMappingApplyConfiguration{}
+func NodeLabelMapping() *NodeLabelMappingApplyConfiguration {
+	return &NodeLabelMappingApplyConfiguration{}
 }
 
 // WithNodeLabel sets the NodeLabel field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NodeLabel field is set to the value of the last call.
-func (b *TopologyLabelMappingApplyConfiguration) WithNodeLabel(value string) *TopologyLabelMappingApplyConfiguration {
+func (b *NodeLabelMappingApplyConfiguration) WithNodeLabel(value string) *NodeLabelMappingApplyConfiguration {
 	b.NodeLabel = &value
 	return b
 }
@@ -31,7 +31,7 @@ func (b *TopologyLabelMappingApplyConfiguration) WithNodeLabel(value string) *To
 // WithMapTo sets the MapTo field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the MapTo field is set to the value of the last call.
-func (b *TopologyLabelMappingApplyConfiguration) WithMapTo(value string) *TopologyLabelMappingApplyConfiguration {
+func (b *NodeLabelMappingApplyConfiguration) WithMapTo(value string) *NodeLabelMappingApplyConfiguration {
 	b.MapTo = &value
 	return b
 }

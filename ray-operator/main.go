@@ -125,7 +125,7 @@ func main() {
 	flag.StringVar(&nodeEventForwarderTypes, "node-event-forwarder-types", "",
 		"Comma-separated list of event types to forward (Warning, Normal). Empty means all types.")
 	flag.StringVar(&allowedNodeLabels, "allowed-node-labels", "",
-		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through topology.labelMappings. If left empty, every mapping is rejected.")
+		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].labelMappings. If left empty, every mapping is rejected.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,

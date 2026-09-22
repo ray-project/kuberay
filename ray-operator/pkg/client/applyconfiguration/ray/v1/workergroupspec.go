@@ -47,10 +47,12 @@ type WorkerGroupSpecApplyConfiguration struct {
 	ScaleStrategy *ScaleStrategyApplyConfiguration `json:"scaleStrategy,omitempty"`
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	NumOfHosts *int32 `json:"numOfHosts,omitempty"`
-	// Topology delivers labels of the node each worker pod is bound to as Ray node labels.
-	// While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.
+	// LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.
+	// Any allowed node label can be mapped, for example topology labels for topology-aware scheduling.
+	// An empty list delivers nothing. Every listed label is required: a pod bound to a node missing one
+	// exits before ray start.
 	// Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`).
-	Topology *TopologySpecApplyConfiguration `json:"topology,omitempty"`
+	LabelMappings []NodeLabelMappingApplyConfiguration `json:"labelMappings,omitempty"`
 }
 
 // WorkerGroupSpecApplyConfiguration constructs a declarative configuration of the WorkerGroupSpec type for use with
@@ -181,10 +183,15 @@ func (b *WorkerGroupSpecApplyConfiguration) WithNumOfHosts(value int32) *WorkerG
 	return b
 }
 
-// WithTopology sets the Topology field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Topology field is set to the value of the last call.
-func (b *WorkerGroupSpecApplyConfiguration) WithTopology(value *TopologySpecApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
-	b.Topology = value
+// WithLabelMappings adds the given value to the LabelMappings field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the LabelMappings field.
+func (b *WorkerGroupSpecApplyConfiguration) WithLabelMappings(values ...*NodeLabelMappingApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithLabelMappings")
+		}
+		b.LabelMappings = append(b.LabelMappings, *values[i])
+	}
 	return b
 }
