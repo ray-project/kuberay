@@ -31,16 +31,15 @@ Open [http://localhost:3000/jobs](http://localhost:3000/jobs). The tables are em
 - **Clusters**: There is no create-cluster button; apply
   `kubectl apply -f ray-operator/config/samples/ray-cluster.sample.yaml`
   and open `/clusters`. A RayJob also creates a cluster, so the job sample appears there too.
-- **History**: Needs a History Server on `http://localhost:8080`; without it the page loads but
-  the proxy logs `ECONNREFUSED` and returns 502. That is expected.
+- **History**: This UI still has a `/history` tab, but the supported path is the
+  [Ray Dashboard + History Server](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-history-server.html).
 
 ## What works
 
 You can view the list of Ray jobs and Ray clusters. You can search and filter them using frontend
-components. You can delete them using the select button. You can also create a test job by specifying
-a Docker image, entrypoint, and compute resources. Links to the Ray head dashboard are available once
-the cluster service is ready. Historical clusters, tasks, and logs are at `/history` if a History
-Server is running.
+components. You can delete them using the select button. You can also create a test job, but the
+compute templates don't work yet. Links to the Ray head dashboard are available once the cluster
+service is ready.
 
 ## What doesn't work
 
