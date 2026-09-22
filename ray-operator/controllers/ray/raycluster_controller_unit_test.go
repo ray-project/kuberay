@@ -3559,62 +3559,40 @@ func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
 		c.Spec.IdleSuspend = new(true)
 	}
 
-	tests := []struct {
-		mutate          func(*rayv1.RayCluster)
-		name            string
-		expectSuspended bool
-		expectReason    string
-	}{
-		{
-			name: "idleSuspend=true; the reason is RayClusterIdleSuspended",
-			mutate: func(c *rayv1.RayCluster) {
-				enableIdleSuspendPolicy(c)
-			},
-			expectSuspended: true,
-			expectReason:    string(rayv1.RayClusterIdleSuspended),
-		},
+	ctx := context.Background()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Status = rayv1.RayClusterStatus{}
+	enableIdleSuspendPolicy(cluster)
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+	recorder := events.NewFakeRecorder(10)
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   recorder,
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			cluster := testRayCluster.DeepCopy()
-			cluster.Status = rayv1.RayClusterStatus{}
-			tc.mutate(cluster)
 
-			fakeClient := clientFake.NewClientBuilder().
-				WithScheme(newScheme).
-				WithObjects(cluster).
-				WithStatusSubresource(cluster).
-				Build()
-			recorder := events.NewFakeRecorder(10)
-			reconciler := &RayClusterReconciler{
-				Client:                     fakeClient,
-				Recorder:                   recorder,
-				Scheme:                     newScheme,
-				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
-			}
+	// Transitions RayClusterSuspending to True
+	_, err := reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
 
-			_, err := reconciler.rayClusterReconcile(ctx, cluster)
-			require.NoError(t, err)
+	got := &rayv1.RayCluster{}
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
 
-			got := &rayv1.RayCluster{}
-			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
+	// Transition to RayClusterSuspended.
+	_, err = reconciler.rayClusterReconcile(ctx, got)
+	require.NoError(t, err)
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
 
-			// The first reconcile only transitions RayClusterSuspending to True.
-			// The RayClusterSuspended condition (and its idle-termination reason) is
-			// only set on the following reconcile, once RayClusterSuspending is observed.
-			_, err = reconciler.rayClusterReconcile(ctx, got)
-			require.NoError(t, err)
-			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got))
-
-			if tc.expectSuspended {
-				cond := meta.FindStatusCondition(got.Status.Conditions, string(rayv1.RayClusterSuspended))
-				if assert.NotNil(t, cond) {
-					assert.Equal(t, metav1.ConditionTrue, cond.Status)
-					assert.Equal(t, tc.expectReason, cond.Reason)
-				}
-			}
-		})
+	cond := meta.FindStatusCondition(got.Status.Conditions, string(rayv1.RayClusterSuspended))
+	if assert.NotNil(t, cond) {
+		assert.Equal(t, metav1.ConditionTrue, cond.Status)
+		assert.Equal(t, string(rayv1.RayClusterIdleSuspended), cond.Reason)
 	}
 }
 
@@ -3648,7 +3626,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 		expectDeleted bool
 	}{
 		{
-			name: "finalizer present, deletionTimestamp set, noDriverTimeout enabled: finalizer is removed and deletion proceeds",
+			name: "finalizer present, deletionTimestamp set, feature enabled: finalizer is removed and deletion proceeds",
 			mutate: func(c *rayv1.RayCluster) {
 				enableIdleDeletePolicy(c)
 				controllerutil.AddFinalizer(c, utils.IdleTerminationCleanupFinalizer)
@@ -3667,7 +3645,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			expectDeleted: false,
 		},
 		{
-			name: "deletionTimestamp set but a different finalizer is blocking deletion: no-driver finalizer logic is a no-op",
+			name: "deletionTimestamp set but a different finalizer is blocking deletion: idle-termination finalizer logic is a no-op",
 			mutate: func(c *rayv1.RayCluster) {
 				enableIdleDeletePolicy(c)
 				controllerutil.AddFinalizer(c, "example.com/other-finalizer")
@@ -3714,6 +3692,85 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 				require.NoError(t, err)
 			}
 		})
+	}
+}
+
+func Test_ReconcileIdleTerminationOptionsDeletePolicy_WithGCSFaultTolerance(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+	_ = rbacv1.AddToScheme(newScheme)
+
+	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
+		c.Spec.EnableInTreeAutoscaling = new(true)
+		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+			Version: ptr.To(rayv1.AutoscalerVersionV2),
+		}
+		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
+			TimeoutSeconds: ptr.To[int32](600), // 1 min
+			Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
+		}
+	}
+	ctx := context.Background()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Status = rayv1.RayClusterStatus{}
+	enableIdleDeletePolicy(cluster)
+	controllerutil.AddFinalizer(cluster, utils.IdleTerminationCleanupFinalizer)
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		RedisAddress: "redis://redis:6379",
+	}
+	controllerutil.AddFinalizer(cluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	cluster.DeletionTimestamp = &now
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+	recorder := events.NewFakeRecorder(10)
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   recorder,
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	// In the first reconcile,
+	// check the idle-termination finalizer must be removed,
+	// and the GCS FT block must already have created the Redis cleanup Job.
+	_, err := reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	assert.NotContains(t, cluster.ObjectMeta.Finalizers, utils.IdleTerminationCleanupFinalizer)
+	assert.Contains(t, cluster.ObjectMeta.Finalizers, utils.GCSFaultToleranceRedisCleanupFinalizer)
+
+	jobList := batchv1.JobList{}
+	require.NoError(t, fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr)), "Fail to get Job list")
+	require.Len(t, jobList.Items, 1, "Redis cleanup Job should be created in the same reconcile pass as the idle finalizer removal")
+
+	// Simulate the Job succeeds.
+	job := jobList.Items[0]
+	job.Status.Succeeded = 1
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue}, {Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	require.NoError(t, fakeClient.Status().Update(ctx, &job), "Fail to update Job status")
+
+	// In the second reconcile,
+	// check the Job is now finished, the GCS FT finalizer is removed,
+	// and the RayCluster is deleted.
+	_, err = reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	got := &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, got)
+	assert.True(t, k8serrors.IsNotFound(err))
+	if err == nil {
+		assert.False(t, controllerutil.ContainsFinalizer(got, utils.GCSFaultToleranceRedisCleanupFinalizer))
 	}
 }
 
