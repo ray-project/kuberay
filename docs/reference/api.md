@@ -401,8 +401,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `timeoutSeconds` _integer_ | TimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering Policy. |  |  |
-| `policy` _[IdleTerminationPolicy](#idleterminationpolicy)_ | Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds. | Suspend | Enum: [Delete Suspend] <br /> |
+| `timeoutSeconds` _integer_ | TimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle RayCluster. |  |  |
+| `policy` _[IdleTerminationPolicy](#idleterminationpolicy)_ | Policy is the action taken once the RayCluster has been idle for TimeoutSeconds. | Suspend | Enum: [Delete Suspend] <br /> |
 
 
 #### IdleTerminationPolicy
@@ -579,7 +579,7 @@ _Appears in:_
 | `upgradeStrategy` _[RayClusterUpgradeStrategy](#rayclusterupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayCluster |  |  |
 | `authOptions` _[AuthOptions](#authoptions)_ | AuthOptions specifies the authentication options for the RayCluster. |  |  |
 | `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
-| `idleSuspend` _boolean_ | IdleSuspend is set to true by the Ray autoscaler when the RayCluster has<br />had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's<br />IdleTerminationOptions.Policy is Suspend.<br />Setting it back to false resumes the RayCluster. |  |  |
+| `idleSuspend` _boolean_ | IdleSuspend indicates whether a RayCluster should be suspended due to idleness.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
 | `idleTerminationOptions` _[IdleTerminationOptions](#idleterminationoptions)_ | IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.<br />A RayCluster is considered idle when no Ray driver is connected. |  |  |
 | `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayCluster which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |  |  |

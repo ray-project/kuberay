@@ -9,9 +9,9 @@ import (
 // IdleTerminationOptionsApplyConfiguration represents a declarative configuration of the IdleTerminationOptions type for use
 // with apply.
 type IdleTerminationOptionsApplyConfiguration struct {
-	// TimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering Policy.
+	// TimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle RayCluster.
 	TimeoutSeconds *int32 `json:"timeoutSeconds,omitempty"`
-	// Policy is the action the operator takes once the cluster has been idle for TimeoutSeconds.
+	// Policy is the action taken once the RayCluster has been idle for TimeoutSeconds.
 	Policy *rayv1.IdleTerminationPolicy `json:"policy,omitempty"`
 }
 

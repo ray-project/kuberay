@@ -16,10 +16,8 @@ type RayClusterSpecApplyConfiguration struct {
 	// Suspend indicates whether a RayCluster should be suspended.
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	Suspend *bool `json:"suspend,omitempty"`
-	// IdleSuspend is set to true by the Ray autoscaler when the RayCluster has
-	// had no attached driver for IdleTerminationOptions.timeoutSeconds and the RayCluster's
-	// IdleTerminationOptions.Policy is Suspend.
-	// Setting it back to false resumes the RayCluster.
+	// IdleSuspend indicates whether a RayCluster should be suspended due to idleness.
+	// A suspended RayCluster will have head pods and worker pods deleted.
 	IdleSuspend *bool `json:"idleSuspend,omitempty"`
 	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
 	// A RayCluster is considered idle when no Ray driver is connected.
