@@ -47,13 +47,10 @@ The collector is only injected when the `RayClusterHistoryServer` feature gate i
 operator. See the `featureGates` value of the `kuberay-operator` chart.
 
 > [!WARNING]
-> The operator only manages the collector container of a RayCluster that sets
-> `historyServerOptions.collectorOptions`, and it recognizes that container by name: the injected
-> container is named `ray-history-collector`, and validation rejects a RayCluster that already
-> defines a container with that name while `collectorOptions` is set. A collector sidecar you added
-> manually under any other name is not detected: enabling `collectorOptions` on such a RayCluster
-> keeps the manual container and adds a second collector to every Ray Pod. Remove the manual sidecar
-> in the same patch that enables `collectorOptions`.
+> The injected container is named `ray-history-collector`, and KubeRay only recognizes a collector
+> by that name. If your Ray Pods already run a manually added collector sidecar, remove it in the
+> same patch that enables `collectorOptions`, otherwise every Ray Pod gets a second collector.
+> A manual container that reuses the name `ray-history-collector` is instead rejected by validation.
 
 ## Supported storage backends
 

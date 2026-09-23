@@ -804,6 +804,15 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
+// IsCollectorEnabled returns whether the operator manages the collector container of the
+// RayCluster: the RayClusterHistoryServer feature gate is on and the RayCluster opts in with
+// historyServerOptions.collectorOptions.
+func IsCollectorEnabled(spec *rayv1.RayClusterSpec) bool {
+	return features.Enabled(features.RayClusterHistoryServer) &&
+		spec.HistoryServerOptions != nil &&
+		spec.HistoryServerOptions.CollectorOptions != nil
+}
+
 // IsTLSEnabled returns whether TLS is enabled for the RayCluster.
 // TLS is enabled when the RayClusterMTLS feature gate is on, spec.TLSOptions is non-nil,
 // and spec.TLSOptions.Enabled is true.

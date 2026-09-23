@@ -3208,6 +3208,8 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 func TestSetDefaultCollectorImage(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
 
+	defaultCollectorImage := "quay.io/kuberay/collector:nightly"
+
 	cluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			HistoryServerOptions: &rayv1.HistoryServerOptions{
@@ -3224,7 +3226,7 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 		{
 			name:           "collector image is inherited from the operator when not set",
 			collectorImage: "",
-			expectedImage:  "quay.io/kuberay/collector:nightly",
+			expectedImage:  defaultCollectorImage,
 		},
 		{
 			name:           "collector image set in the RayCluster is not overridden",
@@ -3244,7 +3246,7 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 				},
 			}
 
-			SetDefaultCollectorImage(cluster, &podTemplate, "quay.io/kuberay/collector:nightly")
+			SetDefaultCollectorImage(cluster, &podTemplate, defaultCollectorImage)
 
 			assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
 			assert.Equal(t, tc.expectedImage, podTemplate.Spec.Containers[1].Image)
@@ -3260,7 +3262,7 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 			},
 		}
 
-		SetDefaultCollectorImage(cluster, &podTemplate, "quay.io/kuberay/collector:nightly")
+		SetDefaultCollectorImage(cluster, &podTemplate, defaultCollectorImage)
 
 		assert.Len(t, podTemplate.Spec.Containers, 1)
 		assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
@@ -3277,7 +3279,7 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 			},
 		}
 
-		SetDefaultCollectorImage(&rayv1.RayCluster{}, &podTemplate, "quay.io/kuberay/collector:nightly")
+		SetDefaultCollectorImage(&rayv1.RayCluster{}, &podTemplate, defaultCollectorImage)
 
 		assert.Empty(t, podTemplate.Spec.Containers[0].Image)
 	})
