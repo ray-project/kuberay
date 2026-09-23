@@ -15,8 +15,24 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	StepSizePercent *int32 `json:"stepSizePercent,omitempty"`
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds,omitempty"`
-	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
+	// GatewayClassName is the name of the GatewayClass installed by the Kubernetes cluster admin.
+	// When set, the operator creates and manages a dedicated Gateway named "<rayservice-name>-gateway"
+	// and its own HTTPRoute for this RayService. Exactly one of GatewayClassName or HTTPRouteName must be set.
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
+	// HTTPRouteName references an existing HTTPRoute (in the RayService namespace) that the operator
+	// adopts: it patches only the backendRefs of the route's first rule to perform the incremental
+	// traffic migration, while leaving hostnames, parentRefs, matches and metadata untouched. The
+	// operator neither creates nor deletes this route, and derives the Gateway from the route's
+	// parentRefs. Use this when the Gateway and HTTPRoute are managed externally (e.g. by Helm/GitOps)
+	// and the operator may only adjust traffic weights. This is an alternative to specifying a Gateway;
+	// exactly one of GatewayClassName or HTTPRouteName must be set.
+	HTTPRouteName *string `json:"httpRouteName,omitempty"`
+	// HTTPRouteInProgressLabels are labels the operator sets on the adopted HTTPRoute while it is
+	// actively splitting traffic during an upgrade, and removes once traffic collapses back to a
+	// single cluster. They let a GitOps controller (e.g. Argo CD) ignore the operator's temporary
+	// backendRef edits only while an upgrade is in progress, then resume reconciling the route.
+	// Only valid together with HTTPRouteName.
+	HTTPRouteInProgressLabels map[string]string `json:"httpRouteInProgressLabels,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -54,5 +70,27 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value int3
 // If called multiple times, the GatewayClassName field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value string) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayClassName = &value
+	return b
+}
+
+// WithHTTPRouteName sets the HTTPRouteName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HTTPRouteName field is set to the value of the last call.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRouteName(value string) *ClusterUpgradeOptionsApplyConfiguration {
+	b.HTTPRouteName = &value
+	return b
+}
+
+// WithHTTPRouteInProgressLabels puts the entries into the HTTPRouteInProgressLabels field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the HTTPRouteInProgressLabels field,
+// overwriting an existing map entries in HTTPRouteInProgressLabels field with the same key.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRouteInProgressLabels(entries map[string]string) *ClusterUpgradeOptionsApplyConfiguration {
+	if b.HTTPRouteInProgressLabels == nil && len(entries) > 0 {
+		b.HTTPRouteInProgressLabels = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.HTTPRouteInProgressLabels[k] = v
+	}
 	return b
 }
