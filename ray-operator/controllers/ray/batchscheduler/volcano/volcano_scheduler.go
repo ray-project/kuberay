@@ -376,7 +376,8 @@ func (v *VolcanoBatchScheduler) CleanupOnSuspend(ctx context.Context, object met
 		return false, err
 	}
 
-	return v.syncPodGroup(ctx, rayCluster, 0, corev1.ResourceList{})
+	// calculateSubGroupPolicy ignores spec.suspend, so clear the subgroups too: the suspended cluster has no Pods.
+	return v.syncPodGroup(ctx, rayCluster, 0, corev1.ResourceList{}, nil)
 }
 
 // CleanupOnCompletion recalculates and updates the PodGroup resources when the RayJob no longer

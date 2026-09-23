@@ -843,6 +843,7 @@ func TestCleanupOnSuspend(t *testing.T) {
 		require.NoError(fakeCli.Get(ctx, podGroupKey, &podGroup))
 		require.Equal(utils.CalculateDesiredReplicas(&rayCluster)+1, podGroup.Spec.MinMember)
 		require.NotEmpty(*podGroup.Spec.MinResources)
+		require.NotEmpty(podGroup.Spec.SubGroupPolicy)
 
 		// Suspending it must hand that capacity back.
 		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
@@ -852,6 +853,7 @@ func TestCleanupOnSuspend(t *testing.T) {
 		require.NoError(fakeCli.Get(ctx, podGroupKey, &podGroup))
 		a.Equal(int32(0), podGroup.Spec.MinMember)
 		a.Empty(*podGroup.Spec.MinResources)
+		a.Empty(podGroup.Spec.SubGroupPolicy)
 
 		// Idempotent, so a suspended cluster does not write (or emit an event) every reconcile.
 		didUpdate, err = scheduler.CleanupOnSuspend(ctx, &rayCluster)
