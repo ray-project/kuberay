@@ -2872,6 +2872,12 @@ func TestReconcileRollbackState(t *testing.T) {
 
 			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
 			assert.Equal(t, tt.expectRollbackStatus, isCurrentlyRollingBack)
+
+			if tt.expectRollbackStatus && !tt.isRollbackInProgress {
+				cond := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
+				require.NotNil(t, cond)
+				assert.Equal(t, string(rayv1.DesiredClusterSpecChanged), cond.Reason)
+			}
 		})
 	}
 }

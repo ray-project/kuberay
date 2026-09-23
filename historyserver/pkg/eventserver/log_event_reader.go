@@ -55,21 +55,14 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 //
 // Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
-	// Build cluster ID (clusterLogPathPrefix) used by StorageReader
+	// Build storage prefix used by StorageReader
 	clusterLogPathPrefix := clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 
 	// Get or create the JobEventMap for this cluster session
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
 
 	// Find candidate nodes under {sessionName}/
-	var nodeIDs []string
-	for _, entry := range r.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
-		if nodeID, ok := strings.CutSuffix(entry, "/"); ok {
-			if nodeID != "" {
-				nodeIDs = append(nodeIDs, nodeID)
-			}
-		}
-	}
+	nodeIDs := clusterlogs.ListSessionNodeDirs(r.reader, clusterLogPathPrefix, clusterInfo.SessionName)
 	logrus.Debugf("Found candidate node directories for cluster %s: %v", clusterSessionKey, nodeIDs)
 
 	total := 0
@@ -101,8 +94,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // readEventFile reads and parses a single event_*.log file (JSON Lines format).
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
-func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+func (r *LogEventReader) readEventFile(prefix, filePath string, jobEventMap *types.JobEventMap) error {
+	ioReader := r.reader.GetContent(prefix, filePath)
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}
