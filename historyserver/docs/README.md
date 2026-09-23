@@ -43,9 +43,8 @@ helm install kuberay-operator kuberay/kuberay-operator \
   --set collectorImage=my-registry.io/kuberay/collector:v1.7.0
 ```
 
-> [!NOTE]
-> The collector is only injected when the `RayClusterHistoryServer` feature gate is enabled on the
-> operator. See the `featureGates` value of the `kuberay-operator` chart.
+The collector is only injected when the `RayClusterHistoryServer` feature gate is enabled on the
+operator. See the `featureGates` value of the `kuberay-operator` chart.
 
 > [!WARNING]
 > The operator only manages the collector container of a RayCluster that sets

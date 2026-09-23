@@ -3341,6 +3341,6 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 
 		SetDefaultCollectorImage(&rayv1.RayCluster{}, &podTemplate, "quay.io/kuberay/collector:nightly")
 
-		assert.Equal(t, "", podTemplate.Spec.Containers[0].Image)
+		assert.Empty(t, podTemplate.Spec.Containers[0].Image)
 	})
 }
