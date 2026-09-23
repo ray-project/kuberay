@@ -122,8 +122,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.OssRootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(prefix string, dir string) []string {
+	fullPrefix := path.Join(r.OssRootDir, prefix, dir)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -133,7 +133,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	// Initial continuation token
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
+	nodes := r._listFiles(fullPrefix, "/", true)
 	sort.Sort(clusters)
 	return nodes
 }
@@ -181,9 +181,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx := context.TODO()
-	fullPath := path.Join(r.OssRootDir, clusterId, fileName)
+	fullPath := path.Join(r.OssRootDir, prefix, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
 		Bucket: oss.Ptr(r.OssBucket),

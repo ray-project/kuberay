@@ -339,6 +339,13 @@ jobs:
         run: make test
         working-directory: ${{env.working-directory}}
 
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v5
+
+      - name: Build Docker Images - Historyserver and Collector
+        run: make localimage-build
+        working-directory: ${{env.working-directory}}
+
       - name: Log in to Quay.io
         uses: docker/login-action@v4
         with:
