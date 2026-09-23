@@ -1,0 +1,13 @@
+# Member cluster B: remote Ray workers.
+# CIDRs must not overlap with other clusters or Docker's kind network (172.18.0.0/16).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: frc-member-b
+networking:
+  disableDefaultCNI: true   # Cilium will replace the default CNI
+  podSubnet: "10.30.0.0/16"
+  serviceSubnet: "10.31.0.0/16"
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
