@@ -42,9 +42,9 @@ const (
 	TPUContainerResourceName           = "google.com/tpu"
 	TPURayResourceName                 = "TPU"
 	AscendRayResourceName              = "NPU"
-	// KubeRayPodIPEnvVar is populated from status.podIP on every Ray Pod. It is
-	// used as the default advertised Ray node address and, on head Pods, to
-	// select the dashboard wildcard address family.
+	// KubeRayPodIPEnvVar is populated from status.podIP on every Ray Pod. Head
+	// Pods use it to select the dashboard wildcard address family, and users can
+	// reference it in rayStartParams (e.g. node-ip-address) for multi-network Pods.
 	KubeRayPodIPEnvVar = "KUBERAY_POD_IP"
 	// KubeRayDashboardHostEnvVar is exported by dashboardHostSetupCommand before
 	// the generated head-node command starts.
@@ -1406,14 +1406,6 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 
 func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]string, nodeType rayv1.RayNodeType, headPort string, fqdnRayIP string) (completeStartParams map[string]string) {
 	log := ctrl.LoggerFrom(ctx)
-	// Ray's automatic node address detection can select a loopback, link-local,
-	// or secondary-interface address that other Pods cannot reach. Kubernetes
-	// already exposes the canonical primary Pod IP, so advertise it by default
-	// while preserving an explicit user override for multi-network Pods.
-	if _, ok := rayStartParams["node-ip-address"]; !ok {
-		rayStartParams["node-ip-address"] = "$" + KubeRayPodIPEnvVar
-	}
-
 	// Note: The argument headPort is unused for nodeType == rayv1.HeadNode.
 	if nodeType == rayv1.WorkerNode {
 		if _, ok := rayStartParams["address"]; !ok {

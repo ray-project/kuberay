@@ -747,7 +747,6 @@ func TestBuildPod(t *testing.T) {
 	headRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
 	assert.True(t, strings.HasPrefix(headRayStartCommandEnv.Value, "eval "))
 	assert.Contains(t, headRayStartCommandEnv.Value, "ray start")
-	assert.Contains(t, pod.Spec.Containers[utils.RayContainerIndex].Args[0], "--node-ip-address=$KUBERAY_POD_IP")
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -802,7 +801,7 @@ func TestBuildPod(t *testing.T) {
 	assert.True(t, strings.HasPrefix(workerRayStartCommandEnv.Value, "eval "))
 	assert.Contains(t, workerRayStartCommandEnv.Value, "ray start")
 
-	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080 --node-ip-address=$KUBERAY_POD_IP")
+	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -861,7 +860,7 @@ func TestBuildPod_WithUlimitOverride(t *testing.T) {
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 
 	// The generated command arg still uses ${RAY_START_ULIMIT_OPEN_FILES:-65536} because the shell resolves it at runtime.
-	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --metrics-export-port=8080 --node-ip-address=$KUBERAY_POD_IP --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
+	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --metrics-export-port=8080 --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -1123,7 +1122,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
-	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --node-ip-address=$KUBERAY_POD_IP --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
+	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -1133,7 +1132,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
-	expectedCommandArg = splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080 --node-ip-address=$KUBERAY_POD_IP")
+	expectedCommandArg = splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 }
@@ -1847,48 +1846,6 @@ func TestSetMissingRayStartParamsAddress(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.rayStartParams = setMissingRayStartParams(ctx, testCase.rayStartParams, testCase.nodeType, headPort, testCase.fqdnRayIP)
 			testCase.assertion(t, testCase.rayStartParams)
-		})
-	}
-}
-
-func TestSetMissingRayStartParamsNodeIPAddress(t *testing.T) {
-	ctx := context.Background()
-	tests := []struct {
-		name           string
-		nodeType       rayv1.RayNodeType
-		rayStartParams map[string]string
-		want           string
-	}{
-		{
-			name:           "head defaults to the primary Pod IP",
-			nodeType:       rayv1.HeadNode,
-			rayStartParams: map[string]string{},
-			want:           "$KUBERAY_POD_IP",
-		},
-		{
-			name:           "worker defaults to the primary Pod IP",
-			nodeType:       rayv1.WorkerNode,
-			rayStartParams: map[string]string{},
-			want:           "$KUBERAY_POD_IP",
-		},
-		{
-			name:           "head preserves an explicit override",
-			nodeType:       rayv1.HeadNode,
-			rayStartParams: map[string]string{"node-ip-address": "192.0.2.10"},
-			want:           "192.0.2.10",
-		},
-		{
-			name:           "worker preserves an explicit IPv6 override",
-			nodeType:       rayv1.WorkerNode,
-			rayStartParams: map[string]string{"node-ip-address": "2001:db8::10"},
-			want:           "2001:db8::10",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			params := setMissingRayStartParams(ctx, tt.rayStartParams, tt.nodeType, "6379", "head.default.svc.cluster.local")
-			assert.Equal(t, tt.want, params["node-ip-address"])
 		})
 	}
 }
