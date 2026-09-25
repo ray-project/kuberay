@@ -20,46 +20,49 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-          # --- Issue settings ---
-          # Number of days of inactivity before an issue becomes stale.
-          days-before-issue-stale: 120
-
-          # Number of days of inactivity after being marked stale before an issue is closed.
-          days-before-issue-close: 14
-
-          # Label to use when marking an issue as stale.
-          stale-issue-label: 'stale'
-
-          # Issues with these labels will never be considered stale.
-          exempt-issue-labels: >
-            P0,
-            P0.5,
-            P1,
-            P2,
-            P3,
-            good-first-issue,
-            release-blocker
-
-          # Comment to post when marking an issue as stale.
-          stale-issue-message: |
-            This issue has been automatically marked as stale because it has not had
-            any activity for 120 days. It will be closed in 14 days if no further activity occurs.
-
-            If you'd like to keep this issue open, just leave any comment, and the stale label will be removed.
-            If you'd like to get more attention on this issue, please tag one of the KubeRay maintainers.
-
-            You can always ask for help on [Ray's public Slack channel](https://github.com/ray-project/kuberay#getting-involved).
-
-          # Comment to post when closing a stale issue.
-          close-issue-message: |
-            This issue has been automatically closed because there has been no more activity in the
-            14 days since being marked stale.
-
-            Please feel free to reopen or open a new issue if you'd still like this to be addressed.
-
-            Again, you can always ask for help on [Ray's public Slack channel](https://github.com/ray-project/kuberay#getting-involved).
-
-            Thanks again for the report!
+          # TODO: Disable stale bot for issues for now, we need further discussion on whether we want to enable it.
+          # # --- Issue settings ---
+          # # Number of days of inactivity before an issue becomes stale.
+          # days-before-issue-stale: 120
+          #
+          # # Number of days of inactivity after being marked stale before an issue is closed.
+          # days-before-issue-close: 14
+          #
+          # # Label to use when marking an issue as stale.
+          # stale-issue-label: 'stale'
+          #
+          # # Issues with these labels will never be considered stale.
+          # exempt-issue-labels: >
+          #   P0,
+          #   P0.5,
+          #   P1,
+          #   P2,
+          #   P3,
+          #   good-first-issue,
+          #   release-blocker
+          #
+          # # Comment to post when marking an issue as stale.
+          # stale-issue-message: |
+          #   This issue has been automatically marked as stale because it has not had
+          #   any activity for 120 days. It will be closed in 14 days if no further activity occurs.
+          #
+          #   If you'd like to keep this issue open, just leave any comment, and the stale label will be removed.
+          #   If you'd like to get more attention on this issue, please tag one of the KubeRay maintainers.
+          #
+          #   You can always ask for help on [Ray's public Slack channel](https://github.com/ray-project/kuberay#getting-involved).
+          #
+          # # Comment to post when closing a stale issue.
+          # close-issue-message: |
+          #   This issue has been automatically closed because there has been no more activity in the
+          #   14 days since being marked stale.
+          #
+          #   Please feel free to reopen or open a new issue if you'd still like this to be addressed.
+          #
+          #   Again, you can always ask for help on [Ray's public Slack channel](https://github.com/ray-project/kuberay#getting-involved).
+          #
+          #   Thanks again for the report!
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
 
           # --- Pull request settings ---
           # Number of days of inactivity before a pull request becomes stale.
