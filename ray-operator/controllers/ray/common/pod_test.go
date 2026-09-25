@@ -161,6 +161,12 @@ var autoscalerContainer = corev1.Container{
 	Name:            "autoscaler",
 	Image:           "repo/image:custom",
 	ImagePullPolicy: corev1.PullIfNotPresent,
+	Ports: []corev1.ContainerPort{
+		{
+			ContainerPort: int32(utils.DefaultAutoscalerMetricsPort),
+			Name:          utils.AutoscalerMetricsPortName,
+		},
+	},
 	Env: []corev1.EnvVar{
 		{
 			Name: utils.RAY_CLUSTER_NAME,
