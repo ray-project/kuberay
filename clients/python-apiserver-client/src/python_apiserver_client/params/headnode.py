@@ -46,7 +46,7 @@ class HeadNodeSpec:
             self,
             compute_template: str,
             image: str,
-            ray_start_params: dict[str, str] = DEFAULT_HEAD_START_PARAMS,
+            ray_start_params: dict[str, str] | None = None,
             service_type: ServiceType = ServiceType.ClusterIP,
             enable_ingress: bool = False,
             volumes: list[BaseVolume] = None,
@@ -74,8 +74,9 @@ class HeadNodeSpec:
         """
 
         self.compute_template = compute_template
-        self.ray_start_params = ray_start_params
-        self.ray_start_params.update(DEFAULT_HEAD_START_PARAMS)
+        self.ray_start_params = DEFAULT_HEAD_START_PARAMS.copy()
+        if ray_start_params is not None:
+            self.ray_start_params.update(ray_start_params)
         self.image = image
         self.service_type = service_type
         self.enable_ingress = enable_ingress

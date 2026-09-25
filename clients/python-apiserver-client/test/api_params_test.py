@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from python_apiserver_client.params import (
     DEFAULT_HEAD_START_PARAMS,
     DEFAULT_WORKER_START_PARAMS,
@@ -425,3 +427,61 @@ def test_submission():
     """
     job_info = RayJobInfo(json.loads(info_json))
     print(job_info.to_string())
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_start_params_preserve_overrides(kind):
+    params = {"num-cpus": "2", "metrics-export-port": "9090", "node-ip-address": "10.0.0.1"}
+    expected = params.copy()
+    if kind == "head":
+        node = HeadNodeSpec(compute_template="template", image="ray:test", ray_start_params=params)
+        assert node.to_dict()["rayStartParams"]["dashboard-host"] == "0.0.0.0"
+    else:
+        node = WorkerNodeSpec(group_name="workers", compute_template="template", image="ray:test",
+                              max_replicas=1, ray_start_params=params)
+    for key, value in expected.items():
+        assert node.to_dict()["rayStartParams"][key] == value
+    assert params == expected
+    params["num-cpus"] = "4"
+    assert node.to_dict()["rayStartParams"]["num-cpus"] == "2"
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_start_params_do_not_mutate_input(kind):
+    params = {"custom-resource": "1"}
+    if kind == "head":
+        HeadNodeSpec(compute_template="template", image="ray:test", ray_start_params=params)
+    else:
+        WorkerNodeSpec(group_name="workers", compute_template="template", image="ray:test",
+                       max_replicas=1, ray_start_params=params)
+    assert params == {"custom-resource": "1"}
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_start_params_are_independent(kind):
+    def make_node():
+        if kind == "head":
+            return HeadNodeSpec(compute_template="template", image="ray:test")
+        return WorkerNodeSpec(group_name="workers", compute_template="template", image="ray:test", max_replicas=1)
+
+    first = make_node()
+    try:
+        first.ray_start_params["custom-resource"] = "1"
+        second = make_node()
+        assert "custom-resource" not in second.to_dict()["rayStartParams"]
+    finally:
+        first.ray_start_params.pop("custom-resource", None)
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_decoder_with_omitted_start_params(kind):
+    payload = {"computeTemplate": "template", "image": "ray:test"}
+    if kind == "head":
+        node = head_node_spec_decoder(payload)
+        expected = DEFAULT_HEAD_START_PARAMS
+    else:
+        payload.update({"groupName": "workers", "maxReplicas": 1})
+        node = worker_node_spec_decoder(payload)
+        expected = DEFAULT_WORKER_START_PARAMS
+    assert node.to_dict()["rayStartParams"] == expected
+    assert "rayStartParams" not in payload
