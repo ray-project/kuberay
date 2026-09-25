@@ -1172,7 +1172,7 @@ func TestReconcileHeadServiceSelectorDrift(t *testing.T) {
 	assert.Equal(t, resourceVersion, svc.ResourceVersion, "reconcile should be a no-op once the head service matches")
 }
 
-// runningHeadPod builds a head Pod labelled the way labelPod would label it, so a test can put a
+// runningHeadPod builds a head Pod labeled the way labelPod would label it, so a test can put a
 // head Pod that is already running in front of the reconciler.
 func runningHeadPod(cluster *rayv1.RayCluster, appName string) *corev1.Pod {
 	return &corev1.Pod{
@@ -1252,7 +1252,7 @@ func TestReconcileHeadServicePrefersOldestHeadPod(t *testing.T) {
 		"the oldest head Pod should decide the selector regardless of list order")
 
 	// The choice must not depend on which reconcile pass we are in.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		require.NoError(t, r.reconcileHeadService(ctx, cluster))
 	}
 	svc = getHeadService(ctx, t, r.Client, cluster)
