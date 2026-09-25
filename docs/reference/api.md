@@ -934,7 +934,7 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
 | `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
-| `labelMappings` _[NodeLabelMapping](#nodelabelmapping) array_ | LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.<br />Any allowed node label can be mapped, for example topology labels for topology-aware scheduling.<br />An empty list delivers nothing. Every listed label is required: a pod bound to a node missing one<br />exits before ray start.<br />Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`). |  |  |
+| `labelMappings` _[NodeLabelMapping](#nodelabelmapping) array_ | LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.<br />This enables Ray scheduling based on node attributes, such as topology placement<br />(e.g., rack, zone, or topology domain) or specialized hardware roles (e.g., prefill vs. decode nodes).<br />Any allowlisted node labels can be mapped. If this field is empty, nothing happens.<br />Every listed node label in this field is required; if not available on the node, an error is thrown.<br />Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`). |  |  |
 
 
 

@@ -518,11 +518,10 @@ type WorkerGroupSpec struct {
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
 	// LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.
-	// This enables Ray scheduling based on node attributes, such as topology placement
-	// (e.g., rack, zone, or topology domain) or specialized hardware roles (e.g., prefill vs. decode nodes).
-	// Any allowlisted node labels can be mapped. If this field is empty, nothing happens.
-	// Every listed node label in this field is required; if not available on the node, an error is thrown.
-	// Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`).
+	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
+	// Only allowlisted node labels can be mapped. Every listed label must exist on the node or pod startup fails.
+	// Empty means no labels are delivered.
+	// Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`).
 	// +listType=map
 	// +listMapKey=nodeLabel
 	// +optional
