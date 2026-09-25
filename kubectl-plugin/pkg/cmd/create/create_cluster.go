@@ -49,6 +49,7 @@ type CreateClusterOptions struct {
 	workerReplicas         int32
 	dryRun                 bool
 	wait                   bool
+	skipTPUValidation      bool
 }
 
 var (
@@ -73,12 +74,18 @@ var (
 		# Create a Ray cluster with TPU in default worker group
 		kubectl ray create cluster sample-cluster --worker-tpu 1 --worker-node-selectors %s=tpu-v5-lite-podslice,%s=1x1
 
-		# For more details on TPU-related node selectors like %s and %s, refer to:
+		# Create a Ray cluster with a multi-host TPU slice (4x4 requires 4 hosts)
+		kubectl ray create cluster sample-cluster --worker-tpu 4 --num-of-hosts 4 --worker-node-selectors %s=tpu-v6e-slice,%s=4x4
+
+		# Create a Ray cluster with a 3D TPU topology (2x2x2 requires 2 hosts)
+		kubectl ray create cluster sample-cluster --worker-tpu 4 --num-of-hosts 2 --worker-node-selectors %s=tpu-v4-podslice,%s=2x2x2
+
+		# For more details on TPU-related node selectors, refer to:
 		# https://cloud.google.com/kubernetes-engine/docs/concepts/plan-tpus#availability
 
 		# Create a Ray cluster from a YAML configuration file
 		kubectl ray create cluster sample-cluster --file ray-cluster-config.yaml
-	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
+	`, util.RayVersion, util.RayImage, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology, util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology))
 )
 
 func NewCreateClusterOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *CreateClusterOptions {
@@ -144,6 +151,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 	cmd.Flags().BoolVar(&options.dryRun, "dry-run", false, "print the generated YAML instead of creating the cluster")
 	cmd.Flags().BoolVar(&options.wait, "wait", false, "wait for the cluster to be provisioned before returning. Returns an error if the cluster is not provisioned by the timeout specified")
 	cmd.Flags().DurationVar(&options.timeout, "timeout", defaultProvisionedTimeout, "the timeout for --wait")
+	cmd.Flags().BoolVar(&options.skipTPUValidation, "skip-tpu-validation", false, "skip TPU accelerator, topology, and numOfHosts validation")
 
 	return cmd
 }
@@ -184,7 +192,7 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 			return fmt.Errorf("failed to parse config file: %w", err)
 		}
 
-		if err := generation.ValidateConfig(rayClusterConfig); err != nil {
+		if err := generation.ValidateConfig(rayClusterConfig, options.skipTPUValidation); err != nil {
 			return fmt.Errorf("failed to validate config file: %w", err)
 		}
 
@@ -212,8 +220,10 @@ func (options *CreateClusterOptions) Validate(cmd *cobra.Command) error {
 		}
 	}
 
-	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
-		return fmt.Errorf("%w", err)
+	if !options.skipTPUValidation {
+		if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
+			return fmt.Errorf("%w", err)
+		}
 	}
 
 	return nil
@@ -358,12 +368,13 @@ func flagsIncompatibleWithConfigFilePresent(cmd *cobra.Command) error {
 	// Define which flags are allowed to be used with --file.
 	// These are typically flags that modify the command's behavior but not the cluster configuration.
 	allowedWithFile := map[string]bool{
-		"file":      true,
-		"context":   true,
-		"namespace": true,
-		"dry-run":   true,
-		"wait":      true,
-		"timeout":   true,
+		"file":                true,
+		"context":             true,
+		"namespace":           true,
+		"dry-run":             true,
+		"wait":                true,
+		"timeout":             true,
+		"skip-tpu-validation": true,
 	}
 
 	// Check all flags to see if any incompatible flags are set
