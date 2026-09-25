@@ -1,6 +1,6 @@
 # This sample shows how to terminate an idle RayCluster automatically.
 # When `idleTerminationOptions` is set, the Ray autoscaler v2 tracks whether any
-# user driver is attached. Once no driver has been attached for `idleTerminationOptions.timeoutSeconds`,
+# Ray driver is connected. Once no Ray driver has been connected for `idleTerminationOptions.timeoutSeconds`,
 # the autoscaler applies `idleTerminationOptions.policy` (Delete or Suspend) to the RayCluster.
 #
 # Notes:

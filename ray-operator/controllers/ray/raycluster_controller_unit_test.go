@@ -3635,16 +3635,6 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 			expectDeleted: true,
 		},
 		{
-			name: "finalizer present, deletionTimestamp set, feature disabled: finalizer is left untouched",
-			mutate: func(c *rayv1.RayCluster) {
-				c.Spec.EnableInTreeAutoscaling = new(false)
-				c.Spec.AutoscalerOptions = nil
-				controllerutil.AddFinalizer(c, utils.IdleTerminationCleanupFinalizer)
-				setDeletionTimestamp(c)
-			},
-			expectDeleted: false,
-		},
-		{
 			name: "deletionTimestamp set but a different finalizer is blocking deletion: idle-termination finalizer logic is a no-op",
 			mutate: func(c *rayv1.RayCluster) {
 				enableIdleDeletePolicy(c)
@@ -3687,7 +3677,6 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 				}
 				event := <-recorder.Events
 				assert.Contains(t, event, string(utils.DeletedIdleRayCluster))
-				assert.Contains(t, event, "TimeoutSeconds=600")
 			} else {
 				require.NoError(t, err)
 			}

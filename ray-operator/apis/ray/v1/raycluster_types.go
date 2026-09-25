@@ -754,6 +754,7 @@ const (
 	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
+	RayClusterIdleSuspended        = "RayClusterIdleSuspended"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )
@@ -770,8 +771,6 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
-	// RayClusterIdleSuspended indicates that the RayCluster was suspended because it had no attached driver for the configured timeout.
-	RayClusterIdleSuspended RayClusterConditionType = "RayClusterIdleSuspended"
 )
 
 // HeadInfo gives info about head
