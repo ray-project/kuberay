@@ -142,7 +142,7 @@ class WorkerNodeSpec:
         if self.image is not None:
             dct["image"] = self.image
         if self.service_account is not None:
-            dct["service_account"] = self.service_account
+            dct["serviceAccount"] = self.service_account
         if self.image_pull_secret is not None:
             dct["imagePullSecret"] = self.image_pull_secret
         if self.image_pull_policy is not None:
@@ -185,7 +185,7 @@ def worker_node_spec_decoder(dct: dict[str, Any]) -> WorkerNodeSpec:
         ray_start_params=dct.get("rayStartParams"),
         image=dct.get("image"),
         volumes=volumes,
-        service_account=dct.get("service_account", None),
+        service_account=dct.get("serviceAccount", dct.get("service_account")),
         image_pull_secret=dct.get("imagePullSecret", None),
         image_pull_policy=dct.get("imagePullPolicy", None),
         environment=environments,
