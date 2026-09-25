@@ -506,6 +506,23 @@ _Appears in:_
 | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-policy-deny-all sample. |  |  |
 
 
+#### NodeLabelMapping
+
+
+
+NodeLabelMapping maps one Kubernetes node label to a Ray node label.
+
+
+
+_Appears in:_
+- [WorkerGroupSpec](#workergroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `nodeLabel` _string_ | NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels. |  |  |
+| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.<br />The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file. |  | MaxLength: 317 <br /> |
+
+
 #### RayCluster
 
 
@@ -859,39 +876,6 @@ _Appears in:_
 | `enabled` _boolean_ | Enabled controls whether mTLS is active for this RayCluster.<br />Defaults to false when omitted. Set to true to enable mTLS. |  |  |
 
 
-#### TopologyLabelMapping
-
-
-
-TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
-
-
-
-_Appears in:_
-- [TopologySpec](#topologyspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `nodeLabel` _string_ | NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels. |  |  |
-| `mapTo` _string_ | MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.<br />The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file. |  | MaxLength: 317 <br /> |
-
-
-#### TopologySpec
-
-
-
-TopologySpec selects the node labels delivered to a worker group's Ray nodes.
-
-
-
-_Appears in:_
-- [WorkerGroupSpec](#workergroupspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `labelMappings` _[TopologyLabelMapping](#topologylabelmapping) array_ | LabelMappings lists the node labels to deliver. An empty list delivers nothing. Every listed label is<br />required: a pod bound to a node missing one exits before ray start. |  |  |
-
-
 #### UpscalingMode
 
 _Underlying type:_ _string_
@@ -950,7 +934,7 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
 | `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
-| `topology` _[TopologySpec](#topologyspec)_ | Topology delivers labels of the node each worker pod is bound to as Ray node labels.<br />While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.<br />Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`). |  |  |
+| `labelMappings` _[NodeLabelMapping](#nodelabelmapping) array_ | LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.<br />This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).<br />Only allowlisted node labels can be mapped. Every listed label must exist on the node or pod startup fails.<br />Empty means no labels are delivered.<br />Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`). |  |  |
 
 
 

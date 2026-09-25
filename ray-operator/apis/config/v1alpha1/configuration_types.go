@@ -105,7 +105,7 @@ type Configuration struct {
 	// surface in the Ray Dashboard.
 	NodeEventForwarder NodeEventForwarderConfiguration `json:"nodeEventForwarder,omitempty"`
 
-	// AllowedNodeLabels lists the node label keys worker groups may deliver through topology.labelMappings.
+	// AllowedNodeLabels lists the node label keys worker groups may deliver through workerGroupSpecs[].labelMappings.
 	// Empty rejects every mapping and disables delivery.
 	AllowedNodeLabels []string `json:"allowedNodeLabels,omitempty"`
 }

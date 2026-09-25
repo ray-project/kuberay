@@ -52,6 +52,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NodeLabelMapping"):
+		return &rayv1.NodeLabelMappingApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
 		return &rayv1.RayClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterSpec"):
@@ -96,10 +98,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.SubmitterConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TLSOptions"):
 		return &rayv1.TLSOptionsApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("TopologyLabelMapping"):
-		return &rayv1.TopologyLabelMappingApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("TopologySpec"):
-		return &rayv1.TopologySpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupNetworkPolicyRules"):
 		return &rayv1.WorkerGroupNetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupSpec"):

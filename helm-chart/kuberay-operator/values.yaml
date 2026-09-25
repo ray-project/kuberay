@@ -146,7 +146,7 @@ configuration:
   #   image: fluent/fluent-bit:1.9
   workerSidecarContainers: []
 
-  # -- Node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].topology.
+  # -- Node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].labelMappings.
   # Enforced by the validating webhooks, so it requires ENABLE_WEBHOOKS to be enabled. Empty disables delivery.
   # Example:
   # allowedNodeLabels:

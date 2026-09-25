@@ -517,11 +517,15 @@ type WorkerGroupSpec struct {
 	// +kubebuilder:default:=1
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
-	// Topology delivers labels of the node each worker pod is bound to as Ray node labels.
-	// While its primary use would be for topology-aware scheduling, any allowed node label can be mapped.
-	// Requires the operator to run with `ENABLE_WEBHOOKS` enabled and Ray 2.45.0 or later (`--labels-file`).
+	// LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.
+	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
+	// Only allowlisted node labels can be mapped. Every listed label must exist on the node or pod startup fails.
+	// Empty means no labels are delivered.
+	// Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`).
+	// +listType=map
+	// +listMapKey=nodeLabel
 	// +optional
-	Topology *TopologySpec `json:"topology,omitempty"`
+	LabelMappings []NodeLabelMapping `json:"labelMappings,omitempty"`
 }
 
 // ScaleStrategy controls scaling of a worker group.
@@ -553,18 +557,8 @@ type ScaleGate struct {
 	Type string `json:"type"`
 }
 
-// TopologySpec selects the node labels delivered to a worker group's Ray nodes.
-type TopologySpec struct {
-	// LabelMappings lists the node labels to deliver. An empty list delivers nothing. Every listed label is
-	// required: a pod bound to a node missing one exits before ray start.
-	// +listType=map
-	// +listMapKey=nodeLabel
-	// +optional
-	LabelMappings []TopologyLabelMapping `json:"labelMappings,omitempty"`
-}
-
-// TopologyLabelMapping maps one Kubernetes node label to a Ray node label.
-type TopologyLabelMapping struct {
+// NodeLabelMapping maps one Kubernetes node label to a Ray node label.
+type NodeLabelMapping struct {
 	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
 	NodeLabel string `json:"nodeLabel"`
 	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
