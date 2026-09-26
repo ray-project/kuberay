@@ -3,6 +3,7 @@ package utils
 import (
 	errstd "errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -150,6 +151,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return err
 		}
 		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 {
+			if !features.Enabled(features.TopologyLabelDelivery) {
+				return fmt.Errorf("worker group %s sets topology, which requires the TopologyLabelDelivery feature gate to be enabled", workerGroup.GroupName)
+			}
+			// the webhook validates topology; without webhooks the operator cannot deliver node labels
+			if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) != "true" {
+				return fmt.Errorf("worker group %s sets topology, which requires the KubeRay operator to run with ENABLE_WEBHOOKS=true", workerGroup.GroupName)
+			}
 			// ray start --labels-file was added in Ray 2.45.0
 			rayVersion, err := version.ParseGeneric(spec.RayVersion)
 			if err != nil {

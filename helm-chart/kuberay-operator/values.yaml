@@ -154,6 +154,13 @@ configuration:
   # - topology.kubernetes.io/zone
   allowedNodeLabels: []
 
+# Admission webhooks: validating webhooks for RayCluster, RayJob and RayService, and the pod mutating webhooks
+# that deliver node labels to Ray workers (workerGroupSpecs[].topology, TopologyLabelDelivery feature gate).
+webhooks:
+  # -- Deploy the admission webhooks. Requires cert-manager in the cluster for the serving certificate and CA
+  # injection. Creates cluster-scoped webhook configurations, so it is not supported with singleNamespaceInstall.
+  enabled: false
+
 featureGates:
 - name: RayClusterStatusConditions
   enabled: true
@@ -172,6 +179,8 @@ featureGates:
 - name: RayClusterHistoryServer
   enabled: false
 - name: RayNodeEventForwarder
+  enabled: false
+- name: TopologyLabelDelivery
   enabled: false
 
 # Configurations for KubeRay node event forwarder controller.
