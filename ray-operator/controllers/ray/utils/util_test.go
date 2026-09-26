@@ -2508,3 +2508,29 @@ func TestGetGCSStoragePVCName(t *testing.T) {
 	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ClaimName: "byo-pvc"}
 	assert.Equal(t, "byo-pvc", GetGCSStoragePVCName(instance))
 }
+
+func TestIsResourceReservationTimeoutPod(t *testing.T) {
+	assert.True(t, IsResourceReservationTimeoutPod(corev1.Pod{
+		Status: corev1.PodStatus{Phase: corev1.PodFailed, Reason: ResourceReservationTimeoutReason},
+	}))
+	assert.False(t, IsResourceReservationTimeoutPod(corev1.Pod{
+		Status: corev1.PodStatus{Phase: corev1.PodFailed, Reason: "OOMKilled"},
+	}))
+	assert.False(t, IsResourceReservationTimeoutPod(corev1.Pod{
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, Reason: ResourceReservationTimeoutReason},
+	}))
+}
+
+func TestHasResourceReservationTimeoutPods(t *testing.T) {
+	pods := corev1.PodList{Items: []corev1.Pod{
+		{Status: corev1.PodStatus{Phase: corev1.PodRunning}},
+		{Status: corev1.PodStatus{Phase: corev1.PodFailed, Reason: ResourceReservationTimeoutReason}},
+	}}
+	assert.True(t, HasResourceReservationTimeoutPods(pods))
+	assert.False(t, HasResourceReservationTimeoutPods(corev1.PodList{}))
+}
+
+func TestIsRayClusterResourceReservationTimeout(t *testing.T) {
+	assert.True(t, IsRayClusterResourceReservationTimeout(rayv1.RayClusterStatus{Reason: ResourceReservationTimeoutReason}))
+	assert.False(t, IsRayClusterResourceReservationTimeout(rayv1.RayClusterStatus{}))
+}
