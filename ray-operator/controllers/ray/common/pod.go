@@ -524,11 +524,11 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
 while true; do
-  if openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}" >/dev/null 2>&1; then
+  if output=$(openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}" 2>&1); then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
   fi
-  echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
+  echo "TLS cert not yet valid for ${POD_IP}, retrying in 5s: ${output}"
   sleep 5
 done`, certPath, caCertPath)
 

@@ -2886,8 +2886,10 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	}
 	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
 	require.Len(t, waitInit.Args, 1)
-	assert.Contains(t, waitInit.Args[0], `openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}"`,
+	assert.Contains(t, waitInit.Args[0], `output=$(openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}" 2>&1)`,
 		"wait-for-tls-ip-san should compare IPv4 and IPv6 SANs semantically")
+	assert.Contains(t, waitInit.Args[0], `retrying in 5s: ${output}`,
+		"wait-for-tls-ip-san should surface the openssl verification error on each retry")
 }
 
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
