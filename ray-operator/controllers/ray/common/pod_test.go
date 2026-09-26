@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"reflect"
 	"sort"
 	"strconv"
@@ -735,14 +736,16 @@ func TestBuildPod(t *testing.T) {
 
 	// Check environment variables
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_ADDRESS, "127.0.0.1:6379")
+	checkContainerEnv(t, rayContainer, utils.RAY_ADDRESS, "localhost:6379")
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayClusterLabelKey))
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAMESPACE, "metadata.namespace")
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
+	checkContainerEnv(t, rayContainer, KubeRayPodIPEnvVar, "status.podIP")
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_EXTRA_TAGS, fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, utils.RayClusterCRD))
 	headRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
+	assert.True(t, strings.HasPrefix(headRayStartCommandEnv.Value, "eval "))
 	assert.Contains(t, headRayStartCommandEnv.Value, "ray start")
 
 	// In head, init container needs FQ_RAY_IP to create a self-signed certificate for its TLS authenticate.
@@ -793,7 +796,9 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAMESPACE, "metadata.namespace")
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
+	checkContainerEnv(t, rayContainer, KubeRayPodIPEnvVar, "status.podIP")
 	workerRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
+	assert.True(t, strings.HasPrefix(workerRayStartCommandEnv.Value, "eval "))
 	assert.Contains(t, workerRayStartCommandEnv.Value, "ray start")
 
 	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
@@ -806,6 +811,38 @@ func TestBuildPod(t *testing.T) {
 
 	// Test default environment variables injection in ray pods
 	checkContainerEnv(t, rayContainer, "TEST_DEFAULT_ENV_NAME", "TEST_ENV_VALUE")
+}
+
+func TestGeneratedRayStartCommandEnvExpandsRuntimeVariables(t *testing.T) {
+	_, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is required to verify generated Ray start command expansion")
+	}
+
+	for _, testCase := range []struct {
+		name          string
+		podIP         string
+		dashboardHost string
+	}{
+		{name: "IPv4", podIP: "10.244.0.9", dashboardHost: "0.0.0.0"},
+		{name: "IPv6", podIP: "fd00:10:244::9", dashboardHost: "::"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Reproduce the overwrite-command pattern used by the sample YAML. The
+			// generated value contains both shell control operators and variables that
+			// only exist after the container starts.
+			generatedCommand := "eval " + dashboardHostSetupCommand + `; printf '%s|%s' "$KUBERAY_POD_IP" "$KUBERAY_DASHBOARD_HOST"`
+			cmd := exec.CommandContext(t.Context(), "bash", "-c", "$KUBERAY_GEN_RAY_START_CMD")
+			cmd.Env = append(os.Environ(),
+				KubeRayPodIPEnvVar+"="+testCase.podIP,
+				utils.KUBERAY_GEN_RAY_START_CMD+"="+generatedCommand,
+			)
+
+			output, err := cmd.Output()
+			require.NoError(t, err, "generated command failed")
+			assert.Equal(t, testCase.podIP+"|"+testCase.dashboardHost, string(output))
+		})
+	}
 }
 
 func TestBuildPod_WithUlimitOverride(t *testing.T) {
@@ -823,7 +860,7 @@ func TestBuildPod_WithUlimitOverride(t *testing.T) {
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 
 	// The generated command arg still uses ${RAY_START_ULIMIT_OPEN_FILES:-65536} because the shell resolves it at runtime.
-	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
+	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --metrics-export-port=8080 --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -1085,7 +1122,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
-	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
+	expectedCommandArg := splitAndSort(fmt.Sprintf("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; %s; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=$KUBERAY_DASHBOARD_HOST", dashboardHostSetupCommand))
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -2002,8 +2039,9 @@ func TestSetMissingRayStartParamsBlock(t *testing.T) {
 func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 	ctx := context.Background()
 
-	// The dashboard-host option is automatically injected into RayStartParams with a default value of "0.0.0.0" for head only as workers do not have dashborad server.
-	// Users can manually set the dashboard-host option to customize the host the dashboard server binds to, either "localhost" (127.0.0.1) or "0.0.0.0" (available from all interfaces).
+	// The dashboard-host option is automatically injected for the head only, as workers do not have a dashboard server.
+	// Its value is the IPv4 or IPv6 wildcard selected from KUBERAY_POD_IP.
+	// Users can manually set the dashboard-host option to customize the bind address.
 	headPort := "6379"
 	fqdnRayIP := "raycluster-kuberay-head-svc.default.svc.cluster.local"
 	testCases := []struct {
@@ -2019,7 +2057,7 @@ func TestSetMissingRayStartParamsDashboardHost(t *testing.T) {
 			fqdnRayIP:      "",
 			nodeType:       rayv1.HeadNode,
 			assertion: func(t *testing.T, rayStartParams map[string]string) {
-				assert.Equalf(t, "0.0.0.0", rayStartParams["dashboard-host"], "Expected `%v` but got `%v`", "0.0.0.0", rayStartParams["dashboard-host"])
+				assert.Equal(t, "$KUBERAY_DASHBOARD_HOST", rayStartParams["dashboard-host"])
 			},
 		},
 		{
@@ -2909,6 +2947,11 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 		}
 	}
 	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
+	require.Len(t, waitInit.Args, 1)
+	assert.Contains(t, waitInit.Args[0], `output=$(openssl verify -CAfile "${CA_CERT}" -verify_ip "${POD_IP}" "${CERT}" 2>&1)`,
+		"wait-for-tls-ip-san should compare IPv4 and IPv6 SANs semantically")
+	assert.Contains(t, waitInit.Args[0], `retrying in 5s: ${output}`,
+		"wait-for-tls-ip-san should surface the openssl verification error on each retry")
 }
 
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
