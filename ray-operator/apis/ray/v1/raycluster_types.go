@@ -22,6 +22,14 @@ type RayClusterSpec struct {
 	// A suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
+	// IdleSuspend indicates whether a RayCluster should be suspended due to idleness.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	// +optional
+	IdleSuspend *bool `json:"idleSuspend,omitempty"`
+	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
+	// A RayCluster is considered idle when no Ray driver is connected.
+	// +optional
+	IdleTerminationOptions *IdleTerminationOptions `json:"idleTerminationOptions,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
@@ -574,6 +582,23 @@ type TopologyLabelMapping struct {
 	MapTo string `json:"mapTo,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Delete;Suspend
+type IdleTerminationPolicy string
+
+const (
+	IdleTerminationPolicySuspend IdleTerminationPolicy = "Suspend"
+	IdleTerminationPolicyDelete  IdleTerminationPolicy = "Delete"
+)
+
+type IdleTerminationOptions struct {
+	// TimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle RayCluster.
+	TimeoutSeconds *int32 `json:"timeoutSeconds"`
+
+	// Policy is the action taken once the RayCluster has been idle for TimeoutSeconds.
+	// +kubebuilder:default=Suspend
+	Policy *IdleTerminationPolicy `json:"policy,omitempty"`
+}
+
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptions struct {
 	// Resources specifies optional resource request and limit overrides for the autoscaler container.
@@ -729,6 +754,7 @@ const (
 	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
+	RayClusterIdleSuspended        = "RayClusterIdleSuspended"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )
