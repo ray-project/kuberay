@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1707,7 +1708,10 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	pendingCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "pending-ray-cluster", Namespace: namespace}}
 	activeServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(activeCluster.Name), Namespace: namespace}}
 	pendingServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(pendingCluster.Name), Namespace: namespace}}
-	gateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: namespace}}
+	gateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: namespace, Labels: map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: "test-rayservice",
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+	}}}
 
 	baseRayService := &rayv1.RayService{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
@@ -1780,8 +1784,11 @@ func TestReconcileHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 			},
 			existingRoute: &gwv1.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
-				Spec:       gwv1.HTTPRouteSpec{},
+				ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace, Labels: map[string]string{
+					utils.RayOriginatedFromCRNameLabelKey: "test-rayservice",
+					utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+				}},
+				Spec: gwv1.HTTPRouteSpec{},
 			},
 			expectedActiveWeight:  90,
 			expectedPendingWeight: 10,
@@ -1910,6 +1917,92 @@ func TestReconcileGateway(t *testing.T) {
 	}
 }
 
+func TestReconcileGatewayOwnership(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+
+	ctx := context.TODO()
+
+	rayService := makeIncrementalUpgradeRayService(
+		true,
+		"gateway-class",
+		new(int32(20)),
+		new(int32(30)),
+		new(int32(80)),
+		new(metav1.Now()),
+	)
+	gatewayName := fmt.Sprintf("%s-gateway", rayService.Name)
+
+	t.Run("stamps origin labels on a newly created Gateway", func(t *testing.T) {
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayService).
+			Build()
+		reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
+
+		require.NoError(t, reconciler.reconcileGateway(ctx, rayService))
+
+		created := &gwv1.Gateway{}
+		require.NoError(t, fakeClient.Get(ctx, client.ObjectKey{Name: gatewayName, Namespace: rayService.Namespace}, created))
+		assert.Equal(t, rayService.Name, created.Labels[utils.RayOriginatedFromCRNameLabelKey])
+		assert.Equal(t, utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD), created.Labels[utils.RayOriginatedFromCRDLabelKey])
+	})
+
+	t.Run("fails reconciliation when a same-named Gateway is not owned by KubeRay", func(t *testing.T) {
+		userGateway := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: rayService.Namespace},
+		}
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayService, userGateway).
+			Build()
+		reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
+
+		err := reconciler.reconcileGateway(ctx, rayService)
+		require.Error(t, err, "expected reconciliation to fail on a non-owned Gateway")
+		assert.Contains(t, err.Error(), "not owned by RayService")
+
+		after := &gwv1.Gateway{}
+		require.NoError(t, fakeClient.Get(ctx, client.ObjectKey{Name: gatewayName, Namespace: rayService.Namespace}, after))
+		assert.NotContains(t, after.Labels, utils.RayOriginatedFromCRNameLabelKey)
+	})
+
+	t.Run("fails reconciliation when a same-named Gateway belongs to a different RayService", func(t *testing.T) {
+		otherOwned := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: rayService.Namespace, Labels: map[string]string{
+				utils.RayOriginatedFromCRNameLabelKey: "some-other-rayservice",
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+			}},
+		}
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayService, otherOwned).
+			Build()
+		reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
+
+		err := reconciler.reconcileGateway(ctx, rayService)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not owned by RayService")
+	})
+
+	t.Run("treats a same-named Gateway with only a controller owner reference as owned", func(t *testing.T) {
+		legacyGateway := &gwv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: rayService.Namespace},
+		}
+		require.NoError(t, ctrl.SetControllerReference(rayService, legacyGateway, newScheme))
+
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayService, legacyGateway).
+			Build()
+		reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
+
+		require.NoError(t, reconciler.reconcileGateway(ctx, rayService))
+	})
+}
+
 func TestReconcileServeTargetCapacity(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
@@ -2014,6 +2107,10 @@ func makeGateway(name, namespace string, isReady bool) *gwv1.Gateway {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRNameLabelKey: strings.TrimSuffix(name, "-gateway"),
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+			},
 		},
 		Status: gwv1.GatewayStatus{
 			Conditions: []metav1.Condition{
@@ -2040,6 +2137,10 @@ func makeHTTPRoute(name, namespace string, isReady bool) *gwv1.HTTPRoute {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRNameLabelKey: strings.TrimSuffix(name, "-httproute"),
+				utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+			},
 		},
 		Status: gwv1.HTTPRouteStatus{
 			RouteStatus: gwv1.RouteStatus{
