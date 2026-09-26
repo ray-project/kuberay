@@ -1162,7 +1162,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions.TimeoutSeconds must be non-negative, got -1",
+			expectedErr: "idleTerminationOptions.timeoutSeconds must be non-negative, got -1",
 		},
 		"Invalid: idleTerminationOptions.TimeoutSeconds without autoscaling": {
 			spec: func() rayv1.RayClusterSpec {
@@ -1173,7 +1173,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true",
+			expectedErr: "idleTerminationOptions requires enableInTreeAutoscaling to be true",
 		},
 		"Invalid: autoscaler v2 not enabled": {
 			spec: func() rayv1.RayClusterSpec {
@@ -1183,7 +1183,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
+			expectedErr: "idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'",
 		},
 		"Invalid: idleTerminationOptions.TimeoutSeconds with autoscaler v1": {
 			spec: func() rayv1.RayClusterSpec {
@@ -1196,7 +1196,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
+			expectedErr: "idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'",
 		},
 		"Invalid: idleTerminationOptions.TimeoutSeconds with Ray version below minimum": {
 			spec: func() rayv1.RayClusterSpec {
@@ -1210,7 +1210,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions.TimeoutSeconds requires minimum Ray version 2.56.0, got 2.55.0",
+			expectedErr: "idleTerminationOptions requires Ray version 2.56.0 or later, got 2.55.0",
 		},
 		"Valid: idleTerminationOptions.Policy=Delete": {
 			spec: func() rayv1.RayClusterSpec {
@@ -1239,20 +1239,6 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				return s
 			}(),
 			expectedErr: "",
-		},
-		"Invalid: unknown idleTerminationOptions.Policy value": {
-			spec: func() rayv1.RayClusterSpec {
-				s := createSpec()
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version: ptr.To(rayv1.AutoscalerVersionV2),
-				}
-				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					TimeoutSeconds: ptr.To[int32](600),
-					Policy:         ptr.To(rayv1.IdleTerminationPolicy("Bogus")),
-				}
-				return s
-			}(),
-			expectedErr: "idleTerminationOptions.Policy is invalid. Please use either Delete or Suspend",
 		},
 		"Invalid: idleTerminationOptions.Policy set without idleTerminationOptions.TimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {

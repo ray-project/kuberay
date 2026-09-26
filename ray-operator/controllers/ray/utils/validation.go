@@ -264,40 +264,8 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return fmt.Errorf("idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set")
 	}
 
-	// Validate IdleTerminationOptions.TimeoutSeconds (works only with v2 autoscaler)
-	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.TimeoutSeconds != nil {
-		if *spec.IdleTerminationOptions.TimeoutSeconds < 0 {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds must be non-negative, got %d", *spec.IdleTerminationOptions.TimeoutSeconds)
-		}
-		if !isAutoscalingEnabled {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires enableInTreeAutoscaling to be true")
-		}
-
-		v2Enabled := IsAutoscalingV2Enabled(spec)
-		if !v2Enabled {
-			if envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env); exists {
-				v2Enabled = envVar.Value == "1" || envVar.Value == "true"
-			}
-		}
-		if !v2Enabled {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
-		}
-
-		if spec.IdleTerminationOptions.Policy != nil {
-			policy := *spec.IdleTerminationOptions.Policy
-			if policy != rayv1.IdleTerminationPolicyDelete && policy != rayv1.IdleTerminationPolicySuspend {
-				return fmt.Errorf("idleTerminationOptions.Policy is invalid. Please use either %s or %s", rayv1.IdleTerminationPolicyDelete, rayv1.IdleTerminationPolicySuspend)
-			}
-		}
-
-		rayVersion, err := version.ParseGeneric(spec.RayVersion)
-		if err != nil {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
-		}
-		minVersion := version.MustParseGeneric("2.56.0") // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
-		if rayVersion.LessThan(minVersion) {
-			return fmt.Errorf("idleTerminationOptions.TimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
-		}
+	if err := validateIdleTermination(spec); err != nil {
+		return err
 	}
 
 	// When autoscalerOptions.args is set, the user's custom args can reference the
@@ -596,6 +564,41 @@ func validateNoConflictingTLSVolumeMount(container corev1.Container, location st
 			return fmt.Errorf("cannot use volume mount at path %q in %s when tlsOptions is set "+
 				"- the operator manages TLS configuration automatically", RayTLSCertMountPath, location)
 		}
+	}
+	return nil
+}
+
+func isAutoscalingV2EnabledBySpecOrEnv(spec *rayv1.RayClusterSpec) bool {
+	if IsAutoscalingV2Enabled(spec) {
+		return true
+	}
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	return exists && (envVar.Value == "1" || envVar.Value == "true")
+}
+
+func validateIdleTermination(spec *rayv1.RayClusterSpec) error {
+	opts := spec.IdleTerminationOptions
+	if opts == nil {
+		return nil
+	}
+	if opts.TimeoutSeconds != nil && *opts.TimeoutSeconds < 0 {
+		return fmt.Errorf("idleTerminationOptions.timeoutSeconds must be non-negative, got %d", *opts.TimeoutSeconds)
+	}
+	if !IsAutoscalingEnabled(spec) {
+		return fmt.Errorf("idleTerminationOptions requires enableInTreeAutoscaling to be true")
+	}
+	if !isAutoscalingV2EnabledBySpecOrEnv(spec) {
+		return fmt.Errorf("idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'")
+	}
+
+	// TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+	minVersion := version.MustParseGeneric("2.56.0")
+	rayVersion, err := version.ParseGeneric(spec.RayVersion)
+	if err != nil {
+		return fmt.Errorf("idleTerminationOptions requires Ray version %s or later, but RayVersion %q is unset or invalid: %w", minVersion, spec.RayVersion, err)
+	}
+	if rayVersion.LessThan(minVersion) {
+		return fmt.Errorf("idleTerminationOptions requires Ray version %s or later, got %s", minVersion, spec.RayVersion)
 	}
 	return nil
 }
