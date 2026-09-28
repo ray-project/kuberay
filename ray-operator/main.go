@@ -165,7 +165,7 @@ func main() {
 		config.AllowedNodeLabels = splitCommaSeparated(allowedNodeLabels)
 	}
 
-	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
+	stdoutEncoder, err := newLogEncoder(config.LogStdoutEncoder)
 	exitOnError(err, "failed to create log encoder for stdout")
 	opts.Encoder = stdoutEncoder
 
@@ -177,7 +177,7 @@ func main() {
 			MaxAge:     30,  // days
 		}
 
-		fileEncoder, err := newLogEncoder(logFileEncoder)
+		fileEncoder, err := newLogEncoder(config.LogFileEncoder)
 		exitOnError(err, "failed to create log encoder for file")
 
 		k8sLogger := k8szap.NewRaw(k8szap.UseFlagOptions(&opts))
