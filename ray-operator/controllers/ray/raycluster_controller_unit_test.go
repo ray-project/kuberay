@@ -3547,12 +3547,12 @@ func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
 
 	enableIdleSuspendPolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
 		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-			TimeoutSeconds: ptr.To[int32](600),                         // 1 min
+			TimeoutSeconds: ptr.To[int32](60),                          // 1 min
 			Policy:         ptr.To(rayv1.IdleTerminationPolicySuspend), // the default policy is Suspend, we explicitly set it for clarity
 		}
 		// Simulates the Ray autoscaler flipped spec.idleSuspend to true.
@@ -3606,12 +3606,12 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 
 	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
 		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-			TimeoutSeconds: ptr.To[int32](600), // 1 min
+			TimeoutSeconds: ptr.To[int32](60), // 1 min
 			Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
 		}
 	}
@@ -3696,12 +3696,12 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy_WithGCSFaultTolerance(t *t
 
 	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.56.0" // TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
+		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
 		c.Spec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-			TimeoutSeconds: ptr.To[int32](600), // 1 min
+			TimeoutSeconds: ptr.To[int32](60), // 1 min
 			Policy:         ptr.To(rayv1.IdleTerminationPolicyDelete),
 		}
 	}

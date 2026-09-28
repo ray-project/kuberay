@@ -586,8 +586,8 @@ func validateIdleTermination(spec *rayv1.RayClusterSpec) error {
 		return fmt.Errorf("idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'")
 	}
 
-	// TODO(justinyeh1995): change it to 2.59.0 once https://github.com/ray-project/ray/pull/65763 is merged
-	minVersion := version.MustParseGeneric("2.56.0")
+	// TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
+	minVersion := version.MustParseGeneric("2.58.0")
 	rayVersion, err := version.ParseGeneric(spec.RayVersion)
 	if err != nil {
 		return fmt.Errorf("idleTerminationOptions requires Ray version %s or later, but RayVersion %q is unset or invalid: %w", minVersion, spec.RayVersion, err)

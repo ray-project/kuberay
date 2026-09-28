@@ -2129,8 +2129,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		}
 	}
 
-	if utils.IsRayClusterSuspendOrIdleSuspend(instance) && len(runtimePods.Items) == 0 {
-		// TODO: this looks like it should be replaced by meta.SetStatusCondition()
+	if utils.IsRayClusterSuspendOrIdleSuspend(newInstance) && len(runtimePods.Items) == 0 {
 		newInstance.Status.State = rayv1.Suspended
 	}
 
@@ -2494,7 +2493,7 @@ func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, in
 	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
 }
 
-// hasIdleTerminationCleanupFinalizer reports whether the idle termination cleanup finalizer is presented in the RayCluster
+// hasIdleTerminationCleanupFinalizer reports whether the idle termination cleanup finalizer is present in the RayCluster
 func (r *RayClusterReconciler) hasIdleTerminationCleanupFinalizer(cluster *rayv1.RayCluster) bool {
 	return controllerutil.ContainsFinalizer(cluster, utils.IdleTerminationCleanupFinalizer)
 }

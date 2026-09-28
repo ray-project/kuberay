@@ -801,7 +801,7 @@ func newIdleTerminationSpec(test Test, policy rayv1.IdleTerminationPolicy, timeo
 
 	return rayv1ac.RayClusterSpec().
 		WithEnableInTreeAutoscaling(true).
-		WithRayVersion("2.56.0"). // TODO(justinyeh1995) bump it when ray
+		WithRayVersion("2.58.0"). // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
 		WithIdleTerminationOptions(rayv1ac.IdleTerminationOptions().
 			WithTimeoutSeconds(timeoutSeconds).
 			WithPolicy(policy)).

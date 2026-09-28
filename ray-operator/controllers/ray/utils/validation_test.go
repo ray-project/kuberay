@@ -1101,7 +1101,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: new(true),
-			RayVersion:              "2.56.0",
+			RayVersion:              "2.58.0",
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},
@@ -1112,7 +1112,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 		expectedErr string
 		spec        rayv1.RayClusterSpec
 	}{
-		"Valid: idleTerminationOptions.TimeoutSeconds with explicit v2": {
+		"Valid: idleTerminationOptions.timeoutSeconds with explicit v2": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1125,7 +1125,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Valid: idleTerminationOptions.TimeoutSeconds with v2 enabled via env var": {
+		"Valid: idleTerminationOptions.timeoutSeconds with v2 enabled via env var": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
@@ -1138,7 +1138,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Valid: zero idleTerminationOptions.TimeoutSeconds": {
+		"Valid: zero idleTerminationOptions.timeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1151,7 +1151,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Invalid: negative idleTerminationOptions.TimeoutSeconds": {
+		"Invalid: negative idleTerminationOptions.timeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1164,7 +1164,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "idleTerminationOptions.timeoutSeconds must be non-negative, got -1",
 		},
-		"Invalid: idleTerminationOptions.TimeoutSeconds without autoscaling": {
+		"Invalid: idleTerminationOptions.timeoutSeconds without autoscaling": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.EnableInTreeAutoscaling = new(false)
@@ -1185,7 +1185,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'",
 		},
-		"Invalid: idleTerminationOptions.TimeoutSeconds with autoscaler v1": {
+		"Invalid: idleTerminationOptions.timeoutSeconds with autoscaler v1": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1198,10 +1198,10 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "idleTerminationOptions requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2'",
 		},
-		"Invalid: idleTerminationOptions.TimeoutSeconds with Ray version below minimum": {
+		"Invalid: idleTerminationOptions.timeoutSeconds with Ray version below minimum": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.RayVersion = "2.55.0"
+				s.RayVersion = "2.57.0"
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
@@ -1210,9 +1210,9 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions requires Ray version 2.56.0 or later, got 2.55.0",
+			expectedErr: "idleTerminationOptions requires Ray version 2.58.0 or later, got 2.57.0",
 		},
-		"Valid: idleTerminationOptions.Policy=Delete": {
+		"Valid: idleTerminationOptions.policy=Delete": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1226,7 +1226,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Valid: idleTerminationOptions.Policy=Suspend": {
+		"Valid: idleTerminationOptions.policy=Suspend": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{

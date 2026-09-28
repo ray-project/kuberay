@@ -7,15 +7,15 @@
 # - The feature is only supported by autoscaler v2 and requires `enableInTreeAutoscaling: true`.
 # - Detached actors do NOT count as a driver, so a cluster running only detached actors is still
 #   eligible for termination.
-# - Requires a Ray version that supports no-driver cluster termination (https://github.com/ray-project/ray/pull/63465).
+# - Requires a Ray version that supports idle termination (https://github.com/ray-project/ray/pull/65763).
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: ray-cluster-autoscaler-v2-terminate-idle-cluster
 spec:
-  rayVersion: "2.58.0" # TODO(justinyeh1995): change this to 2.59.0 once released
+  rayVersion: "2.58.0" # TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
   enableInTreeAutoscaling: true
-  # Delete the RayCluster after no user driver has been attached for 30 seconds.
+  # Suspend the RayCluster after no user driver has been attached for 30 seconds.
   idleTerminationOptions:
     timeoutSeconds: 30
     policy: Suspend
@@ -42,7 +42,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:idle-termination # TODO(justinyeh1995): change this to 2.59.0 once released
+          image: rayproject/ray:nightly.260926.5b14d6 # TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
           ports:
           - containerPort: 6379
             name: gcs
@@ -69,7 +69,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:idle-termination # TODO(justinyeh1995): change this to 2.59.0 once released
+          image: rayproject/ray:nightly.260926.5b14d6 # TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
           resources:
             limits:
               cpu: "1"
