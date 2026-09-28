@@ -259,11 +259,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
-	// Validate IdleTerminationOptions.Policy has to be set alongside IdleTerminationOptions.TimeoutSeconds
-	if spec.IdleTerminationOptions != nil && spec.IdleTerminationOptions.Policy != nil && spec.IdleTerminationOptions.TimeoutSeconds == nil {
-		return fmt.Errorf("idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set")
-	}
-
 	if err := validateIdleTermination(spec); err != nil {
 		return err
 	}

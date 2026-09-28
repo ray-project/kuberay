@@ -1097,7 +1097,7 @@ func TestValidateRayClusterSpecAutoscaler_FlexibleRestartPolicy(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.T) {
+func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: new(true),
@@ -1239,19 +1239,6 @@ func TestValidateRayClusterSpec_IdleTerminationOptionsTimeoutSeconds(t *testing.
 				return s
 			}(),
 			expectedErr: "",
-		},
-		"Invalid: idleTerminationOptions.Policy set without idleTerminationOptions.TimeoutSeconds": {
-			spec: func() rayv1.RayClusterSpec {
-				s := createSpec()
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version: ptr.To(rayv1.AutoscalerVersionV2),
-				}
-				s.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
-				}
-				return s
-			}(),
-			expectedErr: "idleTerminationOptions.Policy requires idleTerminationOptions.TimeoutSeconds to be set",
 		},
 	}
 
@@ -1601,25 +1588,11 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "RayJob does not support noDriverTimeoutSeconds",
+			name: "RayJob does not support idleTerminationOptions",
 			spec: func() rayv1.RayJobSpec {
 				clusterSpec := createBasicRayClusterSpec()
 				clusterSpec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
 					TimeoutSeconds: ptr.To[int32](600),
-				}
-				return rayv1.RayJobSpec{
-					ShutdownAfterJobFinishes: true,
-					RayClusterSpec:           clusterSpec,
-				}
-			}(),
-			expectError: true,
-		},
-		{
-			name: "RayJob rejects idleTerminationOptions.policy set without idleTerminationOptions.timeoutSeconds",
-			spec: func() rayv1.RayJobSpec {
-				clusterSpec := createBasicRayClusterSpec()
-				clusterSpec.IdleTerminationOptions = &rayv1.IdleTerminationOptions{
-					Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
 				}
 				return rayv1.RayJobSpec{
 					ShutdownAfterJobFinishes: true,
@@ -2473,22 +2446,11 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayService does not support idleTerminationOptions.TimeoutSeconds",
+			name: "RayService does not support idleTerminationOptions",
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec: rayv1.RayClusterSpec{
 					IdleTerminationOptions: &rayv1.IdleTerminationOptions{
 						TimeoutSeconds: ptr.To[int32](600),
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
-			name: "RayService rejects idleTerminationOptions.Policy set without idleTerminationOptions.TimeoutSeconds",
-			spec: rayv1.RayServiceSpec{
-				RayClusterSpec: rayv1.RayClusterSpec{
-					IdleTerminationOptions: &rayv1.IdleTerminationOptions{
-						Policy: ptr.To(rayv1.IdleTerminationPolicySuspend),
 					},
 				},
 			},
