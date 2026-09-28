@@ -928,10 +928,9 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 	return nil
 }
 
-// releaseBatchSchedulerResources releases the capacity the batch scheduler reserved for this
-// suspended RayCluster (e.g. a Volcano PodGroup). Callers must propagate the error to requeue,
-// since the capacity stays reserved until this succeeds.
-func (r *RayClusterReconciler) releaseBatchSchedulerResources(ctx context.Context, instance *rayv1.RayCluster) error {
+// cleanupBatchSchedulerResources releases the capacity a batch scheduler reserved for the suspended
+// RayCluster (e.g., zeroes out the Volcano PodGroup). Return its error so the reconcile is requeued.
+func (r *RayClusterReconciler) cleanupBatchSchedulerResources(ctx context.Context, instance *rayv1.RayCluster) error {
 	if r.options.BatchSchedulerManager == nil {
 		return nil
 	}
@@ -941,16 +940,16 @@ func (r *RayClusterReconciler) releaseBatchSchedulerResources(ctx context.Contex
 		return fmt.Errorf("failed to get batch scheduler: %w", err)
 	}
 
-	didCleanup, err := scheduler.CleanupOnSuspend(ctx, instance)
+	didCleanup, err := scheduler.CleanupOnCompletion(ctx, instance)
 	if err != nil {
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler), string(utils.CleanupAction),
-			"Failed releasing batch scheduler resources for suspended RayCluster %s/%s, %v",
+			"Failed to cleanup batch scheduler resources for suspended RayCluster %s/%s: %v",
 			instance.Namespace, instance.Name, err)
-		return fmt.Errorf("failed to release batch scheduler resources: %w", err)
+		return fmt.Errorf("failed to cleanup batch scheduler resources: %w", err)
 	}
 	if didCleanup {
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp), string(utils.CleanupAction),
-			"Released batch scheduler resources for suspended RayCluster %s/%s",
+			"Cleaned up batch scheduler resources for suspended RayCluster %s/%s",
 			instance.Namespace, instance.Name)
 	}
 	return nil
@@ -987,14 +986,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if len(pods.Items) > 0 {
 			return nil
 		}
-		return r.releaseBatchSchedulerResources(ctx, instance)
+		return r.cleanupBatchSchedulerResources(ctx, instance)
 	}
 
 	if statusConditionGateEnabled {
 		if suspendStatus == rayv1.RayClusterSuspended {
-			// Also release here: a cluster suspended before this operator started never went
-			// through the Suspending branch above.
-			return r.releaseBatchSchedulerResources(ctx, instance)
+			// Release here too: this is the retry path when the release above failed, and the
+			// only path for a cluster that was already Suspended when this operator started.
+			return r.cleanupBatchSchedulerResources(ctx, instance)
 		}
 		// (suspendStatus != rayv1.RayClusterSuspending) is always true here because it has been checked above.
 		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {

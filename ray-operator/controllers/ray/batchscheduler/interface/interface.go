@@ -24,15 +24,12 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string)
 
-	// CleanupOnCompletion handles cleanup when the RayJob no longer needs the capacity it
-	// reserved: it reached a terminal state (Complete/Failed) or was suspended.
-	// For batch schedulers like Volcano, this releases the PodGroup's reserved queue resources.
-	// This is a no-op for schedulers that don't need cleanup.
+	// CleanupOnCompletion releases the capacity reserved for a workload that no longer needs it:
+	// a RayJob that reached a terminal state (Complete/Failed) or was suspended, or a suspended
+	// RayCluster. The behavior is plugin-specific; schedulers that keep their resources for reuse
+	// on resume treat this as a no-op.
 	// Returns (didCleanup, error) where didCleanup indicates whether actual cleanup was performed.
 	CleanupOnCompletion(ctx context.Context, object metav1.Object) (didCleanup bool, err error)
-
-	// CleanupOnSuspend releases the capacity reserved for a suspended RayCluster.
-	CleanupOnSuspend(ctx context.Context, object metav1.Object) (didCleanup bool, err error)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -69,10 +66,6 @@ func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ 
 }
 
 func (d *DefaultBatchScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
-	return false, nil
-}
-
-func (d *DefaultBatchScheduler) CleanupOnSuspend(_ context.Context, _ metav1.Object) (bool, error) {
 	return false, nil
 }
 

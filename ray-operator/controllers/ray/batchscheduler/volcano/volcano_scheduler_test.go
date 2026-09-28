@@ -797,7 +797,7 @@ func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
 	})
 }
 
-func TestCleanupOnSuspend(t *testing.T) {
+func TestCleanupOnCompletion(t *testing.T) {
 	t.Run("RayCluster - no PodGroup - should be no-op", func(t *testing.T) {
 		a := assert.New(t)
 		require := require.New(t)
@@ -812,13 +812,13 @@ func TestCleanupOnSuspend(t *testing.T) {
 		ctx := context.Background()
 
 		// Nothing is reserved, so there is nothing to release and no PodGroup to create.
-		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)
 		a.False(didUpdate)
 
 		podGroup := volcanoschedulingv1beta1.PodGroup{}
 		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}, &podGroup)
-		a.True(errors.IsNotFound(err), "CleanupOnSuspend must not create a PodGroup, got err=%v", err)
+		a.True(errors.IsNotFound(err), "CleanupOnCompletion must not create a PodGroup, got err=%v", err)
 	})
 
 	// Regression test for https://github.com/ray-project/kuberay/issues/5183.
@@ -846,7 +846,7 @@ func TestCleanupOnSuspend(t *testing.T) {
 		require.NotEmpty(podGroup.Spec.SubGroupPolicy)
 
 		// Suspending it must hand that capacity back.
-		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)
 		a.True(didUpdate)
 
@@ -856,7 +856,7 @@ func TestCleanupOnSuspend(t *testing.T) {
 		a.Empty(podGroup.Spec.SubGroupPolicy)
 
 		// Idempotent, so a suspended cluster does not write (or emit an event) every reconcile.
-		didUpdate, err = scheduler.CleanupOnSuspend(ctx, &rayCluster)
+		didUpdate, err = scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)
 		a.False(didUpdate)
 	})
@@ -886,55 +886,6 @@ func TestCleanupOnSuspend(t *testing.T) {
 		before := volcanoschedulingv1beta1.PodGroup{}
 		require.NoError(fakeCli.Get(ctx, podGroupKey, &before))
 		require.NotEmpty(*before.Spec.MinResources)
-
-		didUpdate, err := scheduler.CleanupOnSuspend(ctx, &rayCluster)
-		require.NoError(err)
-		a.False(didUpdate)
-
-		after := volcanoschedulingv1beta1.PodGroup{}
-		require.NoError(fakeCli.Get(ctx, podGroupKey, &after))
-		a.Equal(before.Spec.MinMember, after.Spec.MinMember)
-		a.Equal(before.Spec.MinResources, after.Spec.MinResources)
-	})
-
-	t.Run("RayJob - should be no-op", func(t *testing.T) {
-		a := assert.New(t)
-		require := require.New(t)
-
-		// RayJob capacity is released through CleanupOnCompletion by the RayJob reconciler.
-		rayJob := createTestRayJob(1)
-		scheme := runtime.NewScheme()
-		a.NoError(rayv1.AddToScheme(scheme))
-		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
-		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
-
-		didUpdate, err := scheduler.CleanupOnSuspend(context.Background(), &rayJob)
-		require.NoError(err)
-		a.False(didUpdate)
-	})
-}
-
-func TestCleanupOnCompletion(t *testing.T) {
-	t.Run("RayCluster - should be no-op", func(t *testing.T) {
-		a := assert.New(t)
-		require := require.New(t)
-
-		// RayCluster capacity is released through CleanupOnSuspend by the RayCluster reconciler.
-		rayCluster := createTestRayCluster(1)
-		scheme := runtime.NewScheme()
-		a.NoError(rayv1.AddToScheme(scheme))
-		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
-		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
-
-		ctx := context.Background()
-
-		require.NoError(scheduler.DoBatchSchedulingOnSubmission(ctx, &rayCluster))
-
-		podGroupKey := client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}
-		before := volcanoschedulingv1beta1.PodGroup{}
-		require.NoError(fakeCli.Get(ctx, podGroupKey, &before))
 
 		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)

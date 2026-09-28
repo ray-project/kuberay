@@ -354,20 +354,28 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
-// CleanupOnSuspend zeroes out a suspended RayCluster's PodGroup so it stops reserving queue
-// capacity. The suspended RayCluster still exists, so its OwnerReference cannot do this.
-func (v *VolcanoBatchScheduler) CleanupOnSuspend(ctx context.Context, object metav1.Object) (bool, error) {
-	rayCluster, ok := object.(*rayv1.RayCluster)
-	if !ok {
+// CleanupOnCompletion stops the PodGroup from reserving queue capacity once a RayJob reaches a
+// terminal state or is suspended, or a RayCluster is suspended. PodGroups of deleted objects are
+// removed by their OwnerReference.
+func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
+	switch obj := object.(type) {
+	case *rayv1.RayJob:
+		return v.cleanupRayJobPodGroup(ctx, obj)
+	case *rayv1.RayCluster:
+		return v.cleanupRayClusterPodGroup(ctx, obj)
+	default:
 		return false, nil
 	}
+}
 
+// cleanupRayClusterPodGroup zeroes out a suspended RayCluster's PodGroup.
+func (v *VolcanoBatchScheduler) cleanupRayClusterPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
 	// A RayCluster created by a RayJob shares the RayJob's PodGroup, which the RayJob reconciler owns.
 	if crdType, ok := rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok && crdType == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
 		return false, nil
 	}
 
-	// A cluster without a PodGroup reserves nothing; don't let syncPodGroup create an empty one.
+	// Skip clusters without a PodGroup so syncPodGroup does not create an empty one.
 	podGroupName := getAppPodGroupName(rayCluster)
 	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: podGroupName}, &volcanoschedulingv1beta1.PodGroup{}); err != nil {
 		if errors.IsNotFound(err) {
@@ -376,27 +384,19 @@ func (v *VolcanoBatchScheduler) CleanupOnSuspend(ctx context.Context, object met
 		return false, err
 	}
 
-	// calculateSubGroupPolicy ignores spec.suspend, so clear the subgroups too: the suspended cluster has no Pods.
+	// Clear the subgroups too: calculateSubGroupPolicy ignores spec.suspend.
 	return v.syncPodGroup(ctx, rayCluster, 0, corev1.ResourceList{}, nil)
 }
 
-// CleanupOnCompletion recalculates and updates the PodGroup resources when the RayJob no longer
-// needs the capacity it reserved: it reached a terminal state (Complete/Failed) or was suspended.
-//
-// The PodGroup's MinMember and MinResources are recalculated based on the
-// live RayCluster state. This correctly handles deletion strategies:
+// cleanupRayJobPodGroup recalculates the PodGroup's MinMember and MinResources from the live
+// RayCluster state once the RayJob reaches a terminal state (Complete/Failed) or is suspended.
+// This correctly handles deletion strategies:
 //   - If workers are suspended by DeleteWorkers policy, calculatePodGroupParams automatically
 //     excludes suspended groups, so the PodGroup reflects only the head pod.
 //   - If the RayCluster is deleted by DeleteCluster or ShutdownAfterJobFinishes, the PodGroup is
 //     updated with empty resources.
-func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
+func (v *VolcanoBatchScheduler) cleanupRayJobPodGroup(ctx context.Context, rayJob *rayv1.RayJob) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
-
-	// Only handle RayJob. RayCluster PodGroups are handled by CleanupOnSuspend and the OwnerReference.
-	rayJob, ok := object.(*rayv1.RayJob)
-	if !ok {
-		return false, nil
-	}
 
 	if len(rayJob.Spec.ClusterSelector) > 0 {
 		// Batch scheduling is not supported for RayJob with ClusterSelector.
