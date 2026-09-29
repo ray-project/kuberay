@@ -1,7 +1,11 @@
 package clusterlogs
 
 import (
+	"bytes"
+	"io"
 	"path"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -13,6 +17,8 @@ const (
 	LogsSubDir        = "logs"
 	NodeEventsSubDir  = "node_events"
 	JobEventsSubDir   = "job_events"
+	// ChunkDirSuffix is the suffix of the directory holding a file's chunks. Format: "<file>.chunks/<offset>"
+	ChunkDirSuffix = ".chunks"
 )
 
 // Prefix returns the hierarchical cluster directory prefix under rootDir:
@@ -114,4 +120,55 @@ func ListSessionNodeDirs(reader storage.StorageReader, prefix, sessionName strin
 		nodes = append(nodes, name)
 	}
 	return nodes
+}
+
+// ListLogFiles lists dir like reader.ListFiles, but a file that so far exists
+// only as chunks shows up as the file itself and the chunk directory is hidden.
+func ListLogFiles(reader storage.StorageReader, prefix, dir string) []string {
+	entries := reader.ListFiles(prefix, dir)
+	seen := make(map[string]struct{}, len(entries))
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := strings.TrimSuffix(entry, ChunkDirSuffix+"/")
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			files = append(files, name)
+		}
+	}
+	return files
+}
+
+// ReadLogFile returns the whole object at logPath when it exists, otherwise
+// join the file's chunks in offset order, or nil when there is neither.
+//
+// Only chunks that continue exactly where the previous one ended are used. A
+// collector restart re-uploads from offset zero and leaves the earlier
+// higher-offset chunks behind; splicing those in would duplicate bytes.
+func ReadLogFile(reader storage.StorageReader, prefix, logPath string) io.Reader {
+	if content := reader.GetContent(prefix, logPath); content != nil {
+		return content
+	}
+
+	chunkDir := logPath + ChunkDirSuffix
+	names := reader.ListFiles(prefix, chunkDir)
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+
+	var joined bytes.Buffer
+	for _, name := range names {
+		offset, err := strconv.ParseInt(name, 10, 64)
+		if err != nil || offset != int64(joined.Len()) {
+			break
+		}
+		chunk := reader.GetContent(prefix, path.Join(chunkDir, name))
+		if chunk == nil {
+			break
+		}
+		if _, err := joined.ReadFrom(chunk); err != nil {
+			break
+		}
+	}
+	return bytes.NewReader(joined.Bytes())
 }
