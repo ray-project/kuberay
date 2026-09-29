@@ -128,3 +128,19 @@ func (r *RayLogHandler) uploadNewBytes(absPath, objectName string) error {
 	logrus.Debugf("Uploaded active log chunk %s (object: %s, size: %d bytes)", absPath, chunkName, chunk.Size())
 	return nil
 }
+
+// collectActiveLog uploads one active log according to classifyActiveLog.
+func (r *RayLogHandler) collectActiveLog(absPath, logsDir, objectPrefix, sessionID, nodeID string) error {
+	relPath, err := filepath.Rel(logsDir, absPath)
+	if err != nil {
+		return err
+	}
+	switch classifyActiveLog(relPath) {
+	case activeLogChunk:
+		return r.uploadNewBytes(absPath, path.Join(objectPrefix, filepath.ToSlash(relPath)))
+	case activeLogOverwrite:
+		return r.processSessionLatestLogFile(absPath, logsDir, sessionID, nodeID)
+	default:
+		return nil
+	}
+}

@@ -93,7 +93,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	rotatedScanStopped := make(chan struct{})
 	go func() {
 		defer close(rotatedScanStopped)
-		r.scanRotatedLogs(stop)
+		r.scanSessionLogs(stop)
 	}()
 	var periodicPollResults <-chan periodicPollResult
 	if r.IsHead {
@@ -205,7 +205,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		}
 
 		// Process log file with the real session ID and node ID
-		if err := r.processSessionLatestLogFile(path, sessionID, nodeID); err != nil {
+		if err := r.processSessionLatestLogFile(path, logsDir, sessionID, nodeID); err != nil {
 			logrus.Errorf("Failed to process session_latest log file %s: %v", path, err)
 		}
 
@@ -218,12 +218,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	logrus.Info("Finished processing session_latest logs")
 }
 
-// processSessionLatestLogFile processes a single log file from session_latest
-func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, sessionID, nodeID string) error {
-	// Calculate relative path within logs directory
-	// The logsDir is the configured session_latest/logs directory.
-	sessionLatestDir := utils.GetRaySessionLatestPath()
-	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+// processSessionLatestLogFile uploads one file below logsDir in full.
+func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, logsDir, sessionID, nodeID string) error {
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
 	if err != nil {
 		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
