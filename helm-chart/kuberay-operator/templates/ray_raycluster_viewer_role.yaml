@@ -6,7 +6,6 @@ metadata:
   name: raycluster-viewer-role
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
-    rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
 - apiGroups:
   - ray.io

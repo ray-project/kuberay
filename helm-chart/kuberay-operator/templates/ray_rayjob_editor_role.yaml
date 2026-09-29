@@ -6,7 +6,6 @@ metadata:
   name: rayjob-editor-role
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
-    rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:
 - apiGroups:
   - ray.io
