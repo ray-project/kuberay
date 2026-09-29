@@ -26,6 +26,7 @@ func main() {
 	useKubernetesProxy := false
 	useAuthTokenMode := false
 	enableLiveClusters := false
+	serveRunningClusters := false
 	qps := historyserver.DefaultKubeAPIQPS
 	burst := historyserver.DefaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
@@ -40,6 +41,7 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
 	flag.BoolVar(&useAuthTokenMode, "use-auth-token-mode", false, "Enable Ray dashboard token authentication mode (requires x-ray-authorization header)")
 	flag.BoolVar(&enableLiveClusters, "enable-live-clusters", false, "Enable access to live clusters")
+	flag.BoolVar(&serveRunningClusters, "serve-running-clusters", false, "Serve sessions of still-running RayClusters from storage. The snapshot only refreshes when a client enters the cluster with ?reload=true.")
 	flag.Float64Var(&qps, "kube-api-qps", historyserver.DefaultKubeAPIQPS, "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "kube-api-burst", historyserver.DefaultKubeAPIBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
@@ -124,7 +126,7 @@ func main() {
 	)
 	defer serverCancel()
 
-	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
+	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client(), serveRunningClusters)
 	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheMaxBytes, sessionCacheTTL)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
