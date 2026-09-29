@@ -517,15 +517,13 @@ type WorkerGroupSpec struct {
 	// +kubebuilder:default:=1
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
-	// LabelMappings delivers labels of the node each worker pod is bound to as Ray node labels.
+	// LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.
 	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
-	// Only allowlisted node labels can be mapped. Every listed label must exist on the node or pod startup fails.
+	// Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.
 	// Empty means no labels are delivered.
 	// Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`).
-	// +listType=map
-	// +listMapKey=nodeLabel
 	// +optional
-	LabelMappings []NodeLabelMapping `json:"labelMappings,omitempty"`
+	LabelRefs []LabelRef `json:"labelRefs,omitempty"`
 }
 
 // ScaleStrategy controls scaling of a worker group.
@@ -557,15 +555,29 @@ type ScaleGate struct {
 	Type string `json:"type"`
 }
 
-// NodeLabelMapping maps one Kubernetes node label to a Ray node label.
-type NodeLabelMapping struct {
-	// NodeLabel is the node label key to read. Must be in the operator's allowedNodeLabels.
-	NodeLabel string `json:"nodeLabel"`
-	// MapTo is the Ray label key to deliver the value under. If empty, defaults to the value of nodeLabel.
-	// The keys set here should not conflict with the workerGroupSpec.Labels, since --labels overwrites --labels-file.
+// LabelRef maps a node label to a Ray node label.
+type LabelRef struct {
+	// Name is the Ray label key the value is delivered under. If empty, defaults to the node label key in fieldPath.
+	// Must not be a key in the same group's workerGroupSpecs[].labels.
 	// +kubebuilder:validation:MaxLength=317
 	// +optional
-	MapTo string `json:"mapTo,omitempty"`
+	Name string `json:"name,omitempty"`
+	// ValueFrom selects the node value to deliver.
+	ValueFrom LabelRefSource `json:"valueFrom"`
+}
+
+// LabelRefSource selects where a LabelRef value comes from.
+type LabelRefSource struct {
+	// NodeRef selects a field of the node the pod is bound to.
+	NodeRef NodeFieldRef `json:"nodeRef"`
+}
+
+// NodeFieldRef selects a field of the node in downward API syntax.
+type NodeFieldRef struct {
+	// FieldPath is the node field to read; only metadata.labels['<key>'] is supported in this version.
+	// The key must be in the operator's allowedNodeLabels.
+	// +kubebuilder:validation:MinLength=1
+	FieldPath string `json:"fieldPath"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.

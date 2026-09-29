@@ -5575,21 +5575,29 @@ spec:
                             idleTimeoutSeconds:
                               format: int32
                               type: integer
-                            labelMappings:
+                            labelRefs:
                               items:
                                 properties:
-                                  mapTo:
+                                  name:
                                     maxLength: 317
                                     type: string
-                                  nodeLabel:
-                                    type: string
+                                  valueFrom:
+                                    properties:
+                                      nodeRef:
+                                        properties:
+                                          fieldPath:
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - fieldPath
+                                        type: object
+                                    required:
+                                    - nodeRef
+                                    type: object
                                 required:
-                                - nodeLabel
+                                - valueFrom
                                 type: object
                               type: array
-                              x-kubernetes-list-map-keys:
-                              - nodeLabel
-                              x-kubernetes-list-type: map
                             labels:
                               additionalProperties:
                                 type: string

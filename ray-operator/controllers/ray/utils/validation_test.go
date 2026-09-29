@@ -4274,15 +4274,15 @@ func TestValidateCollectorOptions(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a group with labelMappings
+// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a group with labelRefs
 func TestValidateRayClusterSpec_Topology(t *testing.T) {
 	spec := createBasicRayClusterSpec()
 	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
-		GroupName:     "test",
-		MinReplicas:   new(int32(1)),
-		MaxReplicas:   new(int32(1)),
-		Template:      corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
-		LabelMappings: []rayv1.NodeLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}},
+		GroupName:   "test",
+		MinReplicas: new(int32(1)),
+		MaxReplicas: new(int32(1)),
+		Template:    corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
+		LabelRefs:   []rayv1.LabelRef{{ValueFrom: rayv1.LabelRefSource{NodeRef: rayv1.NodeFieldRef{FieldPath: "metadata.labels['topology.kubernetes.io/zone']"}}}},
 	}}
 
 	spec.RayVersion = ""
