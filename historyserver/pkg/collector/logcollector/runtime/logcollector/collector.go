@@ -50,6 +50,8 @@ type RayLogHandler struct {
 	// and prev-logs paths cannot upload one generation twice.
 	rotatedMu       sync.Mutex
 	rotatedUploaded map[string]struct{}
+	// activeLogs is where the periodic scan stopped reading each active log.
+	activeLogs map[string]tailState
 }
 
 func (r *RayLogHandler) GetRayNodeName() string {
