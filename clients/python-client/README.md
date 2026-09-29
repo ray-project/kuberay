@@ -81,7 +81,7 @@ Finally, the `job_api` can be used to submit RayJobs to a pre-existing RayCluste
 #### Submitting to Existing Cluster
 
 ```python
-from python_client import kuberay_job_api, kuberay_cluster_api, constants
+from kuberay_client import kuberay_job_api, kuberay_cluster_api, constants
 
 job_body = {
     "apiVersion": "ray.io/v1",
@@ -117,7 +117,7 @@ clients/
     ├── LICENSE
     ├── poetry.lock
     ├── pyproject.toml
-    ├── python_client
+    ├── kuberay_client
     │   ├── __init__.py
     │   ├── constants.py
     │   ├── kuberay_cluster_api.py

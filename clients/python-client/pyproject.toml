@@ -14,7 +14,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 packages = [
-  { include = "python_client" }
+  { include = "kuberay_client" }
 ]
 
 [tool.poetry.dependencies]

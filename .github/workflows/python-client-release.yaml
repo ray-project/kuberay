@@ -11,6 +11,12 @@ jobs:
     name: Build Python Client
     runs-on: ubuntu-latest
     steps:
+      - name: Error if not a tag
+        uses: actions/github-script@v9
+        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+        with:
+          script: core.setFailed('This action can only be run on tags')
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -18,6 +24,14 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.x"
+
+      - name: Set version from tag
+        working-directory: clients/python-client
+        run: |
+          python -m pip install packaging
+          VERSION=$(python -c 'import os; from packaging.version import Version; print(Version(os.environ["GITHUB_REF_NAME"]))')
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+          sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" kuberay_client/__init__.py
 
       - name: Build
         working-directory: clients/python-client
