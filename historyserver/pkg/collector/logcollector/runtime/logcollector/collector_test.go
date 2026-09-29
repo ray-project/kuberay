@@ -13,6 +13,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -463,4 +464,40 @@ func TestNodeIDRefresh(t *testing.T) {
 	g.Eventually(func() string {
 		return handler.GetRayNodeName()
 	}, 10*time.Second, 100*time.Millisecond).Should(Equal("22222222222222222222222222222222"), "GetRayNodeName should update dynamically when node ID changes")
+}
+
+// The session the collector starts into raises no fsnotify event, so its
+// marker must be written up front or the History Server never lists it.
+func TestWatchSessionLatestLoopsWritesMarkerForCurrentSession(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", root)
+	sessionDir := filepath.Join(root, testSessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.Symlink(sessionDir, filepath.Join(root, "session_latest")); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+	handler.ShutdownChan = make(chan struct{})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.WatchSessionLatestLoops()
+	}()
+	defer func() { close(handler.ShutdownChan); <-done }()
+
+	want := clustermetadata.EncodePath(utils.ClusterInfo{Name: "rc", Namespace: "default"}, "root", testSessionID)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, ok := writer.written()[want]; ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("session marker %s not written; wrote %v", want, writer.order())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

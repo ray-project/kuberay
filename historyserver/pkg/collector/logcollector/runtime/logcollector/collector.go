@@ -147,21 +147,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	// Extract the real session ID from the resolved path
 	sessionID := filepath.Base(sessionRealDir)
 	if r.IsHead {
-		metafile := clustermetadata.EncodePath(
-			utils.ClusterInfo{
-				Name:      r.RayClusterName,
-				Namespace: r.RayClusterNamespace,
-				OwnerKind: r.OwnerKind,
-				OwnerName: r.OwnerName},
-			r.RootDir,
-			sessionID,
-		)
-		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-			logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
-			return
-		}
-		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-			logrus.Errorf("Failed to write session file %s error %v", metafile, err)
+		if err := r.writeSessionMarker(sessionID); err != nil {
+			logrus.Errorf("Failed to write session marker for %s: %v", sessionID, err)
 			return
 		}
 	}
@@ -497,20 +484,8 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	sessionID := parts[0]
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.IsHead {
-		metafile := clustermetadata.EncodePath(
-			utils.ClusterInfo{
-				Name:      r.RayClusterName,
-				Namespace: r.RayClusterNamespace,
-				OwnerKind: r.OwnerKind,
-				OwnerName: r.OwnerName},
-			r.RootDir,
-			sessionID)
-		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-			logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
-			return
-		}
-		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-			logrus.Errorf("Failed to write session file %s error %v", metafile, err)
+		if err := r.writeSessionMarker(sessionID); err != nil {
+			logrus.Errorf("Failed to write session marker for %s: %v", sessionID, err)
 			return
 		}
 	}
@@ -773,6 +748,14 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 		return
 	}
 
+	// Write the marker for the session that already exists when the collector
+	// starts up; the watcher below only sees sessions created after it.
+	if sessionDir, err := filepath.EvalSymlinks(sessionLatestSymlink); err == nil {
+		if err := r.writeSessionMarker(filepath.Base(sessionDir)); err != nil {
+			logrus.Errorf("Failed to write session marker for %s: %v", sessionDir, err)
+		}
+	}
+
 	logrus.Infof("Started watching session_latest directory: %s", sessionLatestDir)
 	for {
 		select {
@@ -801,22 +784,8 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 
 			// Handle changes to the symlink
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
-				sessionID := filepath.Base(event.Name)
-				metafile := clustermetadata.EncodePath(
-					utils.ClusterInfo{
-						Name:      r.RayClusterName,
-						Namespace: r.RayClusterNamespace,
-						OwnerKind: r.OwnerKind,
-						OwnerName: r.OwnerName},
-					r.RootDir,
-					sessionID,
-				)
-				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-					logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
-					return
-				}
-				if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-					logrus.Errorf("Failed to write session file %s error %v", metafile, err)
+				if err := r.writeSessionMarker(filepath.Base(event.Name)); err != nil {
+					logrus.Errorf("Failed to write session marker for %s: %v", event.Name, err)
 					return
 				}
 			}
@@ -828,6 +797,27 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			logrus.Errorf("Session latest watcher error: %v", err)
 		}
 	}
+}
+
+// writeSessionMarker writes the empty object the History Server lists sessions
+// by (see clustermetadata.EncodePath).
+func (r *RayLogHandler) writeSessionMarker(sessionID string) error {
+	metafile := clustermetadata.EncodePath(
+		utils.ClusterInfo{
+			Name:      r.RayClusterName,
+			Namespace: r.RayClusterNamespace,
+			OwnerKind: r.OwnerKind,
+			OwnerName: r.OwnerName},
+		r.RootDir,
+		sessionID,
+	)
+	if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", path.Dir(metafile), err)
+	}
+	if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
+		return fmt.Errorf("failed to write session file %s: %w", metafile, err)
+	}
+	return nil
 }
 
 // Polls if the active session changes, when it does, it moves the old session logs to a prev-logs/ folder.
