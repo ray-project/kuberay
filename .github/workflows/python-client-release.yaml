@@ -26,7 +26,7 @@ jobs:
           python-version: "3.x"
 
       - name: Set version from tag
-        working-directory: clients/python-client
+        working-directory: clients/kuberay-client
         run: |
           python -m pip install packaging
           VERSION=$(python -c 'import os; from packaging.version import Version; print(Version(os.environ["GITHUB_REF_NAME"]))')
@@ -34,7 +34,7 @@ jobs:
           sed -i "s/^__version__ = .*/__version__ = \"${VERSION}\"/" kuberay_client/__init__.py
 
       - name: Build
-        working-directory: clients/python-client
+        working-directory: clients/kuberay-client
         run: |
           python -m pip install build
           python -m build
@@ -42,8 +42,8 @@ jobs:
       - name: Upload Artifact Python Client
         uses: actions/upload-artifact@v7
         with:
-          name: python_client_dist
-          path: clients/python-client/dist/
+          name: kuberay_client_dist
+          path: clients/kuberay-client/dist/
 
   publish-pypi:
     name: Publish Python Client to PyPI
@@ -58,7 +58,7 @@ jobs:
       - name: Download Artifact Python Client
         uses: actions/download-artifact@v8
         with:
-          name: python_client_dist
+          name: kuberay_client_dist
           path: dist/
 
       - name: Publish to PyPI
