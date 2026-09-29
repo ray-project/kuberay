@@ -149,7 +149,7 @@ from the directory `path/to/kuberay/clients/python-client`
 
 ### to uninstall the module run
 
-`pip uninstall python-client`
+`pip uninstall kuberay-client`
 
 ### For testing run
 

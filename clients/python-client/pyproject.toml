@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "python-client"
+name = "kuberay-client"
 version = "0.0.0-dev"
 description = "Python Client for Kuberay"
 license = "Apache-2.0"

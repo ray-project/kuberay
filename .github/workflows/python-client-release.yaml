@@ -1,0 +1,51 @@
+name: release-python-client
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Check that the tag matches the version in pyproject.toml
+        working-directory: clients/python-client
+        run: |
+          VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["poetry"]["version"])')
+          if [[ "${GITHUB_REF}" != "refs/tags/kuberay-client/v${VERSION}" ]]; then
+            echo "::error::Run this workflow on the tag kuberay-client/v${VERSION}"
+            exit 1
+          fi
+      - name: Build
+        working-directory: clients/python-client
+        run: |
+          python -m pip install build
+          python -m build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-client-dist
+          path: clients/python-client/dist/
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/kuberay-client
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-client-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
