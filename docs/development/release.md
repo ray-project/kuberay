@@ -27,6 +27,8 @@ The high-level steps for a new minor or patch release are:
 
 See the next section for more details on each step.
 
+The Python client is versioned and released separately. See [Python Client Release](#python-client-release).
+
 ## Steps
 
 *(Example commands use `v1.4.0` as the target release and `release-1.4` as the branch.)*
@@ -306,3 +308,32 @@ Announce the new release in the [kuberay Slack channel](https://ray.slack.com/ar
 ### Step 10: Update ray.io documentation
 
 Update all references to the KubeRay version in the ray.io documentation.
+
+---
+
+## Python Client Release
+
+The Python client (`clients/python-client`) is published to PyPI as [`kuberay-client`](https://pypi.org/project/kuberay-client/).
+It is versioned independently of KubeRay and released from the `master` branch when needed, separately from the steps above.
+
+### Step 1: Bump the Version
+
+Open a PR to `master` that updates `version` in `clients/python-client/pyproject.toml` (e.g., `0.1.0`), and merge it.
+PyPI does not allow re-uploading a version, so each release needs a new version.
+
+### Step 2: Publish to PyPI
+
+Trigger the [`release-python-client`](https://github.com/ray-project/kuberay/actions/workflows/python-client-release.yaml) workflow to build the package and publish it to PyPI.
+
+1. Navigate to the workflow page: [https://github.com/ray-project/kuberay/actions/workflows/python-client-release.yaml](https://github.com/ray-project/kuberay/actions/workflows/python-client-release.yaml)
+2. Click the **"Run workflow"** dropdown button.
+3. Set the parameters:
+    * **Use workflow from:** Select the **`master`** branch.
+4. Click **"Run workflow"**.
+5. The **Publish Python Client to PyPI** job waits for approval because it deploys to the `pypi` environment. A reviewer of that environment approves it with **"Review deployments"**.
+
+**Verification:** Once the workflow succeeds, check that the new version is listed on [PyPI](https://pypi.org/project/kuberay-client/#history), then install it in a clean virtual environment:
+
+```bash
+pip install kuberay-client==0.1.0
+```
