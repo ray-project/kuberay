@@ -310,7 +310,7 @@ func selectClusterHandler(s *ServerHandler) http.Handler {
 }
 
 func routerSelectCluster(s *ServerHandler) {
-	http.Handle("/select_cluster", selectClusterHandler(s))
+	http.Handle(SelectClusterPath, selectClusterHandler(s))
 }
 
 func routerLogical(s *ServerHandler) {

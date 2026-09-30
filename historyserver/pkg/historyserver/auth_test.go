@@ -143,15 +143,34 @@ func TestSafeNextRejectsOffOriginRedirects(t *testing.T) {
 	tests := map[string]string{
 		"/#/overview":           "/#/overview",
 		"/enter_cluster/ns/c/s": "/enter_cluster/ns/c/s",
-		"https://evil.test/x":   "/",
-		"//evil.test/x":         "/",
-		"javascript:alert(1)":   "/",
-		"":                      "/",
+		"https://evil.test/x":   SelectClusterPath,
+		"//evil.test/x":         SelectClusterPath,
+		"javascript:alert(1)":   SelectClusterPath,
+		"":                      SelectClusterPath,
+		// Browsers read a backslash as a path separator, so this is a
+		// protocol-relative URL to evil.test even though url.Parse leaves Host
+		// empty and the value looks like a same-origin path.
+		`/\evil.test/x`:     SelectClusterPath,
+		`/\evil.test`:       SelectClusterPath,
+		"/select_cluster":   SelectClusterPath,
+		"/clusters?a=b&c=d": "/clusters?a=b&c=d",
 	}
 	for in, want := range tests {
 		if got := safeNext(in); got != want {
 			t.Fatalf("safeNext(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestSafeNextDefaultIsServed pins the reason the default is the cluster
+// selector: "/" has no registered handler, so the old default sent the
+// paste-a-token flow and every re-login after /logout to a 404.
+func TestSafeNextDefaultIsServed(t *testing.T) {
+	if got := safeNext(""); got != SelectClusterPath {
+		t.Fatalf("safeNext(empty) = %q, want %q", got, SelectClusterPath)
+	}
+	if SelectClusterPath == "/" {
+		t.Fatal("SelectClusterPath must not be \"/\"; the History Server registers no handler for it")
 	}
 }
 

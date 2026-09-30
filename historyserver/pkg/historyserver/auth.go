@@ -33,6 +33,11 @@ const (
 	LoginPath  = "/login"
 	LogoutPath = "/logout"
 
+	// SelectClusterPath renders the cluster selector page. It is the default
+	// post-login landing page: the History Server registers no handler for "/",
+	// so a redirect to "/" answers 404.
+	SelectClusterPath = "/select_cluster"
+
 	// authCacheSize bounds the number of cached TokenReview results.
 	authCacheSize = 1024
 )
@@ -213,13 +218,25 @@ func (s *ServerHandler) authCookie(value string, maxAge int) *http.Cookie {
 
 // safeNext keeps the post-login redirect inside this origin, so a crafted link
 // cannot bounce a freshly authenticated browser to another host.
+//
+// An empty or rejected next lands on the cluster selector rather than "/". The
+// History Server registers no handler for "/" (routerRoot is disabled), so "/"
+// answers 404 -- which is what the documented paste-a-token flow and every
+// re-login after /logout used to hit, since /logout sends the browser to /login
+// without a next parameter.
 func safeNext(raw string) string {
 	if raw == "" {
-		return "/"
+		return SelectClusterPath
+	}
+	// Browsers treat a backslash as a path separator, so "/\evil.example" is a
+	// protocol-relative URL pointing at evil.example. url.Parse leaves Host empty
+	// for that input, so the backslash has to be rejected on the raw value.
+	if strings.Contains(raw, "\\") {
+		return SelectClusterPath
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.IsAbs() || u.Host != "" || !strings.HasPrefix(u.Path, "/") {
-		return "/"
+		return SelectClusterPath
 	}
 	return u.String()
 }

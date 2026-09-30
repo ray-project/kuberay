@@ -84,6 +84,17 @@ func main() {
 	if sessionCacheTTL < 0 {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
 	}
+	if enableAuth {
+		// The expirable LRU treats a non-positive TTL as "never expire", which
+		// would keep accepting a revoked token for the life of the process and
+		// silently defeat the point of --auth-cache-ttl. Fail at startup instead.
+		if authCacheTTL <= 0 {
+			logrus.Fatalf("--auth-cache-ttl must be > 0 when --enable-auth is set, got %s", authCacheTTL)
+		}
+		if authCookieMaxAge <= 0 {
+			logrus.Fatalf("--auth-cookie-max-age must be > 0 when --enable-auth is set, got %s", authCookieMaxAge)
+		}
+	}
 	// Auth-token mode only affects proxied live-cluster requests. Warn rather than failing so that
 	// deployments upgrading across the default flip do not CrashLoopBackOff.
 	if useAuthTokenMode && !enableLiveClusters {
