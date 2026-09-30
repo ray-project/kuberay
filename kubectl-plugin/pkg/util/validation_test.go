@@ -73,7 +73,7 @@ func TestValidateTPU(t *testing.T) {
 			tpu:          "1",
 			numOfHosts:   new(int32(0)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
-			wantErr:      "numOfHosts cannot be 0 when using TPU",
+			wantErr:      "--num-of-hosts cannot be 0 when using TPU",
 		},
 		"unsupported accelerator is invalid": {
 			tpu:          "1",
@@ -112,7 +112,7 @@ func TestValidateTPU(t *testing.T) {
 			tpu:          "4",
 			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v6e-slice", NodeSelectorGKETPUTopology: "4x4"},
-			wantErr:      "numOfHosts must be 4",
+			wantErr:      "--num-of-hosts must be 4",
 		},
 		"v6e 4x4 with 4 TPU and 4 hosts is valid": {
 			tpu:          "4",
@@ -139,6 +139,43 @@ func TestValidateTPU(t *testing.T) {
 			tpu:          "4",
 			numOfHosts:   new(int32(2)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "2x2x2"},
+		},
+		"v4 2x2x6 is not a supported small topology": {
+			tpu:          "4",
+			numOfHosts:   new(int32(6)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "2x2x6"},
+			wantErr:      `unsupported TPU topology "2x2x6"`,
+		},
+		"v4 16x16x16 superpod is valid": {
+			tpu:          "4",
+			numOfHosts:   new(int32(1024)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-podslice", NodeSelectorGKETPUTopology: "16x16x16"},
+		},
+		"v5e device 1x1 is valid": {
+			tpu:          "1",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-device", NodeSelectorGKETPUTopology: "1x1"},
+		},
+		"v5e device 2x4 is valid": {
+			tpu:          "8",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-device", NodeSelectorGKETPUTopology: "2x4"},
+		},
+		"v4 device 2x2 is valid": {
+			tpu:          "4",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v4-lite-device", NodeSelectorGKETPUTopology: "2x2"},
+		},
+		"tpu7x 1x1x1 single-chip is valid": {
+			tpu:          "1",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "1x1x1"},
+		},
+		"tpu7x 1x1x1 with 4 TPUs per host is invalid": {
+			tpu:          "4",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu7x", NodeSelectorGKETPUTopology: "1x1x1"},
+			wantErr:      "4 TPUs per host is not valid",
 		},
 		"tpu7x 4x4x4 is valid": {
 			tpu:          "4",
@@ -177,6 +214,11 @@ func TestValidateTPU(t *testing.T) {
 			numOfHosts:   new(int32(1)),
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v3-device", NodeSelectorGKETPUTopology: "2x2"},
 		},
+		"v3-device 2x4 is valid": {
+			tpu:          "8",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v3-device", NodeSelectorGKETPUTopology: "2x4"},
+		},
 		"nil numOfHosts defaults to 1 and is valid for single-host": {
 			tpu:          "1",
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
@@ -191,7 +233,7 @@ func TestValidateTPU(t *testing.T) {
 				return
 			}
 			require.ErrorContains(t, err, tt.wantErr)
-			if strings.Contains(tt.wantErr, "unsupported") || strings.Contains(tt.wantErr, "is not set") || strings.Contains(tt.wantErr, "numOfHosts must be") {
+			if strings.Contains(tt.wantErr, "unsupported") || strings.Contains(tt.wantErr, "is not set") || strings.Contains(tt.wantErr, "--num-of-hosts must be") {
 				require.ErrorContains(t, err, tpuDocURL)
 			}
 		})
@@ -240,6 +282,8 @@ func TestIsValid3DTopology(t *testing.T) {
 		"8x8x8":             {dims: []int{8, 8, 8}, want: true},
 		"1x1x1":             {dims: []int{1, 1, 1}, want: false},
 		"2x2x3":             {dims: []int{2, 2, 3}, want: false},
+		"2x2x6":             {dims: []int{2, 2, 6}, want: false},
+		"4x2x2 unordered":   {dims: []int{4, 2, 2}, want: false},
 		"8x4x4 unordered":   {dims: []int{8, 4, 4}, want: false},
 		"too large":         {dims: []int{16, 16, 32}, want: false},
 	}

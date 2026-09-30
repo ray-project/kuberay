@@ -1072,7 +1072,7 @@ func TestValidateConfig(t *testing.T) {
 			},
 			expectedErr: "is not set",
 		},
-		"TPU worker group missing node selectors with skip flg": {
+		"TPU worker group missing node selectors with skip flag": {
 			config: &RayClusterConfig{
 				Head: &Head{
 					CPU:    new("2"),

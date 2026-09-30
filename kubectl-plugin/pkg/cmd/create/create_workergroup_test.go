@@ -244,7 +244,7 @@ func TestCreateWorkerGroupValidate(t *testing.T) {
 					util.NodeSelectorGKETPUTopology:    "4x4",
 				},
 			},
-			expectError: "numOfHosts must be 4",
+			expectError: "--num-of-hosts must be 4",
 		},
 		"should not error when TPU validation is skipped": {
 			options: &CreateWorkerGroupOptions{

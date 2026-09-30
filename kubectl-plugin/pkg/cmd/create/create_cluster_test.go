@@ -377,7 +377,7 @@ func TestNewCreateClusterCommand(t *testing.T) {
 				"--worker-node-selectors", fmt.Sprintf("%s=tpu-v6e-slice,%s=4x4", util.NodeSelectorGKETPUAccelerator, util.NodeSelectorGKETPUTopology),
 				"--dry-run",
 			},
-			expectError: "numOfHosts must be 4",
+			expectError: "--num-of-hosts must be 4",
 		},
 		"should succeed when TPU validation is skipped": {
 			args: []string{

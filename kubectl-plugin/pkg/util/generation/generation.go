@@ -453,7 +453,7 @@ func ParseConfigFile(filePath string) (*RayClusterConfig, error) {
 }
 
 // ValidateConfig validates the RayClusterConfig object. If skipTPUValidation is true,
-// TPU accelerator/topology/numOfHosts checks are skipped.
+// TPU accelerator/topology/num-of-hosts checks are skipped.
 func ValidateConfig(config *RayClusterConfig, skipTPUValidation bool) error {
 	// Validate head resource quantities
 	resourceFields := map[string]*string{
