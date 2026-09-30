@@ -1,0 +1,94 @@
+# RustFS as the S3 backend for the History Server e2e tests (see #5339).
+# Keeps the names in minio.yaml so the Ray and History Server manifests need no changes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio-dev
+---
+# 1. Secrets for Login
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-creds
+  namespace: minio-dev
+type: Opaque
+stringData:
+  rootUser: minioadmin      # CHANGE THIS
+  rootPassword: minioadmin  # CHANGE THIS
+---
+# 2. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: minio-dev
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: rustfs/rustfs:1.0.0
+        env:
+        - name: RUSTFS_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootUser
+        - name: RUSTFS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootPassword
+        ports:
+        - containerPort: 9000 # API Port
+        - containerPort: 9001 # Console UI Port, served at /rustfs/console/
+        # Returns 200 only once storage and IAM are ready.
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 9000
+      # E2E tests exec rc (the RustFS S3 client) in this container to verify bucket contents.
+      - name: rc
+        image: rustfs/rc:v0.1.36
+        command: ["sleep", "infinity"]
+        env:
+        - name: ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootUser
+        - name: ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootPassword
+        # RC_HOST_<alias> defines the "local" alias with credentials for those commands.
+        - name: RC_HOST_local
+          value: "http://$(ROOT_USER):$(ROOT_PASSWORD)@localhost:9000"
+---
+# 3. Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+  namespace: minio-dev
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+  type: ClusterIP

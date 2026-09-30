@@ -1,0 +1,110 @@
+# Apache Ozone as the S3 backend for the History Server e2e tests (see #5339).
+# Keeps the names in minio.yaml so the Ray and History Server manifests need no changes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio-dev
+---
+# 1. Secrets for Login. Ozone in non-secure mode accepts any secret key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-creds
+  namespace: minio-dev
+type: Opaque
+stringData:
+  rootUser: minioadmin      # CHANGE THIS
+  rootPassword: minioadmin  # CHANGE THIS
+---
+# 2. Start script: SCM, OM, DataNode and S3 Gateway only.
+# The image's start-all-services.sh also starts Recon and HttpFS, which S3 does not need.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ozone-start
+  namespace: minio-dev
+data:
+  start.sh: |
+    #!/usr/bin/env bash
+    set -e
+    [ -f /data/metadata/scm/current/VERSION ] || ozone scm --init
+    ozone scm &
+    [ -f /data/metadata/om/current/VERSION ] || ozone om --init
+    ozone om &
+    ozone datanode &
+    ozone s3g &
+    trap 'kill $(jobs -p) 2>/dev/null; wait' TERM INT
+    wait -n
+---
+# 3. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: minio-dev
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: apache/ozone:2.1.2-all-in-one
+        # Replaces the image's CMD and keeps its entrypoint.
+        args: ["/opt/ozone-start/start.sh"]
+        env:
+        # Applies to each of the four JVMs.
+        - name: OZONE_HEAPSIZE_MAX
+          value: 128m
+        - name: OZONE_OPTS
+          value: "-XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+        ports:
+        - containerPort: 9878 # S3 Gateway Port
+        volumeMounts:
+        - name: ozone-start
+          mountPath: /opt/ozone-start
+      # E2E tests exec rc (the RustFS S3 client) in this container to verify bucket contents.
+      - name: rc
+        image: rustfs/rc:v0.1.36
+        command: ["sleep", "infinity"]
+        env:
+        - name: ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootUser
+        - name: ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootPassword
+        # RC_HOST_<alias> defines the "local" alias with credentials for those commands.
+        - name: RC_HOST_local
+          value: "http://$(ROOT_USER):$(ROOT_PASSWORD)@localhost:9878"
+      volumes:
+      - name: ozone-start
+        configMap:
+          name: ozone-start
+          defaultMode: 0755
+---
+# 4. Service. Maps MinIO's port to the S3 Gateway so clients keep using :9000.
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+  namespace: minio-dev
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9878
+  type: ClusterIP
