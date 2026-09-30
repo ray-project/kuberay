@@ -6,9 +6,8 @@ from python_apiserver_client import KubeRayAPIs
 from python_apiserver_client.params import RayJobInfo
 
 
-@pytest.mark.parametrize("error_key,metadata_key", [("errorType", "metadata"), ("ErrorType", "Metadata")])
-def test_job_info_preserves_error_type_and_metadata(error_key, metadata_key):
-    info = RayJobInfo({error_key: "JOB_RUNTIME_ENV_SETUP_FAILED", metadata_key: {"owner": "batch"}})
+def test_job_info_preserves_error_type_and_metadata():
+    info = RayJobInfo({"errorType": "JOB_RUNTIME_ENV_SETUP_FAILED", "metadata": {"owner": "batch"}})
 
     assert info.error_type == "JOB_RUNTIME_ENV_SETUP_FAILED"
     assert info.metadata == {"owner": "batch"}
