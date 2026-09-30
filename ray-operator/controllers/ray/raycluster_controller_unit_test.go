@@ -3547,7 +3547,7 @@ func Test_ReconcileIdleTerminationOptionsSuspendPolicy(t *testing.T) {
 
 	enableIdleSuspendPolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
+		c.Spec.RayVersion = "2.60.0"
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
@@ -3606,7 +3606,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy(t *testing.T) {
 
 	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
+		c.Spec.RayVersion = "2.60.0"
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}
@@ -3696,7 +3696,7 @@ func Test_ReconcileIdleTerminationOptionsDeletePolicy_WithGCSFaultTolerance(t *t
 
 	enableIdleDeletePolicy := func(c *rayv1.RayCluster) {
 		c.Spec.EnableInTreeAutoscaling = new(true)
-		c.Spec.RayVersion = "2.58.0" // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
+		c.Spec.RayVersion = "2.60.0"
 		c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 			Version: ptr.To(rayv1.AutoscalerVersionV2),
 		}

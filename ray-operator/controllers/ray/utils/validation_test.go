@@ -1101,7 +1101,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: new(true),
-			RayVersion:              "2.58.0",
+			RayVersion:              "2.60.0",
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},
@@ -1201,7 +1201,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 		"Invalid: idleTerminationOptions.timeoutSeconds with Ray version below minimum": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.RayVersion = "2.57.0"
+				s.RayVersion = "2.59.0"
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				}
@@ -1210,7 +1210,7 @@ func TestValidateRayClusterSpec_IdleTerminationOptions(t *testing.T) {
 				}
 				return s
 			}(),
-			expectedErr: "idleTerminationOptions requires Ray version 2.58.0 or later, got 2.57.0",
+			expectedErr: "idleTerminationOptions requires Ray version 2.60.0 or later, got 2.59.0",
 		},
 		"Valid: idleTerminationOptions.policy=Delete": {
 			spec: func() rayv1.RayClusterSpec {

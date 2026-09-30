@@ -664,8 +664,8 @@ const (
 	// Idle timeout should exceeds the durantion of Ready + job submit + ray.init() for the driver case.
 	idleTimeoutSeconds      int32 = 60
 	gcsFTIdleTimeoutSeconds int32 = 90
-	// TODO(justinyeh1995): swap for a real Ray release once one contains
-	// https://github.com/ray-project/ray/pull/65763
+	// TODO(justinyeh1995): change it to rayproject/ray:2.60.0 once released (includes
+	// https://github.com/ray-project/ray/pull/65763)
 	idleTerminationRayImage = "rayproject/ray:nightly.260926.5b14d6"
 )
 
@@ -801,7 +801,7 @@ func newIdleTerminationSpec(test Test, policy rayv1.IdleTerminationPolicy, timeo
 
 	return rayv1ac.RayClusterSpec().
 		WithEnableInTreeAutoscaling(true).
-		WithRayVersion("2.58.0"). // TODO(justinyeh1995): bump it once a Ray release includes https://github.com/ray-project/ray/pull/65763
+		WithRayVersion("2.60.0").
 		WithIdleTerminationOptions(rayv1ac.IdleTerminationOptions().
 			WithTimeoutSeconds(timeoutSeconds).
 			WithPolicy(policy)).
