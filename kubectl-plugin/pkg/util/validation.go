@@ -44,6 +44,9 @@ func ValidateTPU(tpu *string, numOfHosts *int32, nodeSelector map[string]string)
 	}
 	tpuQuantity := resource.MustParse(*tpu)
 	tpuPerHost := tpuQuantity.Value()
+	if tpuQuantity.Cmp(*resource.NewQuantity(tpuPerHost, resource.DecimalSI)) != 0 {
+		return fmt.Errorf("--worker-tpu must be a whole integer")
+	}
 	if tpuPerHost <= 0 {
 		return fmt.Errorf("--worker-tpu must be greater than 0")
 	}

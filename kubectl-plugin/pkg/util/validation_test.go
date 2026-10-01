@@ -75,6 +75,18 @@ func TestValidateTPU(t *testing.T) {
 			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
 			wantErr:      "--num-of-hosts cannot be 0 when using TPU",
 		},
+		"fractional millivalue TPU is invalid": {
+			tpu:          "500m",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
+			wantErr:      "--worker-tpu must be a whole integer",
+		},
+		"decimal TPU is invalid": {
+			tpu:          "1.5",
+			numOfHosts:   new(int32(1)),
+			nodeSelector: map[string]string{NodeSelectorGKETPUAccelerator: "tpu-v5-lite-podslice", NodeSelectorGKETPUTopology: "1x1"},
+			wantErr:      "--worker-tpu must be a whole integer",
+		},
 		"unsupported accelerator is invalid": {
 			tpu:          "1",
 			numOfHosts:   new(int32(1)),
