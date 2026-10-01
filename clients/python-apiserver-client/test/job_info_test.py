@@ -22,7 +22,9 @@ def test_job_info_without_optional_error_and_metadata():
     assert info.metadata is None
 
 
-@pytest.mark.parametrize("list_jobs", [False, True])
+@pytest.mark.parametrize(
+    "list_jobs", [False, True], ids=["get_job_info", "list_job_info"]
+)
 def test_job_api_preserves_error_type_and_metadata(monkeypatch, list_jobs):
     payload = {
         "submissionId": "job-1",
