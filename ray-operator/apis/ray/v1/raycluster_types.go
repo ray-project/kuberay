@@ -23,7 +23,7 @@ type RayClusterSpec struct {
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
 	// IdleSuspend indicates whether a RayCluster should be suspended due to idleness.
-	// A suspended RayCluster will have head pods and worker pods deleted.
+	// An idle-suspended RayCluster will have head pods and worker pods deleted.
 	// +optional
 	IdleSuspend *bool `json:"idleSuspend,omitempty"`
 	// IdleTerminationOptions specifies optional configuration for terminating an idle RayCluster.
@@ -596,6 +596,7 @@ type IdleTerminationOptions struct {
 
 	// Policy is the action taken once the RayCluster has been idle for TimeoutSeconds.
 	// +kubebuilder:default=Suspend
+	// +optional
 	Policy *IdleTerminationPolicy `json:"policy,omitempty"`
 }
 

@@ -662,7 +662,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 
 const (
 	// Idle timeout should exceeds the durantion of Ready + job submit + ray.init() for the driver case.
-	idleTimeoutSeconds      int32 = 60
+	idleTimeoutSeconds      int32 = 30
 	gcsFTIdleTimeoutSeconds int32 = 90
 	// TODO(justinyeh1995): change it to rayproject/ray:2.60.0 once released (includes
 	// https://github.com/ray-project/ray/pull/65763)
@@ -685,7 +685,11 @@ func TestRayClusterIdleTerminationSuspendPolicy(t *testing.T) {
 			namespace := test.NewTestNamespace()
 
 			spec := newIdleTerminationSpec(test, rayv1.IdleTerminationPolicySuspend, idleTimeoutSeconds)
-			rayCluster := applyIdleTerminationRayCluster(test, g, namespace.Name, "raycluster-idle-suspend", spec)
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).
+				Apply(test.Ctx(), rayv1ac.RayCluster("raycluster-idle-suspend", namespace.Name).WithSpec(spec), TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
 			LogWithTimestamp(test.T(), "RayCluster %s/%s is ready", rayCluster.Namespace, rayCluster.Name)
@@ -709,7 +713,7 @@ func TestRayClusterIdleTerminationSuspendPolicy(t *testing.T) {
 					return strings.ToLower(out.String())
 				}
 				g.Eventually(jobStatus, TestTimeoutShort).Should(gomega.ContainSubstring("running"))
-				LogWithTimestamp(test.T(), "Driver job hold-driver is RUNNING; RayCluster %s/%s should not be idle-suspended while it is attached", rayCluster.Namespace, rayCluster.Name)
+				LogWithTimestamp(test.T(), "Ray job hold-driver is RUNNING; RayCluster %s/%s should not be idle-suspended while it is attached", rayCluster.Namespace, rayCluster.Name)
 
 				isIdleSuspend := func(c *rayv1.RayCluster) bool { return c.Spec.IdleSuspend != nil && *c.Spec.IdleSuspend }
 				g.Consistently(RayCluster(test, rayCluster.Namespace, rayCluster.Name),
@@ -717,7 +721,7 @@ func TestRayClusterIdleTerminationSuspendPolicy(t *testing.T) {
 					Should(gomega.WithTransform(isIdleSuspend, gomega.BeFalse()))
 
 				g.Eventually(jobStatus, TestTimeoutMedium).Should(gomega.ContainSubstring("succeeded"))
-				LogWithTimestamp(test.T(), "Driver job hold-driver SUCCEEDED; waiting for RayCluster %s/%s to be idle-suspended", rayCluster.Namespace, rayCluster.Name)
+				LogWithTimestamp(test.T(), "Ray job hold-driver SUCCEEDED; waiting for RayCluster %s/%s to be idle-suspended", rayCluster.Namespace, rayCluster.Name)
 			}
 
 			// The autoscaler flips spec.idleSuspend; the operator then walks
@@ -741,8 +745,11 @@ func TestRayClusterIdleTerminationDeletePolicy(t *testing.T) {
 	g := gomega.NewWithT(t)
 	namespace := test.NewTestNamespace()
 
-	rayCluster := applyIdleTerminationRayCluster(test, g, namespace.Name, "raycluster-idle-delete",
-		newIdleTerminationSpec(test, rayv1.IdleTerminationPolicyDelete, idleTimeoutSeconds))
+	spec := newIdleTerminationSpec(test, rayv1.IdleTerminationPolicyDelete, idleTimeoutSeconds)
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).
+		Apply(test.Ctx(), rayv1ac.RayCluster("raycluster-idle-delete", namespace.Name).WithSpec(spec), TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be deleted", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(func(gg gomega.Gomega) {
@@ -769,7 +776,11 @@ func TestRayClusterIdleTerminationDeletePolicyWithGCSFaultTolerance(t *testing.T
 		WithGcsFaultToleranceOptions(rayv1ac.GcsFaultToleranceOptions().
 			WithRedisAddress(RedisAddress).
 			WithRedisPassword(rayv1ac.RedisCredential().WithValue(RedisPassword)))
-	rayCluster := applyIdleTerminationRayCluster(test, g, namespace.Name, "raycluster-idle-delete-gcsft", spec)
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).
+		Apply(test.Ctx(), rayv1ac.RayCluster("raycluster-idle-delete-gcsft", namespace.Name).WithSpec(spec), TestApplyOptions)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 		Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
@@ -815,16 +826,6 @@ func newIdleTerminationSpec(test Test, policy rayv1.IdleTerminationPolicy, timeo
 			WithMaxReplicas(1).
 			WithRayStartParams(map[string]string{"num-cpus": "1"}).
 			WithTemplate(workerTemplate))
-}
-
-// applyIdleTerminationRayCluster creates the RayCluster and returns it.
-func applyIdleTerminationRayCluster(test Test, g *gomega.WithT, namespace, name string, spec *rayv1ac.RayClusterSpecApplyConfiguration) *rayv1.RayCluster {
-	test.T().Helper()
-	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace).
-		Apply(test.Ctx(), rayv1ac.RayCluster(name, namespace).WithSpec(spec), TestApplyOptions)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-	return rayCluster
 }
 
 // eventReasons returns the Reason of every Event whose subject is regardingName in namespace.
