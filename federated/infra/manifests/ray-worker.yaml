@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ray-worker
+  labels:
+    app: ray
+    component: worker
+spec:
+  # Wait for GCS to be ready before starting the worker.
+  # This is the same pattern KubeRay uses (wait-gcs-ready init container).
+  initContainers:
+  - name: wait-gcs-ready
+    image: rayproject/ray:2.52.0
+    command: ["/bin/bash", "-c"]
+    args:
+    - |
+      SECONDS=0
+      while true; do
+        if ray health-check --address $RAY_HEAD_ADDRESS > /dev/null 2>&1; then
+          echo "GCS is ready."
+          break
+        fi
+        echo "$SECONDS seconds elapsed: Waiting for GCS to be ready."
+        sleep 5
+      done
+    env:
+    - name: RAY_HEAD_ADDRESS
+      value: "PLACEHOLDER:6379"
+  containers:
+  - name: ray-worker
+    image: rayproject/ray:2.52.0
+    command: ["/bin/bash", "-lc"]
+    args:
+    - |
+      ulimit -n 65536; \
+      ray start \
+        --address=$RAY_HEAD_ADDRESS \
+        --dashboard-agent-listen-port=52365 \
+        --node-ip-address=$POD_IP \
+        --num-cpus=1 \
+        --block
+    env:
+    - name: RAY_HEAD_ADDRESS
+      value: "PLACEHOLDER:6379"
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+    volumeMounts:
+    - name: dshm
+      mountPath: /dev/shm
+  volumes:
+  - name: dshm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 2Gi

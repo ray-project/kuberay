@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: echo-primary
+  labels:
+    app: echo
+    cluster: frc-primary
+spec:
+  containers:
+  - name: echo
+    image: hashicorp/http-echo
+    args: ["-text=hello-from-primary"]
+    ports:
+    - containerPort: 5678
