@@ -13,20 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestAddMetadataToChildResourceSetsDefaultSchedulerName(t *testing.T) {
@@ -592,7 +591,7 @@ func TestDoBatchSchedulingOnSubmissionIsIdempotentWhenUnchanged(t *testing.T) {
 	assert.Equal(t, podGroupAfterFirst.ResourceVersion, podGroupAfterSecond.ResourceVersion, "PodGroup should not be recreated on an unchanged reconcile")
 }
 
-func TestSyncSchedulingResourcesRemovesProtectionFinalizerWhenPodGroupBeingDeleted(t *testing.T) {
+func TestSyncSchedulingResourcesLeavesTerminatingPodGroupToKubernetes(t *testing.T) {
 	ctx := context.Background()
 	rayCluster := newTestRayCluster(newWorkerGroup())
 
@@ -606,27 +605,35 @@ func TestSyncSchedulingResourcesRemovesProtectionFinalizerWhenPodGroupBeingDelet
 			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
 		}},
 	}
-	// The PodGroup is mid-deletion with the protection finalizer still present.
+	// The PodGroup is mid-deletion (e.g. deleted out of band) with a stale minCount.
 	deletionTime := metav1.NewTime(time.Now())
-	existingPodGroup := &schedulingv1alpha3.PodGroup{ObjectMeta: metav1.ObjectMeta{
-		Name:              "test-cluster-cluster",
-		Namespace:         rayCluster.Namespace,
-		Labels:            map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-		Finalizers:        []string{podGroupProtectionFinalizer, "example.com/retain"},
-		DeletionTimestamp: &deletionTime,
-	}}
+	existingPodGroup := &schedulingv1alpha3.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-cluster-cluster",
+			Namespace:         rayCluster.Namespace,
+			Labels:            map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
+			Finalizers:        []string{podGroupProtectionFinalizer, "example.com/retain"},
+			DeletionTimestamp: &deletionTime,
+		},
+		Spec: schedulingv1alpha3.PodGroupSpec{
+			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{
+				Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: desiredPolicy.Gang.MinCount - 1},
+			},
+		},
+	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
-	err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "is being deleted")
+	// Sync neither blocks on nor strips the finalizer from a terminating PodGroup.
+	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
-	assert.NotContains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
+	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
 	assert.NotNil(t, podGroup.DeletionTimestamp)
+	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
+	assert.Equal(t, desiredPolicy.Gang.MinCount, podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 }
 
 func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
@@ -661,79 +668,29 @@ func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(getErr))
 }
 
-func TestResolveGangPriorityGateDisabled(t *testing.T) {
-	// With the gate off the pods' PriorityClass is not reflected onto the gang.
-	scheduler, _ := newTestScheduler(t, newPriorityClass("never-pc", corev1.PreemptNever))
+func TestBuildSchedulingResourcesCopiesPriorityFields(t *testing.T) {
+	scheduler, _ := newTestScheduler(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
 	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
 
-	name, policy, err := scheduler.resolveGangPriority(context.Background(), rayCluster)
-	require.NoError(t, err)
-	assert.Empty(t, name)
-	assert.Nil(t, policy)
-}
-
-func TestResolveGangPriority(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.KubernetesWASPodGroupPreemptionPolicy, true)
-
-	tests := []struct {
-		name              string
-		priorityClassName string
-		priorityClass     *schedulingv1.PriorityClass
-		wantName          string
-		wantPolicy        *schedulingv1alpha3.PreemptionPolicy
-	}{
-		{name: "no priority class on pods", priorityClassName: "", wantName: "", wantPolicy: nil},
-		{name: "never class", priorityClassName: "never-pc", priorityClass: newPriorityClass("never-pc", corev1.PreemptNever), wantName: "never-pc", wantPolicy: new(schedulingv1alpha3.PreemptNever)},
-		{name: "preempt-lower class", priorityClassName: "low-pc", priorityClass: newPriorityClass("low-pc", corev1.PreemptLowerPriority), wantName: "low-pc", wantPolicy: new(schedulingv1alpha3.PreemptLowerPriority)},
-		{name: "class without preemptionPolicy defaults to PreemptLowerPriority", priorityClassName: "bare-pc", priorityClass: &schedulingv1.PriorityClass{ObjectMeta: metav1.ObjectMeta{Name: "bare-pc"}, Value: 1000}, wantName: "bare-pc", wantPolicy: new(schedulingv1alpha3.PreemptLowerPriority)},
-		{name: "missing class is ignored", priorityClassName: "ghost-pc", priorityClass: nil, wantName: "", wantPolicy: nil},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var objects []client.Object
-			if tt.priorityClass != nil {
-				objects = append(objects, tt.priorityClass)
-			}
-			scheduler, _ := newTestScheduler(t, objects...)
-			rayCluster := newTestRayCluster(newWorkerGroup())
-			rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = tt.priorityClassName
-
-			name, policy, err := scheduler.resolveGangPriority(context.Background(), rayCluster)
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantName, name)
-			if tt.wantPolicy == nil {
-				assert.Nil(t, policy)
-				return
-			}
-			require.NotNil(t, policy)
-			assert.Equal(t, *tt.wantPolicy, *policy)
-		})
-	}
-}
-
-func TestBuildSchedulingResourcesReflectsPriorityClass(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.KubernetesWASPodGroupPreemptionPolicy, true)
-	scheduler, _ := newTestScheduler(t, newPriorityClass("never-pc", corev1.PreemptNever))
-	rayCluster := newTestRayCluster(newWorkerGroup())
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
-
-	workload, podGroup, err := scheduler.buildSchedulingResources(context.Background(), rayCluster)
+	workload, podGroup, err := scheduler.buildSchedulingResources(rayCluster)
 	require.NoError(t, err)
 	require.Len(t, workload.Spec.PodGroupTemplates, 1)
 	assert.Equal(t, "never-pc", workload.Spec.PodGroupTemplates[0].PriorityClassName)
-	require.NotNil(t, workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
+	assert.Nil(t, workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
 	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
-	require.NotNil(t, podGroup.Spec.PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *podGroup.Spec.PreemptionPolicy)
+	assert.Nil(t, podGroup.Spec.PreemptionPolicy)
+
+	rayCluster.Spec.HeadGroupSpec.Template.Spec.PreemptionPolicy = ptr.To(corev1.PreemptNever)
+	workload, podGroup, err = scheduler.buildSchedulingResources(rayCluster)
+	require.NoError(t, err)
+	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
+	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), podGroup.Spec.PreemptionPolicy)
 }
 
 // TestSyncPreservesPriorityFieldsOnRescale locks in that a rescale patches only gang.minCount and
 // leaves the immutable priorityClassName/preemptionPolicy untouched.
 func TestSyncPreservesPriorityFieldsOnRescale(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.KubernetesWASPodGroupPreemptionPolicy, true)
 	ctx := context.Background()
 	rayCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 5)) // desired MinCount 6
 	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
@@ -757,7 +714,7 @@ func TestSyncPreservesPriorityFieldsOnRescale(t *testing.T) {
 		},
 	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
-	scheduler, fakeClient := newTestScheduler(t, newPriorityClass("never-pc", corev1.PreemptNever), existingWorkload, existingPodGroup)
+	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
@@ -776,14 +733,6 @@ func TestSyncPreservesPriorityFieldsOnRescale(t *testing.T) {
 	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
 	require.NotNil(t, podGroup.Spec.PreemptionPolicy)
 	assert.Equal(t, schedulingv1alpha3.PreemptNever, *podGroup.Spec.PreemptionPolicy)
-}
-
-func newPriorityClass(name string, policy corev1.PreemptionPolicy) *schedulingv1.PriorityClass {
-	return &schedulingv1.PriorityClass{
-		ObjectMeta:       metav1.ObjectMeta{Name: name},
-		Value:            1000,
-		PreemptionPolicy: &policy,
-	}
 }
 
 func TestSchedulingV1alpha3Available(t *testing.T) {
@@ -884,7 +833,6 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))
 	require.NoError(t, rayv1.AddToScheme(scheme))
-	require.NoError(t, schedulingv1.AddToScheme(scheme))
 	require.NoError(t, schedulingv1alpha3.AddToScheme(scheme))
 	return scheme
 }

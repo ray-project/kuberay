@@ -120,17 +120,6 @@ const (
 	// Enables delivery of Kubernetes Node labels to Ray node labels (workerGroupSpecs[].labelRefs).
 	// Requires ENABLE_WEBHOOKS=true and Ray 2.45.0 or later.
 	NodeLabelDelivery featuregate.Feature = "NodeLabelDelivery"
-
-	// owner: @marosset
-	// rep: N/A
-	// alpha: v1.8
-	//
-	// Enables the gang preemption policy for the Kubernetes WAS scheduler: the RayCluster pods'
-	// PriorityClass is reflected onto the whole-cluster PodGroup (priorityClassName + preemptionPolicy)
-	// so the scheduling.k8s.io priority admission controller populates the PodGroup's preemptionPolicy.
-	// Requires the KubernetesWAS gate, Kubernetes v1.37+ serving scheduling.k8s.io/v1alpha3, AND the
-	// clusters PodGroupPreemptionPolicy feature gate enabled.
-	KubernetesWASPodGroupPreemptionPolicy featuregate.Feature = "KubernetesWASPodGroupPreemptionPolicy"
 )
 
 func init() {
@@ -138,21 +127,20 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:            {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:                  {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:                  {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade:          {Default: true, PreRelease: featuregate.Beta},
-	RayCronJob:                            {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:               {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterNetworkPolicy:               {Default: false, PreRelease: featuregate.Alpha},
-	GCSFaultToleranceEmbeddedStorage:      {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterMTLS:                        {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterHistoryServer:               {Default: false, PreRelease: featuregate.Alpha},
-	KubernetesWAS:                         {Default: false, PreRelease: featuregate.Alpha},
-	GCSFaultToleranceActivePassiveHead:    {Default: false, PreRelease: featuregate.Alpha},
-	RayNodeEventForwarder:                 {Default: false, PreRelease: featuregate.Alpha},
-	NodeLabelDelivery:                     {Default: false, PreRelease: featuregate.Alpha},
-	KubernetesWASPodGroupPreemptionPolicy: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:         {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:               {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:               {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:       {Default: true, PreRelease: featuregate.Beta},
+	RayCronJob:                         {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:            {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkPolicy:            {Default: false, PreRelease: featuregate.Alpha},
+	GCSFaultToleranceEmbeddedStorage:   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:                     {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterHistoryServer:            {Default: false, PreRelease: featuregate.Alpha},
+	KubernetesWAS:                      {Default: false, PreRelease: featuregate.Alpha},
+	GCSFaultToleranceActivePassiveHead: {Default: false, PreRelease: featuregate.Alpha},
+	RayNodeEventForwarder:              {Default: false, PreRelease: featuregate.Alpha},
+	NodeLabelDelivery:                  {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
