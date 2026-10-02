@@ -1107,11 +1107,9 @@ func TestKubernetesWAS_MultiHostWorkerGroup(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 }
 
-// TestKubernetesWAS_PreemptionPolicyFromPriorityClass verifies that a Never PriorityClass on the
-// Ray pods is reflected onto the whole-cluster gang: KubeRay stamps priorityClassName on the
-// Workload template + PodGroup, and the scheduling.k8s.io priority admission controller populates
-// their preemptionPolicy to Never. Requires the operator's KubernetesWASPodGroupPreemptionPolicy
-// gate and the Kubernetes cluster PodGroupPreemptionPolicy feature gate (set in the kind config).
+// TestKubernetesWAS_PreemptionPolicyFromPriorityClass verifies that KubeRay copies the Ray pods'
+// PriorityClass onto the Workload template and PodGroup, and that the priority admission controller
+// then sets the PodGroup's preemptionPolicy. Requires the Kubernetes PodGroupPreemptionPolicy gate.
 func TestKubernetesWAS_PreemptionPolicyFromPriorityClass(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
@@ -1133,10 +1131,11 @@ func TestKubernetesWAS_PreemptionPolicyFromPriorityClass(t *testing.T) {
 	})
 
 	// All pods in the gang must share the PriorityClass (the scheduler requires a uniform priority).
+	// A Never class also needs an explicit preemptionPolicy, which KubeRay copies to the PodGroup.
 	headTemplate := HeadPodTemplateApplyConfiguration()
-	headTemplate.Spec.WithPriorityClassName(priorityClassName)
+	headTemplate.Spec.WithPriorityClassName(priorityClassName).WithPreemptionPolicy(preemptNever)
 	workerTemplate := WorkerPodTemplateApplyConfiguration()
-	workerTemplate.Spec.WithPriorityClassName(priorityClassName)
+	workerTemplate.Spec.WithPriorityClassName(priorityClassName).WithPreemptionPolicy(preemptNever)
 
 	rayClusterAC := newWASRayClusterAC("preempt-never", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
@@ -1164,8 +1163,6 @@ func TestKubernetesWAS_PreemptionPolicyFromPriorityClass(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
 	g.Expect(workload.Spec.PodGroupTemplates[0].PriorityClassName).To(Equal(priorityClassName))
-	g.Expect(workload.Spec.PodGroupTemplates[0].PreemptionPolicy).NotTo(BeNil(), "Workload template preemptionPolicy should be set")
-	g.Expect(*workload.Spec.PodGroupTemplates[0].PreemptionPolicy).To(Equal(schedulingv1alpha3.PreemptNever))
 
 	clusterPodGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
 	g.Expect(err).NotTo(HaveOccurred())

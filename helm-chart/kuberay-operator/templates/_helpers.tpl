@@ -434,14 +434,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - scheduling.k8s.io
-  resources:
-  - priorityclasses
-  verbs:
-  - get
-  - list
-  - watch
 {{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:

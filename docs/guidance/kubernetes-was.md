@@ -100,14 +100,13 @@ kubectl get pods -n <namespace> -l ray.io/cluster=<raycluster-name> \
 By default a scheduled gang can preempt lower-priority pods to make room (`PreemptLowerPriority`). You can also mark a
 gang as non-preempting (`Never`) so it waits for capacity rather than evicting other workloads.
 
-This is controlled through a Kubernetes `PriorityClass`: the priority admission
-controller derives a PodGroup's `preemptionPolicy` from its `priorityClassName`. To use it:
+This is controlled through a Kubernetes `PriorityClass`: KubeRay copies the head pod's `priorityClassName` onto the
+Workload and PodGroup, and the priority admission controller derives the PodGroup's `priority` and `preemptionPolicy`
+from it. To use it:
 
-1. Enable the KubeRay operator feature gate `KubernetesWASPodGroupPreemptionPolicy` (alpha, disabled by default), in
-   addition to `KubernetesWAS`.
-2. Enable the Kubernetes cluster `PodGroupPreemptionPolicy` feature gate on the kube-apiserver and kube-scheduler
+1. Enable the Kubernetes `PodGroupPreemptionPolicy` feature gate on the kube-apiserver and kube-scheduler
    (Kubernetes 1.37+).
-3. Create a `PriorityClass` with the desired policy and assign it to **all** Ray pods (the head and every worker group):
+2. Create a `PriorityClass` with the desired policy and assign it to **all** Ray pods (the head and every worker group):
 
    ```yaml
    apiVersion: scheduling.k8s.io/v1
@@ -124,12 +123,9 @@ controller derives a PodGroup's `preemptionPolicy` from its `priorityClassName`.
      priorityClassName: ray-no-preemption
    ```
 
-KubeRay then reflects that `priorityClassName` onto the whole-cluster Workload and PodGroup, and the priority admission
-controller populates the PodGroup's `preemptionPolicy` from the class. All pods in the gang must use the **same**
-`PriorityClass` — the Kubernetes scheduler requires a uniform priority across a PodGroup.
-
-If either feature gate is off, the `preemptionPolicy` field is left unset and the gang uses the default
-`PreemptLowerPriority` (the operator logs a one-time startup warning when its gate is on so the requirement is visible).
+All pods in the gang must use the **same** `PriorityClass` — the Kubernetes scheduler requires every pod in a PodGroup
+to have the PodGroup's priority. If the Kubernetes `PodGroupPreemptionPolicy` gate is off, the PodGroup's
+`preemptionPolicy` is left unset and the gang uses the default `PreemptLowerPriority`.
 
 ## Limitations
 
@@ -138,6 +134,8 @@ If either feature gate is off, the `preemptionPolicy` field is left unset and th
   the cluster cannot be scheduled in full, none of its pods are scheduled.
 - `spec.schedulingGroup` on pods is immutable. If you add the opt-in label to an already-running RayCluster, existing
   pods will not get a scheduling group until they are recreated.
+- Only the gang size is updated in place. A PriorityClass is fixed when the Workload and PodGroup are created; to change
+  it, recreate the RayCluster.
 
 ## Troubleshooting
 
@@ -160,8 +158,7 @@ to an already-running RayCluster, existing pods are not affected — they pick u
 
 ### The gang's preemption policy is not applied
 
-If a gang still preempts (or the PodGroup's `preemptionPolicy` is unset) when you expected `Never`, check that: the
-operator `KubernetesWASPodGroupPreemptionPolicy` gate is on; the Kubernetes cluster `PodGroupPreemptionPolicy` gate is enabled
-on the kube-apiserver and kube-scheduler; and **every** Ray pod (head and all worker groups) references the same
-`PriorityClass`. If the pods carry different priorities the scheduler rejects the gang, since a PodGroup requires a
-uniform priority.
+If a gang still preempts (or the PodGroup's `preemptionPolicy` is unset) when you expected `Never`, check that the
+Kubernetes `PodGroupPreemptionPolicy` gate is enabled on the kube-apiserver and kube-scheduler, and that **every** Ray
+pod (head and all worker groups) references the same `PriorityClass`. If the pods carry different priorities the
+scheduler rejects the gang, since a PodGroup requires a uniform priority.
