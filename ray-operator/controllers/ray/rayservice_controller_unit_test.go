@@ -1491,6 +1491,11 @@ func TestCreateGateway(t *testing.T) {
 		Client: fakeClient,
 	}
 
+	// Build a RayService that adopts an existing HTTPRoute instead of letting the operator manage a
+	// Gateway. createGateway must return (nil, nil) in this case (no GatewayClassName set).
+	referencingRayService := makeIncrementalUpgradeRayService(true, "", new(int32(50)), new(int32(10)), new(int32(80)), &metav1.Time{Time: time.Now()})
+	referencingRayService.Spec.UpgradeStrategy.ClusterUpgradeOptions.HTTPRouteName = "my-app-route"
+
 	tests := []struct {
 		rayService          *rayv1.RayService
 		name                string
@@ -1498,6 +1503,7 @@ func TestCreateGateway(t *testing.T) {
 		expectedClass       string
 		expectedListeners   int
 		expectErr           bool
+		expectNil           bool
 	}{
 		{
 			name:                "valid gateway creation",
@@ -1512,15 +1518,25 @@ func TestCreateGateway(t *testing.T) {
 			rayService: makeIncrementalUpgradeRayService(false, "gateway-class", new(int32(0)), new(int32(0)), new(int32(0)), &metav1.Time{Time: time.Now()}),
 			expectErr:  true,
 		},
+		{
+			name:       "adopted HTTPRoute skips gateway creation",
+			rayService: referencingRayService,
+			expectErr:  false,
+			expectNil:  true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gw, err := reconciler.createGateway(tt.rayService)
-			if tt.expectErr {
+			switch {
+			case tt.expectErr:
 				require.Error(t, err)
 				assert.Nil(t, gw)
-			} else {
+			case tt.expectNil:
+				require.NoError(t, err)
+				assert.Nil(t, gw)
+			default:
 				require.NoError(t, err)
 				require.NotNil(t, gw)
 				assert.Equal(t, tt.expectedGatewayName, gw.Name)
@@ -1838,6 +1854,93 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			assert.Equal(t, new(gwv1.Namespace(namespace)), parent.Namespace)
 		})
 	}
+}
+
+func TestReconcileAdoptedHTTPRoute(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+
+	ctx := context.TODO()
+	namespace := "test-ns"
+	stepSize := int32(10)
+	interval := int32(30)
+	routeName := "external-app-route"
+
+	activeCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active-ray-cluster", Namespace: namespace}}
+	pendingCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "pending-ray-cluster", Namespace: namespace}}
+	activeServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(activeCluster.Name), Namespace: namespace}}
+	pendingServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(pendingCluster.Name), Namespace: namespace}}
+
+	// An externally-managed HTTPRoute (e.g. by Helm/GitOps) that the operator adopts: it references
+	// a shared Gateway in another namespace, carries a hostname, and has a single backendRef.
+	adoptedRoute := &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: routeName, Namespace: namespace},
+		Spec: gwv1.HTTPRouteSpec{
+			Hostnames: []gwv1.Hostname{"api.example.com"},
+			CommonRouteSpec: gwv1.CommonRouteSpec{
+				ParentRefs: []gwv1.ParentReference{{
+					Name:      "internal",
+					Namespace: new(gwv1.Namespace("kube-gateway")),
+				}},
+			},
+			Rules: []gwv1.HTTPRouteRule{{
+				BackendRefs: []gwv1.HTTPBackendRef{{
+					BackendRef: gwv1.BackendRef{
+						BackendObjectReference: gwv1.BackendObjectReference{Name: "aggregate-serve-svc"},
+						Weight:                 new(int32(1)),
+					},
+				}},
+			}},
+		},
+	}
+
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					StepSizePercent: &stepSize,
+					IntervalSeconds: &interval,
+					HTTPRouteName:   routeName,
+				},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName: activeCluster.Name, TrafficRoutedPercent: new(int32(100)), TargetCapacity: new(int32(100)),
+			},
+			PendingServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName: pendingCluster.Name, TrafficRoutedPercent: new(int32(0)), TargetCapacity: new(int32(100)),
+				LastTrafficMigratedTime: &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+		WithRuntimeObjects(rayService, activeCluster, pendingCluster, activeServeService, pendingServeService, adoptedRoute).Build()
+	reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
+
+	reconciledRoute, err := reconciler.reconcileHTTPRoute(ctx, rayService, true)
+	require.NoError(t, err)
+	require.NotNil(t, reconciledRoute)
+
+	// Only the backendRefs of the first rule are patched (active 90 / pending 10)...
+	require.Len(t, reconciledRoute.Spec.Rules, 1)
+	backendRefs := reconciledRoute.Spec.Rules[0].BackendRefs
+	require.Len(t, backendRefs, 2)
+	assert.Equal(t, gwv1.ObjectName(utils.GenerateServeServiceName(activeCluster.Name)), backendRefs[0].Name)
+	assert.Equal(t, int32(90), *backendRefs[0].Weight)
+	assert.Equal(t, gwv1.ObjectName(utils.GenerateServeServiceName(pendingCluster.Name)), backendRefs[1].Name)
+	assert.Equal(t, int32(10), *backendRefs[1].Weight)
+
+	// ...while hostnames, parentRefs and ownership (none) are preserved.
+	assert.Equal(t, []gwv1.Hostname{"api.example.com"}, reconciledRoute.Spec.Hostnames)
+	require.Len(t, reconciledRoute.Spec.ParentRefs, 1)
+	assert.Equal(t, gwv1.ObjectName("internal"), reconciledRoute.Spec.ParentRefs[0].Name)
+	assert.Empty(t, reconciledRoute.OwnerReferences)
 }
 
 func TestReconcileGateway(t *testing.T) {

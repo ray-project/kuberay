@@ -212,6 +212,13 @@ func RayServiceGatewayNamespacedName(rayService *rayv1.RayService) types.Namespa
 }
 
 func RayServiceHTTPRouteNamespacedName(rayService *rayv1.RayService) types.NamespacedName {
+	// When an existing HTTPRoute is adopted, resolve to it instead of the operator-managed route.
+	if utils.AdoptsExistingHTTPRoute(&rayService.Spec) {
+		return types.NamespacedName{
+			Name:      utils.GetRayServiceClusterUpgradeOptions(&rayService.Spec).HTTPRouteName,
+			Namespace: rayService.Namespace,
+		}
+	}
 	return types.NamespacedName{
 		Name:      fmt.Sprintf("%s-httproute", rayService.Name),
 		Namespace: rayService.Namespace,
