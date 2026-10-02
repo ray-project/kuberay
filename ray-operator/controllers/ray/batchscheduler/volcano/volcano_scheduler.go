@@ -26,7 +26,6 @@ import (
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -68,9 +67,12 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 	}
 
 	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
-	subGroupPolicy := calculateSubGroupPolicy(raycluster, &raycluster.Spec)
+	subGroupPolicy, err := calculateSubGroupPolicy(&raycluster.Spec)
+	if err != nil {
+		return err
+	}
 
-	_, err := v.syncPodGroup(ctx, raycluster, minMember, totalResource, subGroupPolicy)
+	_, err = v.syncPodGroup(ctx, raycluster, minMember, totalResource, subGroupPolicy)
 	return err
 }
 
@@ -82,7 +84,10 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 
 	var totalResourceList []corev1.ResourceList
 	minMember, totalResource := v.calculatePodGroupParams(rayJob.Spec.RayClusterSpec)
-	subGroupPolicy := calculateSubGroupPolicy(rayJob, rayJob.Spec.RayClusterSpec)
+	subGroupPolicy, err := calculateSubGroupPolicy(rayJob.Spec.RayClusterSpec)
+	if err != nil {
+		return err
+	}
 	totalResourceList = append(totalResourceList, totalResource)
 
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
@@ -90,7 +95,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// submitter's resource requests into MinResources so capacity is reserved.
 	submitterResource := getSubmitterResource(rayJob)
 	totalResourceList = append(totalResourceList, submitterResource)
-	_, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList), subGroupPolicy)
+	_, err = v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList), subGroupPolicy)
 	return err
 }
 
@@ -194,8 +199,10 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	// We accept this overhead to avoid the long-term maintenance of capability detection,
 	// cached or persistent state, and upgrade invalidation/re-detection logic. Keeping this
 	// path stateless lets the next reconciliation persist the policy after a CRD upgrade
-	// without restarting KubeRay. Upgrade Volcano and its matching CRDs to use subgroup
-	// scheduling and avoid these redundant requests.
+	// without restarting KubeRay. Upgrade Volcano and its matching CRDs to v1.14.1 or later
+	// to use subgroup scheduling and avoid these redundant requests. Volcano v1.14.0 stores
+	// the policy but only schedules subgroups when the PodGroup or one of its subgroups
+	// sets hard network topology with a highest allowed tier.
 	if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) || !apiequality.Semantic.DeepEqual(podGroup.Spec.SubGroupPolicy, subGroupPolicy) {
 		podGroup.Spec.MinMember = size
 		podGroup.Spec.MinResources = &totalResource
@@ -220,76 +227,93 @@ func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.Ra
 	return utils.CalculateMinReplicas(rayCluster) + 1, utils.CalculateMinResources(rayCluster)
 }
 
-// calculateSubGroupPolicy maps every required logical Ray replica to a Volcano subgroup.
-// A subgroup contains NumOfHosts Pods, and MinSubGroups follows the same autoscaling or
+// calculateSubGroupPolicy maps the head group and every active worker group to one Volcano subgroup.
+// A subgroup requires the group's minimum number of Pods, following the same autoscaling or
 // effective desired replica semantics used to calculate the PodGroup's global MinMember.
+// The network topology labels on a group's Pod template apply to that group's subgroup.
 // Pre-v1.14 Volcano CRDs prune this field and retain the legacy global PodGroup settings.
-func calculateSubGroupPolicy(owner metav1.Object, rayClusterSpec *rayv1.RayClusterSpec) []volcanoschedulingv1beta1.SubGroupPolicySpec {
-	if !features.Enabled(features.RayMultiHostIndexing) {
-		return nil
+func calculateSubGroupPolicy(rayClusterSpec *rayv1.RayClusterSpec) ([]volcanoschedulingv1beta1.SubGroupPolicySpec, error) {
+	headPolicy, err := buildSubGroupPolicy(utils.RayNodeHeadGroupLabelValue, 1, rayClusterSpec.HeadGroupSpec.Template.Labels)
+	if err != nil {
+		return nil, err
 	}
-
-	// The existing top-level topology labels apply topology constraints to the entire PodGroup.
-	// Generating per-replica subgroups without copying that policy would change those semantics.
-	// Keep the existing behavior until per-worker-group topology configuration is defined.
-	if _, topologyConfigured := owner.GetLabels()[NetworkTopologyModeLabelKey]; topologyConfigured {
-		return nil
-	}
-
-	subGroupPolicy := []volcanoschedulingv1beta1.SubGroupPolicySpec{
-		{
-			Name:         utils.RayNodeHeadGroupLabelValue,
-			SubGroupSize: ptr.To[int32](1),
-			MinSubGroups: ptr.To[int32](1),
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					utils.RayNodeGroupLabelKey: utils.RayNodeHeadGroupLabelValue,
-				},
-			},
-			MatchLabelKeys: []string{utils.RayNodeGroupLabelKey},
-		},
-	}
+	subGroupPolicy := []volcanoschedulingv1beta1.SubGroupPolicySpec{headPolicy}
 
 	autoscalingEnabled := utils.IsAutoscalingEnabled(rayClusterSpec)
 	for _, workerGroupSpec := range rayClusterSpec.WorkerGroupSpecs {
 		if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
 			continue
 		}
-
-		numOfHosts := workerGroupSpec.NumOfHosts
-		if numOfHosts < 1 {
+		if workerGroupSpec.NumOfHosts < 1 {
 			continue
 		}
 
-		var minSubGroups int32
+		var minPods int32
 		if autoscalingEnabled {
-			minSubGroups = ptr.Deref(workerGroupSpec.MinReplicas, int32(0))
+			minPods = ptr.Deref(workerGroupSpec.MinReplicas, int32(0)) * workerGroupSpec.NumOfHosts
 		} else {
-			minSubGroups = utils.GetWorkerGroupDesiredReplicas(workerGroupSpec) / numOfHosts
+			minPods = utils.GetWorkerGroupDesiredReplicas(workerGroupSpec)
 		}
-		if minSubGroups < 0 {
+		if minPods < 0 {
 			continue
 		}
 
-		matchLabelKey := utils.RayWorkerReplicaIndexKey
-		if numOfHosts > 1 {
-			matchLabelKey = utils.RayWorkerReplicaNameKey
+		workerPolicy, err := buildSubGroupPolicy(workerGroupSpec.GroupName, minPods, workerGroupSpec.Template.Labels)
+		if err != nil {
+			return nil, err
 		}
-
-		subGroupPolicy = append(subGroupPolicy, volcanoschedulingv1beta1.SubGroupPolicySpec{
-			Name:         workerGroupSpec.GroupName,
-			SubGroupSize: new(numOfHosts),
-			MinSubGroups: new(minSubGroups),
-			LabelSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					utils.RayNodeGroupLabelKey: workerGroupSpec.GroupName,
-				},
-			},
-			MatchLabelKeys: []string{matchLabelKey},
-		})
+		subGroupPolicy = append(subGroupPolicy, workerPolicy)
 	}
 
-	return subGroupPolicy
+	return subGroupPolicy, nil
+}
+
+// buildSubGroupPolicy puts all Pods of a Ray group into one Volcano subgroup that requires at least
+// minPods Pods. A group without required Pods gets an optional subgroup, so it keeps its own network topology.
+func buildSubGroupPolicy(groupName string, minPods int32, podLabels map[string]string) (volcanoschedulingv1beta1.SubGroupPolicySpec, error) {
+	networkTopology, err := parseNetworkTopology(podLabels)
+	if err != nil {
+		return volcanoschedulingv1beta1.SubGroupPolicySpec{}, fmt.Errorf("group %s: %w", groupName, err)
+	}
+
+	minSubGroups := int32(0)
+	if minPods > 0 {
+		minSubGroups = 1
+	}
+
+	return volcanoschedulingv1beta1.SubGroupPolicySpec{
+		Name:            groupName,
+		NetworkTopology: networkTopology,
+		SubGroupSize:    new(max(minPods, 1)),
+		MinSubGroups:    new(minSubGroups),
+		LabelSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				utils.RayNodeGroupLabelKey: groupName,
+			},
+		},
+		MatchLabelKeys: []string{utils.RayNodeGroupLabelKey},
+	}, nil
+}
+
+// parseNetworkTopology builds a Volcano network topology from the network topology labels.
+// It returns nil when the mode label is not set.
+func parseNetworkTopology(labels map[string]string) (*volcanoschedulingv1beta1.NetworkTopologySpec, error) {
+	mode, ok := labels[NetworkTopologyModeLabelKey]
+	if !ok {
+		return nil, nil
+	}
+
+	networkTopology := &volcanoschedulingv1beta1.NetworkTopologySpec{
+		Mode: volcanoschedulingv1beta1.NetworkTopologyMode(mode),
+	}
+	if highestTier, ok := labels[NetworkTopologyHighestTierAllowedLabelKey]; ok {
+		highestTierInt, err := strconv.Atoi(highestTier)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert %s label to int: %w", NetworkTopologyHighestTierAllowedLabelKey, err)
+		}
+		networkTopology.HighestTierAllowed = &highestTierInt
+	}
+	return networkTopology, nil
 }
 
 func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalResource corev1.ResourceList, subGroupPolicy []volcanoschedulingv1beta1.SubGroupPolicySpec) (volcanoschedulingv1beta1.PodGroup, error) {
@@ -322,20 +346,11 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 	}
 
 	// Handle network topology configuration
-	mode, modeOk := owner.GetLabels()[NetworkTopologyModeLabelKey]
-	if modeOk {
-		podGroup.Spec.NetworkTopology = &volcanoschedulingv1beta1.NetworkTopologySpec{
-			Mode: volcanoschedulingv1beta1.NetworkTopologyMode(mode),
-		}
-		highestTier, tierOk := owner.GetLabels()[NetworkTopologyHighestTierAllowedLabelKey]
-		if tierOk {
-			highestTierInt, err := strconv.Atoi(highestTier)
-			if err != nil {
-				return podGroup, fmt.Errorf("failed to convert %s label to int: %w for podgroup %s in namespace %s", NetworkTopologyHighestTierAllowedLabelKey, err, podGroupName, owner.GetNamespace())
-			}
-			podGroup.Spec.NetworkTopology.HighestTierAllowed = &highestTierInt
-		}
+	networkTopology, err := parseNetworkTopology(owner.GetLabels())
+	if err != nil {
+		return podGroup, fmt.Errorf("%w for podgroup %s in namespace %s", err, podGroupName, owner.GetNamespace())
 	}
+	podGroup.Spec.NetworkTopology = networkTopology
 
 	if queue, ok := owner.GetLabels()[QueueNameLabelKey]; ok {
 		podGroup.Spec.Queue = queue
@@ -403,7 +418,10 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		clusterMinMembers, clusterMinResources := v.calculatePodGroupParams(&cluster.Spec)
 		minMembers = clusterMinMembers
 		totalResourceList = append(totalResourceList, clusterMinResources)
-		subGroupPolicy = calculateSubGroupPolicy(rayJob, &cluster.Spec)
+		subGroupPolicy, err = calculateSubGroupPolicy(&cluster.Spec)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMembers, utils.SumResourceList(totalResourceList), subGroupPolicy)
