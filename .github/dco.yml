@@ -1,0 +1,4 @@
+# Configuration for the DCO GitHub App: https://github.com/apps/dco
+# Allow a commit's author to fix a missing sign-off by pushing a follow-up signed-off commit.
+allowRemediationCommits:
+  individual: true

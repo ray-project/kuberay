@@ -19,6 +19,7 @@
 
 ## Checks
 
+- [ ] I've signed off every commit (by using `git commit -s`) in this PR. See [CONTRIBUTING.md](https://github.com/ray-project/kuberay/blob/master/CONTRIBUTING.md#sign-off-your-commits).
 - [ ] I've made sure the tests are passing.
 - Testing Strategy
   - [ ] Unit tests

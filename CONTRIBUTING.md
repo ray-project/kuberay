@@ -56,6 +56,26 @@ If you spot a problem with the problem, [search if an issue already exists](http
 
 KubeRay has subproject and each of them may have different development and testing procedure. Please check `DEVELOPMENT.md` in sub folder to get familiar with running and testing codes.
 
+### Sign off your commits
+
+KubeRay requires every commit in a pull request to be signed off under the [Developer Certificate of Origin](https://developercertificate.org/) (DCO).
+By signing off, you certify that you wrote the change or otherwise have the right to submit it under the project's open source license.
+
+To sign off, add a `Signed-off-by` line to the commit message. The email address must match the commit author's email address:
+
+```text
+Signed-off-by: Random J Developer <random@developer.example.org>
+```
+
+`git commit -s` adds this line for you. If the DCO check on your pull request fails, sign off your existing commits and force-push your branch:
+
+```bash
+git rebase --signoff origin/master
+git push --force-with-lease
+```
+
+Alternatively, push a remediation commit as described in the details of the failing DCO check.
+
 ### Open a Pull request
 
 When you're done making the changes, open a pull request and fill PR template so we can better review your PR. The template helps reviewers understand your changes and the purpose of your pull request.
