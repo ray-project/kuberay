@@ -71,6 +71,22 @@ func (c *ClientManager) GetRayCluster(ctx context.Context, namespace, name strin
 	return &rayCluster, nil
 }
 
+func (c *ClientManager) GetRayJob(ctx context.Context, namespace, name string) (*rayv1.RayJob, error) {
+	var rayJob rayv1.RayJob
+	if err := c.Client().Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &rayJob); err != nil {
+		return nil, err
+	}
+	return &rayJob, nil
+}
+
+func (c *ClientManager) GetRayService(ctx context.Context, namespace, name string) (*rayv1.RayService, error) {
+	var rayService rayv1.RayService
+	if err := c.Client().Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &rayService); err != nil {
+		return nil, err
+	}
+	return &rayService, nil
+}
+
 type ClientManagerConfig struct {
 	Kubeconfigs        string
 	UseKubernetesProxy bool
