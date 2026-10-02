@@ -48,6 +48,25 @@ func TestGetClusterDomainName(t *testing.T) {
 	}
 }
 
+func TestGetRayHTTPProxyClientFuncFormatsIPAddresses(t *testing.T) {
+	tests := map[string]struct {
+		hostIP string
+		want   string
+	}{
+		"IPv4": {hostIP: "10.0.0.1", want: "http://10.0.0.1:8000/"},
+		"IPv6": {hostIP: "2001:db8::1", want: "http://[2001:db8::1]:8000/"},
+	}
+
+	clientFunc := GetRayHttpProxyClientFunc(nil, false)
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			client, ok := clientFunc(tt.hostIP, "default", "head", 8000).(*RayHttpProxyClient)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, client.httpProxyURL)
+		})
+	}
+}
+
 func TestStatus(t *testing.T) {
 	pod := createSomePod()
 	pod.Status.Phase = corev1.PodPending
