@@ -4274,8 +4274,8 @@ func TestValidateCollectorOptions(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a group with labelRefs
-func TestValidateRayClusterSpec_Topology(t *testing.T) {
+// TestValidateRayClusterSpec_LabelRefs checks the Ray version requirement of a group with labelRefs
+func TestValidateRayClusterSpec_LabelRefs(t *testing.T) {
 	spec := createBasicRayClusterSpec()
 	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 		GroupName:   "test",
