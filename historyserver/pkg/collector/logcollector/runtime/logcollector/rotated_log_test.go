@@ -221,7 +221,7 @@ func TestCollectRotatedLogUploadsDeterministicObject(t *testing.T) {
 	active := filepath.Join(logsDir, "raylet.out")
 	writeLogFile(t, active, "active raylet")
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	want := map[string]string{
 		testLogPrefix + mustRotatedName(t, "raylet.out.1", id):                                    "rotated raylet",
@@ -230,16 +230,17 @@ func TestCollectRotatedLogUploadsDeterministicObject(t *testing.T) {
 	assertWritten(t, writer, want)
 }
 
-func TestCollectRotatedLogSkipsActiveFiles(t *testing.T) {
+// Active files the running-cluster dashboard does not read wait for shutdown.
+func TestCollectRotatedLogSkipsUnclassifiedActiveFiles(t *testing.T) {
 	logsDir := t.TempDir()
 	writer := NewMockStorageWriter()
 	handler := newRotatedTestHandler(writer)
 
-	for _, name := range []string{"raylet.out", "raylet.err", "monitor.log", "worker-abc-01000000-1.out"} {
+	for _, name := range []string{"raylet.out", "raylet.err", "monitor.log", "gcs_server.out"} {
 		writeLogFile(t, filepath.Join(logsDir, name), "active")
 	}
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, writer, map[string]string{})
 }
 
@@ -252,13 +253,13 @@ func TestCollectRotatedLogIgnoresRotationIndexChange(t *testing.T) {
 
 	first := filepath.Join(logsDir, "raylet.out.1")
 	id := writeLogFile(t, first, "generation one")
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	second := filepath.Join(logsDir, "raylet.out.2")
 	if err := os.Rename(first, second); err != nil {
 		t.Fatalf("Rename() = %v", err)
 	}
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	assertWritten(t, writer, map[string]string{
 		testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "generation one",
@@ -279,7 +280,7 @@ func TestCollectRotatedLogUploadsNewGenerationReusingIndex(t *testing.T) {
 	writeLogFile(t, backup, firstContent)
 	setModTime(t, backup, 1788398100000000000)
 	firstID := identityOf(t, backup)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	if err := os.Remove(backup); err != nil {
 		t.Fatalf("Remove() = %v", err)
@@ -287,7 +288,7 @@ func TestCollectRotatedLogUploadsNewGenerationReusingIndex(t *testing.T) {
 	writeLogFile(t, backup, secondContent)
 	setModTime(t, backup, 1788398200000000000)
 	secondID := identityOf(t, backup)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	if firstID.inode == secondID.inode {
 		t.Logf("filesystem reused inode %d, exercising the collision directly", firstID.inode)
@@ -311,7 +312,7 @@ func TestCollectRotatedLogsUploadsHighestIndexFirst(t *testing.T) {
 		ids[index] = writeLogFile(t, filepath.Join(logsDir, name), name)
 	}
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	want := []string{
 		testLogPrefix + mustRotatedName(t, "foo.out.5", ids[5]),
@@ -340,7 +341,7 @@ func TestCollectRotatedLogsStopsBeforeNextCandidate(t *testing.T) {
 	writer.beforeWrite = func() { stopOnce.Do(func() { close(stop) }) }
 
 	before := openDescriptorCount(t)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, stop)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, stop)
 
 	if got := writer.order(); len(got) != 1 {
 		t.Fatalf("uploaded %v after stop, want only the in-flight candidate", got)
@@ -371,11 +372,11 @@ func TestCollectRotatedLogsClosesEveryDescriptor(t *testing.T) {
 	before := openDescriptorCount(t)
 
 	// Success and failure in one pass, then a pass where both are already known.
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	writer.setWriteErr(errors.New("object store unavailable"))
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	writer.setWriteErr(nil)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	// The shutdown and prev-logs walkers open through the same helper.
 	objectPrefix := handler.rotatedObjectPrefix(testSessionID, testNodeID)
@@ -398,11 +399,11 @@ func TestCollectRotatedLogRetriesAfterWriteFailure(t *testing.T) {
 	backup := filepath.Join(logsDir, "raylet.out.1")
 	id := writeLogFile(t, backup, "rotated raylet")
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, writer, map[string]string{})
 
 	writer.setWriteErr(nil)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, writer, map[string]string{
 		testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "rotated raylet",
 	})
@@ -423,7 +424,7 @@ func TestCollectRotatedLogReadsThroughUnlinkedPath(t *testing.T) {
 		}
 	}
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, writer, map[string]string{
 		testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "rotated raylet",
 	})
@@ -449,8 +450,8 @@ func TestCollectRotatedLogAttributesSessionAndNode(t *testing.T) {
 	backup := filepath.Join(logsDir, "raylet.out.1")
 	id := writeLogFile(t, backup, "rotated raylet")
 
-	handler.collectRotatedLogsUnder(logsDir, "session-old", "node-old", nil)
-	handler.collectRotatedLogsUnder(logsDir, "session-new", "node-new", nil)
+	handler.collectSessionLogsUnder(logsDir, "session-old", "node-old", nil)
+	handler.collectSessionLogsUnder(logsDir, "session-new", "node-new", nil)
 
 	name := mustRotatedName(t, "raylet.out.1", id)
 	assertWritten(t, writer, map[string]string{
@@ -465,8 +466,8 @@ func TestCollectRotatedLogSkipsUnknownSessionOrNode(t *testing.T) {
 	handler := newRotatedTestHandler(writer)
 	writeLogFile(t, filepath.Join(logsDir, "raylet.out.1"), "rotated raylet")
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, "", nil)
-	handler.collectRotatedLogsUnder(logsDir, "", testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, "", nil)
+	handler.collectSessionLogsUnder(logsDir, "", testNodeID, nil)
 	assertWritten(t, writer, map[string]string{})
 }
 
@@ -479,11 +480,11 @@ func TestCollectRotatedLogRestartKeepsObjectName(t *testing.T) {
 	want := map[string]string{testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "rotated raylet"}
 
 	beforeRestart := NewMockStorageWriter()
-	newRotatedTestHandler(beforeRestart).collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	newRotatedTestHandler(beforeRestart).collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, beforeRestart, want)
 
 	afterRestart := NewMockStorageWriter()
-	newRotatedTestHandler(afterRestart).collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	newRotatedTestHandler(afterRestart).collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertWritten(t, afterRestart, want)
 }
 
@@ -506,7 +507,7 @@ func TestCollectRotatedLogIsUploadedOnceUnderConcurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+			handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 		})
 	}
 	wg.Wait()
@@ -536,7 +537,7 @@ func TestScanRotatedLogsScansBeforeFirstTick(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go handler.scanRotatedLogs(stop)
+	go handler.scanSessionLogs(stop)
 
 	deadline := time.Now().Add(10 * time.Second)
 	for len(writer.written()) == 0 {
@@ -559,14 +560,14 @@ func TestScanRotatedLogsStopsOnSignal(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		handler.scanRotatedLogs(stop)
+		handler.scanSessionLogs(stop)
 	}()
 
 	close(stop)
 	select {
 	case <-stopped:
 	case <-time.After(5 * time.Second):
-		t.Fatal("scanRotatedLogs did not exit after stop")
+		t.Fatal("scanSessionLogs did not exit after stop")
 	}
 }
 
@@ -598,7 +599,7 @@ func TestProcessSessionLatestLogsSkipsAlreadyUploadedRotation(t *testing.T) {
 
 	writer := NewMockStorageWriter()
 	handler := newRotatedTestHandler(writer)
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 
 	var uploadsAfterScan int
 	writer.beforeWrite = func() { uploadsAfterScan++ }
@@ -644,11 +645,11 @@ func TestCollectRotatedLogsPrunesEvictedGenerations(t *testing.T) {
 	id := writeLogFile(t, backup, "generation one")
 	object := testLogPrefix + mustRotatedName(t, "raylet.out.1", id)
 
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertRotatedUploaded(t, handler, []string{object})
 
 	// Still on disk, so the entry survives and the object is not written again.
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertRotatedUploaded(t, handler, []string{object})
 	if got := writer.order(); len(got) != 1 {
 		t.Fatalf("wrote %v, want a single upload", got)
@@ -657,7 +658,7 @@ func TestCollectRotatedLogsPrunesEvictedGenerations(t *testing.T) {
 	if err := os.Remove(backup); err != nil {
 		t.Fatalf("Remove() = %v", err)
 	}
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	assertRotatedUploaded(t, handler, nil)
 }
 
@@ -669,11 +670,11 @@ func TestCollectRotatedLogsKeepsStateAfterIncompleteWalk(t *testing.T) {
 	handler := newRotatedTestHandler(writer)
 
 	id := writeLogFile(t, filepath.Join(logsDir, "raylet.out.1"), "generation one")
-	handler.collectRotatedLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
 	object := testLogPrefix + mustRotatedName(t, "raylet.out.1", id)
 	assertRotatedUploaded(t, handler, []string{object})
 
-	handler.collectRotatedLogsUnder(filepath.Join(logsDir, "gone"), testSessionID, testNodeID, nil)
+	handler.collectSessionLogsUnder(filepath.Join(logsDir, "gone"), testSessionID, testNodeID, nil)
 	assertRotatedUploaded(t, handler, []string{object})
 }
 
@@ -698,7 +699,7 @@ func TestScanOfNewSessionKeepsPrevSessionUploads(t *testing.T) {
 	logsOne := filepath.Join(rayRoot, sessionOne, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	idOne := writeLogFile(t, filepath.Join(logsOne, "raylet.out.1"), "s1 rotated")
 	pointSessionLatest(t, rayRoot, sessionOne)
-	handler.collectActiveSessionRotatedLogs(nil)
+	handler.collectActiveSessionLogs(nil)
 
 	objectOne := logsPrefixOf(sessionOne) + mustRotatedName(t, "raylet.out.1", idOne)
 	assertRotatedUploaded(t, handler, []string{objectOne})
@@ -712,7 +713,7 @@ func TestScanOfNewSessionKeepsPrevSessionUploads(t *testing.T) {
 		t.Fatalf("MoveLeftoverSessionLogs() = %v", err)
 	}
 
-	handler.collectActiveSessionRotatedLogs(nil)
+	handler.collectActiveSessionLogs(nil)
 	objectTwo := logsPrefixOf(sessionTwo) + mustRotatedName(t, "raylet.out.1", idTwo)
 	assertRotatedUploaded(t, handler, []string{objectOne, objectTwo})
 
@@ -738,14 +739,14 @@ func TestPruneRotatedUploadedIsScopedToNode(t *testing.T) {
 	idOne := writeLogFile(t, filepath.Join(logsOne, "raylet.out.1"), "node1 rotated")
 	writeLogFile(t, filepath.Join(logsTen, "raylet.out.1"), "node10 rotated")
 
-	handler.collectRotatedLogsUnder(logsOne, testSessionID, "node1", nil)
-	handler.collectRotatedLogsUnder(logsTen, testSessionID, "node10", nil)
+	handler.collectSessionLogsUnder(logsOne, testSessionID, "node1", nil)
+	handler.collectSessionLogsUnder(logsTen, testSessionID, "node10", nil)
 
 	// node10 loses its generation; node1 keeps its own.
 	if err := os.Remove(filepath.Join(logsTen, "raylet.out.1")); err != nil {
 		t.Fatalf("Remove() = %v", err)
 	}
-	handler.collectRotatedLogsUnder(logsTen, testSessionID, "node10", nil)
+	handler.collectSessionLogsUnder(logsTen, testSessionID, "node10", nil)
 
 	nodeOnePrefix := "root/cluster-history/raycluster/default/rc/" + testSessionID + "/node1/logs/"
 	assertRotatedUploaded(t, handler, []string{nodeOnePrefix + mustRotatedName(t, "raylet.out.1", idOne)})

@@ -236,13 +236,13 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 	// Use recursive listing when glob contains ** to support cross-directory matching.
 	var matchedFiles []string
 	if glob == "" {
-		matchedFiles = s.reader.ListFiles(clusterLogPathPrefix, logPath)
+		matchedFiles = clusterlogs.ListLogFiles(s.reader, clusterLogPathPrefix, logPath)
 	} else {
 		var files []string
 		if strings.Contains(glob, "**") {
 			files = s.listFilesRecursive(clusterLogPathPrefix, logPath)
 		} else {
-			files = s.reader.ListFiles(clusterLogPathPrefix, logPath)
+			files = clusterlogs.ListLogFiles(s.reader, clusterLogPathPrefix, logPath)
 		}
 		for _, file := range files {
 			matched, err := doublestar.Match(glob, file)
@@ -273,7 +273,7 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 // returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
 // It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
 func (s *ServerHandler) listFilesRecursive(prefix, dir string) []string {
-	entries := s.reader.ListFiles(prefix, dir)
+	entries := clusterlogs.ListLogFiles(s.reader, prefix, dir)
 	var result []string
 	for _, entry := range entries {
 		if strings.HasSuffix(entry, "/") {
@@ -340,7 +340,7 @@ func (s *ServerHandler) _getNodeLogFile(clusterSessionKey, clusterLogPathPrefix,
 
 	// Build log path using clusterlogs helper (<nodeID>/<sessionID>/logs/<filename>)
 	logPath := path.Join(clusterlogs.RelLogsDir(sessionID, nodeID), filename)
-	reader := s.reader.GetContent(clusterLogPathPrefix, logPath)
+	reader := clusterlogs.ReadLogFile(s.reader, clusterLogPathPrefix, logPath)
 
 	if reader == nil {
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
@@ -484,7 +484,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterLogPathPrefix, sessionID, n
 	}
 
 	logPath := clusterlogs.RelLogsDir(sessionID, nodeIDHex)
-	files := s.reader.ListFiles(clusterLogPathPrefix, logPath)
+	files := clusterlogs.ListLogFiles(s.reader, clusterLogPathPrefix, logPath)
 
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
@@ -703,7 +703,7 @@ func (s *ServerHandler) findWorkerLogFile(clusterLogPathPrefix, sessionID, nodeI
 
 	// List all files in the node's log directory
 	logPath := clusterlogs.RelLogsDir(sessionID, nodeIDHex)
-	files := s.reader.ListFiles(clusterLogPathPrefix, logPath)
+	files := clusterlogs.ListLogFiles(s.reader, clusterLogPathPrefix, logPath)
 
 	// Search for files matching pattern: worker-{worker_id_hex}-*.{suffix}
 	workerPrefix := fmt.Sprintf("worker-%s-", workerIDHex)

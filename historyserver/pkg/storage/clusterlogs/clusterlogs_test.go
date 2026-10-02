@@ -3,6 +3,7 @@ package clusterlogs
 import (
 	"io"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -70,7 +71,8 @@ func TestClusterLogsPaths(t *testing.T) {
 }
 
 type mockStorageReader struct {
-	files map[string][]string
+	files   map[string][]string // dir -> entries
+	content map[string]string   // object path -> content
 }
 
 func (m *mockStorageReader) List() []utils.ClusterInfo {
@@ -78,6 +80,9 @@ func (m *mockStorageReader) List() []utils.ClusterInfo {
 }
 
 func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+	if content, ok := m.content[fileName]; ok {
+		return strings.NewReader(content)
+	}
 	return nil
 }
 
@@ -130,6 +135,88 @@ func TestListSessionNodeDirs(t *testing.T) {
 			got := ListSessionNodeDirs(reader, "prefix", tc.sessionName)
 			if !slices.Equal(got, tc.expected) {
 				t.Errorf("ListSessionNodeDirs() = %v, want %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestListLogFiles(t *testing.T) {
+	reader := &mockStorageReader{files: map[string][]string{
+		"logs": {"raylet.out", "job-driver-x.log.chunks/", "worker-a.out", "worker-a.out.chunks/", "events/"},
+	}}
+
+	got := ListLogFiles(reader, "prefix", "logs")
+
+	// Chunk directories are hidden; a chunk-only file appears once, as the file.
+	want := []string{"raylet.out", "job-driver-x.log", "worker-a.out", "events/"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("ListLogFiles() = %v, want %v", got, want)
+	}
+}
+
+func TestReadLogFile(t *testing.T) {
+	const logPath = "logs/job-driver-x.log"
+	chunk := func(name string) string { return logPath + ChunkDirSuffix + "/" + name }
+
+	tests := map[string]struct {
+		files   []string          // listing of the chunk directory
+		content map[string]string // objects in storage
+		want    string
+		wantNil bool
+	}{
+		"whole file wins over chunks": {
+			files:   []string{"00000000000000000000"},
+			content: map[string]string{logPath: "whole", chunk("00000000000000000000"): "chunk"},
+			want:    "whole",
+		},
+		"chunks are joined in offset order regardless of listing order": {
+			files: []string{"00000000000000000005", "00000000000000000000", "00000000000000000008"},
+			content: map[string]string{
+				chunk("00000000000000000000"): "line1",
+				chunk("00000000000000000005"): "lin",
+				chunk("00000000000000000008"): "e2",
+			},
+			want: "line1line2",
+		},
+		"stale chunk left by a collector restart is dropped": {
+			// Chunk 0 was re-uploaded covering the whole file; the old chunk at
+			// offset 5 no longer continues it.
+			files: []string{"00000000000000000000", "00000000000000000005"},
+			content: map[string]string{
+				chunk("00000000000000000000"): "line1line2",
+				chunk("00000000000000000005"): "line2",
+			},
+			want: "line1line2",
+		},
+		"neither whole file nor chunks": {
+			wantNil: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			reader := &mockStorageReader{
+				files:   map[string][]string{logPath + ChunkDirSuffix: tc.files},
+				content: tc.content,
+			}
+
+			got := ReadLogFile(reader, "prefix", logPath)
+
+			if tc.wantNil {
+				if got != nil {
+					t.Fatalf("ReadLogFile() = non-nil, want nil")
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("ReadLogFile() = nil, want %q", tc.want)
+			}
+			data, err := io.ReadAll(got)
+			if err != nil {
+				t.Fatalf("ReadAll: %v", err)
+			}
+			if string(data) != tc.want {
+				t.Fatalf("ReadLogFile() = %q, want %q", data, tc.want)
 			}
 		})
 	}

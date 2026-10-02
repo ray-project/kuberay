@@ -70,6 +70,9 @@ The history server can be configured using command-line flags:
 - `--storage-backend-config-path`: Path to storage backend configuration file
 - `--enable-live-clusters`: Serve RayClusters that are still running by reverse-proxying to their
   head dashboard (default: `false`)
+- `--serve-running-clusters`: Serve sessions of RayClusters that are still running from storage,
+  using whatever the collector has uploaded so far. The cached snapshot does not refresh on its
+  own; enter the cluster with `?reload=true` to trigger reload (default: `false`)
 
 > [!WARNING]
 > The history server does not authenticate its own callers, and the RayCluster it proxies to is
@@ -94,7 +97,17 @@ The collector can be configured using command-line flags:
 And using environment variables:
 
 - `RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL`: How often the collector scans the active session
-  log directory for completed Ray log rotation backups (default: `30s`)
+  log directory for completed Ray log rotation backups and for new content in the active logs
+  the dashboard reads while a cluster runs (default: `30s`)
+
+#### Active log upload
+
+On the same schedule the collector also uploads the active logs the dashboard reads for a
+running cluster: `debug_state.txt` is re-uploaded in full each pass, while the append-only
+`job-driver-*.log`, `worker-*.out`/`.err` and `events/event_*.log` upload only the bytes added
+since the previous pass, as one object per pass under `<file>.chunks/<offset>`. The History
+Server reads the whole file when present (written on shutdown) and falls back to the chunks
+otherwise. Ray log rotation is not supported for chunked uploads yet.
 
 #### Rotated log collection
 
