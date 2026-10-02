@@ -40,6 +40,7 @@ const (
       "serve": "rayServeDashboard",
       "serveDeployment": "rayServeDeploymentDashboard",
       "serveLlm": "rayServeLlmDashboard",
+      "serveLlmSglang": "rayServeLlmSglangDashboard",
       "data": "rayDataDashboard",
       "dataLlm": "rayDataLlmDashboard",
       "train": "rayTrainDashboard"
