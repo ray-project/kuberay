@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -216,7 +216,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			}
 
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).WithStatusSubresource(rayJob).Build()
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler = &RayJobReconciler{
 				Client:   fakeClient,
@@ -267,7 +267,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			}
 
 			client := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).WithStatusSubresource(rayJob).Build()
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			reconciler = &RayJobReconciler{
 				Client:   client,

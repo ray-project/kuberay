@@ -126,6 +126,28 @@ func TestLogEventGetJobID(t *testing.T) {
 	}
 }
 
+func TestLogEventStoreGetLogEventsByJobIDDeepCopy(t *testing.T) {
+	store := NewLogEventStore()
+	const clusterSessionKey = "raycluster-test_default_session_2026-04-22_10-00-00_000000_1"
+
+	m := store.GetOrCreateJobEventMap(clusterSessionKey)
+	m.AddEvent(&LogEvent{
+		EventID:      "e1",
+		Timestamp:    "1770635705",
+		CustomFields: map[string]any{"job_id": "01000000"},
+	})
+
+	copied := store.GetLogEventsByJobID(clusterSessionKey)
+	require.Len(t, copied["01000000"], 1)
+
+	copied["01000000"][0].Message = "mutated"
+	copied["01000000"][0].CustomFields["job_id"] = "changed"
+
+	again := store.GetLogEventsByJobID(clusterSessionKey)
+	assert.NotEqual(t, "mutated", again["01000000"][0].Message)
+	assert.Equal(t, "01000000", again["01000000"][0].CustomFields["job_id"])
+}
+
 func TestLogEventRestoreNewline(t *testing.T) {
 	event := LogEvent{Message: "line1\\nline2\\rline3"}
 	event.RestoreNewline()

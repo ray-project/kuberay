@@ -20,6 +20,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -164,52 +165,30 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
-	metadirPrefix := path.Join(r.RootDir, "metadir") + "/"
+	prefix := clustermetadata.Prefix(r.RootDir)
 
 	pager := r.ContainerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
-		Prefix:     &metadirPrefix,
+		Prefix:     &prefix,
 		MaxResults: to32(100),
 	})
 
 	for pager.More() {
 		resp, err := pager.NextPage(ctx)
 		if err != nil {
-			logrus.Errorf("Failed to list blobs from %s: %v", metadirPrefix, err)
+			logrus.Errorf("Failed to list blobs from %s: %v", prefix, err)
 			break
 		}
 
 		logrus.Infof("[List]Returned blobs in %v. length of Segment.BlobItems: %v",
-			metadirPrefix, len(resp.Segment.BlobItems))
+			prefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
-			c := &utils.ClusterInfo{}
-			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
-			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
-				continue
-			}
-			logrus.Infof("Process %++v", metas)
-			namespaceName := strings.Split(metas[0], "_")
-			if len(namespaceName) < 2 {
-				continue
-			}
-			c.Name = namespaceName[0]
-			c.Namespace = namespaceName[1]
-			c.SessionName = metas[1]
-			sessionInfo := strings.Split(metas[1], "_")
-			if len(sessionInfo) < 3 {
-				continue
-			}
-			date := sessionInfo[1]
-			dataTime := sessionInfo[2]
-			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+			c, err := clustermetadata.DecodePath(*blob.Name, r.RootDir)
 			if err != nil {
-				logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+				logrus.Errorf("Failed to parse meta file path: %s, error: %v", *blob.Name, err)
 				continue
 			}
-			c.CreateTimeStamp = createTime.Unix()
-			c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
-			clusters = append(clusters, *c)
+			clusters = append(clusters, c)
 		}
 	}
 

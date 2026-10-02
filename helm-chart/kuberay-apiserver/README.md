@@ -1,6 +1,6 @@
 # KubeRay APIServer
 
-![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+![Version: 1.7.1](https://img.shields.io/badge/Version-1.7.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 A Helm chart for kuberay-apiserver
 
@@ -29,7 +29,7 @@ helm version
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 # Install KubeRay APIServer without security proxy
-helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.2 --set security=null
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.7.1 --set security=null
 ```
 
 - Install the nightly version
@@ -52,7 +52,7 @@ helm install kuberay-apiserver . --set security=null
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 # Install KubeRay APIServer
-helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.2
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.7.1
 ```
 
 - Install the nightly version
@@ -79,7 +79,7 @@ To list the `kuberay-apiserver` release:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART
-# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.4.2
+# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.7.1
 ```
 
 ## Uninstall the Chart
@@ -103,7 +103,7 @@ kubectl get pods
 | replicaCount | int | `1` |  |
 | name | string | `"kuberay-apiserver"` |  |
 | image.repository | string | `"quay.io/kuberay/apiserver"` | Image repository. |
-| image.tag | string | `"nightly"` | Image tag. |
+| image.tag | string | `"v1.7.1"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | cors | string | `nil` |  |
 | labels | object | `{}` | Extra labels. |
@@ -133,4 +133,4 @@ kubectl get pods
 | singleNamespaceInstall | bool | `false` | The chart can be installed by users with permissions to a single namespace only |
 | enableAPIServerV2 | bool | `true` | If set to true, APIServer v2 would be served on the same port as the APIServer v1. |
 | security.proxy | object | `{"pullPolicy":"IfNotPresent","repository":"quay.io/kuberay/security-proxy","tag":"nightly"}` | security proxy image. |
-| security.env | object | `{"ENABLE_GRPC":"true","GRPC_LOCAL_PORT":8987,"HTTP_LOCAL_PORT":8988,"SECURITY_PREFIX":"/","SECURITY_TOKEN":"12345"}` | security proxy environment variables. |
+| security.env | object | `{"ENABLE_GRPC":"true","GRPC_LOCAL_PORT":8987,"HTTP_LOCAL_PORT":8988,"SECURITY_PREFIX":"/"}` | security proxy environment variables. |

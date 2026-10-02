@@ -10,7 +10,7 @@ image:
   # -- Image repository.
   repository: quay.io/kuberay/apiserver
   # -- Image tag.
-  tag: nightly
+  tag: v1.7.1
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
@@ -116,6 +116,7 @@ security:
   env:
     HTTP_LOCAL_PORT: 8988
     GRPC_LOCAL_PORT: 8987
-    SECURITY_TOKEN: "12345"
+    # SECURITY_TOKEN must be provided explicitly by the user or fetched from a Secret.
+    # SECURITY_TOKEN: "12345"
     SECURITY_PREFIX: "/"
     ENABLE_GRPC: "true"

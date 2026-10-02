@@ -20,13 +20,13 @@ func NewMockReader() *MockReader {
 	clusters := []utils.ClusterInfo{
 		{
 			Name:            "cluster-1",
-			SessionName:     "session-1",
+			SessionName:     "session_2023-01-01_00-00-00_000000",
 			CreateTime:      "2023-01-01T00:00:00Z",
 			CreateTimeStamp: 1672531200000,
 		},
 		{
 			Name:            "cluster-2",
-			SessionName:     "session-2",
+			SessionName:     "session_2023-01-02_00-00-00_000000",
 			CreateTime:      "2023-01-02T00:00:00Z",
 			CreateTimeStamp: 1672617600000,
 		},
@@ -35,11 +35,11 @@ func NewMockReader() *MockReader {
 	data := map[string]map[string]string{
 		"cluster-1": {
 			"log.txt":       "This is log content for cluster-1\nMultiple lines\nof log content",
-			"metadata.json": "{\n  \"name\": \"cluster-1\",\n  \"sessionName\": \"session-1\",\n  \"createTime\": \"2023-01-01T00:00:00Z\"\n}",
+			"metadata.json": "{\n  \"name\": \"cluster-1\",\n  \"sessionName\": \"session_2023-01-01_00-00-00_000000\",\n  \"createTime\": \"2023-01-01T00:00:00Z\"\n}",
 		},
 		"cluster-2": {
 			"log.txt":       "This is log content for cluster-2\nMultiple lines\nof log content",
-			"metadata.json": "{\n  \"name\": \"cluster-2\",\n  \"sessionName\": \"session-2\",\n  \"createTime\": \"2023-01-02T00:00:00Z\"\n}",
+			"metadata.json": "{\n  \"name\": \"cluster-2\",\n  \"sessionName\": \"session_2023-01-02_00-00-00_000000\",\n  \"createTime\": \"2023-01-02T00:00:00Z\"\n}",
 		},
 	}
 

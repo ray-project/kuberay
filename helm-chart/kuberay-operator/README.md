@@ -1,6 +1,6 @@
 # kuberay-operator
 
-![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+![Version: 1.7.1](https://img.shields.io/badge/Version-1.7.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 A Helm chart for deploying the Kuberay operator on Kubernetes.
 
@@ -29,8 +29,8 @@ helm version
   ```sh
   helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 
-  # Install both CRDs and KubeRay operator v1.1.0.
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0
+  # Install both CRDs and KubeRay operator v1.7.1.
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.7.1
 
   # Check the KubeRay operator Pod in `default` namespace
   kubectl get pods
@@ -58,10 +58,10 @@ helm version
 
   ```sh
   # Step 1: Install CRDs only (for cluster admin)
-  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.1.0&timeout=90s"
+  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/crd?ref=v1.7.1&timeout=90s"
 
   # Step 2: Install KubeRay operator only. (for developer)
-  helm install kuberay-operator kuberay/kuberay-operator --version 1.1.0 --skip-crds
+  helm install kuberay-operator kuberay/kuberay-operator --version 1.7.1 --skip-crds
   ```
 
 ## List the chart
@@ -71,7 +71,7 @@ To list the `my-release` deployment:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                           APP VERSION
-# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.1.0
+# kuberay-operator        default         1               2023-09-22 02:57:17.306616331 +0000 UTC deployed        kuberay-operator-1.7.1
 ```
 
 ## Uninstall the Chart
@@ -102,7 +102,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.0.0-rc.0
+    targetRevision: v1.7.1
     path: helm-chart/kuberay-operator/crds
   destination:
     server: https://kubernetes.default.svc
@@ -122,7 +122,7 @@ metadata:
 spec:
   source:
     repoURL: https://github.com/ray-project/kuberay
-    targetRevision: v1.0.0-rc.0
+    targetRevision: v1.7.1
     path: helm-chart/kuberay-operator
     helm:
       skipCrds: true
@@ -149,7 +149,7 @@ spec:
 | componentOverride | string | `"kuberay-operator"` | String to override component name. |
 | replicas | int | `1` | Number of replicas for the KubeRay operator Deployment. |
 | image.repository | string | `"quay.io/kuberay/operator"` | Image repository. |
-| image.tag | string | `"nightly"` | Image tag. |
+| image.tag | string | `"v1.7.1"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | imagePullSecrets | list | `[]` | Secrets with credentials to pull images from a private registry |
 | nodeSelector | object | `{}` | Restrict to run on particular nodes. |
@@ -169,6 +169,8 @@ spec:
 | batchScheduler.name | string | `""` |  |
 | configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.) will be injected into the ConfigMap. The operator will use the ConfigMap and ignore command-line flags. |
 | configuration.defaultContainerEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultContainerEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
+| configuration.defaultPodAnnotations | object | `{}` | Default annotations to add to all Ray pod templates. User-specified annotations take precedence. Example: defaultPodAnnotations:   prometheus.io/scrape: "true"   prometheus.io/port: "8080" |
+| configuration.defaultPodLabels | object | `{}` | Default labels to add to all Ray pod templates. User-specified labels take precedence. Example: defaultPodLabels:   app.kubernetes.io/managed-by: kuberay |
 | configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
@@ -178,14 +180,20 @@ spec:
 | featureGates[2].name | string | `"RayMultiHostIndexing"` |  |
 | featureGates[2].enabled | bool | `true` |  |
 | featureGates[3].name | string | `"RayServiceIncrementalUpgrade"` |  |
-| featureGates[3].enabled | bool | `false` |  |
+| featureGates[3].enabled | bool | `true` |  |
 | featureGates[4].name | string | `"RayCronJob"` |  |
 | featureGates[4].enabled | bool | `false` |  |
+| featureGates[5].name | string | `"RayClusterMTLS"` |  |
+| featureGates[5].enabled | bool | `false` |  |
+| featureGates[6].name | string | `"RayClusterNetworkPolicy"` |  |
+| featureGates[6].enabled | bool | `false` |  |
+| featureGates[7].name | string | `"RayClusterHistoryServer"` |  |
+| featureGates[7].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |
 | metrics.serviceMonitor.honorLabels | bool | `true` | When true, honorLabels preserves the metric’s labels when they collide with the target’s labels. |
-| metrics.serviceMonitor.selector | object | `{}` | Prometheus ServiceMonitor selector |
+| metrics.serviceMonitor.additionalLabels | object | `{}` | Additional labels to add to the ServiceMonitor's metadata. |
 | metrics.serviceMonitor.namespace | string | `""` | Prometheus ServiceMonitor namespace |
 | operatorCommand | string | `"/manager"` | Path to the operator binary |
 | leaderElectionEnabled | bool | `true` | If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability. |

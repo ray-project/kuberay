@@ -1,7 +1,8 @@
 apiVersion: v2
 name: kuberay-operator
 description: A Helm chart for deploying the Kuberay operator on Kubernetes.
-version: 1.1.0
+version: 2.0.0
+appVersion: v1.7.1
 type: application
 keywords:
   - ray

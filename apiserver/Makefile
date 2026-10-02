@@ -156,9 +156,6 @@ load-image: ## Load the api server image to the kind cluster created with create
 operator-image: ## Build the operator image to be loaded in your kind cluster.
 	cd ../ray-operator && $(MAKE) docker-image -e IMG=quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
-.PHONY: security-proxy-image
-security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.

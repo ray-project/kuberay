@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -120,7 +121,7 @@ func getFiltersFromReq(req *restful.Request) ([]Filter, error) {
 
 	filters := make([]Filter, len(filterKeys))
 	for i := range filterKeys {
-		// TODO(jwj): Add error handling for invalid filter keys based on filterable fields.
+		// TODO(jiangjiawei1103): Add error handling for invalid filter keys based on filterable fields.
 		predicate, err := parsePredicate(string(filterPredicates[i]))
 		if err != nil {
 			return nil, fmt.Errorf("invalid predicate: %w", err)
@@ -178,7 +179,8 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 		return []eventtypes.Task{}, 0
 	}
 
-	// Sort tasks by task_id and task_attempt.
+	// The caller's slice may be a shared cached snapshot; never sort it in place.
+	tasks = slices.Clone(tasks)
 	sort.Slice(tasks, func(i, j int) bool {
 		return tasks[i].TaskID < tasks[j].TaskID || (tasks[i].TaskID == tasks[j].TaskID && tasks[i].TaskAttempt < tasks[j].TaskAttempt)
 	})
@@ -206,7 +208,7 @@ func filterTasks(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
 	return filteredTasks
 }
 
-// TODO(jwj): ApplyFilters and helpers like sortByIdAndAttempt and limitByLimit should be shared among different objects, e.g., actors, nodes.
+// TODO(jiangjiawei1103): ApplyFilters and helpers like sortByIdAndAttempt and limitByLimit should be shared among different objects, e.g., actors, nodes.
 // The following functions are for compatibility for other endpoints other than tasks.
 type PredicateFunc func(fieldValue, filterValue string) bool
 

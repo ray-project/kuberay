@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  architect: giantswarm/architect@5.11.5
+  architect: giantswarm/architect@10.11.1
 
 workflows:
   build:
@@ -11,6 +11,9 @@ workflows:
           context: architect
           executor: app-build-suite
           chart: kuberay
+          # Keep the appVersion declared in Chart.yaml: it names the upstream
+          # KubeRay release the chart deploys, not the GS chart tag.
+          override_app_version: false
           app_catalog: giantswarm-catalog
           app_catalog_test: giantswarm-test-catalog
           filters:

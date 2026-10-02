@@ -305,6 +305,16 @@ tests:
         path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
         content: "--burst=150"
 
+  - it: Should enable Kubernetes WAS batch scheduler when the KubernetesWAS feature gate is set
+    set:
+      featureGates:
+        - name: KubernetesWAS
+          enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--feature-gates=KubernetesWAS=true"
+
   - it: Should add config volume and volumeMount when configuration is enabled
     set:
       configuration:

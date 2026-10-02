@@ -4,7 +4,7 @@ name: kuberay-operator
 
 description: A Helm chart for deploying the Kuberay operator on Kubernetes.
 
-version: 1.1.0
+version: 1.7.1
 
 type: application
 
@@ -22,7 +22,3 @@ keywords:
 home: https://github.com/ray-project/kuberay
 
 icon: https://github.com/ray-project/ray/raw/master/doc/source/images/ray_header_logo.png
-
-annotations:
-  io.giantswarm.application.audience: all
-  io.giantswarm.application.team: planeteers

@@ -128,7 +128,7 @@
                         "namespace": {
                             "type": "string"
                         },
-                        "selector": {
+                        "additionalLabels": {
                             "type": "object"
                         }
                     }

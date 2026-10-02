@@ -71,6 +71,17 @@ FeatureGates
 {{- end }}
 {{- end }}
 
+{{/*
+Whether the KubernetesWAS feature gate is enabled in .Values.featureGates.
+*/}}
+{{- define "kuberay.kubernetesWASEnabled" -}}
+{{- range .Values.featureGates -}}
+{{- if and (eq .name "KubernetesWAS") .enabled -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+
 {{- /* Create the name of the service to use. */ -}}
 {{- define "kuberay-operator.service.name" -}}
 {{- include "kuberay-operator.fullname" . }}
@@ -151,7 +162,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
+  - persistentvolumeclaims
   - pods/status
   - services
   verbs:
@@ -196,8 +207,10 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - ""
@@ -231,6 +244,31 @@ rules:
   - update
   - watch
 - apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates/status
+  verbs:
+  - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
@@ -247,6 +285,13 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - extensions
   - networking.k8s.io
@@ -267,6 +312,7 @@ rules:
   - httproutes
   verbs:
   - create
+  - delete
   - get
   - list
   - update
@@ -278,6 +324,17 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - ray.io
@@ -347,6 +404,21 @@ rules:
   - patch
   - update
   - watch
+{{- if .kubernetesWASEnabled }}
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - podgroups
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh

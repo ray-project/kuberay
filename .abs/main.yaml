@@ -1,4 +1,4 @@
-chart-dir: helm-chart/kuberay-operator
+chart-dir: ./helm/kuberay
 replace-chart-version-with-git: true
 generate-metadata: true
 catalog-base-url: https://giantswarm.github.io/giantswarm-catalog/

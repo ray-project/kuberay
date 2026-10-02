@@ -14,6 +14,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
 
@@ -130,19 +131,24 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	// Wait until Ray Dashboard GCS is healthy before proceeding.
 	// In SidecarMode the submitter shares the head Pod's network namespace, so we
-	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
-	// reach the dashboard through the head Service.
-	var healthURL string
+	// probe localhost. In K8sJobMode the submitter probes the dashboard URL from
+	// its environment overrides, falling back to the head Service address.
+	var rayDashboardGCSHealthCommand string
 	if submissionMode == rayv1.SidecarMode {
-		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+		healthURL := fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+		rayDashboardGCSHealthCommand = fmt.Sprintf(
+			utils.BasePythonHealthCommand,
+			healthURL,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
+		)
 	} else {
-		healthURL = address + "/" + utils.RayDashboardGCSHealthPath
+		rayDashboardGCSHealthCommand = fmt.Sprintf(
+			utils.K8sJobDashboardHealthCommand,
+			utils.RayDashboardGCSHealthPath,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
+			address,
+		)
 	}
-	rayDashboardGCSHealthCommand := fmt.Sprintf(
-		utils.BasePythonHealthCommand,
-		healthURL,
-		utils.RayDashboardGCSHealthCheckTimeoutSeconds,
-	)
 
 	waitLoop := []string{
 		"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
@@ -150,10 +156,13 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	}
 	cmd = append(cmd, waitLoop...)
 
-	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
+	// In Sidecar mode without SidecarSubmitterRestart feature gate enabled, we only support RayJob level retry, which means that the submitter retry won't happen,
 	// so we won't have to check if the job has been submitted.
-	if submissionMode == rayv1.K8sJobMode {
-		// Only check job status in K8s mode to handle duplicated submission gracefully
+	// In K8sJobMode (submitter Job may retry) or Sidecar mode with SidecarSubmitterRestart feature gate enabled (submitter container may restart on failure).
+	// we check job status before submitting to handle duplicated submission gracefully.
+	needsStatusCheck := submissionMode == rayv1.K8sJobMode || (submissionMode == rayv1.SidecarMode && features.Enabled(features.SidecarSubmitterRestart))
+
+	if needsStatusCheck {
 		cmd = append(cmd, "if", "!")
 		cmd = append(cmd, jobStatusCommand...)
 		cmd = append(cmd, ";", "then")
@@ -161,7 +170,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	cmd = append(cmd, jobSubmitCommand...)
 
-	if submissionMode == rayv1.K8sJobMode {
+	if needsStatusCheck {
 		cmd = append(cmd, "--no-wait")
 	}
 
@@ -199,7 +208,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.
 	cmd = append(cmd, "--", entrypoint, ";")
-	if submissionMode == rayv1.K8sJobMode {
+	if needsStatusCheck {
 		cmd = append(cmd, "fi", ";")
 		cmd = append(cmd, jobFollowCommand...)
 	}

@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,7 +53,7 @@ const (
 type RayServiceReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 	// Currently, the Ray dashboard doesn't cache the Serve application config.
 	// To avoid reapplying the same config repeatedly, cache the config in this map.
 	// Cache key is the combination of RayService namespace and name.
@@ -71,7 +71,7 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 	return &RayServiceReconciler{
 		Client:                       mgr.GetClient(),
 		Scheme:                       mgr.GetScheme(),
-		Recorder:                     mgr.GetEventRecorderFor("rayservice-controller"),
+		Recorder:                     mgr.GetEventRecorder("rayservice-controller"),
 		ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
 		RayClusterDeletionTimestamps: cmap.New[time.Time](),
 
@@ -86,7 +86,7 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/proxy,verbs=get;update;patch
@@ -95,8 +95,8 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;list;watch;create;update;
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
@@ -157,7 +157,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	errType, err := validateRayService(ctx, rayServiceInstance)
 	// Immediately update the status after validation
 	if err != nil {
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(errType),
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(errType), string(utils.ValidateAction),
 			"%s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
 
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceValidationFailed, err.Error())
@@ -168,6 +168,17 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, updateErr
 		}
 		return ctrl.Result{}, nil
+	}
+
+	result, err := r.handleSuspend(ctx, rayServiceInstance)
+	if updateErr := r.updateStatusIfChanged(ctx, originalRayServiceInstance, rayServiceInstance); updateErr != nil && err == nil {
+		err = updateErr
+		if (result == ctrl.Result{}) {
+			result = ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}
+		}
+	}
+	if err != nil || suspendIsOperative(rayServiceInstance) {
+		return result, err
 	}
 
 	// If the RayService has timed out during initialization, skip the rest of the reconciliation.
@@ -196,7 +207,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		if isUpgradeInProgress {
 			if activeRayClusterInstance == nil {
 				logger.Info("Cannot initiate rollback: active cluster not found")
-				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.RollbackImpossible), "Active cluster not found, rollback cannot be initiated")
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.RollbackImpossible), string(utils.ReconcileAction), "Active cluster not found, rollback cannot be initiated")
 			} else if pendingRayClusterInstance != nil {
 				if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
 					return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -336,6 +347,222 @@ func validateRayService(ctx context.Context, rayServiceInstance *rayv1.RayServic
 		}
 	}
 	return "", nil
+}
+
+// suspendIsOperative reports whether the suspend state machine currently
+// owns this reconcile pass. When true, Reconcile must short-circuit after
+// persisting status: running the rest of the loop would either re-create
+// resources that handleSuspend tore down or overwrite the conditions it
+// staged.
+//
+// Reading Suspending / Suspended is the canonical "is suspend driving?"
+// check because those two conditions must only be mutated by handleSuspend
+// (and are the source of truth for the suspend state machine after it
+// returns). Do not write to them from anywhere else.
+func suspendIsOperative(rayServiceInstance *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending)) ||
+		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+}
+
+// handleSuspend implements the Spec.Suspend lifecycle. It mutates
+// rayServiceInstance.Status in-place; the caller persists the changes via a
+// single Status().Update.
+//
+// State machine:
+//
+//	(no suspend)  --Spec.Suspend=true-->  Suspending  --owned resources deleted-->  Suspended  --Spec.Suspend=false-->  (no suspend)
+//
+// Atomicity comes from a persisted Suspending condition as the commit point.
+// The first reconcile that observes Spec.Suspend=true only stages the status
+// transition (Suspending=True + reset of ActiveServiceStatus,
+// PendingServiceStatus, NumServeEndpoints, ServiceStatus) in the same status
+// update; deletion runs on the next reconcile, once Suspending is durable. If
+// a later deletion attempt errors out or Spec.Suspend is flipped back to
+// false, Suspending stays True in storage and subsequent reconciles continue
+// the cleanup.
+func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInstance *rayv1.RayService) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	isSuspending := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending))
+	isSuspended := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+
+	// Case 1: already fully suspended.
+	if isSuspended {
+		if !rayServiceInstance.Spec.Suspend {
+			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
+			rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
+			setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionFalse, rayv1.RayServiceResumed,
+				"Spec.Suspend is false; RayService has resumed.")
+			// Re-arm the initializing-timeout for the resumed attempt.
+			// Remove + Set forces a fresh LastTransitionTime because
+			// meta.SetStatusCondition only refreshes it when Status changes.
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady))
+			setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing,
+				"RayService is initializing after resuming from suspend.")
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing,
+				"RayService is initializing after resuming from suspend.")
+			return ctrl.Result{}, nil
+		}
+		// Stay suspended; nothing to reconcile.
+		return ctrl.Result{}, nil
+	}
+
+	// Case 2: Spec.Suspend just transitioned to true. Stage the status
+	// transition (Suspending=True + reset status fields) and return so the
+	// caller can persist it. Deletion runs on the next reconcile once
+	// Suspending is durable.
+	if !isSuspending {
+		if !rayServiceInstance.Spec.Suspend {
+			return ctrl.Result{}, nil
+		}
+		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
+		rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
+			"Spec.Suspend is true; will delete all Kubernetes resources owned by this RayService.")
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No upgrade in progress.")
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No rollback in progress.")
+		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.NumServeEndpoints = 0
+		rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// Case 3: Suspending is committed in storage. Delete owned resources.
+	// Atomic: ignore Spec.Suspend here — once Suspending is persisted, the
+	// deletion always runs to completion.
+	allDeleted, err := r.deleteRayServiceOwnedResources(ctx, rayServiceInstance)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !allDeleted {
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
+			"Waiting for all Kubernetes resources owned by this RayService to be deleted.")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// All resources deleted: transition to Suspended. Requeue so that the
+	// next reconcile observes Spec.Suspend; this matters when the user
+	// flipped Spec.Suspend back to false mid-suspend (atomic completion put
+	// us here despite Spec.Suspend=false), since the status-only update
+	// below would not otherwise wake the controller up.
+	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
+	setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"All owned resources have been deleted.")
+	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
+	setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendComplete, "RayService is suspended.")
+	setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No upgrade in progress.")
+	setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No rollback in progress.")
+	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+// deleteRayServiceOwnedResources deletes every Kubernetes resource that the
+// RayService controller owns: RayClusters, head/serve Services, and — when
+// RayServiceIncrementalUpgrade is enabled — the Gateway and HTTPRoute.
+// Per-cluster serve Services used by incremental upgrade are owned by their
+// RayCluster, so they are garbage-collected when the cluster is deleted above.
+// Returns true when nothing remained to be deleted.
+func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	allDeleted := true
+
+	// RayClusters.
+	rayClusterList := rayv1.RayClusterList{}
+	if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range rayClusterList.Items {
+		cluster := &rayClusterList.Items[i]
+		allDeleted = false
+		if !cluster.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting RayCluster for suspend", "name", cluster.Name)
+		if err := r.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), string(utils.DeleteAction),
+				"Failed to delete the RayCluster %s/%s during suspend: %v", cluster.Namespace, cluster.Name, err)
+			return false, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedRayCluster), string(utils.DeleteAction),
+			"Deleted the RayCluster %s/%s during suspend", cluster.Namespace, cluster.Name)
+	}
+
+	// Kubernetes Services (head + serve).
+	svcList := corev1.ServiceList{}
+	if err := r.List(ctx, &svcList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range svcList.Items {
+		svc := &svcList.Items[i]
+		allDeleted = false
+		if !svc.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting Service for suspend", "name", svc.Name)
+		if err := r.Delete(ctx, svc, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteService), string(utils.DeleteAction),
+				"Failed to delete the Service %s/%s during suspend: %v", svc.Namespace, svc.Name, err)
+			return false, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedService), string(utils.DeleteAction),
+			"Deleted the Service %s/%s during suspend", svc.Namespace, svc.Name)
+	}
+
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		gateway := &gwv1.Gateway{}
+		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
+			allDeleted = false
+			if gateway.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
+				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway), string(utils.DeleteAction),
+						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
+					return false, err
+				}
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedGateway), string(utils.DeleteAction),
+					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
+			}
+		} else if !errors.IsNotFound(err) {
+			return false, err
+		}
+
+		httpRoute := &gwv1.HTTPRoute{}
+		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
+			allDeleted = false
+			if httpRoute.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
+				if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute), string(utils.DeleteAction),
+						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
+					return false, err
+				}
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute), string(utils.DeleteAction),
+					"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
+			}
+		} else if !errors.IsNotFound(err) {
+			return false, err
+		}
+	}
+
+	return allDeleted, nil
+}
+
+// updateStatusIfChanged persists rayServiceInstance.Status if it differs from
+// originalRayService.Status. It mirrors the status-update path used at the end
+// of Reconcile so that handleSuspend can finalize a reconcile early.
+func (r *RayServiceReconciler) updateStatusIfChanged(ctx context.Context, originalRayService, rayServiceInstance *rayv1.RayService) error {
+	if !utils.InconsistentRayServiceStatuses(originalRayService.Status, rayServiceInstance.Status) {
+		return nil
+	}
+	rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
+	return r.Status().Update(ctx, rayServiceInstance)
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
@@ -724,10 +951,10 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 			}
 			logger.Info("Creating a new Gateway instance", "Gateway Listeners", desiredGateway.Spec.Listeners)
 			if err := r.Create(ctx, desiredGateway); err != nil {
-				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateGateway), string(utils.CreateAction), "Failed to create Gateway for RayService %s/%s: %v", desiredGateway.Namespace, desiredGateway.Name, err)
 				return err
 			}
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedGateway), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedGateway), string(utils.CreateAction), "Created Gateway for RayService %s/%s", desiredGateway.Namespace, desiredGateway.Name)
 			return nil
 		}
 		return err
@@ -738,10 +965,10 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 		logger.Info("Updating existing Gateway", "name", existingGateway.Name)
 		existingGateway.Spec = desiredGateway.Spec
 		if err := r.Update(ctx, existingGateway); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), "Failed to update the Gateway %s/%s: %v", existingGateway.Namespace, existingGateway.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateGateway), string(utils.UpdateAction), "Failed to update the Gateway %s/%s: %v", existingGateway.Namespace, existingGateway.Name, err)
 			return err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedGateway), "Updated the Gateway %s/%s", existingGateway.Namespace, existingGateway.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedGateway), string(utils.UpdateAction), "Updated the Gateway %s/%s", existingGateway.Namespace, existingGateway.Name)
 	}
 
 	return nil
@@ -945,10 +1172,10 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 				return nil, err
 			}
 			if err = r.Create(ctx, desiredHTTPRoute); err != nil {
-				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateHTTPRoute), string(utils.CreateAction), "Failed to create the HTTPRoute for RayService %s/%s: %v", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name, err)
 				return nil, err
 			}
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedHTTPRoute), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedHTTPRoute), string(utils.CreateAction), "Created HTTPRoute for RayService %s/%s", desiredHTTPRoute.Namespace, desiredHTTPRoute.Name)
 			return desiredHTTPRoute, nil
 		}
 		return nil, err
@@ -959,10 +1186,10 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), string(utils.UpdateAction), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
 			return nil, err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute), string(utils.UpdateAction), "Updated the HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
 	}
 
 	return existingHTTPRoute, nil
@@ -1000,10 +1227,10 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		}
 		modifyRayCluster(ctx, activeRayCluster, goalCluster)
 		if err = r.Update(ctx, activeRayCluster); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), string(utils.UpdateAction), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
 			return activeRayCluster, pendingRayCluster, err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), string(utils.UpdateAction), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -1015,10 +1242,10 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		}
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), string(utils.UpdateAction), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
 			return activeRayCluster, pendingRayCluster, err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), string(utils.UpdateAction), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
@@ -1063,10 +1290,10 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 				if reasonForDeletion != "" {
 					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-						r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+						r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), string(utils.DeleteAction), "Failed to delete the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 						return false, err
 					}
-					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
+					r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.DeletedRayCluster), string(utils.DeleteAction), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 				}
 			} else {
 				deletionTimestamp := metav1.Now().Add(deletionDelay)
@@ -1140,14 +1367,6 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 		}
 	}
 
-	if ptr.Deref(rayServiceInstance.Spec.RayClusterSpec.Suspend, false) != ptr.Deref(cluster.Spec.Suspend, false) {
-		// Suspend toggles (e.g. from Kueue admitting or preempting the workload) must be
-		// applied in-place to the existing RayCluster. Otherwise the hash comparison below
-		// selects neither the update nor the new-cluster path, and the cluster stays
-		// suspended with no head pod (ray-project/kuberay#4686).
-		return true
-	}
-
 	if isClusterSpecHashEqual(rayServiceInstance, cluster, false) {
 		// The RayCluster spec matches the cluster spec in the RayService. No need to update the cluster.
 		return false
@@ -1160,9 +1379,10 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster, partial bool) bool {
 	// If `partial` is true, only compare the first `len(cluster.Spec.WorkerGroupSpecs)` worker groups in the CR spec.
 	clusterHash := cluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	goalClusterSpec := rayClusterSpecForHashing(rayServiceInstance)
 	goalClusterHash := ""
 	if !partial {
-		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
 	} else {
 		// If everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
@@ -1170,11 +1390,10 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 		if err != nil {
 			return true
 		}
-		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
+		goalNumWorkerGroups := len(goalClusterSpec.WorkerGroupSpecs)
 		if goalNumWorkerGroups >= clusterNumWorkerGroups {
 
 			// Remove the new workergroup(s) from the end before calculating the hash.
-			goalClusterSpec := rayServiceInstance.Spec.RayClusterSpec.DeepCopy()
 			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:clusterNumWorkerGroups]
 
 			// Generate the hash of the old worker group specs.
@@ -1235,8 +1454,14 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	}
 	logger.Info("updateRayClusterInstance", "Name", goalCluster.Name, "Namespace", goalCluster.Namespace)
 
-	// Update the fetched RayCluster with new changes
+	// Update the fetched RayCluster with new changes. Suspend is propagated
+	// from the RayService to the RayCluster only at creation time; afterwards
+	// the RayCluster's Suspend is delegated to Kueue, so we preserve the
+	// existing cluster's Suspend here instead of letting the goal spec
+	// overwrite it.
+	existingSuspend := currentCluster.Spec.Suspend
 	currentCluster.Spec = goalCluster.Spec
+	currentCluster.Spec.Suspend = existingSuspend
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
@@ -1254,12 +1479,26 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	}
 	if err = r.Create(ctx, rayClusterInstance); err != nil {
 		logger.Error(err, "Failed to create the RayCluster")
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), "Failed to create the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRayCluster), string(utils.CreateAction), "Failed to create the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 		return nil, err
 	}
 	logger.Info("Created RayCluster for RayService", "clusterName", rayClusterInstance.Name)
-	r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedRayCluster), "Created the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
+	r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedRayCluster), string(utils.CreateAction), "Created the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 	return rayClusterInstance, nil
+}
+
+// rayClusterSpecForHashing returns a copy of the RayService's RayClusterSpec
+// to use for hash comparisons. Fields that should not trigger reconciliation
+// of the underlying RayCluster are cleared here. Suspend is excluded because
+// the RayService controller propagates Suspend to the RayCluster only at
+// creation time; once the RayCluster exists, Suspend is delegated to Kueue
+// (or whichever external controller owns the RayCluster's queueing), and
+// later changes to RayService.Spec.RayClusterSpec.Suspend must not trigger
+// an in-place update or a new cluster preparation.
+func rayClusterSpecForHashing(rayService *rayv1.RayService) *rayv1.RayClusterSpec {
+	spec := rayService.Spec.RayClusterSpec.DeepCopy()
+	spec.Suspend = nil
+	return spec
 }
 
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
@@ -1271,7 +1510,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 
 	rayClusterAnnotations := make(map[string]string)
 	maps.Copy(rayClusterAnnotations, rayService.Annotations)
-	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayService))
 	if err != nil {
 		return nil, err
 	}
@@ -1722,10 +1961,10 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 		oldSvc.Spec = *newSvc.Spec.DeepCopy()
 		logger.Info("Update Kubernetes Service", "serviceType", serviceType)
 		if updateErr := r.Update(ctx, oldSvc); updateErr != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateService), "Failed to update the service %s/%s, %v", oldSvc.Namespace, oldSvc.Name, updateErr)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateService), string(utils.UpdateAction), "Failed to update the service %s/%s, %v", oldSvc.Namespace, oldSvc.Name, updateErr)
 			return nil, updateErr
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedService), "Updated the service %s/%s", oldSvc.Namespace, oldSvc.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedService), string(utils.UpdateAction), "Updated the service %s/%s", oldSvc.Namespace, oldSvc.Name)
 		// Return the updated service.
 		return oldSvc, nil
 	} else if errors.IsNotFound(err) {
@@ -1734,10 +1973,10 @@ func (r *RayServiceReconciler) reconcileServices(ctx context.Context, rayService
 			return nil, err
 		}
 		if err := r.Create(ctx, newSvc); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToCreateService), "Failed to create the service %s/%s, %v", newSvc.Namespace, newSvc.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateService), string(utils.CreateAction), "Failed to create the service %s/%s, %v", newSvc.Namespace, newSvc.Name, err)
 			return nil, err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.CreatedService), "Created the service %s/%s", newSvc.Namespace, newSvc.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.CreatedService), string(utils.CreateAction), "Created the service %s/%s", newSvc.Namespace, newSvc.Name)
 		return newSvc, nil
 	}
 	return nil, err
@@ -1811,20 +2050,20 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 
 	if shouldUpdate && !skipConfigUpdate {
 		if err = r.updateServeDeployment(ctx, rayServiceInstance, rayDashboardClient, rayClusterInstance.Name); err != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateServeApplications), "Failed to update serve applications to the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateServeApplications), string(utils.UpdateAction), "Failed to update serve applications to the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 			return false, serveApplications, err
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeApplications), "Updated serve applications to the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedServeApplications), string(utils.UpdateAction), "Updated serve applications to the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 	}
 	if isIncrementalUpgradeInProgress {
 		incrementalUpgradeUpdate, reason := r.checkIfNeedTargetCapacityUpdate(ctx, rayServiceInstance)
 		logger.Info("checkIfNeedTargetCapacityUpdate", "incrementalUpgradeUpdate", incrementalUpgradeUpdate, "reason", reason)
 		if incrementalUpgradeUpdate {
 			if err := r.reconcileServeTargetCapacity(ctx, rayServiceInstance, rayClusterInstance, rayDashboardClient); err != nil {
-				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateTargetCapacity), "Failed to update target_capacity of serve applications to the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
+				r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateTargetCapacity), string(utils.UpdateAction), "Failed to update target_capacity of serve applications to the RayCluster %s/%s: %v", rayClusterInstance.Namespace, rayClusterInstance.Name, err)
 				return false, serveApplications, err
 			}
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedServeTargetCapacity),
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedServeTargetCapacity), string(utils.UpdateAction),
 				"Updated target_capacity of serve applications to to the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 		}
 	}
@@ -1870,10 +2109,10 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayS
 	if oldLabel != newLabel {
 		headPod.Labels[utils.RayClusterServingServiceLabelKey] = newLabel
 		if updateErr := r.Update(ctx, headPod); updateErr != nil {
-			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHeadPodServeLabel), "Failed to update the serve label to %q for the Head Pod %s/%s: %v", newLabel, headPod.Namespace, headPod.Name, updateErr)
+			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateHeadPodServeLabel), string(utils.UpdateAction), "Failed to update the serve label to %q for the Head Pod %s/%s: %v", newLabel, headPod.Namespace, headPod.Name, updateErr)
 			return updateErr
 		}
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHeadPodServeLabel), "Updated the serve label to %q for the Head Pod %s/%s", newLabel, headPod.Namespace, headPod.Name)
+		r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeNormal, string(utils.UpdatedHeadPodServeLabel), string(utils.UpdateAction), "Updated the serve label to %q for the Head Pod %s/%s", newLabel, headPod.Namespace, headPod.Name)
 	}
 
 	return nil
@@ -2030,7 +2269,7 @@ func markFailedOnInitializingTimeout(ctx context.Context, r *RayServiceReconcile
 	setCondition(rs, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializingTimeout, message)
 
 	// Emit warning event
-	r.Recorder.Eventf(rs, corev1.EventTypeWarning, string(utils.RayServiceInitializingTimeout),
+	r.Recorder.Eventf(rs, nil, corev1.EventTypeWarning, string(utils.RayServiceInitializingTimeout), string(utils.ReconcileAction),
 		"RayService initializing timeout exceeded after %s (configured timeout: %s)",
 		timeInInitializing, timeout)
 }
@@ -2091,7 +2330,7 @@ func shouldCompleteIncrementalRollback(
 func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayServiceInstance))
 	if err != nil {
 		return fmt.Errorf("failed to generate hash for goal cluster spec: %w", err)
 	}
@@ -2101,7 +2340,17 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 
 	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-	// Case 1: The goal spec matches the pending cluster's spec.
+	// Case 1: The goal spec matches the original active cluster's spec.
+	// The user reverted the upgrade. We must cancel the upgrade and safely roll back to the active cluster.
+	if targetHash == originalHash {
+		if !isRollbackInProgress {
+			logger.Info("Goal state reverted to original cluster during upgrade. Initiating safe rollback.", "targetHash", targetHash, "originalHash", originalHash)
+			setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "Goal state reverted to original cluster, rolling back.")
+		}
+		return nil
+	}
+
+	// Case 2: The goal spec matches the pending cluster's spec.
 	// The upgrade is on track. We should revert any accidental rollback attempt and continue.
 	if targetHash == pendingHash {
 		if isRollbackInProgress {
@@ -2111,18 +2360,15 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 		return nil
 	}
 
-	// Case 2: The goal spec diverges from the pending cluster.
-	// This covers two sub-cases:
-	//   2.1: The user reverted to the original spec (targetHash == originalHash).
-	//        The pending cluster is no longer needed, so we roll back to the active cluster.
-	//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
-	//        The pending cluster doesn't match the new goal either, so we must first roll back
-	//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
-	// In both sub-cases, we must safely route all traffic back to the original cluster before
+	// Case 3: The goal spec diverges from the pending cluster.
+	// The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
+	// The pending cluster doesn't match the new goal either, so we must first roll back
+	// to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
+	// We must safely route all traffic back to the original cluster before
 	// allowing a new cluster to be spun up.
 	if !isRollbackInProgress {
 		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
-		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.DesiredClusterSpecChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
 	}
 
 	return nil

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `metrics.serviceMonitor.selector` is renamed to `metrics.serviceMonitor.additionalLabels`, and empty labels are no longer emitted ([ray-project/kuberay#4979](https://github.com/ray-project/kuberay/pull/4979)). Update any values file that sets it.
+- Synced the fork with upstream `ray-project/kuberay` `v1.7.1`, the first release that supports Kubernetes 1.35 ([#4399](https://github.com/ray-project/kuberay/pull/4399) adds RayJob sidecar retry handling for 1.35+, [#4703](https://github.com/ray-project/kuberay/pull/4703) moves client-go to 1.36).
+- Refreshed `helm/kuberay/` (CRDs, templates, `values.yaml`, chart tests) from `helm-chart/kuberay-operator/` at `v1.7.1`, and pinned the operator image to `v1.7.1`.
+- `RayServiceIncrementalUpgrade` is beta and enabled by default upstream from `v1.7.0`; the GS chart follows that default.
+
+### Fixed
+
+- Bumped the `architect` orb from `5.11.5` to `10.11.1`. Orbs below 9 push to `giantswarmpublic.azurecr.io`, which no longer resolves, so releases never reached the catalog.
+- `.abs/main.yaml` built `helm-chart/kuberay-operator`, the upstream-tracking copy, instead of `helm/kuberay`, the chart CI actually publishes.
+- `helm/kuberay/Chart.yaml` now declares `appVersion: v1.7.1`, with `override_app_version: false` in CI, so the published chart names the KubeRay release it deploys rather than the GS chart tag.
+
+### Added
+
+- Feature gates `RayClusterMTLS`, `RayClusterNetworkPolicy` and `RayClusterHistoryServer`, all disabled by default.
+- Operator configuration values `configuration.defaultPodAnnotations` and `configuration.defaultPodLabels`, applied to every Ray pod.
+
+### Deprecated
+
+- `ray.io/v1alpha1` is marked deprecated upstream ([#5122](https://github.com/ray-project/kuberay/pull/5122)). Migrate to `ray.io/v1`.
+
 ## [1.1.0] - 2026-05-19
 
 ### Changed

@@ -44,7 +44,7 @@ const (
 // RayErrorInfo is the information per Ray error type.
 type RayErrorInfo struct {
 	// More detailed error context for various error types.
-	// TODO(jwj): Add error context.
+	// TODO(jiangjiawei1103): Add error context.
 	Error interface{} `json:"error"`
 
 	ErrorMessage string `json:"errorMessage"`
