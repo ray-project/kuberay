@@ -9492,6 +9492,9 @@ spec:
                       - template
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - groupName
+                    x-kubernetes-list-type: map
                 required:
                 - headGroupSpec
                 type: object
@@ -18485,6 +18488,9 @@ spec:
                       - template
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - groupName
+                    x-kubernetes-list-type: map
                 required:
                 - headGroupSpec
                 type: object
