@@ -206,7 +206,7 @@ func TestAddMetadataToChildResourceSkipsSchedulingGroupWhenAutoscalingEnabled(t 
 	assert.Empty(t, pod.Spec.SchedulerName)
 }
 
-func TestCleanupOnCompletionDeletesSchedulingResourcesInDependencyOrder(t *testing.T) {
+func TestDeleteSchedulingResourcesInDependencyOrder(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -237,7 +237,7 @@ func TestCleanupOnCompletionDeletesSchedulingResourcesInDependencyOrder(t *testi
 	assert.True(t, apierrors.IsNotFound(err))
 }
 
-func TestCleanupOnCompletionSkipsForeignPodGroupAndDeletesOwnedWorkload(t *testing.T) {
+func TestDeleteSchedulingResourcesSkipsForeignPodGroupAndDeletesOwnedWorkload(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -267,7 +267,7 @@ func TestCleanupOnCompletionSkipsForeignPodGroupAndDeletesOwnedWorkload(t *testi
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 }
 
-func TestCleanupOnCompletionSkipsForeignWorkloadAndDeletesOwnedPodGroup(t *testing.T) {
+func TestDeleteSchedulingResourcesSkipsForeignWorkloadAndDeletesOwnedPodGroup(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -297,7 +297,7 @@ func TestCleanupOnCompletionSkipsForeignWorkloadAndDeletesOwnedPodGroup(t *testi
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: foreignWorkload.Name, Namespace: foreignWorkload.Namespace}, &schedulingv1alpha3.Workload{}))
 }
 
-func TestCleanupOnCompletionWaitsForPodGroupsBeforeDeletingWorkload(t *testing.T) {
+func TestDeleteSchedulingResourcesWaitsForPodGroupsBeforeDeletingWorkload(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup())
@@ -327,7 +327,7 @@ func TestCleanupOnCompletionWaitsForPodGroupsBeforeDeletingWorkload(t *testing.T
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingWorkload.Name, Namespace: existingWorkload.Namespace}, &schedulingv1alpha3.Workload{}))
 }
 
-func TestCleanupOnCompletionNotFoundIsNoop(t *testing.T) {
+func TestDeleteSchedulingResourcesNotFoundIsNoop(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).Build()

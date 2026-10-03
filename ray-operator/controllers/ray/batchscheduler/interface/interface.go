@@ -24,10 +24,10 @@ type BatchScheduler interface {
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string)
 
-	// CleanupOnCompletion releases the capacity reserved for a workload that no longer needs it:
-	// a RayJob that reached a terminal state (Complete/Failed) or was suspended, or a suspended
-	// RayCluster. The behavior is plugin-specific; schedulers that keep their resources for reuse
-	// on resume treat this as a no-op.
+	// CleanupOnCompletion handles cleanup when a RayJob reaches a terminal state (Complete/Failed)
+	// or when a RayJob or RayCluster is suspended.
+	// For example, Volcano updates the PodGroup to release unused queue capacity.
+	// This is a no-op for schedulers that do not need cleanup.
 	// Returns (didCleanup, error) where didCleanup indicates whether actual cleanup was performed.
 	CleanupOnCompletion(ctx context.Context, object metav1.Object) (didCleanup bool, err error)
 }

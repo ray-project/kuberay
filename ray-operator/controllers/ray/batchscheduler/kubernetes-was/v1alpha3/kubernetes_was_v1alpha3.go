@@ -77,6 +77,8 @@ func (k *KubernetesWASV1Alpha3Scheduler) AddMetadataToChildResource(_ context.Co
 	setSchedulingGroup(child, clusterPodGroupName(rayCluster.Name))
 }
 
+// CleanupOnCompletion is a no-op because the Workload and PodGroup
+// are kept for reuse when the RayCluster resumes.
 func (k *KubernetesWASV1Alpha3Scheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
 	return false, nil
 }

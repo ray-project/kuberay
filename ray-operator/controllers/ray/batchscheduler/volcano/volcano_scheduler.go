@@ -354,9 +354,13 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
-// CleanupOnCompletion stops the PodGroup from reserving queue capacity once a RayJob reaches a
-// terminal state or is suspended, or a RayCluster is suspended. PodGroups of deleted objects are
-// removed by their OwnerReference.
+// CleanupOnCompletion recalculates and updates the PodGroup resources.
+// This is called when a RayJob reaches a terminal state (Complete/Failed),
+// or when a RayJob or RayCluster is suspended.
+//
+// For RayJob, MinMember and MinResources are recalculated based on the current RayCluster.
+// For suspended RayCluster, the PodGroup is updated with empty resources.
+// When a RayJob or RayCluster is deleted, its PodGroup is cleaned up through its OwnerReference.
 func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
 	switch obj := object.(type) {
 	case *rayv1.RayJob:
@@ -368,7 +372,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 	}
 }
 
-// cleanupRayClusterPodGroup zeroes out a suspended RayCluster's PodGroup.
+// cleanupRayClusterPodGroup updates the suspended RayCluster's PodGroup with empty resources.
 func (v *VolcanoBatchScheduler) cleanupRayClusterPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster) (bool, error) {
 	// A RayCluster created by a RayJob shares the RayJob's PodGroup, which the RayJob reconciler owns.
 	if crdType, ok := rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey]; ok && crdType == utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD) {
