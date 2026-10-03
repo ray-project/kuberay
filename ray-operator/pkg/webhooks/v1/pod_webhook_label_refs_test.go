@@ -8,13 +8,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-var _ = Describe("Pod topology", func() {
-	It("prepares a topology worker at CREATE", func() {
-		cluster := newTopologyRayCluster(rayv1.TopologyLabelMapping{NodeLabel: "topology.kubernetes.io/zone"})
+var _ = Describe("Pod labelRefs", func() {
+	It("prepares a labelRefs worker at CREATE", func() {
+		cluster := newLabelRefsRayCluster(nodeLabelRef("topology.kubernetes.io/zone", ""))
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, ctx, cluster)
 
@@ -29,7 +28,7 @@ var _ = Describe("Pod topology", func() {
 	})
 
 	It("delivers the node labels onto the pod at bind time", func() {
-		cluster := newTopologyRayCluster(rayv1.TopologyLabelMapping{NodeLabel: "topology.kubernetes.io/zone"})
+		cluster := newLabelRefsRayCluster(nodeLabelRef("topology.kubernetes.io/zone", ""))
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, ctx, cluster)
 
@@ -50,6 +49,6 @@ var _ = Describe("Pod topology", func() {
 		bound := &corev1.Pod{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: pod.Name}, bound)).To(Succeed())
 		Expect(bound.Spec.NodeName).To(Equal(node.Name))
-		Expect(bound.Annotations).To(HaveKeyWithValue(utils.RayTopologyLabelsAnnotationKey, `{"topology.kubernetes.io/zone":"us-central1-a"}`))
+		Expect(bound.Annotations).To(HaveKeyWithValue(utils.RayNodeLabelsAnnotationKey, `{"topology.kubernetes.io/zone":"us-central1-a"}`))
 	})
 })

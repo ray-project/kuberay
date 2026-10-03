@@ -11,17 +11,17 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-func TestValidateTopology(t *testing.T) {
+func TestValidateLabelRefs(t *testing.T) {
 	const zone, clique = "topology.kubernetes.io/zone", "nvidia.com/gpu.clique"
 	allowed := []string{zone, clique}
 	newSpec := func() *rayv1.RayClusterSpec {
 		return &rayv1.RayClusterSpec{WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{
 			GroupName: "train",
 			Template:  corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
-			Topology: &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{
-				{NodeLabel: zone, MapTo: "ray.io/zone"},
-				{NodeLabel: clique},
-			}},
+			LabelRefs: []rayv1.LabelRef{
+				nodeLabelRef(zone, "ray.io/zone"),
+				nodeLabelRef(clique, ""),
+			},
 		}}}
 	}
 
@@ -32,8 +32,8 @@ func TestValidateTopology(t *testing.T) {
 		errorContains string
 	}{
 		{name: "valid mappings"},
-		{name: "no topology", mutate: func(g *rayv1.WorkerGroupSpec) { g.Topology = nil }},
-		{name: "empty labelMappings", mutate: func(g *rayv1.WorkerGroupSpec) { g.Topology.LabelMappings = nil }},
+		{name: "no labelRefs", mutate: func(g *rayv1.WorkerGroupSpec) { g.LabelRefs = nil }},
+		{name: "empty labelRefs", mutate: func(g *rayv1.WorkerGroupSpec) { g.LabelRefs = []rayv1.LabelRef{} }},
 		{
 			name: "overwrite-container-cmd annotation",
 			mutate: func(g *rayv1.WorkerGroupSpec) {
@@ -54,16 +54,45 @@ func TestValidateTopology(t *testing.T) {
 			errorContains: "runs ray start",
 		},
 		{
+			name: "RAY_NODE_LABELS_JSON set in the pod template",
+			mutate: func(g *rayv1.WorkerGroupSpec) {
+				g.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: utils.RAY_NODE_LABELS_JSON, Value: "{}"}}
+			},
+			errorContains: "managed by KubeRay",
+		},
+		{
+			name:          "rayStartParams labels",
+			mutate:        func(g *rayv1.WorkerGroupSpec) { g.RayStartParams = map[string]string{"labels": "a=b"} },
+			errorContains: "cannot be combined with rayStartParams labels",
+		},
+		{
+			name:          "rayStartParams labels-file",
+			mutate:        func(g *rayv1.WorkerGroupSpec) { g.RayStartParams = map[string]string{"labels-file": "/x.yaml"} },
+			errorContains: "cannot be combined with rayStartParams labels-file",
+		},
+		{
+			name:          "Ray key also set in the group's static labels",
+			mutate:        func(g *rayv1.WorkerGroupSpec) { g.Labels = map[string]string{"ray.io/zone": "static"} },
+			errorContains: `Ray label "ray.io/zone" is also set in labels`,
+		},
+		{
+			name: "fieldPath is not a node label",
+			mutate: func(g *rayv1.WorkerGroupSpec) {
+				g.LabelRefs[1].ValueFrom.NodeRef.FieldPath = "metadata.annotations['nvidia.com/gpu.clique']"
+			},
+			errorContains: "only metadata.labels['<key>'] is supported",
+		},
+		{
 			name: "node label outside the allowlist",
 			mutate: func(g *rayv1.WorkerGroupSpec) {
-				g.Topology.LabelMappings[1].NodeLabel = "cloud.google.com/gke-nodepool"
+				g.LabelRefs[1].ValueFrom.NodeRef.FieldPath = "metadata.labels['cloud.google.com/gke-nodepool']"
 			},
 			errorContains: `node label "cloud.google.com/gke-nodepool" is not in the operator's allowedNodeLabels`,
 		},
 		{
 			name: "two mappings deliver the same Ray key",
 			mutate: func(g *rayv1.WorkerGroupSpec) {
-				g.Topology.LabelMappings[1].MapTo = "ray.io/zone"
+				g.LabelRefs[1].Name = "ray.io/zone"
 			},
 			errorContains: `Duplicate value: "ray.io/zone"`,
 		},
@@ -74,7 +103,7 @@ func TestValidateTopology(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(&spec.WorkerGroupSpecs[0])
 			}
-			err := validateTopology(spec, tt.annotations, allowed, field.NewPath("spec"))
+			err := validateLabelRefs(spec, tt.annotations, allowed, field.NewPath("spec"))
 			if tt.errorContains == "" {
 				require.Nil(t, err)
 				return
