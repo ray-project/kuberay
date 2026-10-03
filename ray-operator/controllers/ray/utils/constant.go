@@ -68,6 +68,9 @@ const (
 	// `KUBERAY_GEN_RAY_START_CMD`.
 	RayOverwriteContainerCmdAnnotationKey = "ray.io/overwrite-container-cmd"
 
+	// RayNodeLabelsAnnotationKey holds the node labels delivered to a worker pod, as a JSON object keyed by Ray label key
+	RayNodeLabelsAnnotationKey = "ray.io/node-labels"
+
 	// RayServiceInitializingTimeoutAnnotation specifies the timeout for RayService initialization.
 	// Accepts Go duration format (e.g., "30m", "1h") or integer seconds.
 	//
@@ -157,6 +160,11 @@ const (
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
 	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
 	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
+
+	// RAY_NODE_LABELS_JSON is a downward API pointer to the RayNodeLabelsAnnotationKey pod annotation
+	RAY_NODE_LABELS_JSON = "RAY_NODE_LABELS_JSON"
+	// RayNodeLabelsFilePath is the file the Ray container writes RAY_NODE_LABELS_JSON to before `ray start`
+	RayNodeLabelsFilePath = "/tmp/ray-labels.yaml"
 
 	// TLS-related environment variables for Ray. See: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication
 	RAY_USE_TLS         = "RAY_USE_TLS"

@@ -2508,3 +2508,13 @@ func TestGetGCSStoragePVCName(t *testing.T) {
 	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ClaimName: "byo-pvc"}
 	assert.Equal(t, "byo-pvc", GetGCSStoragePVCName(instance))
 }
+
+func TestNodeLabelKey(t *testing.T) {
+	key, err := NodeLabelKey("metadata.labels['topology.kubernetes.io/zone']")
+	require.NoError(t, err)
+	assert.Equal(t, "topology.kubernetes.io/zone", key)
+	for _, bad := range []string{"", "metadata.labels", "metadata.labels[\"zone\"]", "metadata.annotations['zone']", "spec.providerID"} {
+		_, err := NodeLabelKey(bad)
+		require.ErrorContains(t, err, "only metadata.labels['<key>'] is supported", bad)
+	}
+}

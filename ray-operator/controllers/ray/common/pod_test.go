@@ -3266,3 +3266,24 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildPod_GeneratedRayStartCmdIsArgsSubstring pins the contract the pods CREATE webhook relies on: the
+// KUBERAY_GEN_RAY_START_CMD value appears exactly once, verbatim, in the Ray container's single args element
+func TestBuildPod_GeneratedRayStartCmdIsArgsSubstring(t *testing.T) {
+	ctx := context.Background()
+	for _, userCommand := range [][]string{nil, {"echo hello"}} {
+		cluster := instance.DeepCopy()
+		worker := cluster.Spec.WorkerGroupSpecs[0]
+		worker.Template.Spec.Containers[utils.RayContainerIndex].Command = userCommand
+		podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+		fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+		podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+		pod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
+
+		container := pod.Spec.Containers[utils.RayContainerIndex]
+		generated := getEnvVar(container, utils.KUBERAY_GEN_RAY_START_CMD)
+		require.NotNil(t, generated)
+		require.Len(t, container.Args, 1)
+		assert.Equal(t, 1, strings.Count(container.Args[0], generated.Value), "args: %q", container.Args[0])
+	}
+}

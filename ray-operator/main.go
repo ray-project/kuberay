@@ -376,13 +376,18 @@ func main() {
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
-	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
-		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
+	if strings.ToLower(os.Getenv("ENABLE_WEBHOOKS")) == "true" {
+		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr, config),
 			"unable to create webhook", "webhook", "RayCluster")
-		exitOnError(webhooks.SetupRayJobWebhookWithManager(mgr),
+		exitOnError(webhooks.SetupRayJobWebhookWithManager(mgr, config),
 			"unable to create webhook", "webhook", "RayJob")
-		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr),
+		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr, config),
 			"unable to create webhook", "webhook", "RayService")
+		// node label delivery for worker groups with labelRefs
+		exitOnError(webhooks.SetupPodWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "Pod")
+		exitOnError(webhooks.SetupPodBindingWebhookWithManager(mgr, config),
+			"unable to create webhook", "webhook", "PodBinding")
 	}
 
 	if features.Enabled(features.RayCronJob) {

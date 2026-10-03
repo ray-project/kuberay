@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1261,4 +1262,15 @@ func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
 		}
 	}
 	return true
+}
+
+var nodeLabelFieldPath = regexp.MustCompile(`^metadata\.labels\['([^']+)'\]$`)
+
+// NodeLabelKey returns the node label key a labelRef fieldPath selects. Only metadata.labels['<key>'] is supported
+func NodeLabelKey(fieldPath string) (string, error) {
+	m := nodeLabelFieldPath.FindStringSubmatch(fieldPath)
+	if m == nil {
+		return "", fmt.Errorf("unsupported fieldPath %q, only metadata.labels['<key>'] is supported", fieldPath)
+	}
+	return m[1], nil
 }
