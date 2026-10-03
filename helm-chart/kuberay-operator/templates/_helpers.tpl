@@ -200,6 +200,15 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
+{{- if .clusterScoped }}
+# the pods/binding webhook reads the bound node's labels; nodes are cluster-scoped so only the ClusterRole carries it
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+{{- end }}
 - apiGroups:
   - ""
   resources:
