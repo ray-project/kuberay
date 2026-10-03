@@ -25,7 +25,7 @@ func SetupRayClusterWebhookWithManager(mgr ctrl.Manager, config configapi.Config
 }
 
 type RayClusterWebhook struct {
-	// AllowedNodeLabels is the operator allowlist for topology.labelMappings
+	// AllowedNodeLabels is the operator allowlist for labelRefs
 	AllowedNodeLabels []string
 }
 
@@ -61,7 +61,7 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
-	if err := validateTopology(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
+	if err := validateLabelRefs(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 

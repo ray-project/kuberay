@@ -25,7 +25,7 @@ func TestRayStartWithNodeLabelsShell(t *testing.T) {
 	if err != nil {
 		t.Skip("bash is not available")
 	}
-	t.Cleanup(func() { _ = os.Remove(utils.RayTopologyLabelsFilePath) })
+	t.Cleanup(func() { _ = os.Remove(utils.RayNodeLabelsFilePath) })
 
 	script := rayStartWithNodeLabels("echo RAYSTART")
 	run := func(labelsJSON *string) (string, error) {
@@ -45,8 +45,8 @@ func TestRayStartWithNodeLabelsShell(t *testing.T) {
 	good := `{"ray.io/zone":"us-central1-a"}`
 	out, err = run(&good)
 	require.NoError(t, err, out)
-	assert.Contains(t, out, "RAYSTART --labels-file="+utils.RayTopologyLabelsFilePath)
-	content, err := os.ReadFile(utils.RayTopologyLabelsFilePath)
+	assert.Contains(t, out, "RAYSTART --labels-file="+utils.RayNodeLabelsFilePath)
+	content, err := os.ReadFile(utils.RayNodeLabelsFilePath)
 	require.NoError(t, err)
 	assert.Equal(t, good+"\n", string(content))
 }
@@ -57,7 +57,7 @@ func TestPrepareNodeLabelDelivery(t *testing.T) {
 	container := pod.Spec.Containers[utils.RayContainerIndex]
 	pointer := nodeLabelsEnv(container.Env)
 	require.NotNil(t, pointer)
-	assert.Equal(t, "metadata.annotations['"+utils.RayTopologyLabelsAnnotationKey+"']", pointer.ValueFrom.FieldRef.FieldPath)
+	assert.Equal(t, "metadata.annotations['"+utils.RayNodeLabelsAnnotationKey+"']", pointer.ValueFrom.FieldRef.FieldPath)
 	assert.Equal(t, testUlimitCmd+rayStartWithNodeLabels(testRayStartCmd), container.Args[0])
 
 	t.Run("reinvocation leaves the pod unchanged", func(t *testing.T) {
@@ -88,12 +88,12 @@ func TestPrepareNodeLabelDelivery(t *testing.T) {
 }
 
 func TestPodWebhookDefault(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, true)
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
 	ctx := context.Background()
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	require.NoError(t, rayv1.AddToScheme(scheme))
-	webhook := &PodWebhook{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(newTopologyCluster()).Build()}
+	webhook := &PodWebhook{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(newLabelRefsCluster()).Build()}
 
 	unchanged := func(t *testing.T, pod *corev1.Pod) {
 		before := pod.DeepCopy()
@@ -102,7 +102,7 @@ func TestPodWebhookDefault(t *testing.T) {
 	}
 
 	t.Run("disabled feature gate leaves the pod alone", func(t *testing.T) {
-		features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, false)
+		features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, false)
 		unchanged(t, newWorkerPod("test"))
 	})
 
@@ -117,7 +117,7 @@ func TestPodWebhookDefault(t *testing.T) {
 		unchanged(t, newWorkerPod("empty"))
 	})
 
-	t.Run("worker of a topology group is prepared", func(t *testing.T) {
+	t.Run("worker of a labelRefs group is prepared", func(t *testing.T) {
 		pod := newWorkerPod("test")
 		require.NoError(t, webhook.Default(ctx, pod))
 		assert.NotNil(t, nodeLabelsEnv(pod.Spec.Containers[utils.RayContainerIndex].Env))

@@ -497,6 +497,15 @@ tests:
       - failedTemplate:
           errorMessage: "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace."
 
+  - it: Should fail if `webhooks.enabled` and `singleNamespaceInstall` are both true
+    set:
+      singleNamespaceInstall: true
+      webhooks:
+        enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "webhooks are not supported when singleNamespaceInstall is true because the webhook configurations and Node reads are cluster-scoped."
+
   - it: Should not enable webhooks by default
     asserts:
       - notExists:

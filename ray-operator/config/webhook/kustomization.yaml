@@ -25,6 +25,6 @@ patches:
     - name: mpod.kb.io
       objectSelector:
         matchLabels:
-          ray.io/is-ray-node: "yes"
+          ray.io/node-type: worker
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

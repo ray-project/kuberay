@@ -54,7 +54,7 @@ spec:
       {{- if .Values.webhooks.enabled }}
         - name: cert
           secret:
-            secretName: {{ include "kuberay-operator.fullname" . }}-webhook-server-cert
+            secretName: {{ include "kuberay-operator.webhook.certSecretName" . }}
       {{- end }}
       {{- end }}
       {{- with .Values.podSecurityContext }}

@@ -55,29 +55,37 @@ type PodBindingWebhook struct {
 	// Recorder emits the Warning event when labels are withheld, may be nil
 	Recorder events.EventRecorder
 	Decoder  admission.Decoder
-	// AllowedNodeLabels is the operator allowlist for topology.labelMappings
+	// AllowedNodeLabels is the operator allowlist for labelRefs
 	AllowedNodeLabels sets.Set[string]
 }
 
-// Handle implements admission.Handler
 func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if !features.Enabled(features.TopologyLabelDelivery) {
-		return admission.Allowed("TopologyLabelDelivery feature gate is disabled")
+	if !features.Enabled(features.NodeLabelDelivery) {
+		return admission.Allowed("NodeLabelDelivery feature gate is disabled")
 	}
 	binding := &corev1.Binding{}
 	if err := w.Decoder.Decode(req, binding); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	if _, done := binding.Annotations[utils.RayTopologyLabelsAnnotationKey]; done {
+	if _, done := binding.Annotations[utils.RayNodeLabelsAnnotationKey]; done {
 		// already delivered e.g. on a webhook reinvocation
 		return admission.Allowed("node labels already set on the binding")
 	}
 	nodeName := binding.Target.Name
 	podName := req.Name
 	if nodeName == "" {
-		return admission.Allowed("binding has no pod or node name")
+		return admission.Allowed("binding has no target node")
 	}
 	log := podBindingLog.WithValues("pod", req.Namespace+"/"+podName, "node", nodeName)
+
+	cluster, group, err := w.labelRefsGroupForPod(ctx, req.Namespace, podName)
+	if err != nil {
+		log.Error(err, "cannot list RayClusters, admitting the binding without node labels")
+		return admission.Allowed("RayCluster lookup failed")
+	}
+	if group == nil {
+		return admission.Allowed("not a worker of a group with labelRefs")
+	}
 
 	podMeta, err := w.getPodMetadata(ctx, types.NamespacedName{Namespace: req.Namespace, Name: podName})
 	if err != nil {
@@ -85,17 +93,19 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 		log.Error(err, "cannot read pod, admitting the binding without node labels")
 		return admission.Allowed("pod lookup failed")
 	}
-	if podMeta == nil || podMeta.Labels[utils.RayClusterLabelKey] == "" || podMeta.Labels[utils.RayNodeTypeLabelKey] != string(rayv1.WorkerNode) {
-		return admission.Allowed("not a Ray worker pod")
+	if podMeta == nil || podMeta.Labels[utils.RayClusterLabelKey] != cluster.Name || podMeta.Labels[utils.RayNodeGroupLabelKey] != group.GroupName {
+		return admission.Allowed("not a worker of the matched group")
 	}
-
-	labels, err := w.resolveNodeLabels(ctx, req.Namespace, podMeta, nodeName)
+	// metadata-only GET
+	node := &metav1.PartialObjectMetadata{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Node"}}
+	if err := w.APIReader.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
+		w.withhold(req, podMeta, nodeName, fmt.Errorf("cannot read node %s: %w", nodeName, err))
+		return admission.Allowed("node labels withheld")
+	}
+	labels, err := buildNodeLabels(node.Labels, group.LabelRefs, w.AllowedNodeLabels)
 	if err != nil {
 		w.withhold(req, podMeta, nodeName, err)
 		return admission.Allowed("node labels withheld")
-	}
-	if labels == nil {
-		return admission.Allowed("worker group does not set topology")
 	}
 	encoded, err := json.Marshal(labels)
 	if err != nil {
@@ -104,7 +114,7 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 	if binding.Annotations == nil {
 		binding.Annotations = map[string]string{}
 	}
-	binding.Annotations[utils.RayTopologyLabelsAnnotationKey] = string(encoded)
+	binding.Annotations[utils.RayNodeLabelsAnnotationKey] = string(encoded)
 	patched, err := json.Marshal(binding)
 	if err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
@@ -113,47 +123,44 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 	return admission.PatchResponseFromRaw(req.Object.Raw, patched)
 }
 
-// resolveNodeLabels returns the Ray labels to deliver, nil when the worker group has no label mappings
-func (w *PodBindingWebhook) resolveNodeLabels(ctx context.Context, namespace string, podMeta *metav1.ObjectMeta, nodeName string) (map[string]string, error) {
-	clusterName := podMeta.Labels[utils.RayClusterLabelKey]
-	groupName := podMeta.Labels[utils.RayNodeGroupLabelKey]
-	cluster := &rayv1.RayCluster{}
-	if err := w.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, cluster); err != nil {
-		return nil, fmt.Errorf("cannot read RayCluster %s: %w", clusterName, err)
+// Returns the cached RayCluster and worker group with labelRefs whose pods are named <cluster>-<group>-worker-<rand>.
+func (w *PodBindingWebhook) labelRefsGroupForPod(ctx context.Context, namespace, podName string) (*rayv1.RayCluster, *rayv1.WorkerGroupSpec, error) {
+	clusters := &rayv1.RayClusterList{}
+	if err := w.Client.List(ctx, clusters, client.InNamespace(namespace)); err != nil {
+		return nil, nil, err
 	}
-	group := findWorkerGroupSpec(&cluster.Spec, groupName)
-	if group == nil {
-		return nil, fmt.Errorf("worker group %s not found in RayCluster %s", groupName, clusterName)
+	for i := range clusters.Items {
+		cluster := &clusters.Items[i]
+		for j := range cluster.Spec.WorkerGroupSpecs {
+			group := &cluster.Spec.WorkerGroupSpecs[j]
+			if len(group.LabelRefs) > 0 && strings.HasPrefix(podName, utils.PodName(cluster.Name+"-"+group.GroupName, rayv1.WorkerNode, true)) {
+				return cluster, group, nil
+			}
+		}
 	}
-	if group.Topology == nil || len(group.Topology.LabelMappings) == 0 {
-		return nil, nil
-	}
-	node := &metav1.PartialObjectMetadata{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Node"}}
-	if err := w.APIReader.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
-		return nil, fmt.Errorf("cannot read node %s: %w", nodeName, err)
-	}
-	return buildTopologyLabels(node.Labels, group.Topology.LabelMappings, w.AllowedNodeLabels)
+	return nil, nil, nil
 }
 
-// buildTopologyLabels maps node labels to Ray labels following the mappings. Every mapping must resolve to a
-// non-empty allowlisted node label, otherwise the whole set fails
-func buildTopologyLabels(nodeLabels map[string]string, mappings []rayv1.TopologyLabelMapping, allowed sets.Set[string]) (map[string]string, error) {
-	labels := make(map[string]string, len(mappings))
+func buildNodeLabels(nodeLabels map[string]string, refs []rayv1.LabelRef, allowed sets.Set[string]) (map[string]string, error) {
+	labels := make(map[string]string, len(refs))
 	var errList []string
-	for _, mapping := range mappings {
-		value, ok := nodeLabels[mapping.NodeLabel]
+	for _, ref := range refs {
+		nodeLabel, err := utils.NodeLabelKey(ref.ValueFrom.NodeRef.FieldPath)
+		if err != nil {
+			errList = append(errList, err.Error())
+			continue
+		}
+		value, ok := nodeLabels[nodeLabel]
 		switch {
-		case !allowed.Has(mapping.NodeLabel):
-			errList = append(errList, fmt.Sprintf("node label %q is not in the operator's allowedNodeLabels", mapping.NodeLabel))
+		case !allowed.Has(nodeLabel):
+			errList = append(errList, fmt.Sprintf("node label %q is not in the operator's allowedNodeLabels", nodeLabel))
 		case !ok:
-			errList = append(errList, fmt.Sprintf("node lacks label %q", mapping.NodeLabel))
-		case value == "":
-			errList = append(errList, fmt.Sprintf("node label %q is empty", mapping.NodeLabel))
+			errList = append(errList, fmt.Sprintf("node lacks label %q", nodeLabel))
 		default:
-			// an empty mapTo delivers under the node label key
-			key := mapping.MapTo
+			// name defaults to the node label key
+			key := ref.Name
 			if key == "" {
-				key = mapping.NodeLabel
+				key = nodeLabel
 			}
 			labels[key] = value
 		}
@@ -164,8 +171,6 @@ func buildTopologyLabels(nodeLabels map[string]string, mappings []rayv1.Topology
 	return labels, nil
 }
 
-// getPodMetadata returns the pod metadata, or nil when the pod does not exist. The cache only holds Ray node pods,
-// so a miss falls back to a metadata-only GET
 func (w *PodBindingWebhook) getPodMetadata(ctx context.Context, key types.NamespacedName) (*metav1.ObjectMeta, error) {
 	pod := &corev1.Pod{}
 	err := w.Client.Get(ctx, key, pod)
@@ -185,7 +190,7 @@ func (w *PodBindingWebhook) getPodMetadata(ctx context.Context, key types.Namesp
 	return &podMeta.ObjectMeta, nil
 }
 
-// withhold records why the labels were not delivered. The binding proceeds without the annotation and the pod exits before ray start
+// Records why the labels were not delivered. The binding proceeds without the annotation and the pod exits before ray start
 func (w *PodBindingWebhook) withhold(req admission.Request, podMeta *metav1.ObjectMeta, nodeName string, cause error) {
 	message := fmt.Sprintf("node labels not delivered for the binding to node %s: %v", nodeName, cause)
 	podBindingLog.Info(message, "pod", podMeta.Namespace+"/"+podMeta.Name)

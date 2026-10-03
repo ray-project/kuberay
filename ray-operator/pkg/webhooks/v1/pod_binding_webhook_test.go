@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/events"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -22,22 +23,19 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
-func TestBuildTopologyLabels(t *testing.T) {
+func TestBuildNodeLabels(t *testing.T) {
 	allowed := sets.New("topology.kubernetes.io/zone", "nvidia.com/gpu.clique")
-	mappings := []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}, {NodeLabel: "nvidia.com/gpu.clique", MapTo: "ray.io/accelerator-domain"}}
+	refs := []rayv1.LabelRef{nodeLabelRef("topology.kubernetes.io/zone", ""), nodeLabelRef("nvidia.com/gpu.clique", "ray.io/accelerator-domain")}
 	nodeLabels := map[string]string{"topology.kubernetes.io/zone": "us-central1-a", "nvidia.com/gpu.clique": "abc.0", "unrelated": "x"}
 
-	labels, err := buildTopologyLabels(nodeLabels, mappings, allowed)
+	labels, err := buildNodeLabels(nodeLabels, refs, allowed)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"topology.kubernetes.io/zone": "us-central1-a", "ray.io/accelerator-domain": "abc.0"}, labels)
 
-	_, err = buildTopologyLabels(map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}, mappings, allowed)
+	_, err = buildNodeLabels(map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}, refs, allowed)
 	require.ErrorContains(t, err, `node lacks label "nvidia.com/gpu.clique"`)
 
-	_, err = buildTopologyLabels(map[string]string{"topology.kubernetes.io/zone": "", "nvidia.com/gpu.clique": "abc.0"}, mappings, allowed)
-	require.ErrorContains(t, err, `node label "topology.kubernetes.io/zone" is empty`)
-
-	_, err = buildTopologyLabels(nodeLabels, mappings, sets.New("topology.kubernetes.io/zone"))
+	_, err = buildNodeLabels(nodeLabels, refs, sets.New("topology.kubernetes.io/zone"))
 	require.ErrorContains(t, err, `node label "nvidia.com/gpu.clique" is not in the operator's allowedNodeLabels`)
 }
 
@@ -70,7 +68,7 @@ func deliveredLabels(t *testing.T, resp admission.Response) map[string]string {
 		if patch.Path != "/metadata/annotations" {
 			continue
 		}
-		encoded, ok := patch.Value.(map[string]any)[utils.RayTopologyLabelsAnnotationKey].(string)
+		encoded, ok := patch.Value.(map[string]any)[utils.RayNodeLabelsAnnotationKey].(string)
 		require.True(t, ok, "annotations patch should carry the labels annotation")
 		labels := map[string]string{}
 		require.NoError(t, json.Unmarshal([]byte(encoded), &labels))
@@ -92,7 +90,7 @@ func drainEvents(recorder *events.FakeRecorder) []string {
 }
 
 func TestPodBindingWebhookHandle(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, true)
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
 	ctx := context.Background()
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
@@ -103,13 +101,14 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 	zoneNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", Labels: map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}}}
 	bareNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-b"}}
 	c := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(newTopologyCluster(), topoPod, plainPod, otherPod, zoneNode, bareNode).Build()
+		WithObjects(newLabelRefsCluster(), topoPod, plainPod, otherPod, zoneNode, bareNode).Build()
+	apiReader := &countingReader{Reader: c}
 
 	newHandler := func(allowed ...string) (*PodBindingWebhook, *events.FakeRecorder) {
 		recorder := events.NewFakeRecorder(10)
 		return &PodBindingWebhook{
 			Client:            c,
-			APIReader:         c,
+			APIReader:         apiReader,
 			Recorder:          recorder,
 			Decoder:           admission.NewDecoder(scheme),
 			AllowedNodeLabels: sets.New(allowed...),
@@ -153,7 +152,7 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 	})
 
 	t.Run("disabled feature gate passes through", func(t *testing.T) {
-		features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, false)
+		features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, false)
 		handler, recorder := newHandler()
 		passThrough(t, handler.Handle(ctx, newBindingRequest(t, newBinding(topoPod.Name, "node-a"), false)), recorder)
 	})
@@ -163,16 +162,30 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 		passThrough(t, handler.Handle(ctx, newBindingRequest(t, newBinding(plainPod.Name, "node-a"), false)), recorder)
 	})
 
-	t.Run("passes through non-Ray and unknown pods", func(t *testing.T) {
+	t.Run("passes through non-Ray and unknown pods without an API read", func(t *testing.T) {
 		handler, recorder := newHandler()
+		before := apiReader.gets
 		passThrough(t, handler.Handle(ctx, newBindingRequest(t, newBinding(otherPod.Name, "node-a"), false)), recorder)
 		passThrough(t, handler.Handle(ctx, newBindingRequest(t, newBinding("ghost", "node-a"), false)), recorder)
+		passThrough(t, handler.Handle(ctx, newBindingRequest(t, newBinding(plainPod.Name, "node-a"), false)), recorder)
+		assert.Equal(t, before, apiReader.gets, "unrelated bindings must be decided from the cache")
 	})
 
 	t.Run("passes through a binding that already carries labels", func(t *testing.T) {
 		handler, recorder := newHandler()
 		binding := newBinding(topoPod.Name, "node-a")
-		binding.Annotations = map[string]string{utils.RayTopologyLabelsAnnotationKey: "{}"}
+		binding.Annotations = map[string]string{utils.RayNodeLabelsAnnotationKey: "{}"}
 		passThrough(t, handler.Handle(ctx, newBindingRequest(t, binding, false)), recorder)
 	})
+}
+
+// countingReader counts Get calls, to prove bindings of unrelated pods cost no API read
+type countingReader struct {
+	client.Reader
+	gets int
+}
+
+func (r *countingReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	r.gets++
+	return r.Reader.Get(ctx, key, obj, opts...)
 }

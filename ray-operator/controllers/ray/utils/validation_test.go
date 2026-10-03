@@ -4286,9 +4286,9 @@ func TestValidateRayClusterSpec_LabelRefs(t *testing.T) {
 	}}
 
 	t.Setenv("ENABLE_WEBHOOKS", "")
-	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the TopologyLabelDelivery feature gate")
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the NodeLabelDelivery feature gate")
 
-	features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, true)
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
 	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the KubeRay operator to run with ENABLE_WEBHOOKS=true")
 
 	t.Setenv("ENABLE_WEBHOOKS", "true")

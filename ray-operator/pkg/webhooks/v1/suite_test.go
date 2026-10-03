@@ -43,7 +43,7 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.TopologyLabelDelivery, true)
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Webhook Suite")

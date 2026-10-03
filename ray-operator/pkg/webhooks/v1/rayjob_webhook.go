@@ -25,7 +25,7 @@ func SetupRayJobWebhookWithManager(mgr ctrl.Manager, config configapi.Configurat
 }
 
 type RayJobWebhook struct {
-	// AllowedNodeLabels is the operator allowlist for topology.labelMappings
+	// AllowedNodeLabels is the operator allowlist for labelRefs
 	AllowedNodeLabels []string
 }
 
@@ -58,7 +58,7 @@ func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
-		if err := validateTopology(rayJob.Spec.RayClusterSpec, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
+		if err := validateLabelRefs(rayJob.Spec.RayClusterSpec, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
 			allErrs = append(allErrs, err)
 		}
 	}

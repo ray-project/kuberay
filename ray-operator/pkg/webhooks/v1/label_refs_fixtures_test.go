@@ -1,6 +1,6 @@
 package v1
 
-// shared fixtures for the topology validation, pods and pods/binding webhook tests
+// shared fixtures for the labelRefs validation, pods and pods/binding webhook tests
 
 import (
 	"fmt"
@@ -19,15 +19,15 @@ const (
 	testUlimitCmd   = "ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; "
 )
 
-// newTopologyCluster returns a RayCluster with a plain worker group, one with empty topology and a topology-enabled one
-func newTopologyCluster() *rayv1.RayCluster {
+// newLabelRefsCluster returns a RayCluster with a plain worker group, one with empty labelRefs and one with labelRefs
+func newLabelRefsCluster() *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "topo", Namespace: "default"},
 		Spec: rayv1.RayClusterSpec{
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{GroupName: "plain"},
-				{GroupName: "empty", Topology: &rayv1.TopologySpec{}},
-				{GroupName: "test", Topology: &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}}}},
+				{GroupName: "empty", LabelRefs: []rayv1.LabelRef{}},
+				{GroupName: "test", LabelRefs: []rayv1.LabelRef{nodeLabelRef("topology.kubernetes.io/zone", "")}},
 			},
 		},
 	}
@@ -64,8 +64,8 @@ func nodeLabelsEnv(envs []corev1.EnvVar) *corev1.EnvVar {
 	return nil
 }
 
-// newTopologyRayCluster returns a randomly named RayCluster with one topology worker group carrying mapping
-func newTopologyRayCluster(mapping rayv1.TopologyLabelMapping) *rayv1.RayCluster {
+// newLabelRefsRayCluster returns a randomly named RayCluster with one worker group whose labelRefs carry ref
+func newLabelRefsRayCluster(ref rayv1.LabelRef) *rayv1.RayCluster {
 	template := corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray"}}}}
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("topo-%d", rand.IntnRange(1000, 9000)), Namespace: "default"},
@@ -76,8 +76,13 @@ func newTopologyRayCluster(mapping rayv1.TopologyLabelMapping) *rayv1.RayCluster
 				MinReplicas: new(int32(1)),
 				MaxReplicas: new(int32(1)),
 				Template:    template,
-				Topology:    &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{mapping}},
+				LabelRefs:   []rayv1.LabelRef{ref},
 			}},
 		},
 	}
+}
+
+// nodeLabelRef returns a labelRef reading node label key, delivered under name (empty means the key itself)
+func nodeLabelRef(key, name string) rayv1.LabelRef {
+	return rayv1.LabelRef{Name: name, ValueFrom: rayv1.LabelRefSource{NodeRef: rayv1.NodeFieldRef{FieldPath: "metadata.labels['" + key + "']"}}}
 }

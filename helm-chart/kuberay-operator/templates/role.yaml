@@ -6,4 +6,11 @@ metadata:
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
 {{ include "role.consistentRules" (dict "batchSchedulerEnabled" .Values.batchScheduler.enabled "batchSchedulerName" .Values.batchScheduler.name "kubernetesWASEnabled" (include "kuberay.kubernetesWASEnabled" .)) }}
+# the pods/binding webhook reads the bound node's labels; nodes are cluster-scoped so only the ClusterRole carries it
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
 {{- end }}

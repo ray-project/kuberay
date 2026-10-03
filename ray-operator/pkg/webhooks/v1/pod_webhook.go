@@ -22,7 +22,7 @@ var podLog = logf.Log.WithName("pod-webhook")
 
 //+kubebuilder:webhook:path=/mutate-v1-pod,mutating=true,failurePolicy=fail,sideEffects=None,groups="",resources=pods,verbs=create,versions=v1,name=mpod.kb.io,admissionReviewVersions=v1
 
-// SetupPodWebhookWithManager registers the pods CREATE mutating webhook with the manager. The webhook mutates Ray worker pods to prepare them for node label delivery.
+// Registers the pods CREATE mutating webhook with the manager. The webhook mutates Ray worker pods to prepare them for node label delivery.
 func SetupPodWebhookWithManager(mgr ctrl.Manager) error {
 	mgr.GetWebhookServer().Register("/mutate-v1-pod", admission.WithDefaulter(mgr.GetScheme(), &PodWebhook{
 		Client: mgr.GetClient(),
@@ -35,9 +35,9 @@ type PodWebhook struct {
 	Client client.Reader
 }
 
-// default implements admission.Defaulter. controller-runtime turns the in-place changes into a JSON patch
+// Implements admission.Defaulter. controller-runtime turns the in-place changes into a JSON patch
 func (w *PodWebhook) Default(ctx context.Context, pod *corev1.Pod) error {
-	if !features.Enabled(features.TopologyLabelDelivery) {
+	if !features.Enabled(features.NodeLabelDelivery) {
 		return nil
 	}
 	clusterName := pod.Labels[utils.RayClusterLabelKey]
@@ -63,18 +63,18 @@ func (w *PodWebhook) Default(ctx context.Context, pod *corev1.Pod) error {
 
 	// TODO: vendor-specific(TPU, etc.) CREATE-time mutations
 
-	if group.Topology == nil || len(group.Topology.LabelMappings) == 0 {
+	if len(group.LabelRefs) == 0 {
 		return nil
 	}
 	if err := prepareNodeLabelDelivery(pod); err != nil {
 		return fmt.Errorf("worker pod of group %s in RayCluster %s/%s: %w", groupName, namespace, clusterName, err)
 	}
 	podLog.Info("prepared pod for node label delivery", "namespace", namespace, "rayCluster", clusterName,
-		"group", groupName, "labelMappings", len(group.Topology.LabelMappings))
+		"group", groupName, "labelRefs", len(group.LabelRefs))
 	return nil
 }
 
-// adds the RAY_NODE_LABELS_JSON downward API env var and rewrites the ray start args to load it with --labels-file
+// Adds the RAY_NODE_LABELS_JSON downward API env var and rewrites the ray start args to load it with --labels-file
 func prepareNodeLabelDelivery(pod *corev1.Pod) error {
 	if len(pod.Spec.Containers) <= utils.RayContainerIndex {
 		return fmt.Errorf("pod has no Ray container")
@@ -85,7 +85,7 @@ func prepareNodeLabelDelivery(pod *corev1.Pod) error {
 		Name: utils.RAY_NODE_LABELS_JSON,
 		ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: fmt.Sprintf("metadata.annotations['%s']", utils.RayTopologyLabelsAnnotationKey),
+				FieldPath: fmt.Sprintf("metadata.annotations['%s']", utils.RayNodeLabelsAnnotationKey),
 			},
 		},
 	}
@@ -97,7 +97,7 @@ func prepareNodeLabelDelivery(pod *corev1.Pod) error {
 			// pointer already exists e.g. on a webhook reinvocation
 			return nil
 		}
-		return fmt.Errorf("%s is managed by KubeRay when topology is set and must not be set in the pod template", pointer.Name)
+		return fmt.Errorf("%s is managed by KubeRay when labelRefs is set and must not be set in the pod template", pointer.Name)
 	}
 	i := slices.IndexFunc(container.Env, func(e corev1.EnvVar) bool { return e.Name == utils.KUBERAY_GEN_RAY_START_CMD })
 	if i < 0 || container.Env[i].Value == "" {
@@ -115,12 +115,12 @@ func prepareNodeLabelDelivery(pod *corev1.Pod) error {
 	return nil
 }
 
-// returns the shell command that 1) writes RAY_NODE_LABELS_JSON to the labels file 2) runs rayStartCmd with --labels-file
+// Returns the shell command that 1) writes RAY_NODE_LABELS_JSON to the labels file 2) runs rayStartCmd with --labels-file
 func rayStartWithNodeLabels(rayStartCmd string) string {
 	return fmt.Sprintf(
 		`if [ -z "$%[1]s" ]; then echo "%[1]s is empty: node labels were not delivered to this pod, see the pod events" >&2; exit 1; fi; `+
 			`printf '%%s\n' "$%[1]s" > %[2]s; %[3]s --labels-file=%[2]s`,
-		utils.RAY_NODE_LABELS_JSON, utils.RayTopologyLabelsFilePath, rayStartCmd)
+		utils.RAY_NODE_LABELS_JSON, utils.RayNodeLabelsFilePath, rayStartCmd)
 }
 
 func findWorkerGroupSpec(spec *rayv1.RayClusterSpec, groupName string) *rayv1.WorkerGroupSpec {
