@@ -100,8 +100,20 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 	otherPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "nginx", Namespace: "default"}}
 	zoneNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-a", Labels: map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}}}
 	bareNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-b"}}
+	// prod/ray-gpu and prod-ray/gpu both set labelRefs and both name their pods prod-ray-gpu-worker-*
+	prod := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "default"},
+		Spec:       rayv1.RayClusterSpec{WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "ray-gpu", LabelRefs: []rayv1.LabelRef{nodeLabelRef("nvidia.com/gpu.clique", "")}}}},
+	}
+	prodRay := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod-ray", Namespace: "default"},
+		Spec:       rayv1.RayClusterSpec{WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "gpu", LabelRefs: []rayv1.LabelRef{nodeLabelRef("topology.kubernetes.io/zone", "")}}}},
+	}
+	collidingPod := newWorkerPod("gpu")
+	collidingPod.Name = "prod-ray-gpu-worker-abcde"
+	collidingPod.Labels[utils.RayClusterLabelKey] = "prod-ray"
 	c := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(newLabelRefsCluster(), topoPod, plainPod, otherPod, zoneNode, bareNode).Build()
+		WithObjects(newLabelRefsCluster(), prod, prodRay, topoPod, plainPod, otherPod, collidingPod, zoneNode, bareNode).Build()
 	apiReader := &countingReader{Reader: c}
 
 	newHandler := func(allowed ...string) (*PodBindingWebhook, *events.FakeRecorder) {
@@ -131,6 +143,14 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 	t.Run("delivers the mapped labels on the binding", func(t *testing.T) {
 		handler, recorder := newHandler("topology.kubernetes.io/zone")
 		resp := handler.Handle(ctx, newBindingRequest(t, newBinding(topoPod.Name, "node-a"), false))
+		require.True(t, resp.Allowed, resp.Result)
+		assert.Equal(t, map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}, deliveredLabels(t, resp))
+		assert.Empty(t, drainEvents(recorder))
+	})
+
+	t.Run("resolves the group from the pod labels when name prefixes collide", func(t *testing.T) {
+		handler, recorder := newHandler("topology.kubernetes.io/zone")
+		resp := handler.Handle(ctx, newBindingRequest(t, newBinding(collidingPod.Name, "node-a"), false))
 		require.True(t, resp.Allowed, resp.Result)
 		assert.Equal(t, map[string]string{"topology.kubernetes.io/zone": "us-central1-a"}, deliveredLabels(t, resp))
 		assert.Empty(t, drainEvents(recorder))
