@@ -78,12 +78,12 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 	}
 	log := podBindingLog.WithValues("pod", req.Namespace+"/"+podName, "node", nodeName)
 
-	cluster, group, err := w.labelRefsGroupForPod(ctx, req.Namespace, podName)
+	candidate, err := w.labelRefsCandidate(ctx, req.Namespace, podName)
 	if err != nil {
 		log.Error(err, "cannot list RayClusters, admitting the binding without node labels")
 		return admission.Allowed("RayCluster lookup failed")
 	}
-	if group == nil {
+	if !candidate {
 		return admission.Allowed("not a worker of a group with labelRefs")
 	}
 
@@ -93,8 +93,16 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 		log.Error(err, "cannot read pod, admitting the binding without node labels")
 		return admission.Allowed("pod lookup failed")
 	}
-	if podMeta == nil || podMeta.Labels[utils.RayClusterLabelKey] != cluster.Name || podMeta.Labels[utils.RayNodeGroupLabelKey] != group.GroupName {
-		return admission.Allowed("not a worker of the matched group")
+	if podMeta == nil {
+		return admission.Allowed("pod not found")
+	}
+	group, err := w.labelRefsGroup(ctx, req.Namespace, podMeta.Labels[utils.RayClusterLabelKey], podMeta.Labels[utils.RayNodeGroupLabelKey])
+	if err != nil {
+		log.Error(err, "cannot read RayCluster, admitting the binding without node labels")
+		return admission.Allowed("RayCluster lookup failed")
+	}
+	if group == nil {
+		return admission.Allowed("not a worker of a group with labelRefs")
 	}
 	// metadata-only GET
 	node := &metav1.PartialObjectMetadata{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Node"}}
@@ -123,22 +131,33 @@ func (w *PodBindingWebhook) Handle(ctx context.Context, req admission.Request) a
 	return admission.PatchResponseFromRaw(req.Object.Raw, patched)
 }
 
-// Returns the cached RayCluster and worker group with labelRefs whose pods are named <cluster>-<group>-worker-<rand>.
-func (w *PodBindingWebhook) labelRefsGroupForPod(ctx context.Context, namespace, podName string) (*rayv1.RayCluster, *rayv1.WorkerGroupSpec, error) {
+// labelRefsCandidate reports whether podName carries the <cluster>-<group>-worker- prefix of any cached group with
+// labelRefs in the namespace. Prefixes can collide, so the pod's labels decide the group
+func (w *PodBindingWebhook) labelRefsCandidate(ctx context.Context, namespace, podName string) (bool, error) {
 	clusters := &rayv1.RayClusterList{}
 	if err := w.Client.List(ctx, clusters, client.InNamespace(namespace)); err != nil {
-		return nil, nil, err
+		return false, err
 	}
 	for i := range clusters.Items {
-		cluster := &clusters.Items[i]
-		for j := range cluster.Spec.WorkerGroupSpecs {
-			group := &cluster.Spec.WorkerGroupSpecs[j]
-			if len(group.LabelRefs) > 0 && strings.HasPrefix(podName, utils.PodName(cluster.Name+"-"+group.GroupName, rayv1.WorkerNode, true)) {
-				return cluster, group, nil
+		for _, group := range clusters.Items[i].Spec.WorkerGroupSpecs {
+			if len(group.LabelRefs) > 0 && strings.HasPrefix(podName, utils.PodName(clusters.Items[i].Name+"-"+group.GroupName, rayv1.WorkerNode, true)) {
+				return true, nil
 			}
 		}
 	}
-	return nil, nil, nil
+	return false, nil
+}
+
+// labelRefsGroup returns the named worker group of the cached cluster if it sets labelRefs
+func (w *PodBindingWebhook) labelRefsGroup(ctx context.Context, namespace, clusterName, groupName string) (*rayv1.WorkerGroupSpec, error) {
+	cluster := &rayv1.RayCluster{}
+	if err := w.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, cluster); err != nil {
+		return nil, client.IgnoreNotFound(err)
+	}
+	if group := findWorkerGroupSpec(&cluster.Spec, groupName); group != nil && len(group.LabelRefs) > 0 {
+		return group, nil
+	}
+	return nil, nil
 }
 
 func buildNodeLabels(nodeLabels map[string]string, refs []rayv1.LabelRef, allowed sets.Set[string]) (map[string]string, error) {
