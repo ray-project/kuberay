@@ -441,6 +441,31 @@ spec:
                         type: boolean
                       gcsFaultToleranceOptions:
                         properties:
+                          activePassiveHeadOptions:
+                            properties:
+                              enabled:
+                                type: boolean
+                              leaseDurationSeconds:
+                                default: 15
+                                format: int32
+                                minimum: 1
+                                type: integer
+                              renewDeadlineSeconds:
+                                default: 10
+                                format: int32
+                                minimum: 1
+                                type: integer
+                              retryPeriodSeconds:
+                                default: 2
+                                format: int32
+                                minimum: 1
+                                type: integer
+                            type: object
+                            x-kubernetes-validations:
+                            - message: leaseDurationSeconds must be greater than renewDeadlineSeconds
+                              rule: self.leaseDurationSeconds > self.renewDeadlineSeconds
+                            - message: renewDeadlineSeconds must be greater than retryPeriodSeconds
+                              rule: self.renewDeadlineSeconds > self.retryPeriodSeconds
                           backend:
                             enum:
                             - redis
@@ -5550,6 +5575,29 @@ spec:
                             idleTimeoutSeconds:
                               format: int32
                               type: integer
+                            labelRefs:
+                              items:
+                                properties:
+                                  name:
+                                    maxLength: 317
+                                    type: string
+                                  valueFrom:
+                                    properties:
+                                      nodeRef:
+                                        properties:
+                                          fieldPath:
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - fieldPath
+                                        type: object
+                                    required:
+                                    - nodeRef
+                                    type: object
+                                required:
+                                - valueFrom
+                                type: object
+                              type: array
                             labels:
                               additionalProperties:
                                 type: string
@@ -5584,6 +5632,18 @@ spec:
                               type: object
                             scaleStrategy:
                               properties:
+                                scaleGate:
+                                  items:
+                                    properties:
+                                      type:
+                                        type: string
+                                    required:
+                                    - type
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - type
+                                  x-kubernetes-list-type: map
                                 workersToDelete:
                                   items:
                                     type: string

@@ -1150,7 +1150,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction), "Deleted pod %s/%s", pod.Namespace, pod.Name)
 			}
 		}
-		worker.ScaleStrategy.WorkersToDelete = []string{}
 
 		runningPods := corev1.PodList{}
 		for _, pod := range workerPods.Items {
@@ -1355,11 +1354,8 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 			if err := r.deletePods(ctx, instance, podsToDel, worker.GroupName, "autoscaler scale-down request"); err != nil {
 				return err
 			}
-			worker.ScaleStrategy.WorkersToDelete = []string{}
 			return fmt.Errorf("deleted %d worker Pods based on ScaleStrategy, requeueing", len(podsToDel))
 		}
-		// Clear WorkersToDelete after deletion.
-		worker.ScaleStrategy.WorkersToDelete = []string{}
 	}
 
 	// 5. Calculate Pod diff for scaling up or down by NumOfHosts.

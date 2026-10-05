@@ -10,8 +10,6 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +32,7 @@ func TestHistoryServer(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+		testFunc func(Test, *WithT, *corev1.Namespace, *S3TestClient)
 	}{
 		{
 			name:     "Live cluster: historyserver endpoints should be accessible",
@@ -153,7 +151,7 @@ func TestHistoryServer(t *testing.T) {
 	}
 }
 
-func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -162,14 +160,14 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
 }
 
-func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -180,14 +178,14 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerGrafanaHealthEndpoint(test, g, client, historyServerURL, sessionID)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
 
-func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -196,7 +194,7 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerPrometheusHealthEndpoint(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
@@ -204,14 +202,14 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 }
 
 // testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
-func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -489,7 +487,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify parameter validation for dead cluster
 // 7. Verify security (path traversal) protection
 // 8. Delete S3 bucket to ensure test isolation
-func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -509,7 +507,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1011,7 +1009,7 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 // 5. Delete cluster to test dead cluster behavior
 // 6. Test dead cluster: streaming should return 501 Not Implemented
 // 7. Delete S3 bucket to ensure test isolation
-func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -1022,7 +1020,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1098,7 +1096,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
 // 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
 // 12. Delete S3 bucket to ensure test isolation.
-func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1110,7 +1108,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
@@ -1360,7 +1358,7 @@ func countFiles(result map[string]interface{}) int {
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 4. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -1369,7 +1367,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	jobID := GetOneOfJobID(g, client, historyServerURL)
 
@@ -1411,7 +1409,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 5. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1432,7 +1430,7 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	jobID := GetOneOfJobID(g, client, historyServerURL)
 
@@ -1579,7 +1577,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 // 5. Verify that the history server returns actors via /logical/actors endpoint
 // 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
 // 7. Delete S3 bucket to ensure test isolation
-func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1600,7 +1598,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return actors from history server", func(t *testing.T) {
@@ -1725,7 +1723,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	endpoint := EndpointTasks + "?detail=1"
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
@@ -1736,7 +1734,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	endpointURL := historyServerURL + endpoint
 	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
@@ -1778,7 +1776,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 9. Delete S3 bucket to ensure test isolation
 //
 // NOTE: timeout is not tested because tasks are in-memory and retrieval is typically fast.
-func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1799,7 +1797,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyDeadClusterTaskLogInfo(g, client, historyServerURL)
 
@@ -1991,7 +1989,7 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	// Explicitly specify the view parameter to get the current snapshot.
 	// If the view parameter is not specified, the following error will be returned:
 	// {"result": false, "msg": "Unknown view None", "data": {}}
@@ -2006,7 +2004,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	LogWithTimestamp(test.T(), "Verifying /nodes response schema for live cluster (isLive=true)")
@@ -2032,7 +2030,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -2053,7 +2051,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + EndpointNodes
@@ -2088,7 +2086,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 //   - Verify the response API schema
 //
 // 7. Delete S3 bucket to ensure test isolation
-func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2100,7 +2098,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
@@ -2133,7 +2131,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 //   - Verify the response API schema
 //
 // 8. Delete S3 bucket to ensure test isolation
-func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2156,7 +2154,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
@@ -2175,7 +2173,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 // testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
 // live Ray Dashboard and returns valid cluster metadata.
-func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -2183,7 +2181,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpoint := "/api/v0/cluster_metadata"
@@ -2216,7 +2214,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 // testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
 // cluster metadata from S3 for a dead (deleted) cluster.
-func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
@@ -2227,11 +2225,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(metaKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(s3Client.StatObject(S3BucketName, metaKey)).To(Succeed())
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// Delete the Ray cluster.
@@ -2252,7 +2246,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpoint := "/api/v0/cluster_metadata"
@@ -2296,7 +2290,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
-func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a RayJob that creates a detached placement group named "test_pg".
@@ -2311,11 +2305,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(s3Client.StatObject(S3BucketName, pgKey)).To(Succeed())
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// Delete the Ray cluster.
@@ -2336,7 +2326,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	// Use the same query params as the frontend to match the storage key.
@@ -2391,7 +2381,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2401,7 +2391,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2426,7 +2416,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2445,7 +2435,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2471,7 +2461,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	endpoint := EndpointTasksSummarize
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2480,7 +2470,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	endpointURL := historyServerURL + endpoint
 	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
@@ -2504,7 +2494,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	endpoint := EndpointTasksSummarize
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
@@ -2527,7 +2517,7 @@ func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := historyServerURL + endpoint
@@ -2633,10 +2623,11 @@ func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *ht
 func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, namespace string) *utils.ClusterInfo {
 	LogWithTimestamp(test.T(), "Getting cluster %s/%s from /clusters/ endpoint", namespace, clusterName)
 
+	client := CreateHTTPClientWithCookieJar(test, g)
 	var result *utils.ClusterInfo
 	g.Eventually(func(gg Gomega) {
 		result = nil // Reset to avoid stale value from previous iteration
-		resp, err := http.Get(historyServerURL + "/clusters/")
+		resp, err := client.Get(historyServerURL + "/clusters/")
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
@@ -3193,7 +3184,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 // 5. Set cluster context via /enter_cluster/ endpoint
 // 6. Verify that the /events endpoint returns events with proper structure
 // 7. Delete S3 bucket to ensure test isolation
-func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -3202,7 +3193,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return events", func(t *testing.T) {
@@ -3247,7 +3238,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
 // 9. Verify that the /events endpoint handles empty job_id parameter correctly
 // 10. Delete S3 bucket to ensure test isolation
-func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -3268,7 +3259,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	test.T().Run("should return events from storage", func(t *testing.T) {
@@ -3389,7 +3380,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
 // 9. Verify dead cluster offset and value match the live cluster values
 // 10. Delete S3 bucket to ensure test isolation
-func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -3398,7 +3389,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointTimezone)
@@ -3455,7 +3446,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify /api/cluster_status returns valid JSON response with result=true
 // 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "", EnableLiveClustersArg)
@@ -3464,7 +3455,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
@@ -3507,7 +3498,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 7. Verify /api/cluster_status returns valid JSON response with result=true
 // 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -3519,7 +3510,7 @@ func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
-	client := CreateHTTPClientWithCookieJar(g)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
