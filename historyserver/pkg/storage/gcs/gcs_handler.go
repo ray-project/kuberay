@@ -87,11 +87,11 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 // ListFiles will return all files within the directory.
-func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
+func (h *RayLogsHandler) ListFiles(prefix string, directory string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/") + "/"
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, prefix, directory), "/") + "/"
 
 	query := &gstorage.Query{
 		Prefix: pathPrefix,
@@ -173,18 +173,28 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	return clusterList
 }
 
-func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+// contentMatchGlob builds the object search pattern for GetContent, anchored at
+// the configured root dir the same way ListFiles and List anchor their prefixes.
+// A leading "**/" would let the search escape the root dir entirely, because
+// matchGlob treats "**" as matching across "/", so a bucket shared by more than
+// one root dir could serve a file belonging to a different deployment.
+// An empty root dir keeps the previous unanchored pattern.
+func contentMatchGlob(rootDir string, prefix string, fileName string) string {
+	return strings.TrimPrefix(path.Join(rootDir, "**", prefix+"*", "**", fileName), "/")
+}
+
+func (h *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
-		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
+		MatchGlob: contentMatchGlob(h.RootDir, prefix, fileName),
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
-		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
+		logrus.Errorf("File %s was not found in bucket for prefix %s", fileName, prefix)
 		return nil
 	}
 	if err != nil {
@@ -194,7 +204,7 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
-		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
+		logrus.Errorf("Failed to create reader for file: %s in prefix: %s", fileName, prefix)
 		return nil
 	}
 	defer reader.Close()

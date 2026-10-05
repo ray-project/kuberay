@@ -45,6 +45,35 @@ const (
 // Matches patterns like: \x1b[31m (red color), \x1b[0m (reset), etc.
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]+m`)
 
+type logByteRange struct {
+	start int64
+	end   int64
+}
+
+// exactRangeReader reads exactly `remaining` bytes from the underlying reader.
+// Unlike io.LimitReader, it returns io.ErrUnexpectedEOF if the reader ends
+// early, so a truncated log file surfaces as an error instead of silently
+// returning a partial task log.
+type exactRangeReader struct {
+	reader    io.Reader
+	remaining int64
+}
+
+func (r *exactRangeReader) Read(p []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	if int64(len(p)) > r.remaining {
+		p = p[:r.remaining]
+	}
+	n, err := r.reader.Read(p)
+	r.remaining -= int64(n)
+	if errors.Is(err, io.EOF) && r.remaining > 0 {
+		return n, io.ErrUnexpectedEOF
+	}
+	return n, err
+}
+
 // filterAnsiEscapeCodes removes ANSI escape sequences from log content
 func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
@@ -89,19 +118,21 @@ func crdLabelValueFor(kindLower string) string {
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
-	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
-	liveClusters, err := s.clientManager.ListRayClusters(ctx)
-	if err != nil {
-		logrus.Errorf("Failed to list live RayClusters: %v", err)
+	if s.enableLiveClusters {
+		ctx := context.Background()
+		liveClusterNames := []string{}
+		liveClusters, err := s.clientManager.ListRayClusters(ctx)
+		if err != nil {
+			logrus.Errorf("Failed to list live RayClusters: %v", err)
+		}
+		for _, liveCluster := range liveClusters {
+			liveClusterInfo := buildLiveClusterInfo(liveCluster)
+			liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
+			liveClusterNames = append(liveClusterNames, liveCluster.Name)
+		}
+		logrus.Infof("live clusters: %v", liveClusterNames)
 	}
-	for _, liveCluster := range liveClusters {
-		liveClusterInfo := buildLiveClusterInfo(liveCluster)
-		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
-		liveClusterNames = append(liveClusterNames, liveCluster.Name)
-	}
-	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
@@ -120,8 +151,13 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
 	}
 
+	// "live" is not a valid session while --enable-live-clusters is disabled.
+	if session == "live" && !s.enableLiveClusters {
+		return utils.ClusterInfo{}, false, nil
+	}
+
 	// Check live clusters first if applicable
-	if isLatestOrEmpty || session == "live" {
+	if s.enableLiveClusters && (isLatestOrEmpty || session == "live") {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
 			if err == nil {
@@ -236,13 +272,13 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 // listFilesRecursive recursively lists all files under dir,
 // returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
 // It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
-func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
-	entries := s.reader.ListFiles(clusterID, dir)
+func (s *ServerHandler) listFilesRecursive(prefix, dir string) []string {
+	entries := s.reader.ListFiles(prefix, dir)
 	var result []string
 	for _, entry := range entries {
 		if strings.HasSuffix(entry, "/") {
 			subDir := path.Join(dir, entry)
-			subFiles := s.listFilesRecursive(clusterID, subDir)
+			subFiles := s.listFilesRecursive(prefix, subDir)
 			for _, f := range subFiles {
 				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
 			}
@@ -292,7 +328,7 @@ func categorizeLogFiles(files []string) map[string][]string {
 
 func (s *ServerHandler) _getNodeLogFile(clusterSessionKey, clusterLogPathPrefix, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, options)
+	nodeID, filename, byteRange, err := s.resolveLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, options)
 	if err != nil {
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
@@ -308,6 +344,10 @@ func (s *ServerHandler) _getNodeLogFile(clusterSessionKey, clusterLogPathPrefix,
 
 	if reader == nil {
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
+	}
+	reader, err = applyLogByteRange(reader, byteRange)
+	if err != nil {
+		return nil, err
 	}
 
 	maxLines := options.Lines
@@ -376,21 +416,38 @@ func (s *ServerHandler) _getNodeLogFile(clusterSessionKey, clusterLogPathPrefix,
 	return result, nil
 }
 
+func applyLogByteRange(reader io.Reader, byteRange *logByteRange) (io.Reader, error) {
+	if byteRange == nil {
+		return reader, nil
+	}
+	if byteRange.start < 0 || byteRange.end < 0 || byteRange.end < byteRange.start {
+		return nil, fmt.Errorf("invalid task log byte range [%d,%d)", byteRange.start, byteRange.end)
+	}
+
+	if byteRange.start > 0 {
+		if _, err := io.CopyN(io.Discard, reader, byteRange.start); err != nil {
+			return nil, fmt.Errorf("task log ended before byte range start %d: %w", byteRange.start, err)
+		}
+	}
+
+	return &exactRangeReader{reader: reader, remaining: byteRange.end - byteRange.start}, nil
+}
+
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
 // This mirrors Ray Dashboard's resolve_filename logic.
 // The sessionID parameter is required for task_id resolution to search worker log files.
-func (s *ServerHandler) resolveLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID string, options GetLogFileOptions) (nodeID, filename string, byteRange *logByteRange, err error) {
 	// If filename is explicitly provided, use it and ignore suffix
 	if options.Filename != "" {
 		if options.NodeID == "" {
-			return "", "", fmt.Errorf("node_id is required when filename is provided")
+			return "", "", nil, fmt.Errorf("node_id is required when filename is provided")
 		}
 		filename := options.Filename
 		// Append attempt_number if specified for explicit filenames
 		if options.AttemptNumber > 0 {
 			filename = fmt.Sprintf("%s.%d", filename, options.AttemptNumber)
 		}
-		return options.NodeID, filename, nil
+		return options.NodeID, filename, nil, nil
 	}
 
 	// If task_id is provided, resolve from task events
@@ -400,15 +457,17 @@ func (s *ServerHandler) resolveLogFilename(clusterSessionKey, clusterLogPathPref
 
 	// If actor_id is provided, resolve from actor events
 	if options.ActorID != "" {
-		return s.resolveActorLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, options.ActorID, options.Suffix)
+		nodeID, filename, err := s.resolveActorLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, options.ActorID, options.Suffix)
+		return nodeID, filename, nil, err
 	}
 
 	// If pid is provided, resolve worker log file
 	if options.PID > 0 {
-		return s.resolvePidLogFilename(clusterLogPathPrefix, sessionID, options.NodeID, options.PID, options.Suffix)
+		nodeID, filename, err := s.resolvePidLogFilename(clusterLogPathPrefix, sessionID, options.NodeID, options.PID, options.Suffix)
+		return nodeID, filename, nil, err
 	}
 
-	return "", "", fmt.Errorf("must provide one of: filename, task_id, actor_id, or pid")
+	return "", "", nil, fmt.Errorf("must provide one of: filename, task_id, actor_id, or pid")
 }
 
 // resolvePidLogFilename resolves a log file by PID.
@@ -430,6 +489,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterLogPathPrefix, sessionID, n
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
 	for _, file := range files {
+		// A rotated generation is never the canonical stream for a pid.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasSuffix(file, pidSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -454,15 +517,15 @@ func getTasksByID(tasks []eventtypes.Task, taskID string) ([]eventtypes.Task, bo
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
-func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPathPrefix, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, byteRange *logByteRange, err error) {
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
-		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
+		return "", "", nil, fmt.Errorf("snapshot not found for %s", clusterSessionKey)
 	}
 
 	taskAttempts, found := getTasksByID(snap.Tasks, taskID)
 	if !found {
-		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
+		return "", "", nil, fmt.Errorf("task not found: task_id=%s", taskID)
 	}
 
 	// Find the specific attempt
@@ -475,61 +538,96 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterLogPath
 	}
 
 	if foundTask == nil {
-		return "", "", fmt.Errorf("task attempt not found: task_id=%s, attempt_number=%d", taskID, attemptNumber)
+		return "", "", nil, fmt.Errorf("task attempt not found: task_id=%s, attempt_number=%d", taskID, attemptNumber)
 	}
 
 	// Check if task has node_id
 	if foundTask.NodeID == "" {
-		return "", "", fmt.Errorf("task %s (attempt %d) has no node_id (task not scheduled yet)", taskID, attemptNumber)
+		return "", "", nil, fmt.Errorf("task %s (attempt %d) has no node_id (task not scheduled yet)", taskID, attemptNumber)
 	}
 
 	// Check if this is an actor task
 	if foundTask.ActorID != "" {
-		return "", "", fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"for actor task, please query actor log for actor(%s) by providing actor_id query parameter",
 			foundTask.ActorID,
 		)
 	}
 
-	// Check if task has worker_id
+	// A task log range is only valid together with the file name from the same
+	// TaskLogInfo stream. Falling back to a worker file when that name is missing
+	// can return output from other tasks that reused the worker.
+	if foundTask.TaskLogInfo != nil {
+		var logFilename string
+		var start, end int64
+		if suffix == "err" {
+			logFilename = foundTask.TaskLogInfo.StderrFile
+			start = foundTask.TaskLogInfo.StderrStart
+			end = foundTask.TaskLogInfo.StderrEnd
+		} else {
+			logFilename = foundTask.TaskLogInfo.StdoutFile
+			start = foundTask.TaskLogInfo.StdoutStart
+			end = foundTask.TaskLogInfo.StdoutEnd
+		}
+		if logFilename = taskLogBasename(logFilename); logFilename != "" {
+			// Public Ray events use plain scalar offsets, so end == 0 is
+			// indistinguishable from a missing end update. Treat it as incomplete
+			// instead of reporting a potentially false empty log.
+			if end == 0 {
+				return "", "", nil, utils.NewHTTPError(
+					fmt.Errorf("task %s (attempt %d) has incomplete task_log_info for suffix %s: end offset is unavailable", taskID, attemptNumber, suffix),
+					http.StatusNotFound,
+				)
+			}
+			if start < 0 || end < 0 || end < start {
+				return "", "", nil, utils.NewHTTPError(
+					fmt.Errorf("task %s (attempt %d) has invalid %s log byte range [%d,%d)", taskID, attemptNumber, suffix, start, end),
+					http.StatusInternalServerError,
+				)
+			}
+			return foundTask.NodeID, logFilename, &logByteRange{start: start, end: end}, nil
+		}
+		return "", "", nil, utils.NewHTTPError(
+			fmt.Errorf("task %s (attempt %d) has incomplete task_log_info for suffix %s: log filename is empty", taskID, attemptNumber, suffix),
+			http.StatusNotFound,
+		)
+	}
+
+	// Fallback: Find worker log file by worker_id
 	if foundTask.WorkerID == "" {
-		return "", "", fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"task %s (attempt %d) has no worker_id",
 			taskID, attemptNumber,
 		)
 	}
-
-	// Try to use task_log_info if available
-	// NOTE: task_log_info is currently not supported in ray export event, so we will always
-	// fallback to following logic.
-	if foundTask.TaskLogInfo != nil {
-		var logFilename string
-		if suffix == "err" {
-			logFilename = foundTask.TaskLogInfo.StderrFile
-		} else {
-			logFilename = foundTask.TaskLogInfo.StdoutFile
-		}
-		if logFilename != "" {
-			return foundTask.NodeID, logFilename, nil
-		}
-	}
-
-	// Fallback: Find worker log file by worker_id
 	if sessionID == "" {
-		return "", "", fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"task %s (attempt %d) has no task_log_info and sessionID is required to search for worker log files",
 			taskID, attemptNumber,
 		)
 	}
 	nodeIDHex, logFilename, err := s.findWorkerLogFile(clusterLogPathPrefix, sessionID, foundTask.NodeID, foundTask.WorkerID, suffix)
 	if err != nil {
-		return "", "", fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"failed to find worker log file for task %s (attempt %d, worker_id=%s, node_id=%s): %w",
 			taskID, attemptNumber, foundTask.WorkerID, foundTask.NodeID, err,
 		)
 	}
 
-	return nodeIDHex, logFilename, nil
+	return nodeIDHex, logFilename, nil, nil
+}
+
+// taskLogBasename maps Ray's absolute worker-container log path to the file
+// name stored below the History Server's per-node logs prefix.
+func taskLogBasename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+	filename = path.Base(filename)
+	if filename == "." || filename == ".." || filename == "/" {
+		return ""
+	}
+	return filename
 }
 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
@@ -612,6 +710,11 @@ func (s *ServerHandler) findWorkerLogFile(clusterLogPathPrefix, sessionID, nodeI
 	workerSuffix := fmt.Sprintf(".%s", suffix)
 
 	for _, file := range files {
+		// A worker stream can span several rotated generations, so none of them is
+		// the canonical file a task or actor lookup should resolve to.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasPrefix(file, workerPrefix) && strings.HasSuffix(file, workerSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -633,11 +736,8 @@ func (s *ServerHandler) ipToNodeId(clusterLogPathPrefix, sessionID, nodeIP strin
 
 	// Use targeted listing to find node_events directories under each node
 	var candidatePrefixes []string
-	for _, rawEntry := range s.reader.ListFiles(clusterLogPathPrefix, sessionID) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
-			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
-		}
+	for _, nodeName := range clusterlogs.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionID) {
+		candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
 	}
 
 	for _, nodeEventDirPrefix := range candidatePrefixes {

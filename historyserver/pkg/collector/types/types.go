@@ -24,8 +24,13 @@ type RayCollectorConfig struct {
 	PushInterval        time.Duration
 	DashboardAddress    string
 
+	// AdditionalEndpoints are polled on top of the collector's built-in set.
 	AdditionalEndpoints  []string
 	EndpointPollInterval time.Duration
+
+	// RotatedLogScanInterval is how often the active session log directory is
+	// scanned for completed Ray rotation backups.
+	RotatedLogScanInterval time.Duration
 
 	// Event collector disk-first storage configuration.
 	EventDataDir          string        // root directory for JSONL event files

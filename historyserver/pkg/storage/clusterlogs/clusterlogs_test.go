@@ -1,7 +1,11 @@
 package clusterlogs
 
 import (
+	"io"
+	"slices"
 	"testing"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func TestClusterLogsPaths(t *testing.T) {
@@ -22,6 +26,11 @@ func TestClusterLogsPaths(t *testing.T) {
 	wantSession := wantPrefix + "/session-1"
 	if got := SessionDir(rootDir, ownerKind, ownerName, ns, cluster, session); got != wantSession {
 		t.Errorf("SessionDir() = %q, want %q", got, wantSession)
+	}
+
+	wantFetchedEndpoints := wantSession + "/fetched_endpoints"
+	if got := FetchedEndpointsDir(wantPrefix, session); got != wantFetchedEndpoints {
+		t.Errorf("FetchedEndpointsDir() = %q, want %q", got, wantFetchedEndpoints)
 	}
 
 	wantNode := wantSession + "/node-1"
@@ -57,5 +66,71 @@ func TestClusterLogsPaths(t *testing.T) {
 	}
 	if got := RelJobEventsDir(session, node, jobID); got != "session-1/node-1/job_events/01000000" {
 		t.Errorf("RelJobEventsDir() = %q", got)
+	}
+}
+
+type mockStorageReader struct {
+	files map[string][]string
+}
+
+func (m *mockStorageReader) List() []utils.ClusterInfo {
+	return nil
+}
+
+func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+	return nil
+}
+
+func (m *mockStorageReader) ListFiles(clusterId string, dir string) []string {
+	if entries, ok := m.files[dir]; ok {
+		return entries
+	}
+	return nil
+}
+
+func TestListSessionNodeDirs(t *testing.T) {
+	tests := []struct {
+		name        string
+		sessionName string
+		dirEntries  []string
+		expected    []string
+	}{
+		{
+			name:        "returns node directories",
+			sessionName: "session-1",
+			dirEntries:  []string{"node-a/", "node-b/"},
+			expected:    []string{"node-a", "node-b"},
+		},
+		{
+			name:        "skips files and fetched_endpoints",
+			sessionName: "session-1",
+			dirEntries: []string{
+				"node-a/",
+				"file.txt",
+				utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME + "/",
+				"/",
+			},
+			expected: []string{"node-a"},
+		},
+		{
+			name:        "empty listing",
+			sessionName: "session-1",
+			dirEntries:  nil,
+			expected:    nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := &mockStorageReader{
+				files: map[string][]string{
+					tc.sessionName: tc.dirEntries,
+				},
+			}
+			got := ListSessionNodeDirs(reader, "prefix", tc.sessionName)
+			if !slices.Equal(got, tc.expected) {
+				t.Errorf("ListSessionNodeDirs() = %v, want %v", got, tc.expected)
+			}
+		})
 	}
 }

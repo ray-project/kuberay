@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSlice(t *testing.T) {
@@ -169,6 +172,33 @@ func TestGetNodeRayIDWithFQIP_EnvVars(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A credential that cannot be resolved never becomes valid, so discovery must
+// surface it immediately instead of spending the full 60s retry budget and then
+// reporting a misleading timeout.
+func TestGetNodeRayIDWithFQIP_FailsFastOnAuthConfigError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":{"result":{"result":[{"node_id":"node-id-abc","node_ip":"10.0.0.1","state":"ALIVE"}]}}}`))
+	}))
+	defer ts.Close()
+
+	t.Setenv("POD_IP", "10.0.0.1")
+	t.Setenv("FQ_RAY_IP", ts.URL)
+	// Token auth requested, but neither RAY_AUTH_TOKEN nor the projected token volume is available.
+	t.Setenv(RAY_AUTH_MODE_ENV_VAR, RayAuthModeToken)
+	t.Setenv(RAY_AUTH_TOKEN_ENV_VAR, "")
+	t.Setenv(RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "")
+
+	start := time.Now()
+	_, err := GetNodeRayIDWithFQIP()
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, errRayAuthConfig)
+	assert.NotContains(t, err.Error(), "timeout", "misconfiguration must not be reported as a discovery timeout")
+	assert.Less(t, elapsed, 5*time.Second, "must not enter the retry loop")
 }
 
 func TestGetSessionDir_Symlinks(t *testing.T) {

@@ -165,37 +165,37 @@ func TestListFiles(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		clusterID string
+		prefix    string
 		directory string
 		expected  []string
 	}{
 		{
 			name:      "list_files",
-			clusterID: "cluster1",
+			prefix:    "cluster1",
 			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
 			expected:  []string{"file1.txt", "file2.log", "subdir/"},
 		},
 		{
 			name:      "list_other",
-			clusterID: "cluster1",
+			prefix:    "cluster1",
 			directory: "other",
 			expected:  []string{"file4.txt"},
 		},
 		{
 			name:      "list_nonexistent",
-			clusterID: "cluster1",
+			prefix:    "cluster1",
 			directory: "nonexistent",
 			expected:  nil,
 		},
 		{
 			name:      "list_cluster2",
-			clusterID: "cluster2",
+			prefix:    "cluster2",
 			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
 			expected:  []string{"file5.txt", "subdir2/"},
 		},
 		{
 			name:      "list_empty_subdir",
-			clusterID: "cluster2",
+			prefix:    "cluster2",
 			directory: "logs/subdir2",
 			expected:  nil,
 		},
@@ -203,11 +203,11 @@ func TestListFiles(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			files := handler.ListFiles(tc.clusterID, tc.directory)
+			files := handler.ListFiles(tc.prefix, tc.directory)
 			sort.Strings(files)
 			sort.Strings(tc.expected)
 			if diff := cmp.Diff(tc.expected, files); diff != "" {
-				t.Errorf("ListFiles(%q, %q) returned diff (-want +got):\n%s", tc.clusterID, tc.directory, diff)
+				t.Errorf("ListFiles(%q, %q) returned diff (-want +got):\n%s", tc.prefix, tc.directory, diff)
 			}
 		})
 	}
@@ -274,8 +274,53 @@ func TestList(t *testing.T) {
 	}
 }
 
+// contentMatchGlob is asserted directly because fake-gcs-server does not
+// implement matchGlob, so no test in this package can observe what the pattern
+// actually selects. This checks the pattern that gets sent, not its effect.
+func TestContentMatchGlobIsRooted(t *testing.T) {
+	tests := []struct {
+		name      string
+		rootDir   string
+		clusterID string
+		fileName  string
+		want      string
+	}{
+		{
+			name:      "rooted",
+			rootDir:   "ray_historyserver",
+			clusterID: "clusters/clusterA_ns",
+			fileName:  "session123/logs/important.log",
+			want:      "ray_historyserver/**/clusters/clusterA_ns*/**/session123/logs/important.log",
+		},
+		{
+			name:      "no root dir keeps the previous unanchored pattern",
+			rootDir:   "",
+			clusterID: "clusters/clusterA_ns",
+			fileName:  "session123/logs/important.log",
+			want:      "**/clusters/clusterA_ns*/**/session123/logs/important.log",
+		},
+		{
+			name:      "leading slash on root dir is trimmed",
+			rootDir:   "/ray_historyserver",
+			clusterID: "clusterA",
+			fileName:  "important.log",
+			want:      "ray_historyserver/**/clusterA*/**/important.log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := contentMatchGlob(tt.rootDir, tt.clusterID, tt.fileName)
+			if got != tt.want {
+				t.Errorf("contentMatchGlob(%q, %q, %q) = %q, want %q",
+					tt.rootDir, tt.clusterID, tt.fileName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetContent(t *testing.T) {
-	clusterID := "clusterA"
+	prefix := "clusterA"
 	fileName := "important.log"
 	objPath := "ray_historyserver/clusters/clusterA_ns/sessions/session123/logs/" + fileName
 	fileContent := "Log content here"
@@ -292,9 +337,9 @@ func TestGetContent(t *testing.T) {
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
 
-	reader := handler.GetContent(clusterID, fileName)
+	reader := handler.GetContent(prefix, fileName)
 	if reader == nil {
-		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", clusterID, fileName)
+		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", prefix, fileName)
 	}
 
 	content, err := io.ReadAll(reader)
@@ -303,6 +348,6 @@ func TestGetContent(t *testing.T) {
 	}
 
 	if string(content) != fileContent {
-		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", clusterID, fileName, string(content), fileContent)
+		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", prefix, fileName, string(content), fileContent)
 	}
 }

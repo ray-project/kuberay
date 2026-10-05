@@ -16,6 +16,8 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=ray.io, Version=v1
+	case v1.SchemeGroupVersion.WithKind("ActivePassiveHeadOptions"):
+		return &rayv1.ActivePassiveHeadOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AuthOptions"):
@@ -46,10 +48,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HistoryServerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
 		return &rayv1.IngressOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("LabelRef"):
+		return &rayv1.LabelRefApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("LabelRefSource"):
+		return &rayv1.LabelRefSourceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
 		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NodeFieldRef"):
+		return &rayv1.NodeFieldRefApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
 		return &rayv1.RayClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterSpec"):
@@ -84,6 +92,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayServiceUpgradeStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RedisCredential"):
 		return &rayv1.RedisCredentialApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ScaleGate"):
+		return &rayv1.ScaleGateApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ScaleStrategy"):
 		return &rayv1.ScaleStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("ServeDeploymentStatus"):

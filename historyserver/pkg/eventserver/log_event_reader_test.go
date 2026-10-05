@@ -26,24 +26,24 @@ func newLogEventMockReader() *logEventMockReader {
 	}
 }
 
-func (m *logEventMockReader) addFile(clusterID, filePath, content string) {
-	if m.files[clusterID] == nil {
-		m.files[clusterID] = make(map[string]string)
+func (m *logEventMockReader) addFile(prefix, filePath, content string) {
+	if m.files[prefix] == nil {
+		m.files[prefix] = make(map[string]string)
 	}
-	m.files[clusterID][filePath] = content
+	m.files[prefix][filePath] = content
 }
 
-func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string) {
-	if m.dirs[clusterID] == nil {
-		m.dirs[clusterID] = make(map[string][]string)
+func (m *logEventMockReader) addDir(prefix, dirPath string, entries []string) {
+	if m.dirs[prefix] == nil {
+		m.dirs[prefix] = make(map[string][]string)
 	}
-	m.dirs[clusterID][dirPath] = entries
+	m.dirs[prefix][dirPath] = entries
 }
 
 func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
 
-func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
-	if cd, ok := m.files[clusterID]; ok {
+func (m *logEventMockReader) GetContent(prefix string, fileName string) io.Reader {
+	if cd, ok := m.files[prefix]; ok {
 		if content, ok := cd[fileName]; ok {
 			return strings.NewReader(content)
 		}
@@ -51,8 +51,8 @@ func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Re
 	return nil
 }
 
-func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
-	if cd, ok := m.dirs[clusterID]; ok {
+func (m *logEventMockReader) ListFiles(prefix string, dir string) []string {
+	if cd, ok := m.dirs[prefix]; ok {
 		if entries, ok := cd[dir]; ok {
 			return entries
 		}
@@ -189,13 +189,17 @@ func TestReadLogEvents(t *testing.T) {
 		mock := newLogEventMockReader()
 
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1", []string{"node1/", "node2/", "stray_file.txt"})
-		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events", []string{"event_GCS.log", "debug.log"})
+		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events",
+			[]string{"event_GCS.log", "debug.log", "event_GCS.rotated.1788398100000000000-4390125.log"})
 		mock.addDir("cluster-history/raycluster/ns/cluster", "session1/node2/logs/events", []string{"event_RAYLET.log"})
 
 		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"from node1","timestamp":"1770635700"}`+"\n")
 		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node2/logs/events/event_RAYLET.log",
 			`{"event_id":"e2","source_type":"RAYLET","severity":"WARNING","message":"from node2","timestamp":"1770635800"}`+"\n")
+		// A collected rotated generation of event_GCS.log is read like any other event file.
+		mock.addFile("cluster-history/raycluster/ns/cluster", "session1/node1/logs/events/event_GCS.rotated.1788398100000000000-4390125.log",
+			`{"event_id":"e3","source_type":"GCS","severity":"INFO","message":"rotated generation","timestamp":"1770635600"}`+"\n")
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()
@@ -205,7 +209,7 @@ func TestReadLogEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		events := store.GetAllEvents("cluster_ns_session1")
-		assert.Len(t, events["global"], 2, "should read events from both nodes")
+		assert.Len(t, events["global"], 3, "should read active and rotated event files from both nodes, skipping non-event files")
 	})
 
 	t.Run("handles empty cluster with no nodes", func(t *testing.T) {

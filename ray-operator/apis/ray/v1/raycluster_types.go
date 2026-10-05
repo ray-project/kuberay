@@ -166,8 +166,8 @@ type GcsFaultToleranceOptions struct {
 	RedisPassword *RedisCredential `json:"redisPassword,omitempty"`
 	// +optional
 	ExternalStorageNamespace string `json:"externalStorageNamespace,omitempty"`
-	// RedisAddress is the address of the external Redis service used when Backend
-	// is "redis". It may alternatively be supplied via env vars/annotations.
+	// RedisAddress is the address of the external Redis service. Required when
+	// Backend is "redis"; must be empty for "rocksdb".
 	// +optional
 	RedisAddress string `json:"redisAddress,omitempty"`
 
@@ -177,6 +177,39 @@ type GcsFaultToleranceOptions struct {
 	// store. Only used when Backend is "rocksdb".
 	// +optional
 	Storage *GcsEmbeddedStorage `json:"storage,omitempty"`
+
+	// ----- Active-Passive Head HA fields -----
+
+	// ActivePassiveHeadOptions configures active-passive high availability for the GCS.
+	// It is only supported with the "redis" backend, not with "rocksdb".
+	// +optional
+	ActivePassiveHeadOptions *ActivePassiveHeadOptions `json:"activePassiveHeadOptions,omitempty"`
+}
+
+// ActivePassiveHeadOptions configures active-passive head high availability for
+// the GCS via leader election.
+// +kubebuilder:validation:XValidation:rule="self.leaseDurationSeconds > self.renewDeadlineSeconds",message="leaseDurationSeconds must be greater than renewDeadlineSeconds"
+// +kubebuilder:validation:XValidation:rule="self.renewDeadlineSeconds > self.retryPeriodSeconds",message="renewDeadlineSeconds must be greater than retryPeriodSeconds"
+type ActivePassiveHeadOptions struct {
+	// Enabled turns on active-passive head HA for the RayCluster. When true, KubeRay
+	// provisions a standby head Pod. Defaults to false.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+	// LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
+	// +optional
+	// +kubebuilder:default:=15
+	// +kubebuilder:validation:Minimum=1
+	LeaseDurationSeconds *int32 `json:"leaseDurationSeconds,omitempty"`
+	// RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences.
+	// +optional
+	// +kubebuilder:default:=10
+	// +kubebuilder:validation:Minimum=1
+	RenewDeadlineSeconds *int32 `json:"renewDeadlineSeconds,omitempty"`
+	// RetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts.
+	// +optional
+	// +kubebuilder:default:=2
+	// +kubebuilder:validation:Minimum=1
+	RetryPeriodSeconds *int32 `json:"retryPeriodSeconds,omitempty"`
 }
 
 // GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
@@ -476,19 +509,75 @@ type WorkerGroupSpec struct {
 	RayStartParams map[string]string `json:"rayStartParams"`
 	// Template is a pod template for the worker
 	Template corev1.PodTemplateSpec `json:"template"`
-	// ScaleStrategy defines which pods to remove
+	// ScaleStrategy controls scaling of this worker group: which pods to remove,
+	// and whether the group can currently be scaled up.
 	// +optional
 	ScaleStrategy ScaleStrategy `json:"scaleStrategy,omitempty"`
 	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
 	// +kubebuilder:default:=1
 	// +optional
 	NumOfHosts int32 `json:"numOfHosts,omitempty"`
+	// LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.
+	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
+	// Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.
+	// Empty means no labels are delivered.
+	// Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`).
+	// +optional
+	LabelRefs []LabelRef `json:"labelRefs,omitempty"`
 }
 
-// ScaleStrategy to remove workers
+// ScaleStrategy controls scaling of a worker group.
 type ScaleStrategy struct {
 	// WorkersToDelete workers to be deleted
 	WorkersToDelete []string `json:"workersToDelete,omitempty"`
+	// ScaleGate is a signal written by an external controller to indicate that
+	// this worker group cannot currently be scaled up. KubeRay preserves the
+	// field across reconciles but never reads or writes it; the Ray Autoscaler
+	// consumes it and falls back to another worker group while it is non-empty.
+	//
+	// Each gate is keyed by its type. A writer must add or remove only its own
+	// gates via Server-Side Apply under a distinct field manager; replacing the
+	// list wholesale, or using read-modify-write Update, drops gates owned by
+	// others.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	ScaleGate []ScaleGate `json:"scaleGate,omitempty"`
+}
+
+// ScaleGate marks a worker group as not currently scalable. Type is the merge
+// key, so a gate is added and removed by exactly one controller. This API is
+// intended to be consistent with PodCondition:
+// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
+type ScaleGate struct {
+	// Type uniquely identifies this gate and its owner, for example
+	// "example.com/gate-name".
+	Type string `json:"type"`
+}
+
+// LabelRef maps a node label to a Ray node label.
+type LabelRef struct {
+	// Name is the Ray label key the value is delivered under. If empty, defaults to the node label key in fieldPath.
+	// Must not be a key in the same group's workerGroupSpecs[].labels.
+	// +kubebuilder:validation:MaxLength=317
+	// +optional
+	Name string `json:"name,omitempty"`
+	// ValueFrom selects the node value to deliver.
+	ValueFrom LabelRefSource `json:"valueFrom"`
+}
+
+// LabelRefSource selects where a LabelRef value comes from.
+type LabelRefSource struct {
+	// NodeRef selects a field of the node the pod is bound to.
+	NodeRef NodeFieldRef `json:"nodeRef"`
+}
+
+// NodeFieldRef selects a field of the node in downward API syntax.
+type NodeFieldRef struct {
+	// FieldPath is the node field to read; only metadata.labels['<key>'] is supported in this version.
+	// The key must be in the operator's allowedNodeLabels.
+	// +kubebuilder:validation:MinLength=1
+	FieldPath string `json:"fieldPath"`
 }
 
 // AutoscalerOptions specifies optional configuration for the Ray autoscaler.

@@ -17,6 +17,26 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 
 
+#### ActivePassiveHeadOptions
+
+
+
+ActivePassiveHeadOptions configures active-passive head high availability for
+the GCS via leader election.
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled turns on active-passive head HA for the RayCluster. When true, KubeRay<br />provisions a standby head Pod. Defaults to false. |  |  |
+| `leaseDurationSeconds` _integer_ | LeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition. | 15 | Minimum: 1 <br /> |
+| `renewDeadlineSeconds` _integer_ | RenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences. | 10 | Minimum: 1 <br /> |
+| `retryPeriodSeconds` _integer_ | RetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts. | 2 | Minimum: 1 <br /> |
+
+
 #### AuthMode
 
 _Underlying type:_ _string_
@@ -216,8 +236,8 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
-	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
-	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
+  - Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
+  - Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
@@ -324,8 +344,9 @@ _Appears in:_
 | `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
-| `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
+| `redisAddress` _string_ | RedisAddress is the address of the external Redis service. Required when<br />Backend is "redis"; must be empty for "rocksdb". |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
+| `activePassiveHeadOptions` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveHeadOptions configures active-passive high availability for the GCS.<br />It is only supported with the "redis" backend, not with "rocksdb". |  |  |
 
 
 #### HeadGroupSpec
@@ -426,6 +447,39 @@ _Appears in:_
 | `SidecarMode` |  |
 
 
+#### LabelRef
+
+
+
+LabelRef maps a node label to a Ray node label.
+
+
+
+_Appears in:_
+- [WorkerGroupSpec](#workergroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the Ray label key the value is delivered under. If empty, defaults to the node label key in fieldPath.<br />Must not be a key in the same group's workerGroupSpecs[].labels. |  | MaxLength: 317 <br /> |
+| `valueFrom` _[LabelRefSource](#labelrefsource)_ | ValueFrom selects the node value to deliver. |  |  |
+
+
+#### LabelRefSource
+
+
+
+LabelRefSource selects where a LabelRef value comes from.
+
+
+
+_Appears in:_
+- [LabelRef](#labelref)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `nodeRef` _[NodeFieldRef](#nodefieldref)_ | NodeRef selects a field of the node the pod is bound to. |  |  |
+
+
 #### NetworkPolicyConfig
 
 
@@ -483,6 +537,22 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules appended to the base policy.<br />Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress). |  |  |
 | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-policy-deny-all sample. |  |  |
+
+
+#### NodeFieldRef
+
+
+
+NodeFieldRef selects a field of the node in downward API syntax.
+
+
+
+_Appears in:_
+- [LabelRefSource](#labelrefsource)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `fieldPath` _string_ | FieldPath is the node field to read; only metadata.labels['<key>'] is supported in this version.<br />The key must be in the operator's allowedNodeLabels. |  | MinLength: 1 <br /> |
 
 
 #### RayCluster
@@ -766,11 +836,30 @@ _Appears in:_
 | `value` _string_ |  |  |  |
 
 
+#### ScaleGate
+
+
+
+ScaleGate marks a worker group as not currently scalable. Type is the merge
+key, so a gate is added and removed by exactly one controller. This API is
+intended to be consistent with PodCondition:
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podcondition-v1-core
+
+
+
+_Appears in:_
+- [ScaleStrategy](#scalestrategy)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _string_ | Type uniquely identifies this gate and its owner, for example<br />"example.com/gate-name". |  |  |
+
+
 #### ScaleStrategy
 
 
 
-ScaleStrategy to remove workers
+ScaleStrategy controls scaling of a worker group.
 
 
 
@@ -780,6 +869,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `workersToDelete` _string array_ | WorkersToDelete workers to be deleted |  |  |
+| `scaleGate` _[ScaleGate](#scalegate) array_ | ScaleGate is a signal written by an external controller to indicate that<br />this worker group cannot currently be scaled up. KubeRay preserves the<br />field across reconciles but never reads or writes it; the Ray Autoscaler<br />consumes it and falls back to another worker group while it is non-empty.<br />Each gate is keyed by its type. A writer must add or remove only its own<br />gates via Server-Side Apply under a distinct field manager; replacing the<br />list wholesale, or using read-modify-write Update, drops gates owned by<br />others. |  |  |
 
 
 #### SubmitterConfig
@@ -874,8 +964,9 @@ _Appears in:_
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for this worker group.<br />These labels will also be added to the Pods of this worker group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: address, object-store-memory, ... |  |  |
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
-| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy defines which pods to remove |  |  |
+| `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
+| `labelRefs` _[LabelRef](#labelref) array_ | LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.<br />This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).<br />Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.<br />Empty means no labels are delivered.<br />Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`). |  |  |
 
 
 
@@ -883,6 +974,10 @@ _Appears in:_
 
 
 Package v1alpha1 contains API Schema definitions for the ray v1alpha1 API group
+
+Deprecated: ray.io/v1alpha1 is served for backward compatibility only, is
+frozen at its December 2023 feature set, and will be unavailable in KubeRay
+1.9. Use github.com/ray-project/kuberay/ray-operator/apis/ray/v1 instead.
 
 ### Resource Types
 - [RayCluster](#raycluster)
@@ -943,6 +1038,11 @@ _Appears in:_
 
 RayCluster is the Schema for the RayClusters API
 
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayClusters.
+
 
 
 
@@ -984,6 +1084,11 @@ _Appears in:_
 
 
 RayJob is the Schema for the rayjobs API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayJobs.
 
 
 
@@ -1032,6 +1137,11 @@ _Appears in:_
 
 
 RayService is the Schema for the rayservices API
+
+Deprecated: ray.io/v1alpha1 is deprecated. It is served for backward
+compatibility only, is frozen at its December 2023 feature set, and will be
+unavailable in KubeRay 1.9. Use ray.io/v1, the storage version, for all new
+and existing RayServices.
 
 
 
