@@ -26,7 +26,7 @@ var (
 	JobPath = "/api/jobs/"
 
 	// NodesPath reports the cluster's Ray nodes and their liveness.
-	NodesPath = "/nodes?view=summary"
+	NodesPath = "/api/v0/nodes"
 )
 
 type RayDashboardClientInterface interface {
@@ -169,6 +169,12 @@ func (r *RayDashboardClient) IsNodeAlive(ctx context.Context, nodeID string) (bo
 	if err != nil {
 		return false, err
 	}
+	query := req.URL.Query()
+	query.Set("filter_keys", "node_id")
+	query.Set("filter_predicates", "=")
+	query.Set("filter_values", nodeID)
+	query.Set("limit", "1")
+	req.URL.RawQuery = query.Encode()
 	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
@@ -177,9 +183,8 @@ func (r *RayDashboardClient) IsNodeAlive(ctx context.Context, nodeID string) (bo
 	}
 	defer resp.Body.Close()
 
-	// A non-2xx body often still parses as JSON with an empty summary, which would read as a dead
-	// driver and fail a healthy job. Reject it as an error so the caller retries instead.
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	// A failed node query is inconclusive, not evidence that the driver is gone.
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return false, fmt.Errorf("listing nodes returned status %d", resp.StatusCode)
 	}
 
@@ -188,15 +193,31 @@ func (r *RayDashboardClient) IsNodeAlive(ctx context.Context, nodeID string) (bo
 		return false, fmt.Errorf("failed to read response when listing nodes: %w", err)
 	}
 
-	var nodes utiltypes.RayNodesSummaryResponse
+	var nodes utiltypes.RayNodesResponse
 	if err = json.Unmarshal(body, &nodes); err != nil {
 		return false, fmt.Errorf("IsNodeAlive fail: %s", string(body))
 	}
-
-	for _, node := range nodes.Data.Summary {
-		if node.Raylet.NodeID == nodeID {
-			return node.Raylet.State == "ALIVE", nil
+	if !nodes.Result || nodes.Data.Result == nil || nodes.Data.Result.Result == nil {
+		return false, fmt.Errorf("State API returned no node-list result: %s", nodes.Msg)
+	}
+	if nodes.Data.Result.PartialFailureWarning != "" {
+		return false, fmt.Errorf("State API returned partial node data: %s", nodes.Data.Result.PartialFailureWarning)
+	}
+	for _, node := range nodes.Data.Result.Result {
+		if node.NodeID != nodeID {
+			return false, fmt.Errorf("State API returned node %q for requested node %q", node.NodeID, nodeID)
 		}
+		switch node.State {
+		case "ALIVE":
+			return true, nil
+		case "DEAD":
+			return false, nil
+		default:
+			return false, fmt.Errorf("State API returned unknown node state %q", node.State)
+		}
+	}
+	if nodes.Data.Result.NumFiltered > len(nodes.Data.Result.Result) {
+		return false, fmt.Errorf("State API node-list result was truncated")
 	}
 	return false, nil
 }

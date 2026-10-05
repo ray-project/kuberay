@@ -50,17 +50,21 @@ type RayJobLogsResponse struct {
 	Logs string `json:"logs,omitempty"`
 }
 
-// RayNodesSummaryResponse is the subset of the dashboard's /nodes response used to check whether a
-// Ray node is still alive.
-type RayNodesSummaryResponse struct {
+// RayNodesResponse contains the State API's filtered node-list result.
+type RayNodesResponse struct {
+	Msg  string `json:"msg"`
 	Data struct {
-		Summary []RayNodeSummary `json:"summary,omitempty"`
-	} `json:"data,omitempty"`
+		Result *struct {
+			PartialFailureWarning string         `json:"partial_failure_warning"`
+			Result                []RayNodeState `json:"result"`
+			NumFiltered           int            `json:"num_filtered"`
+		} `json:"result"`
+	} `json:"data"`
+	Result bool `json:"result"`
 }
 
-type RayNodeSummary struct {
-	Raylet struct {
-		NodeID string `json:"nodeId,omitempty"`
-		State  string `json:"state,omitempty"`
-	} `json:"raylet,omitempty"`
+// https://github.com/ray-project/ray/blob/237c2455ebb1ea15a32dd9e1fdeb2d617badc37f/python/ray/util/state/common.py#L557-L571
+type RayNodeState struct {
+	NodeID string `json:"node_id"`
+	State  string `json:"state"`
 }
