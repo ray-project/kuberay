@@ -257,6 +257,47 @@ class TestUtils(unittest.TestCase):
             cpu_requests = "4",
         )
 
+    def test_update_worker_group_resources_with_missing_maps(self):
+        for missing in ("resources", "requests", "limits"):
+            for container_name in ("unspecified", "side-car", "all_containers"):
+                with self.subTest(missing=missing, container_name=container_name):
+                    cluster = copy.deepcopy(test_cluster_body)
+                    containers = cluster["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"]
+                    for container in containers:
+                        for section in ("requests", "limits"):
+                            container["resources"][section]["nvidia.com/gpu"] = "1"
+                        if missing == "resources":
+                            container.pop("resources")
+                        else:
+                            container["resources"].pop(missing)
+                    expected = copy.deepcopy(cluster)
+                    expected_containers = expected["spec"]["workerGroupSpecs"][0]["template"]["spec"]["containers"]
+                    selected = {
+                        "unspecified": (0,),
+                        "side-car": (1,),
+                        "all_containers": (0, 1),
+                    }[container_name]
+                    for index in selected:
+                        expected_containers[index]["resources"] = {
+                            "requests": {"cpu": "3", "memory": "5G"},
+                            "limits": {"cpu": "5", "memory": "10G"},
+                        }
+                        for section in ("requests", "limits"):
+                            if missing not in ("resources", section):
+                                expected_containers[index]["resources"][section]["nvidia.com/gpu"] = "1"
+
+                    actual, succeeded = self.utils.update_worker_group_resources(
+                        cluster,
+                        group_name="small-group",
+                        cpu_requests="3",
+                        memory_requests="5G",
+                        cpu_limits="5",
+                        memory_limits="10G",
+                        container_name=container_name,
+                    )
+                    self.assertTrue(succeeded)
+                    self.assertEqual(actual, expected)
+
     def test_duplicate_worker_group(self):
         cluster = self.director.build_small_cluster(name="small-cluster")
         actual = cluster["metadata"]["name"]

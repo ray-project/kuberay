@@ -341,18 +341,12 @@ class ClusterUtils:
         worker_groups = cluster["spec"]["workerGroupSpecs"]
 
         def add_values(group_index: int, container_index: int):
-            worker_groups[group_index]["template"]["spec"]["containers"][
-                container_index
-            ]["resources"]["requests"]["cpu"] = cpu_requests
-            worker_groups[group_index]["template"]["spec"]["containers"][
-                container_index
-            ]["resources"]["requests"]["memory"] = memory_requests
-            worker_groups[group_index]["template"]["spec"]["containers"][
-                container_index
-            ]["resources"]["limits"]["cpu"] = cpu_limits
-            worker_groups[group_index]["template"]["spec"]["containers"][
-                container_index
-            ]["resources"]["limits"]["memory"] = memory_limits
+            container = worker_groups[group_index]["template"]["spec"]["containers"][container_index]
+            resources = container.setdefault("resources", {})
+            requests = resources.setdefault("requests", {})
+            limits = resources.setdefault("limits", {})
+            requests.update(cpu=cpu_requests, memory=memory_requests)
+            limits.update(cpu=cpu_limits, memory=memory_limits)
 
         for group_index, worker_group in enumerate(worker_groups):
             if worker_group["groupName"] != group_name:
