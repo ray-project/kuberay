@@ -14,9 +14,9 @@ import (
 
 // scanSessionLogs periodically uploads the active session's rotation and active logs.
 func (r *RayLogHandler) scanSessionLogs(stop <-chan struct{}) {
-	interval := r.RotatedLogScanInterval
+	interval := r.LogUploadInterval
 	if interval <= 0 {
-		interval = utils.DefaultRotatedLogScanInterval
+		interval = utils.DefaultLogUploadInterval
 	}
 	logrus.Infof("Started scanning session logs (interval=%v)", interval)
 	r.collectActiveSessionLogs(stop)

@@ -96,9 +96,9 @@ The collector can be configured using command-line flags:
 
 And using environment variables:
 
-- `RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL`: How often the collector scans the active session
-  log directory for completed Ray log rotation backups and for new content in the active logs
-  the dashboard reads while a cluster runs (default: `30s`)
+- `RAY_COLLECTOR_LOG_UPLOAD_INTERVAL`: How often the collector uploads rotated log backups
+  and new active log content (default: `5m`). Shorter intervals produce more log chunks for
+  the History Server to merge on read.
 
 #### Active log upload
 
@@ -117,7 +117,7 @@ scans the active session for those backups and uploads each one before Ray can o
 highest rotation index first because that is the generation Ray evicts next.
 
 Collection is best effort: a backup Ray removes before the collector reaches it is lost, so set
-`RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL` shorter than the time Ray takes to cycle through its
+`RAY_COLLECTOR_LOG_UPLOAD_INTERVAL` shorter than the time Ray takes to cycle through its
 rotation backups. That time depends on `RAY_ROTATION_MAX_BYTES`, `RAY_ROTATION_BACKUP_COUNT` and
 how fast the node writes logs; see the
 [Ray log rotation docs](https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#log-rotation).

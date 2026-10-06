@@ -44,7 +44,7 @@ type RayLogHandler struct {
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
-	RotatedLogScanInterval time.Duration
+	LogUploadInterval      time.Duration
 	mu                     sync.RWMutex
 	// rotatedMu serializes rotated log uploads so the periodic scan, shutdown
 	// and prev-logs paths cannot upload one generation twice.

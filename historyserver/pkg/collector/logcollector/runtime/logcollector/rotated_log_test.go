@@ -533,7 +533,7 @@ func TestScanRotatedLogsScansBeforeFirstTick(t *testing.T) {
 	writer := NewMockStorageWriter()
 	handler := newRotatedTestHandler(writer)
 	// Long enough that only the immediate scan can produce the upload.
-	handler.RotatedLogScanInterval = time.Hour
+	handler.LogUploadInterval = time.Hour
 
 	stop := make(chan struct{})
 	defer close(stop)
@@ -554,7 +554,7 @@ func TestScanRotatedLogsScansBeforeFirstTick(t *testing.T) {
 func TestScanRotatedLogsStopsOnSignal(t *testing.T) {
 	t.Setenv("RAY_TMP_ROOT", t.TempDir())
 	handler := newRotatedTestHandler(NewMockStorageWriter())
-	handler.RotatedLogScanInterval = time.Millisecond
+	handler.LogUploadInterval = time.Millisecond
 
 	stop := make(chan struct{})
 	stopped := make(chan struct{})
