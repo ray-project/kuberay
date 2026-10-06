@@ -11,6 +11,19 @@ on:
     - release-*
 
 jobs:
+  test_flaky_tracker:
+    name: Flaky tracker unit tests
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run mocked tracker tests
+        run: python3 -m unittest discover -s scripts -p 'flaky_tracker_test.py' -v
+
   lint:
     name: Lint (pre-commit)
     runs-on: ubuntu-22.04
