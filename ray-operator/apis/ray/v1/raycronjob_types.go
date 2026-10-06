@@ -7,7 +7,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// RayJobTemplateSpec describes the metadata a RayJob should have when created from a template
+// RayJobTemplateSpec describes the data a RayJob should have when created from a template
 type RayJobTemplateSpec struct {
 	// Standard object's metadata of the RayJobs created from this template
 	// +optional
