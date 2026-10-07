@@ -136,9 +136,9 @@ class HeadNodeSpec:
         if self.enable_ingress:
             dct["enableIngress"] = True
         if self.service_account is not None:
-            dct["service_account"] = self.service_account
+            dct["serviceAccount"] = self.service_account
         if self.image_pull_secret is not None:
-            dct["image_pull_secret"] = self.image_pull_secret
+            dct["imagePullSecret"] = self.image_pull_secret
         if self.image_pull_policy is not None:
             dct["imagePullPolicy"] = self.image_pull_policy
         if self.volumes is not None:
@@ -180,8 +180,8 @@ def head_node_spec_decoder(dct: dict[str, Any]) -> HeadNodeSpec:
         service_type=service_type,
         enable_ingress=dct.get("enableIngress", False),
         volumes=volumes,
-        service_account=dct.get("service_account", None),
-        image_pull_secret=dct.get("imagePullSecret", None),
+        service_account=dct.get("serviceAccount", dct.get("service_account")),
+        image_pull_secret=dct.get("imagePullSecret", dct.get("image_pull_secret")),
         image_pull_policy=dct.get("imagePullPolicy", None),
         environment=environments,
         annotations=dct.get("annotations", None),
