@@ -24,8 +24,6 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -102,19 +100,6 @@ func buildLiveClusterInfo(liveCluster *rayv1.RayCluster) utils.ClusterInfo {
 	}
 }
 
-func crdLabelValueFor(kindLower string) string {
-	switch kindLower {
-	case utils.RayJobKind:
-		return "RayJob"
-	case utils.RayServiceKind:
-		return "RayService"
-	case utils.RayClusterKind:
-		return "RayCluster"
-	default:
-		return kindLower
-	}
-}
-
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
@@ -143,6 +128,41 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
+func (s *ServerHandler) ownerRayClusterNames(ctx context.Context, namespace, resourceType, resourceName string) ([]string, error) {
+	switch resourceType {
+	case utils.RayJobKind:
+		rayJob, err := s.clientManager.GetRayJob(ctx, namespace, resourceName)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to get RayJob %s/%s: %w", namespace, resourceName, err)
+		}
+		if rayJob.Status.RayClusterName == "" {
+			return nil, nil
+		}
+		return []string{rayJob.Status.RayClusterName}, nil
+	case utils.RayServiceKind:
+		rayService, err := s.clientManager.GetRayService(ctx, namespace, resourceName)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("failed to get RayService %s/%s: %w", namespace, resourceName, err)
+		}
+
+		clusterNames := make([]string, 0, 2)
+		for _, name := range []string{rayService.Status.ActiveServiceStatus.RayClusterName, rayService.Status.PendingServiceStatus.RayClusterName} {
+			if name != "" {
+				clusterNames = append(clusterNames, name)
+			}
+		}
+		return clusterNames, nil
+	default:
+		return nil, fmt.Errorf("unsupported owner resource kind: %q", resourceType)
+	}
+}
+
 // resolveSession maps (namespace, resourceType, resourceName, session) to a concrete ClusterInfo.
 func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceType, resourceName, session string) (utils.ClusterInfo, bool, error) {
 	isLatestOrEmpty := session == "latest" || session == ""
@@ -166,21 +186,20 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 				return utils.ClusterInfo{}, false, fmt.Errorf("failed to check live RayCluster %s/%s: %w", namespace, resourceName, err)
 			}
 		} else {
-			// Both labels are needed: name alone is ambiguous since a RayJob and a
-			// RayService in the same namespace can share a name.
-			liveClusters, err := s.clientManager.ListRayClusters(ctx,
-				client.InNamespace(namespace),
-				client.MatchingLabels{
-					rayutils.RayOriginatedFromCRNameLabelKey: resourceName,
-					rayutils.RayOriginatedFromCRDLabelKey:    crdLabelValueFor(resTypeLower),
-				},
-			)
+			clusterNames, err := s.ownerRayClusterNames(ctx, namespace, resTypeLower, resourceName)
 			if err != nil {
-				return utils.ClusterInfo{}, false, fmt.Errorf("failed to list live RayClusters: %w", err)
+				return utils.ClusterInfo{}, false, err
 			}
-			// TODO: A RayService owns both an active and a pending cluster during an upgrade. Needs to decide which one to take.
-			if len(liveClusters) > 0 {
-				info := buildLiveClusterInfo(liveClusters[0])
+			for _, clusterName := range clusterNames {
+				liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, clusterName)
+				if err != nil {
+					if !apierrors.IsNotFound(err) {
+						return utils.ClusterInfo{}, false, fmt.Errorf("failed to check live RayCluster %s/%s: %w", namespace, clusterName, err)
+					}
+					continue
+				}
+
+				info := buildLiveClusterInfo(liveCluster)
 				if info.OwnerKind == "" {
 					info.OwnerKind = resTypeLower
 					info.OwnerName = resourceName
