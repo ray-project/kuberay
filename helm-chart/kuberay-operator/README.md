@@ -198,6 +198,7 @@ spec:
 | nodeEventForwarder.types | list | `["Warning"]` | Only forward Node events with these types. Valid values are "Warning" and "Normal". Empty means all types. Note: Removing the "Warning" filter (or including "Normal") may result in a large number of noisy Normal Node events being forwarded. |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
+| metrics.serviceMonitor.apiVersion | string | `"monitoring.coreos.com/v1"` | API version of the ServiceMonitor resource. |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |
 | metrics.serviceMonitor.honorLabels | bool | `true` | When true, honorLabels preserves the metric’s labels when they collide with the target’s labels. |
 | metrics.serviceMonitor.additionalLabels | object | `{}` | Additional labels to add to the ServiceMonitor's metadata. |
