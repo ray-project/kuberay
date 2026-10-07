@@ -198,7 +198,10 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			return nil
 		}
 
-		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
+		if handled, err := r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix); handled {
+			if err != nil {
+				logrus.Errorf("Failed to collect rotated log %s: %v", path, err)
+			}
 			return nil
 		}
 
@@ -630,7 +633,12 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 			return nil
 		}
 
-		if r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix) {
+		handled, err := r.collectIfRotatedLog(path, logsDir, rotatedObjectPrefix)
+		if err != nil {
+			// Stop before RemoveAll so the directory remains available for retry.
+			return fmt.Errorf("failed to collect rotated log %s: %w", path, err)
+		}
+		if handled {
 			return nil
 		}
 
