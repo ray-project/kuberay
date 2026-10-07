@@ -1945,7 +1945,7 @@ func verifyDeadClusterTaskLogInfo(g *WithT, client *http.Client, historyServerUR
 		}
 	}
 	g.Expect(taskID).NotTo(BeEmpty(),
-		"completed Ray 2.56 my_task should expose a complete stdout byte range")
+		"completed my_task should expose a complete stdout byte range")
 	g.Expect(nodeID).NotTo(BeEmpty())
 
 	workerLogURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1",
