@@ -246,5 +246,5 @@ per first-time cold-path call. Warm-path calls produce no parse log lines.
 
 ## Deployment
 
-History Server can be deployed in Kubernetes using the manifests in the `config/samples/` directory.
+History Server can be deployed in Kubernetes using the manifests in the `config/` directory.
 Examples are provided for different storage backends including S3 (RustFS) and Aliyun OSS.
