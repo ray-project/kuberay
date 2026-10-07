@@ -69,10 +69,9 @@ The history server can be configured using command-line flags:
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
 - `--storage-backend-config-path`: Path to storage backend configuration file
 - `--enable-live-clusters`: Serve RayClusters that are still running by reverse-proxying to their
-  head dashboard (default: `false`)
-- `--serve-running-clusters`: Serve sessions of RayClusters that are still running from storage,
+  head dashboard (default: `false`). When disabled, a running RayCluster is served from storage
   using whatever the collector has uploaded so far. The cached snapshot does not refresh on its
-  own; enter the cluster with `?reload=true` to trigger reload (default: `false`)
+  own; enter the cluster with `?reload=true` to re-read it.
 
 > [!WARNING]
 > The history server does not authenticate its own callers, and the RayCluster it proxies to is

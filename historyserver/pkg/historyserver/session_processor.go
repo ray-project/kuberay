@@ -45,7 +45,8 @@ type SessionProcessor struct {
 	reader    storage.StorageReader
 	k8sClient client.Client
 	// serveRunningClusters builds snapshots for sessions whose RayCluster CR
-	// still exists, instead of reporting them as live.
+	// still exists, instead of reporting them as live. Set when the live proxy
+	// is disabled, so running clusters are served from storage.
 	serveRunningClusters bool
 }
 
