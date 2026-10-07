@@ -117,11 +117,11 @@ To access the local Ray Dashboard, you have to port forward the History Server s
 kubectl port-forward svc/historyserver 8080:30080
 ```
 
-Install Ray locally. Make sure to use at least Ray `v2.55`.
+Install Ray locally. Make sure to use at least Ray `v2.58`.
 
 ```bash
 pip uninstall -y ray
-pip install -U "ray[default]==2.56.0"
+pip install -U "ray[default]==2.58.0"
 ```
 
 Run the `ray start` command:
