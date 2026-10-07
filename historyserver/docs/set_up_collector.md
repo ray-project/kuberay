@@ -124,8 +124,8 @@ open http://localhost:9001/rustfs/console/
 Login with:
 
 ```text
-Username: rustfsadmin
-Password: rustfsadmin
+Account: rustfsadmin
+Key: rustfsadmin
 ```
 
 #### Option B: Azure Blob Storage (Azurite)
