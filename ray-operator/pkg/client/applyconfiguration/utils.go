@@ -48,10 +48,16 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HistoryServerOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("IngressOptions"):
 		return &rayv1.IngressOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("LabelRef"):
+		return &rayv1.LabelRefApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("LabelRefSource"):
+		return &rayv1.LabelRefSourceApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
 		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NodeFieldRef"):
+		return &rayv1.NodeFieldRefApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
 		return &rayv1.RayClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterSpec"):
@@ -96,10 +102,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.SubmitterConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("TLSOptions"):
 		return &rayv1.TLSOptionsApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("TopologyLabelMapping"):
-		return &rayv1.TopologyLabelMappingApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("TopologySpec"):
-		return &rayv1.TopologySpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupNetworkPolicyRules"):
 		return &rayv1.WorkerGroupNetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupSpec"):
