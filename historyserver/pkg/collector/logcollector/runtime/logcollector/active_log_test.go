@@ -13,7 +13,7 @@ func TestUploadNewBytes(t *testing.T) {
 		name   = "job-driver-x.log"
 		object = testLogPrefix + name
 	)
-	key := activeLogKey{sessionID: testSessionID, relPath: name}
+	key := activeLogKey{sessionID: testSessionID, nodeID: testNodeID, relPath: name}
 	errStorage := errors.New("storage down")
 
 	// write is one change to the log file, followed by one scan. An empty write

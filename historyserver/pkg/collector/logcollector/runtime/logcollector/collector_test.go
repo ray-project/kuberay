@@ -566,3 +566,31 @@ func TestProcessPrevLogsDirUploadsChunkedFilesAsTail(t *testing.T) {
 		}
 	}
 }
+
+// Ensure a new node's chunks start under its own prefix rather than continuing from the old node's last offset.
+// A worker's Ray container can restart into the same session with a new node ID.
+func TestCollectActiveLogRestartsChunksForNewNodeID(t *testing.T) {
+	logsDir := t.TempDir()
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+	raylet := filepath.Join(logsDir, "raylet.out")
+	writeLogFile(t, raylet, "old node\n")
+
+	if err := handler.collectActiveLog(raylet, logsDir, testSessionID, "node-old"); err != nil {
+		t.Fatalf("old node: %v", err)
+	}
+	if err := writeTo(raylet, os.O_WRONLY|os.O_APPEND, "new node\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := handler.collectActiveLog(raylet, logsDir, testSessionID, "node-new"); err != nil {
+		t.Fatalf("new node: %v", err)
+	}
+
+	prefix := func(node string) string {
+		return "root/cluster-history/raycluster/default/rc/" + testSessionID + "/" + node + "/logs/"
+	}
+	assertWritten(t, writer, map[string]string{
+		prefix("node-old") + "raylet.out.chunks/00000000000000000000": "old node\n",
+		prefix("node-new") + "raylet.out.chunks/00000000000000000000": "old node\nnew node\n",
+	})
+}

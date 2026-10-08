@@ -38,9 +38,11 @@ type tailState struct {
 
 // activeLogKey identifies one log stream independently of where the file
 // currently lives, so progress survives the move into prev-logs on a session
-// change.
+// change. Add node ID as part of the key because a worker's Ray container can
+// restart into the same session with a new node ID.
 type activeLogKey struct {
 	sessionID string
+	nodeID    string
 	relPath   string
 }
 
@@ -144,7 +146,7 @@ func (r *RayLogHandler) collectActiveLog(absPath, logsDir, sessionID, nodeID str
 	case activeLogOverwrite:
 		return r.uploadWholeFile(absPath, objectName)
 	default:
-		return r.uploadNewBytes(absPath, objectName, activeLogKey{sessionID: sessionID, relPath: relPath})
+		return r.uploadNewBytes(absPath, objectName, activeLogKey{sessionID: sessionID, nodeID: nodeID, relPath: relPath})
 	}
 }
 
