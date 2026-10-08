@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -58,6 +59,9 @@ func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string
 			rayKey := ref.Name
 			if rayKey == "" {
 				rayKey = nodeLabel
+			}
+			if errs := validation.IsQualifiedName(rayKey); len(errs) > 0 {
+				return field.Invalid(refPath.Child("name"), rayKey, strings.Join(errs, "; "))
 			}
 			if seen[rayKey] {
 				return field.Duplicate(refPath, rayKey)

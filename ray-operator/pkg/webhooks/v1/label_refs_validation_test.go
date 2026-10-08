@@ -76,6 +76,11 @@ func TestValidateLabelRefs(t *testing.T) {
 			errorContains: `Ray label "ray.io/zone" is also set in labels`,
 		},
 		{
+			name:          "name is not a valid label key",
+			mutate:        func(g *rayv1.WorkerGroupSpec) { g.LabelRefs[0].Name = "ray zone!" },
+			errorContains: "labelRefs[0].name",
+		},
+		{
 			name: "fieldPath is not a node label",
 			mutate: func(g *rayv1.WorkerGroupSpec) {
 				g.LabelRefs[1].ValueFrom.NodeRef.FieldPath = "metadata.annotations['nvidia.com/gpu.clique']"

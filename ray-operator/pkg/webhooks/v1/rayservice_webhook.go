@@ -13,6 +13,7 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var rayServiceLog = logf.Log.WithName("rayservice-resource")
@@ -57,8 +58,10 @@ func (w *RayServiceWebhook) validateRayService(rayService *rayv1.RayService) err
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), rayService.Name, err.Error()))
 	}
 
-	if err := validateLabelRefs(&rayService.Spec.RayClusterSpec, rayService.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
-		allErrs = append(allErrs, err)
+	if features.Enabled(features.NodeLabelDelivery) {
+		if err := validateLabelRefs(&rayService.Spec.RayClusterSpec, rayService.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
+			allErrs = append(allErrs, err)
+		}
 	}
 
 	if len(allErrs) == 0 {
