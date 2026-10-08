@@ -1,7 +1,6 @@
 package logcollector
 
 import (
-	"bytes"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
-	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -50,8 +48,11 @@ type RayLogHandler struct {
 	// and prev-logs paths cannot upload one generation twice.
 	rotatedMu       sync.Mutex
 	rotatedUploaded map[string]struct{}
-	// activeLogs is where the periodic scan stopped reading each active log.
-	activeLogs map[string]tailState
+	// activeLogs is where the last upload stopped reading each chunked log.
+	// Guarded by activeMu as the periodic scan, the shutdown walk and the
+	// prev-logs walk may update it concurrently.
+	activeMu   sync.Mutex
+	activeLogs map[activeLogKey]tailState
 }
 
 func (r *RayLogHandler) GetRayNodeName() string {
@@ -191,9 +192,9 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			return nil
 		}
 
-		// Process log file with the real session ID and node ID
-		if err := r.processSessionLatestLogFile(path, logsDir, sessionID, nodeID); err != nil {
-			logrus.Errorf("Failed to process session_latest log file %s: %v", path, err)
+		// Only upload the tail of chunked files; upload others in full.
+		if err := r.collectActiveLog(path, logsDir, sessionID, nodeID); err != nil {
+			logrus.Errorf("Failed to upload session_latest log file %s: %v", path, err)
 		}
 
 		return nil
@@ -203,50 +204,6 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	}
 
 	logrus.Info("Finished processing session_latest logs")
-}
-
-// processSessionLatestLogFile uploads one file below logsDir in full.
-func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, logsDir, sessionID, nodeID string) error {
-	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
-	if err != nil {
-		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
-	}
-
-	// Split relative path into subdirectory and filename
-	subdir, _ := filepath.Split(relativePath)
-
-	// Build the object name using the standard path structure
-	logDir := clusterlogs.LogsDir(r.RootDir, r.OwnerKind, r.OwnerName, r.RayClusterNamespace, r.RayClusterName, sessionID, nodeID)
-
-	if subdir != "" && subdir != "." {
-		// Remove trailing separator if present
-		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
-		dirName := path.Join(logDir, subdir)
-		if err := r.Writer.CreateDirectory(dirName); err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
-			return err
-		}
-	}
-
-	objectName := path.Join(logDir, relativePath)
-	logrus.Infof("Processing session_latest log file %s (object: %s)", absoluteLogPathName, objectName)
-
-	// Read the entire file content
-	content, err := os.ReadFile(absoluteLogPathName)
-	if err != nil {
-		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
-		return err
-	}
-
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
-	}
-
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
-	return nil
 }
 
 func (r *RayLogHandler) WatchPrevLogsLoops() {
@@ -637,49 +594,20 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 	r.pruneRotatedUploaded(rotatedObjectPrefix, nil)
 }
 
-// processPrevLogFile processes a single log file from prev-logs
+// processPrevLogFile uploads one prev-log file (chunked files only their tail,
+// others in full) and then moves it to persist-complete-logs so a collector
+// restart skips it.
 func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, sessionID, nodeID string) error {
-	// Calculate relative path within logs directory
+	if err := r.collectActiveLog(absoluteLogPathName, localLogDir, sessionID, nodeID); err != nil {
+		return err
+	}
+
 	// The localLogDir is /tmp/ray/prev-logs/{sessionid}/{nodeid}/logs
 	relativePath, err := filepath.Rel(localLogDir, absoluteLogPathName)
 	if err != nil {
 		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
 	}
-
-	// Split relative path into subdirectory and filename
 	subdir, _ := filepath.Split(relativePath)
-
-	// Build the object name using the standard path structure
-	logDir := clusterlogs.LogsDir(r.RootDir, r.OwnerKind, r.OwnerName, r.RayClusterNamespace, r.RayClusterName, sessionID, nodeID)
-
-	if subdir != "" && subdir != "." {
-		// Remove trailing separator if present
-		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
-		dirName := path.Join(logDir, subdir)
-		if err := r.Writer.CreateDirectory(dirName); err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
-			return err
-		}
-	}
-
-	objectName := path.Join(logDir, relativePath)
-	logrus.Infof("Processing prev-log file %s (object: %s)", absoluteLogPathName, objectName)
-
-	// Read the entire file content
-	content, err := os.ReadFile(absoluteLogPathName)
-	if err != nil {
-		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
-		return err
-	}
-
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
-	}
-
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
 	completeBaseDir := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID)

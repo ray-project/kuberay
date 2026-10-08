@@ -226,22 +226,30 @@ func TestCollectRotatedLogUploadsDeterministicObject(t *testing.T) {
 	want := map[string]string{
 		testLogPrefix + mustRotatedName(t, "raylet.out.1", id):                                    "rotated raylet",
 		testLogPrefix + "old/" + mustRotatedName(t, "worker-abc123-01000000-123.err.2", nestedID): "rotated worker",
+		testLogPrefix + "raylet.out.chunks/00000000000000000000":                                  "active raylet",
 	}
 	assertWritten(t, writer, want)
 }
 
-// Active files the running-cluster dashboard does not read wait for shutdown.
-func TestCollectRotatedLogSkipsUnclassifiedActiveFiles(t *testing.T) {
+// Active component logs are append-only and upload by chunk alongside the
+// rotation backups.
+func TestCollectSessionLogsChunksActiveComponentLogs(t *testing.T) {
 	logsDir := t.TempDir()
 	writer := NewMockStorageWriter()
 	handler := newRotatedTestHandler(writer)
 
-	for _, name := range []string{"raylet.out", "raylet.err", "monitor.log", "gcs_server.out"} {
+	names := []string{"raylet.out", "raylet.err", "monitor.log", "gcs_server.out"}
+	for _, name := range names {
 		writeLogFile(t, filepath.Join(logsDir, name), "active")
 	}
 
 	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
-	assertWritten(t, writer, map[string]string{})
+
+	want := make(map[string]string, len(names))
+	for _, name := range names {
+		want[testLogPrefix+name+".chunks/00000000000000000000"] = "active"
+	}
+	assertWritten(t, writer, want)
 }
 
 // A generation keeps its inode as Ray shifts it down the rotation ring, so it
@@ -586,8 +594,8 @@ func TestProcessSessionLatestLogsUsesRotatedName(t *testing.T) {
 	handler.processSessionLatestLogs()
 
 	assertWritten(t, writer, map[string]string{
-		testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "rotated raylet",
-		testLogPrefix + "raylet.out":                           "active raylet",
+		testLogPrefix + mustRotatedName(t, "raylet.out.1", id):   "rotated raylet",
+		testLogPrefix + "raylet.out.chunks/00000000000000000000": "active raylet",
 	})
 }
 
@@ -629,8 +637,8 @@ func TestProcessPrevLogsDirUsesRotatedName(t *testing.T) {
 	handler.processPrevLogsDir(nodeDir)
 
 	assertWritten(t, writer, map[string]string{
-		testLogPrefix + mustRotatedName(t, "raylet.out.1", id): "rotated raylet",
-		testLogPrefix + "raylet.out":                           "active raylet",
+		testLogPrefix + mustRotatedName(t, "raylet.out.1", id):   "rotated raylet",
+		testLogPrefix + "raylet.out.chunks/00000000000000000000": "active raylet",
 	})
 }
 

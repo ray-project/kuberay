@@ -1,34 +1,30 @@
 package logcollector
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
 
-// activeLogKind is how an active (not yet rotated) session log is uploaded
-// while the cluster runs.
+// activeLogKind is how a session log is uploaded.
 type activeLogKind int
 
 const (
-	// activeLogSkip leaves the file to the shutdown upload.
-	activeLogSkip activeLogKind = iota
 	// activeLogChunk uploads only the bytes appended since the last pass, as
 	// one object per pass, because the file only ever grows.
-	activeLogChunk
+	activeLogChunk activeLogKind = iota
 	// activeLogOverwrite re-uploads the whole file because Ray rewrites it in
 	// place, so there is no stable prefix to build on.
 	activeLogOverwrite
 )
 
-// chunkDirSuffix names the object directory that holds a file's chunks, next
-// to where the whole file lands on shutdown: "<file>.chunks/<offset>".
+// chunkDirSuffix names the object directory that holds a file's chunks: "<file>.chunks/<offset>".
 const chunkDirSuffix = ".chunks"
 
 // tailState is where the previous pass stopped reading one active log. The
@@ -40,34 +36,30 @@ type tailState struct {
 	offset int64
 }
 
+// activeLogKey identifies one log stream independently of where the file
+// currently lives, so progress survives the move into prev-logs on a session
+// change.
+type activeLogKey struct {
+	sessionID string
+	relPath   string
+}
+
 // classifyActiveLog picks the upload strategy for a path relative to the
-// session logs directory. Only the files the dashboard widgets read for a
-// running cluster are covered; everything else waits for shutdown.
+// session logs directory. Ray appends to every log it keeps there, except
+// debug_state.txt, which the raylet truncates and rewrites on every dump:
+// https://github.com/ray-project/ray/blob/c8466ab8fd2b14691633b163c56b5ef036d7d146/src/ray/raylet/node_manager.cc#L2613-L2619
 //
-// Ray's log directory layout: https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#logging-directory-structure
+// NOTE: some files are written once and never appended to, such as the
+// profiler dumps under profiles/. We still classify them as chunk kind, as
+// uploadNewBytes only uploads when the file has grown, so they go up as a
+// single chunk and are not re-uploaded afterwards.
+//
+// Directory layout: https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#logging-directory-structure
 func classifyActiveLog(relPath string) activeLogKind {
-	relPath = filepath.ToSlash(relPath)
-	dir, base := path.Split(relPath)
-	switch {
-	case relPath == "debug_state.txt":
-		// file is overwritten
-		// https://github.com/ray-project/ray/blob/c8466ab8fd2b14691633b163c56b5ef036d7d146/src/ray/raylet/node_manager.cc#L2613-L2619
+	if relPath == "debug_state.txt" {
 		return activeLogOverwrite
-	case dir == "" && strings.HasPrefix(base, "job-driver-") && strings.HasSuffix(base, ".log"):
-		// file is appended
-		// https://github.com/ray-project/ray/blob/c8466ab8fd2b14691633b163c56b5ef036d7d146/python/ray/dashboard/modules/job/job_supervisor.py#L178-L188
-		return activeLogChunk
-	case dir == "" && strings.HasPrefix(base, "worker-") && (strings.HasSuffix(base, ".out") || strings.HasSuffix(base, ".err")):
-		// file is appended
-		// https://github.com/ray-project/ray/blob/c8466ab8fd2b14691633b163c56b5ef036d7d146/src/ray/util/pipe_logger.cc#L198-L203
-		return activeLogChunk
-	case dir == "events/" && strings.HasPrefix(base, "event_") && strings.HasSuffix(base, ".log"):
-		// file is appended
-		// https://github.com/ray-project/ray/blob/c8466ab8fd2b14691633b163c56b5ef036d7d146/python/ray/_private/event/event_logger.py#L119
-		return activeLogChunk
-	default:
-		return activeLogSkip
 	}
+	return activeLogChunk
 }
 
 // chunkObjectName is the object one chunk uploads to. Offsets are zero-padded
@@ -85,7 +77,10 @@ func chunkObjectName(objectName string, offset int64) string {
 //
 // TODO: log rotation is not supported yet. A rotated file restarts from offset
 // zero, overwriting the old generation's chunks.
-func (r *RayLogHandler) uploadNewBytes(absPath, objectName string) error {
+func (r *RayLogHandler) uploadNewBytes(absPath, objectName string, key activeLogKey) error {
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+
 	file, err := os.Open(absPath)
 	if err != nil {
 		return fmt.Errorf("failed to open active log %s: %w", absPath, err)
@@ -102,14 +97,17 @@ func (r *RayLogHandler) uploadNewBytes(absPath, objectName string) error {
 	}
 
 	if r.activeLogs == nil {
-		r.activeLogs = make(map[string]tailState)
+		r.activeLogs = make(map[activeLogKey]tailState)
 	}
-	state := r.activeLogs[absPath]
-	// Inode change or shrink means rotation or truncation. We will start over from offset 0.
-	if state.inode != stat.Ino || info.Size() < state.offset {
+	state := r.activeLogs[key]
+	// A key we have not seen, an inode change (rotation) or a shrink
+	// (truncation) all start over from offset 0. A fresh key always uploads
+	// once, even when the file is empty, so the log is listed in storage.
+	fresh := state.inode != stat.Ino || info.Size() < state.offset
+	if fresh {
 		state = tailState{inode: stat.Ino}
 	}
-	if info.Size() == state.offset {
+	if !fresh && info.Size() == state.offset {
 		return nil
 	}
 
@@ -124,23 +122,41 @@ func (r *RayLogHandler) uploadNewBytes(absPath, objectName string) error {
 	}
 
 	state.offset = info.Size()
-	r.activeLogs[absPath] = state
+	r.activeLogs[key] = state
 	logrus.Debugf("Uploaded active log chunk %s (object: %s, size: %d bytes)", absPath, chunkName, chunk.Size())
 	return nil
 }
 
-// collectActiveLog uploads one active log according to classifyActiveLog.
-func (r *RayLogHandler) collectActiveLog(absPath, logsDir, objectPrefix, sessionID, nodeID string) error {
+// collectActiveLog uploads one log below logsDir according to classifyActiveLog.
+func (r *RayLogHandler) collectActiveLog(absPath, logsDir, sessionID, nodeID string) error {
 	relPath, err := filepath.Rel(logsDir, absPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get relative path for %s: %w", absPath, err)
 	}
+	relPath = filepath.ToSlash(relPath)
+	objectPrefix := r.rotatedObjectPrefix(sessionID, nodeID)
+	if objectPrefix == "" {
+		return fmt.Errorf("session or node ID is unknown for %s", absPath)
+	}
+	objectName := path.Join(objectPrefix, relPath)
+
 	switch classifyActiveLog(relPath) {
-	case activeLogChunk:
-		return r.uploadNewBytes(absPath, path.Join(objectPrefix, filepath.ToSlash(relPath)))
 	case activeLogOverwrite:
-		return r.processSessionLatestLogFile(absPath, logsDir, sessionID, nodeID)
+		return r.uploadWholeFile(absPath, objectName)
 	default:
-		return nil
+		return r.uploadNewBytes(absPath, objectName, activeLogKey{sessionID: sessionID, relPath: relPath})
 	}
+}
+
+// uploadWholeFile uploads absPath in full to objectName.
+func (r *RayLogHandler) uploadWholeFile(absPath, objectName string) error {
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", absPath, err)
+	}
+	if err := r.Writer.WriteFile(objectName, bytes.NewReader(content)); err != nil {
+		return fmt.Errorf("failed to write object %s: %w", objectName, err)
+	}
+	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	return nil
 }

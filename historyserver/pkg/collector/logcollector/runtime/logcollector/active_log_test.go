@@ -13,6 +13,7 @@ func TestUploadNewBytes(t *testing.T) {
 		name   = "job-driver-x.log"
 		object = testLogPrefix + name
 	)
+	key := activeLogKey{sessionID: testSessionID, relPath: name}
 	errStorage := errors.New("storage down")
 
 	// write is one change to the log file, followed by one scan. An empty write
@@ -38,6 +39,11 @@ func TestUploadNewBytes(t *testing.T) {
 				chunkObjectName(object, 0): "line 1\n",
 				chunkObjectName(object, 7): "line 2\nline 3\n",
 			},
+		},
+		{
+			name:   "empty file uploads one empty chunk and is not re-uploaded",
+			writes: []write{{content: ""}, {}},
+			want:   map[string]string{chunkObjectName(object, 0): ""},
 		},
 		{
 			name:   "shrunk file restarts from offset zero",
@@ -68,7 +74,7 @@ func TestUploadNewBytes(t *testing.T) {
 				}
 				writer.setWriteErr(w.writeErr)
 
-				err := r.uploadNewBytes(logPath, object)
+				err := r.uploadNewBytes(logPath, object, key)
 				if (err != nil) != (w.writeErr != nil) {
 					t.Fatalf("write %d: uploadNewBytes() error = %v, want error: %v", i, err, w.writeErr != nil)
 				}

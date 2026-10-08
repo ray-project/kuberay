@@ -94,7 +94,7 @@ func (r *RayLogHandler) collectSessionLogsUnder(logsDir, sessionID, nodeID strin
 			logrus.Debug("Shutdown signaled, ending active log scan early")
 			return
 		}
-		if err := r.collectActiveLog(absPath, logsDir, objectPrefix, sessionID, nodeID); err != nil {
+		if err := r.collectActiveLog(absPath, logsDir, sessionID, nodeID); err != nil {
 			logrus.Errorf("Failed to collect active log %s: %v", absPath, err)
 		}
 	}

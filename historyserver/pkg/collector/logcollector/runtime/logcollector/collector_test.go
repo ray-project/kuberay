@@ -196,8 +196,7 @@ func TestScanAndProcess(t *testing.T) {
 	createTestLogFile(t, f2, "content2")
 
 	// --- Step 1: Process file1 only (simulating partial success before crash) ---
-	err := handler.processPrevLogFile(f1, logsDir, sessionID, nodeID)
-	if err != nil {
+	if err := handler.processPrevLogFile(f1, logsDir, sessionID, nodeID); err != nil {
 		t.Fatalf("Failed to process file1: %v", err)
 	}
 
@@ -499,5 +498,71 @@ func TestWatchSessionLatestLoopsWritesMarkerForCurrentSession(t *testing.T) {
 			t.Fatalf("session marker %s not written; wrote %v", want, writer.order())
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// Ensure termination only uploads the rest of the log chunk rather than uploading the whole file again.
+func TestProcessSessionLatestLogsUploadsChunkedFilesAsTail(t *testing.T) {
+	rayRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", rayRoot)
+	logsDir := linkSessionLatest(t, rayRoot, testSessionID)
+	driver := filepath.Join(logsDir, "job-driver-x.log")
+	writeLogFile(t, driver, "first\n")
+	writeLogFile(t, filepath.Join(logsDir, "debug_state.txt"), "state")
+
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+	// Trigger the first log chunk upload
+	handler.collectSessionLogsUnder(logsDir, testSessionID, testNodeID, nil)
+	if err := writeTo(driver, os.O_WRONLY|os.O_APPEND, "tail\n"); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	handler.processSessionLatestLogs()
+
+	// Only the tail chunk was added, no whole-file object.
+	assertWritten(t, writer, map[string]string{
+		testLogPrefix + "job-driver-x.log.chunks/00000000000000000000": "first\n",
+		testLogPrefix + "job-driver-x.log.chunks/00000000000000000006": "tail\n",
+		testLogPrefix + "debug_state.txt":                              "state",
+	})
+}
+
+// Ensure session change only uploads the rest of the log chunk rather than uploading the whole file again.
+func TestProcessPrevLogsDirUploadsChunkedFilesAsTail(t *testing.T) {
+	rayRoot := t.TempDir()
+	t.Setenv("RAY_TMP_ROOT", rayRoot)
+	activeLogs := filepath.Join(rayRoot, testSessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	driver := filepath.Join(activeLogs, "job-driver-x.log")
+	writeLogFile(t, driver, "first\n")
+	writeLogFile(t, filepath.Join(activeLogs, "debug_state.txt"), "state")
+
+	writer := NewMockStorageWriter()
+	handler := newRotatedTestHandler(writer)
+	handler.prevLogsDir = utils.GetRayPrevLogsPath()
+	handler.persistCompleteLogsDir = utils.GetRayPersistCompletePath()
+	// Trigger the first log chunk upload
+	handler.collectSessionLogsUnder(activeLogs, testSessionID, testNodeID, nil)
+	if err := writeTo(driver, os.O_WRONLY|os.O_APPEND, "tail\n"); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	if err := utils.MoveSessionLogsToPrevLogs(filepath.Join(rayRoot, testSessionID), testNodeID); err != nil {
+		t.Fatalf("MoveSessionLogsToPrevLogs() = %v", err)
+	}
+	handler.processPrevLogsDir(filepath.Join(handler.prevLogsDir, testSessionID, testNodeID))
+
+	// Only the tail chunk was added, no whole-file object.
+	assertWritten(t, writer, map[string]string{
+		testLogPrefix + "job-driver-x.log.chunks/00000000000000000000": "first\n",
+		testLogPrefix + "job-driver-x.log.chunks/00000000000000000006": "tail\n",
+		testLogPrefix + "debug_state.txt":                              "state",
+	})
+
+	// Check the marker files are written to persistCompleteLogsDir
+	for _, name := range []string{"job-driver-x.log", "debug_state.txt"} {
+		if _, err := os.Stat(filepath.Join(handler.persistCompleteLogsDir, testSessionID, testNodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME, name)); err != nil {
+			t.Fatalf("%s not marked persisted: %v", name, err)
+		}
 	}
 }

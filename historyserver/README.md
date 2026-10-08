@@ -101,12 +101,13 @@ And using environment variables:
 
 #### Active log upload
 
-On the same schedule the collector also uploads the active logs the dashboard reads for a
-running cluster: `debug_state.txt` is re-uploaded in full each pass, while the append-only
-`job-driver-*.log`, `worker-*.out`/`.err` and `events/event_*.log` upload only the bytes added
-since the previous pass, as one object per pass under `<file>.chunks/<offset>`. The History
-Server reads the whole file when present (written on shutdown) and falls back to the chunks
-otherwise. Ray log rotation is not supported for chunked uploads yet.
+On the same schedule the collector also uploads the active logs of a running cluster.
+`debug_state.txt` is rewritten by Ray on every dump and is re-uploaded in full each pass. Every
+other log under `logs/` is append-only and uploads only the bytes added since the previous pass,
+as one object per pass under `<file>.chunks/<offset>`.
+
+The History Server joins the chunks when reading. On shutdown and on a session change the collector uploads
+the remaining tail as one more chunk. Ray log rotation is not supported for chunked uploads yet.
 
 #### Rotated log collection
 

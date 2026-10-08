@@ -73,6 +73,7 @@ func TestClusterLogsPaths(t *testing.T) {
 type mockStorageReader struct {
 	files   map[string][]string // dir -> entries
 	content map[string]string   // object path -> content
+	gets    []string            // GetContent calls, in order
 }
 
 func (m *mockStorageReader) List() []utils.ClusterInfo {
@@ -80,6 +81,7 @@ func (m *mockStorageReader) List() []utils.ClusterInfo {
 }
 
 func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+	m.gets = append(m.gets, fileName)
 	if content, ok := m.content[fileName]; ok {
 		return strings.NewReader(content)
 	}
@@ -164,9 +166,13 @@ func TestReadLogFile(t *testing.T) {
 		want    string
 		wantNil bool
 	}{
-		"whole file wins over chunks": {
+		"chunks win and the whole object is never fetched": {
 			files:   []string{"00000000000000000000"},
 			content: map[string]string{logPath: "whole", chunk("00000000000000000000"): "chunk"},
+			want:    "chunk",
+		},
+		"whole object is read when there are no chunks": {
+			content: map[string]string{logPath: "whole"},
 			want:    "whole",
 		},
 		"chunks are joined in offset order regardless of listing order": {
@@ -217,6 +223,9 @@ func TestReadLogFile(t *testing.T) {
 			}
 			if string(data) != tc.want {
 				t.Fatalf("ReadLogFile() = %q, want %q", data, tc.want)
+			}
+			if len(tc.files) > 0 && slices.Contains(reader.gets, logPath) {
+				t.Fatalf("ReadLogFile() fetched the whole object although chunks exist: %v", reader.gets)
 			}
 		})
 	}

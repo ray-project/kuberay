@@ -138,21 +138,17 @@ func ListLogFiles(reader storage.StorageReader, prefix, dir string) []string {
 	return files
 }
 
-// ReadLogFile returns the whole object at logPath when it exists, otherwise
-// join the file's chunks in offset order, or nil when there is neither.
+// ReadLogFile joins the file's chunks in offset order when any exist,
+// otherwise returns the whole object at logPath, or nil when there is neither.
 //
 // Only chunks that continue exactly where the previous one ended are used. A
 // collector restart re-uploads from offset zero and leaves the earlier
 // higher-offset chunks behind; splicing those in would duplicate bytes.
 func ReadLogFile(reader storage.StorageReader, prefix, logPath string) io.Reader {
-	if content := reader.GetContent(prefix, logPath); content != nil {
-		return content
-	}
-
 	chunkDir := logPath + ChunkDirSuffix
 	names := reader.ListFiles(prefix, chunkDir)
 	if len(names) == 0 {
-		return nil
+		return reader.GetContent(prefix, logPath)
 	}
 	sort.Strings(names)
 
