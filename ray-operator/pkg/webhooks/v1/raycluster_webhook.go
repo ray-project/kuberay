@@ -13,7 +13,6 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var rayClusterLog = logf.Log.WithName("raycluster-resource")
@@ -62,10 +61,8 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
-	if features.Enabled(features.NodeLabelDelivery) {
-		if err := validateLabelRefs(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
-			allErrs = append(allErrs, err)
-		}
+	if err := validateLabelRefs(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
+		allErrs = append(allErrs, err)
 	}
 
 	if len(allErrs) == 0 {

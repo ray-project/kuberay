@@ -11,6 +11,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // validateLabelRefs checks the labelRefs of every worker group in spec against the operator allowlist.
@@ -22,6 +23,9 @@ func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string
 			continue
 		}
 		path := base.Child("workerGroupSpecs").Index(i).Child("labelRefs")
+		if !features.Enabled(features.NodeLabelDelivery) {
+			return field.Forbidden(path, "requires the NodeLabelDelivery feature gate to be enabled")
+		}
 
 		// node label delivery rewrites the KubeRay-generated ray start command, so the user must not replace it.
 		// the annotation is read from the CR metadata and copied onto the pod template, so check both
@@ -51,6 +55,9 @@ func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string
 			nodeLabel, err := utils.NodeLabelKey(fieldPath)
 			if err != nil {
 				return field.Invalid(refPath.Child("valueFrom", "nodeRef", "fieldPath"), fieldPath, err.Error())
+			}
+			if errs := validation.IsQualifiedName(nodeLabel); len(errs) > 0 {
+				return field.Invalid(refPath.Child("valueFrom", "nodeRef", "fieldPath"), nodeLabel, strings.Join(errs, "; "))
 			}
 			if !slices.Contains(allowed, nodeLabel) {
 				return field.Forbidden(refPath.Child("valueFrom", "nodeRef", "fieldPath"), fmt.Sprintf("node label %q is not in the operator's allowedNodeLabels", nodeLabel))

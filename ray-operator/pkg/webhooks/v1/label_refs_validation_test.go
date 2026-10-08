@@ -9,9 +9,11 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestValidateLabelRefs(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
 	const zone, clique = "topology.kubernetes.io/zone", "nvidia.com/gpu.clique"
 	allowed := []string{zone, clique}
 	newSpec := func() *rayv1.RayClusterSpec {
@@ -81,6 +83,13 @@ func TestValidateLabelRefs(t *testing.T) {
 			errorContains: "labelRefs[0].name",
 		},
 		{
+			name: "fieldPath names a malformed label key",
+			mutate: func(g *rayv1.WorkerGroupSpec) {
+				g.LabelRefs[1].ValueFrom.NodeRef.FieldPath = "metadata.labels['bad key!']"
+			},
+			errorContains: "labelRefs[1].valueFrom.nodeRef.fieldPath",
+		},
+		{
 			name: "fieldPath is not a node label",
 			mutate: func(g *rayv1.WorkerGroupSpec) {
 				g.LabelRefs[1].ValueFrom.NodeRef.FieldPath = "metadata.annotations['nvidia.com/gpu.clique']"
@@ -117,4 +126,14 @@ func TestValidateLabelRefs(t *testing.T) {
 			require.Contains(t, err.Error(), tt.errorContains)
 		})
 	}
+
+	t.Run("gate off", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, false)
+		spec := newSpec()
+		err := validateLabelRefs(spec, nil, allowed, field.NewPath("spec"))
+		require.NotNil(t, err)
+		require.Contains(t, err.Error(), "requires the NodeLabelDelivery feature gate to be enabled")
+		spec.WorkerGroupSpecs[0].LabelRefs = nil
+		require.Nil(t, validateLabelRefs(spec, nil, allowed, field.NewPath("spec")))
+	})
 }

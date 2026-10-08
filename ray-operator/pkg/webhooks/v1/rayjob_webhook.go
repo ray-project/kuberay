@@ -13,7 +13,6 @@ import (
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var rayJobLog = logf.Log.WithName("rayjob-resource")
@@ -58,7 +57,7 @@ func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), rayJob.Name, err.Error()))
 	}
 
-	if features.Enabled(features.NodeLabelDelivery) && rayJob.Spec.RayClusterSpec != nil {
+	if rayJob.Spec.RayClusterSpec != nil {
 		if err := validateLabelRefs(rayJob.Spec.RayClusterSpec, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
 			allErrs = append(allErrs, err)
 		}
