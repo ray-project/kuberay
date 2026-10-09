@@ -1632,8 +1632,13 @@ func (r *RayClusterReconciler) createService(ctx context.Context, svc *corev1.Se
 func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster, clusterHash string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
+	headIPFamily, err := r.getHeadServiceIPFamily(ctx, &instance)
+	if err != nil {
+		return err
+	}
+
 	// build the pod then create it
-	pod := r.buildHeadPod(ctx, instance)
+	pod := r.buildHeadPod(ctx, instance, headIPFamily)
 
 	// Set RayClusterUpgradeStrategyHashKey and KubeRayVersion annotations
 	if clusterHash != "" {
@@ -1710,7 +1715,7 @@ func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, ins
 }
 
 // Build head instance pod(s).
-func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster) corev1.Pod {
+func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.RayCluster, headIPFamily corev1.IPFamily) corev1.Pod {
 	logger := ctrl.LoggerFrom(ctx)
 	podName := utils.PodName(instance.Name, rayv1.HeadNode, !utils.IsDeterministicHeadPodNameEnabled())
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace) // Fully Qualified Domain Name
@@ -1718,7 +1723,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	// The Ray head port used by workers to connect to the cluster (GCS server port for Ray >= 1.11.0, Redis port for older Ray.)
 	headPort := common.GetHeadPort(instance.Spec.HeadGroupSpec.RayStartParams)
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
-	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort)
+	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort, headIPFamily)
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
@@ -1803,8 +1808,14 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instance rayv1.RayCluster) batchv1.Job {
 	logger := ctrl.LoggerFrom(ctx)
 
-	// Build the head pod
-	pod := r.buildHeadPod(ctx, instance)
+	// Build the head pod. The Redis cleanup Job overwrites the container command, so the
+	// dashboard-host default does not matter here; fall back to IPv4 if the head Service is gone.
+	headIPFamily, err := r.getHeadServiceIPFamily(ctx, &instance)
+	if err != nil {
+		logger.Info("Head service not found while building the Redis cleanup Job, defaulting to IPv4", "error", err.Error())
+		headIPFamily = corev1.IPv4Protocol
+	}
+	pod := r.buildHeadPod(ctx, instance, headIPFamily)
 	pod.Labels[utils.RayNodeTypeLabelKey] = string(rayv1.RedisCleanupNode)
 
 	// Only keep the Ray container in the Redis cleanup Job.
@@ -2130,6 +2141,18 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	return newInstance, nil
+}
+
+// getHeadServiceIPFamily returns the primary IP family of the RayCluster's head Service.
+func (r *RayClusterReconciler) getHeadServiceIPFamily(ctx context.Context, instance *rayv1.RayCluster) (corev1.IPFamily, error) {
+	services := corev1.ServiceList{}
+	if err := r.List(ctx, &services, common.RayClusterHeadServiceListOptions(instance)...); err != nil {
+		return "", err
+	}
+	if len(services.Items) == 0 {
+		return "", fmt.Errorf("unable to find head service to determine its IP family. cluster name %s, filter labels %v", instance.Name, common.RayClusterHeadServiceListOptions(instance))
+	}
+	return utils.GetServiceIPFamily(&services.Items[0]), nil
 }
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
