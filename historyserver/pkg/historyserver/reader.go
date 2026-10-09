@@ -50,30 +50,6 @@ type logByteRange struct {
 	end   int64
 }
 
-// exactRangeReader reads exactly `remaining` bytes from the underlying reader.
-// Unlike io.LimitReader, it returns io.ErrUnexpectedEOF if the reader ends
-// early, so a truncated log file surfaces as an error instead of silently
-// returning a partial task log.
-type exactRangeReader struct {
-	reader    io.Reader
-	remaining int64
-}
-
-func (r *exactRangeReader) Read(p []byte) (int, error) {
-	if r.remaining == 0 {
-		return 0, io.EOF
-	}
-	if int64(len(p)) > r.remaining {
-		p = p[:r.remaining]
-	}
-	n, err := r.reader.Read(p)
-	r.remaining -= int64(n)
-	if errors.Is(err, io.EOF) && r.remaining > 0 {
-		return n, io.ErrUnexpectedEOF
-	}
-	return n, err
-}
-
 // filterAnsiEscapeCodes removes ANSI escape sequences from log content
 func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
@@ -424,13 +400,17 @@ func applyLogByteRange(reader io.Reader, byteRange *logByteRange) (io.Reader, er
 		return nil, fmt.Errorf("invalid task log byte range [%d,%d)", byteRange.start, byteRange.end)
 	}
 
+	// Return whatever is available up to end and stop at EOF. For a running cluster the task event
+	// can arrive before the log chunk that holds its bytes. The next scan fills in the rest.
 	if byteRange.start > 0 {
 		if _, err := io.CopyN(io.Discard, reader, byteRange.start); err != nil {
-			return nil, fmt.Errorf("task log ended before byte range start %d: %w", byteRange.start, err)
+			if errors.Is(err, io.EOF) {
+				return strings.NewReader(""), nil
+			}
+			return nil, fmt.Errorf("failed to seek task log to byte %d: %w", byteRange.start, err)
 		}
 	}
-
-	return &exactRangeReader{reader: reader, remaining: byteRange.end - byteRange.start}, nil
+	return io.LimitReader(reader, byteRange.end-byteRange.start), nil
 }
 
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
