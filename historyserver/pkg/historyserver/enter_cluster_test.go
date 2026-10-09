@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -232,6 +233,34 @@ func TestEnterCluster(t *testing.T) {
 
 		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "live" {
 			t.Errorf("Expected cookie %s to default to 'live' (actual latest session name), got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+	})
+
+	t.Run("Successful entry serves the dashboard bootstrap page", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d: %s", resp.Code, resp.Body.String())
+		}
+		if ct := resp.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("Expected Content-Type to start with text/html, got %q", ct)
+		}
+		if body := resp.Body.String(); !strings.Contains(body, `location.replace("/" + location.hash)`) {
+			t.Errorf("Expected the bootstrap page to forward the URL fragment, got %q", body)
+		}
+	})
+
+	t.Run("Browser-style navigation headers are not rejected", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/raycluster/cluster-a", nil)
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Content-Type", "application/octet-stream")
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200 for a browser-style navigation, got %d: %s", resp.Code, resp.Body.String())
 		}
 	})
 }
@@ -676,4 +705,38 @@ func TestEnterClusterWithLiveClustersDisabled(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestClusterSelectorNavigatesAfterEnterCluster guards the contract between
+// /enter_cluster and the embedded cluster selector page. The endpoint answers with the
+// HTML bootstrap page, and a fetch() never executes the document it receives, so the
+// selector must navigate on its own once the response is ok. Parsing the body as JSON
+// (the pre-bootstrap behavior) throws on the HTML and strands the user on the selector
+// with an error even though the context cookies were already set.
+//
+// This is asserted here because the History Server e2e suite that would exercise the
+// flow in a real browser is not wired into CI at the moment.
+func TestClusterSelectorNavigatesAfterEnterCluster(t *testing.T) {
+	page := string(html.ClusterSelectorHTML)
+
+	start := strings.Index(page, "function enterCluster(")
+	if start < 0 {
+		t.Fatal("the cluster selector page no longer defines enterCluster()")
+	}
+	end := strings.Index(page[start:], "\n            function ")
+	if end < 0 {
+		t.Fatal("cannot locate the end of enterCluster() in the cluster selector page")
+	}
+	enterCluster := page[start : start+end]
+
+	if strings.Contains(enterCluster, "res.json()") {
+		t.Error("enterCluster() parses the /enter_cluster body as JSON, " +
+			"but that endpoint serves the HTML bootstrap page")
+	}
+	if strings.Contains(enterCluster, "data.result") {
+		t.Error("enterCluster() still checks data.result, which the bootstrap page never returns")
+	}
+	if !strings.Contains(enterCluster, "window.location.href") {
+		t.Error("enterCluster() must navigate to the dashboard itself once the context cookies are set")
+	}
 }
