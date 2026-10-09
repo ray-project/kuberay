@@ -59,13 +59,16 @@ class RayClusterApi:
 
         Parameters:
         - k8s_namespace (str, optional): The namespace in which to list the Ray clusters. Defaults to "default".
+        - label_selector (str, optional): The label selector to filter the Ray clusters. Defaults to "".
         - async_req (bool, optional): Whether to make the request asynchronously. Defaults to False.
 
         Returns:
-            Any: The custom resource for Ray clusters in the specified namespace, or None if not found.
+            Any: The list of Ray clusters, or None if the synchronous request fails.
+            With async_req=True, returns the Kubernetes client's async result; call
+            get() on it to retrieve the list or raise the request's ApiException.
 
         Raises:
-            ApiException: If there was an error fetching the custom resource.
+            ApiException: From the async result's get() if the request fails.
         """
         try:
             resource: Any = self.api.list_namespaced_custom_object(
@@ -76,6 +79,8 @@ class RayClusterApi:
                 label_selector=label_selector,
                 async_req=async_req,
             )
+            if async_req:
+                return resource
             if "items" in resource:
                 return resource
             return None
