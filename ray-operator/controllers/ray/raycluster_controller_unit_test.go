@@ -4082,7 +4082,7 @@ func TestBuildPodsInjectDefaultPodMetadata(t *testing.T) {
 		},
 	}
 
-	headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+	headPod := reconciler.buildHeadPod(context.Background(), *cluster, corev1.IPv4Protocol)
 	assert.Equal(t, "true", headPod.Annotations["monitoring.example.com/scrape"])
 	assert.Equal(t, "head", headPod.Annotations["shared-annotation"])
 	assert.Equal(t, "head-only", headPod.Annotations["user-annotation"])
@@ -4124,7 +4124,7 @@ func TestBuildPodsWithoutDefaultPodMetadata(t *testing.T) {
 		options: RayClusterReconcilerOptions{},
 	}
 
-	headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+	headPod := reconciler.buildHeadPod(context.Background(), *cluster, corev1.IPv4Protocol)
 	assert.Equal(t, "head-only", headPod.Annotations["user-annotation"])
 	assert.Equal(t, "head-only", headPod.Labels["user-label"])
 	assert.NotContains(t, headPod.Annotations, "monitoring.example.com/scrape")

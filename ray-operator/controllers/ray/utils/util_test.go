@@ -48,6 +48,25 @@ func TestGetClusterDomainName(t *testing.T) {
 	}
 }
 
+func TestGetServiceIPFamily(t *testing.T) {
+	tests := map[string]struct {
+		spec corev1.ServiceSpec
+		want corev1.IPFamily
+	}{
+		"ipFamilies IPv4":                   {spec: corev1.ServiceSpec{IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol}}, want: corev1.IPv4Protocol},
+		"ipFamilies IPv6":                   {spec: corev1.ServiceSpec{IPFamilies: []corev1.IPFamily{corev1.IPv6Protocol}}, want: corev1.IPv6Protocol},
+		"dual-stack uses primary family":    {spec: corev1.ServiceSpec{IPFamilies: []corev1.IPFamily{corev1.IPv6Protocol, corev1.IPv4Protocol}}, want: corev1.IPv6Protocol},
+		"clusterIP IPv6 without ipFamilies": {spec: corev1.ServiceSpec{ClusterIP: "fd00:10:96::1"}, want: corev1.IPv6Protocol},
+		"clusterIP IPv4 without ipFamilies": {spec: corev1.ServiceSpec{ClusterIP: "10.96.0.1"}, want: corev1.IPv4Protocol},
+		"no information defaults to IPv4":   {spec: corev1.ServiceSpec{ClusterIP: corev1.ClusterIPNone}, want: corev1.IPv4Protocol},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, GetServiceIPFamily(&corev1.Service{Spec: tt.spec}))
+		})
+	}
+}
+
 func TestGetRayHTTPProxyClientFuncFormatsIPAddresses(t *testing.T) {
 	tests := map[string]struct {
 		hostIP string

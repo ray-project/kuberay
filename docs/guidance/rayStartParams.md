@@ -5,8 +5,8 @@ This document outlines the default settings for `rayStartParams` in KubeRay.
 
 ## Options Exclusive to the Head Pod
 
-- `--dashboard-host`: Host for the dashboard server. By default, KubeRay binds all interfaces in the Pod's primary
-  address family, using `0.0.0.0` for IPv4 or `::` for IPv6. Users can override this with a specific address or `localhost`
+- `--dashboard-host`: Host for the dashboard server. By default, KubeRay binds all interfaces in the head Service's
+  primary IP family, using `0.0.0.0` for IPv4 or `::` for IPv6. Users can override this with a specific address or `localhost`
   (`127.0.0.1` / `::1`).
   Binding all interfaces exposes the dashboard outside the Ray Pod, which is
   required when [ingress](https://github.com/ray-project/kuberay/blob/master/docs/guidance/ingress.md) is used.
