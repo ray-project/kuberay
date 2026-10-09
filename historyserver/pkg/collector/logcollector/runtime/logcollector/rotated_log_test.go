@@ -532,7 +532,7 @@ func TestCollectRotatedLogIsUploadedOnceUnderConcurrency(t *testing.T) {
 
 // The first scan must not wait for the ticker: a collector restarting under a
 // live Ray node would otherwise miss a whole interval of rotations.
-func TestScanRotatedLogsScansBeforeFirstTick(t *testing.T) {
+func TestScanSessionLogsScansBeforeFirstTick(t *testing.T) {
 	rayRoot := t.TempDir()
 	t.Setenv("RAY_TMP_ROOT", rayRoot)
 	logsDir := linkSessionLatest(t, rayRoot, testSessionID)
@@ -559,7 +559,7 @@ func TestScanRotatedLogsScansBeforeFirstTick(t *testing.T) {
 	})
 }
 
-func TestScanRotatedLogsStopsOnSignal(t *testing.T) {
+func TestScanSessionLogsStopsOnSignal(t *testing.T) {
 	t.Setenv("RAY_TMP_ROOT", t.TempDir())
 	handler := newRotatedTestHandler(NewMockStorageWriter())
 	handler.LogUploadInterval = time.Millisecond

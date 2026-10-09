@@ -91,9 +91,9 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	go r.WatchPrevLogsLoops()
 	go r.PollActiveSessionChanges()
 
-	rotatedScanStopped := make(chan struct{})
+	sessionScanStopped := make(chan struct{})
 	go func() {
-		defer close(rotatedScanStopped)
+		defer close(sessionScanStopped)
 		r.scanSessionLogs(stop)
 	}()
 	var periodicPollResults <-chan periodicPollResult
@@ -122,7 +122,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		})
 	}
 	// Join the scanner before the final collection so no scan outlives the collector.
-	<-rotatedScanStopped
+	<-sessionScanStopped
 	r.processSessionLatestLogs()
 	wg.Wait()
 
