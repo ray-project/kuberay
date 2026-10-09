@@ -1095,7 +1095,7 @@ func getCollectorContainerIndex(pod corev1.Pod) int {
 
 // SetDefaultCollectorImage sets the image of the injected collector container to defaultImage if the
 // RayCluster doesn't specify `historyServerOptions.collectorOptions.image`. It is a no-op if the
-// collector is not enabled for the RayCluster.
+// collector is not defined through `historyServerOptions.collectorOptions`.
 func SetDefaultCollectorImage(instance *rayv1.RayCluster, podTemplate *corev1.PodTemplateSpec, defaultImage string) {
 	if !utils.IsCollectorEnabled(&instance.Spec) {
 		return

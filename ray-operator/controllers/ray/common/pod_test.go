@@ -3330,9 +3330,9 @@ func TestSetDefaultCollectorImage(t *testing.T) {
 		assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
 	})
 
-	t.Run("no-op when the RayCluster does not opt in to the collector", func(t *testing.T) {
-		// The operator must not manage a collector container the RayCluster author defined
-		// by hand, so the empty image is left as is.
+	t.Run("no-op when the RayCluster does not set historyServerOptions.collectorOptions", func(t *testing.T) {
+		// A collector container the user added manually is not managed by the operator,
+		// so its empty image is left as is.
 		podTemplate := corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
