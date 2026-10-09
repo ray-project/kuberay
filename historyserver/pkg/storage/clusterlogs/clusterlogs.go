@@ -1,7 +1,11 @@
 package clusterlogs
 
 import (
+	"bytes"
+	"io"
 	"path"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -13,6 +17,8 @@ const (
 	LogsSubDir        = "logs"
 	NodeEventsSubDir  = "node_events"
 	JobEventsSubDir   = "job_events"
+	// ChunkDirSuffix is the suffix of the directory holding a file's chunks. Format: "<file>.chunks/<offset>"
+	ChunkDirSuffix = ".chunks"
 )
 
 // Prefix returns the hierarchical cluster directory prefix under rootDir:
@@ -114,4 +120,62 @@ func ListSessionNodeDirs(reader storage.StorageReader, prefix, sessionName strin
 		nodes = append(nodes, name)
 	}
 	return nodes
+}
+
+// ListLogFiles lists dir like reader.ListFiles, but a file that so far exists
+// only as chunks shows up as the file itself and the chunk directory is hidden.
+func ListLogFiles(reader storage.StorageReader, prefix, dir string) []string {
+	entries := reader.ListFiles(prefix, dir)
+	seen := make(map[string]struct{}, len(entries))
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := strings.TrimSuffix(entry, ChunkDirSuffix+"/")
+		if _, ok := seen[name]; !ok {
+			seen[name] = struct{}{}
+			files = append(files, name)
+		}
+	}
+	return files
+}
+
+// ReadLogFile joins the file's chunks in offset order when any exist,
+// otherwise returns the whole object at logPath, or nil when there is neither.
+//
+// A collector restart re-uploads from offset zero, so chunk 0 then covers the
+// earlier chunks. Stale chunks are skipped and joining stops at a real gap.
+//
+// For example:
+//
+//	000 -> [0,18)  re-uploaded after restart, joined
+//	006 -> [6,12)  stale, skipped
+//	018 -> [18,24) joined
+//	030 -> [30,36) gap at 24, stop
+func ReadLogFile(reader storage.StorageReader, prefix, logPath string) io.Reader {
+	chunkDir := logPath + ChunkDirSuffix
+	names := reader.ListFiles(prefix, chunkDir)
+	if len(names) == 0 {
+		return reader.GetContent(prefix, logPath)
+	}
+	sort.Strings(names)
+
+	var joined bytes.Buffer
+	for _, name := range names {
+		offset, err := strconv.ParseInt(name, 10, 64)
+		if err != nil || offset < int64(joined.Len()) {
+			// not a chunk, or a stale one already be covered, skip it
+			continue
+		}
+		if offset > int64(joined.Len()) {
+			// a real gap, stop here
+			break
+		}
+		chunk := reader.GetContent(prefix, path.Join(chunkDir, name))
+		if chunk == nil {
+			break
+		}
+		if _, err := joined.ReadFrom(chunk); err != nil {
+			break
+		}
+	}
+	return bytes.NewReader(joined.Bytes())
 }

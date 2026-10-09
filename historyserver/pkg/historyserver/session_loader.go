@@ -122,6 +122,12 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 	return snap, true
 }
 
+// Invalidate drops a cached snapshot so the next LoadSession re-reads the
+// session from storage. Used to pick up data uploaded since the last load.
+func (s *SessionLoader) Invalidate(clusterSessionKey string) {
+	s.cache.Remove(clusterSessionKey)
+}
+
 // renewTTL extends ExpiresAt for a cache hit.
 //
 // Must not re-insert after a concurrent byte eviction.
