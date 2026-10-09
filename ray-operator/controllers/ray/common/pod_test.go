@@ -1445,7 +1445,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 			cluster := tc.cluster.DeepCopy()
 			cluster.Spec.RayVersion = tc.rayVersion
 			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379", corev1.IPv4Protocol)
-      
+
 			// if autoscaling is enabled, the head pod should have the autoscaler container appended for a total of 2 containers
 			if utils.IsAutoscalingEnabled(&cluster.Spec) {
 				assert.Len(t, podTemplateSpec.Spec.Containers, tc.expectedHeadContainers)

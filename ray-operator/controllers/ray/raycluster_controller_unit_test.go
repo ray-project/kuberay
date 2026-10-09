@@ -90,6 +90,13 @@ const (
 	MultiKueueController = "kueue.x-k8s.io/multikueue"
 )
 
+func newTestHeadService(t *testing.T) *corev1.Service {
+	t.Helper()
+	headService, err := common.BuildServiceForHeadPod(context.Background(), *testRayCluster, nil, nil)
+	require.NoError(t, err)
+	return headService
+}
+
 func setupTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	namespaceStr = "default"
@@ -2232,7 +2239,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme)
 
 	// Only one head Pod and no worker Pods in the RayCluster.
-	runtimeObjects := testPods[0:1]
+	runtimeObjects := append([]runtime.Object{newTestHeadService(t)}, testPods[0:1]...)
 	cluster := testRayCluster.DeepCopy()
 	cluster.Spec.WorkerGroupSpecs = nil
 	fakeClient := clientFake.NewClientBuilder().
@@ -2320,7 +2327,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	_ = corev1.AddToScheme(newScheme)
 
 	// Only one head Pod and no worker Pods in the RayCluster.
-	runtimeObjects := testPods[0:1]
+	runtimeObjects := append([]runtime.Object{newTestHeadService(t)}, testPods[0:1]...)
 	cluster := testRayCluster.DeepCopy()
 	cluster.Spec.WorkerGroupSpecs = nil
 	fakeClient := clientFake.NewClientBuilder().
@@ -3422,7 +3429,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 				Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
 					return test.errInject
 				},
-			}).WithRuntimeObjects(testPods...).Build()
+			}).WithRuntimeObjects(append([]runtime.Object{newTestHeadService(t)}, testPods...)...).Build()
 			ctx := context.Background()
 
 			// Get the pod list from the fake client.
@@ -3726,7 +3733,7 @@ func TestReconcile_PodsWithAuthToken(t *testing.T) {
 
 	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeToken}
 
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(newTestHeadService(t)).Build()
 	ctx := context.Background()
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -3950,7 +3957,7 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 		SecretName: &providedSecretName,
 	}
 
-	fakeClient := clientFake.NewClientBuilder().Build()
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(newTestHeadService(t)).Build()
 	ctx := context.Background()
 
 	testRayClusterReconciler := &RayClusterReconciler{
