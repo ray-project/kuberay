@@ -184,15 +184,26 @@ func TestReadLogFile(t *testing.T) {
 			},
 			want: "line1line2",
 		},
-		"stale chunk left by a collector restart is dropped": {
-			// Chunk 0 was re-uploaded covering the whole file; the old chunk at
-			// offset 5 no longer continues it.
-			files: []string{"00000000000000000000", "00000000000000000005"},
+		"stale chunks left by a collector restart are skipped, later chunks still join": {
+			// Chunk 0 was re-uploaded after a restart and covers [0,18); the
+			// chunks at 6 and 12 are from before the restart. The chunk at 18
+			// was written after the restart and must still be reached.
+			files: []string{"00000000000000000000", "00000000000000000006", "00000000000000000012", "00000000000000000018"},
 			content: map[string]string{
-				chunk("00000000000000000000"): "line1line2",
-				chunk("00000000000000000005"): "line2",
+				chunk("00000000000000000000"): "line1 line2 line3 ",
+				chunk("00000000000000000006"): "line2 ",
+				chunk("00000000000000000012"): "line3 ",
+				chunk("00000000000000000018"): "line4 ",
 			},
-			want: "line1line2",
+			want: "line1 line2 line3 line4 ",
+		},
+		"a real gap stops the join": {
+			files: []string{"00000000000000000000", "00000000000000000010"},
+			content: map[string]string{
+				chunk("00000000000000000000"): "line1",
+				chunk("00000000000000000010"): "late",
+			},
+			want: "line1",
 		},
 		"neither whole file nor chunks": {
 			wantNil: true,

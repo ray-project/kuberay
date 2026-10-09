@@ -141,9 +141,15 @@ func ListLogFiles(reader storage.StorageReader, prefix, dir string) []string {
 // ReadLogFile joins the file's chunks in offset order when any exist,
 // otherwise returns the whole object at logPath, or nil when there is neither.
 //
-// Only chunks that continue exactly where the previous one ended are used. A
-// collector restart re-uploads from offset zero and leaves the earlier
-// higher-offset chunks behind; splicing those in would duplicate bytes.
+// A collector restart re-uploads from offset zero, so chunk 0 then covers the
+// earlier chunks. Stale chunks are skipped and joining stops at a real gap.
+//
+// For example:
+//
+//	000 -> [0,18)  re-uploaded after restart, joined
+//	006 -> [6,12)  stale, skipped
+//	018 -> [18,24) joined
+//	030 -> [30,36) gap at 24, stop
 func ReadLogFile(reader storage.StorageReader, prefix, logPath string) io.Reader {
 	chunkDir := logPath + ChunkDirSuffix
 	names := reader.ListFiles(prefix, chunkDir)
@@ -155,7 +161,12 @@ func ReadLogFile(reader storage.StorageReader, prefix, logPath string) io.Reader
 	var joined bytes.Buffer
 	for _, name := range names {
 		offset, err := strconv.ParseInt(name, 10, 64)
-		if err != nil || offset != int64(joined.Len()) {
+		if err != nil || offset < int64(joined.Len()) {
+			// not a chunk, or a stale one already be covered, skip it
+			continue
+		}
+		if offset > int64(joined.Len()) {
+			// a real gap, stop here
 			break
 		}
 		chunk := reader.GetContent(prefix, path.Join(chunkDir, name))
