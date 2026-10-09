@@ -118,19 +118,21 @@ func crdLabelValueFor(kindLower string) string {
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
-	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
-	liveClusters, err := s.clientManager.ListRayClusters(ctx)
-	if err != nil {
-		logrus.Errorf("Failed to list live RayClusters: %v", err)
+	if s.enableLiveClusters {
+		ctx := context.Background()
+		liveClusterNames := []string{}
+		liveClusters, err := s.clientManager.ListRayClusters(ctx)
+		if err != nil {
+			logrus.Errorf("Failed to list live RayClusters: %v", err)
+		}
+		for _, liveCluster := range liveClusters {
+			liveClusterInfo := buildLiveClusterInfo(liveCluster)
+			liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
+			liveClusterNames = append(liveClusterNames, liveCluster.Name)
+		}
+		logrus.Infof("live clusters: %v", liveClusterNames)
 	}
-	for _, liveCluster := range liveClusters {
-		liveClusterInfo := buildLiveClusterInfo(liveCluster)
-		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
-		liveClusterNames = append(liveClusterNames, liveCluster.Name)
-	}
-	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
@@ -149,8 +151,13 @@ func (s *ServerHandler) resolveSession(ctx context.Context, namespace, resourceT
 		return utils.ClusterInfo{}, false, fmt.Errorf("unsupported resource kind: %q (must be raycluster, rayjob, or rayservice)", resourceType)
 	}
 
+	// "live" is not a valid session while --enable-live-clusters is disabled.
+	if session == "live" && !s.enableLiveClusters {
+		return utils.ClusterInfo{}, false, nil
+	}
+
 	// Check live clusters first if applicable
-	if isLatestOrEmpty || session == "live" {
+	if s.enableLiveClusters && (isLatestOrEmpty || session == "live") {
 		if resTypeLower == utils.RayClusterKind {
 			liveCluster, err := s.clientManager.GetRayCluster(ctx, namespace, resourceName)
 			if err == nil {
@@ -265,13 +272,13 @@ func (s *ServerHandler) _getNodeLogs(clusterLogPathPrefix, sessionId, nodeId, fo
 // listFilesRecursive recursively lists all files under dir,
 // returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
 // It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
-func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
-	entries := s.reader.ListFiles(clusterID, dir)
+func (s *ServerHandler) listFilesRecursive(prefix, dir string) []string {
+	entries := s.reader.ListFiles(prefix, dir)
 	var result []string
 	for _, entry := range entries {
 		if strings.HasSuffix(entry, "/") {
 			subDir := path.Join(dir, entry)
-			subFiles := s.listFilesRecursive(clusterID, subDir)
+			subFiles := s.listFilesRecursive(prefix, subDir)
 			for _, f := range subFiles {
 				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
 			}
@@ -482,6 +489,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterLogPathPrefix, sessionID, n
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
 	for _, file := range files {
+		// A rotated generation is never the canonical stream for a pid.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasSuffix(file, pidSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -699,6 +710,11 @@ func (s *ServerHandler) findWorkerLogFile(clusterLogPathPrefix, sessionID, nodeI
 	workerSuffix := fmt.Sprintf(".%s", suffix)
 
 	for _, file := range files {
+		// A worker stream can span several rotated generations, so none of them is
+		// the canonical file a task or actor lookup should resolve to.
+		if utils.IsRotatedLogName(file) {
+			continue
+		}
 		if strings.HasPrefix(file, workerPrefix) && strings.HasSuffix(file, workerSuffix) {
 			return nodeIDHex, file, nil
 		}
@@ -720,11 +736,8 @@ func (s *ServerHandler) ipToNodeId(clusterLogPathPrefix, sessionID, nodeIP strin
 
 	// Use targeted listing to find node_events directories under each node
 	var candidatePrefixes []string
-	for _, rawEntry := range s.reader.ListFiles(clusterLogPathPrefix, sessionID) {
-		if strings.HasSuffix(rawEntry, "/") {
-			nodeName := strings.TrimSuffix(rawEntry, "/")
-			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
-		}
+	for _, nodeName := range clusterlogs.ListSessionNodeDirs(s.reader, clusterLogPathPrefix, sessionID) {
+		candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(sessionID, nodeName)+"/")
 	}
 
 	for _, nodeEventDirPrefix := range candidatePrefixes {

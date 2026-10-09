@@ -68,6 +68,14 @@ The history server can be configured using command-line flags:
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
 - `--storage-backend-config-path`: Path to storage backend configuration file
+- `--enable-live-clusters`: Serve RayClusters that are still running by reverse-proxying to their
+  head dashboard (default: `false`)
+
+> [!WARNING]
+> The history server does not authenticate its own callers, and the RayCluster it proxies to is
+> chosen from a client-supplied cookie. With `--enable-live-clusters` enabled, anyone who can reach
+> the history server can reach the Ray Dashboard API of every RayCluster the history server can
+> access. Only turn it on where that access is already restricted by other means.
 
 ### Collector Configuration
 
@@ -82,6 +90,30 @@ The collector can be configured using command-line flags:
 - `--events-port`: Port for the events server
 - `--push-interval`: Interval between pushes to storage
 - `--storage-backend-config-path`: Path to storage backend configuration file
+
+And using environment variables:
+
+- `RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL`: How often the collector scans the active session
+  log directory for completed Ray log rotation backups (default: `30s`)
+
+#### Rotated log collection
+
+Ray keeps only a limited number of local rotation backups per log stream (`raylet.out.1`,
+`raylet.out.2`, ...) and overwrites the oldest as the ring advances. The collector periodically
+scans the active session for those backups and uploads each one before Ray can overwrite it,
+highest rotation index first because that is the generation Ray evicts next.
+
+Collection is best effort: a backup Ray removes before the collector reaches it is lost, so set
+`RAY_COLLECTOR_ROTATED_LOG_SCAN_INTERVAL` shorter than the time Ray takes to cycle through its
+rotation backups. That time depends on `RAY_ROTATION_MAX_BYTES`, `RAY_ROTATION_BACKUP_COUNT` and
+how fast the node writes logs; see the
+[Ray log rotation docs](https://docs.ray.io/en/latest/ray-observability/user-guides/configure-logging.html#log-rotation).
+
+Rotation indexes are reused as the ring advances, so an uploaded backup is named after the
+generation it holds rather than its index: `raylet.out.2` is stored as
+`raylet.rotated.<modification-time-ns>-<inode>.out`. Rotated objects are listed and can be
+fetched by explicit filename; `task_id`, `actor_id` and `pid` lookups continue to resolve the
+canonical active log, since one worker stream can span several generations.
 
 ## Supported Storage Backends
 
@@ -171,8 +203,9 @@ kubectl wait rayjob/rayjob-historyserver --for=jsonpath='{.status.jobStatus}=SUC
 # Delete the RayJob only to skip the TTL wait:
 kubectl delete -f historyserver/config/rayjob.yaml
 
-# Discover the session name. /clusters lists both live and dead sessions;
-# dead sessions carry the `session_*` name you'll feed into /enter_cluster.
+# Discover the session name. /clusters lists dead sessions, plus live ones when
+# --enable-live-clusters is set; dead sessions carry the `session_*` name you'll
+# feed into /enter_cluster.
 curl -sS http://localhost:8080/clusters
 ```
 

@@ -7,7 +7,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
+	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -68,10 +68,9 @@ func TestKubernetesWAS_CreatesWorkloadAndPodGroups(t *testing.T) {
 	LogWithTimestamp(test.T(), "Verifying the whole-cluster PodGroup exists")
 	clusterPodGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(clusterPodGroup.Spec.PodGroupTemplateRef).NotTo(BeNil())
-	g.Expect(clusterPodGroup.Spec.PodGroupTemplateRef.Workload).NotTo(BeNil())
-	g.Expect(clusterPodGroup.Spec.PodGroupTemplateRef.Workload.WorkloadName).To(Equal(rayCluster.Name))
-	g.Expect(clusterPodGroup.Spec.PodGroupTemplateRef.Workload.PodGroupTemplateName).To(Equal("cluster"))
+	g.Expect(clusterPodGroup.Spec.WorkloadRef).NotTo(BeNil())
+	g.Expect(clusterPodGroup.Spec.WorkloadRef.WorkloadName).To(Equal(rayCluster.Name))
+	g.Expect(clusterPodGroup.Spec.WorkloadRef.TemplateName).To(Equal("cluster"))
 	g.Expect(clusterPodGroup.Spec.SchedulingPolicy.Gang).NotTo(BeNil())
 	g.Expect(clusterPodGroup.Spec.SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
 	g.Expect(clusterPodGroup.OwnerReferences).To(HaveLen(1))
@@ -80,10 +79,10 @@ func TestKubernetesWAS_CreatesWorkloadAndPodGroups(t *testing.T) {
 	g.Expect(*clusterPodGroup.OwnerReferences[0].Controller).To(BeTrue())
 	g.Expect(clusterPodGroup.Labels[utils.RayClusterLabelKey]).To(Equal(rayCluster.Name))
 
-	LogWithTimestamp(test.T(), "Verifying PodGroupScheduled condition on the PodGroup")
+	LogWithTimestamp(test.T(), "Verifying PodGroupInitiallyScheduled condition on the PodGroup")
 	g.Eventually(PodGroup(test, namespace.Name, rayCluster.Name+"-cluster"), TestTimeoutShort).
-		Should(WithTransform(func(pg *schedulingv1alpha2.PodGroup) bool {
-			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha2.PodGroupScheduled)
+		Should(WithTransform(func(pg *schedulingv1alpha3.PodGroup) bool {
+			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha3.PodGroupInitiallyScheduled)
 		}, BeTrue()))
 }
 
@@ -231,10 +230,10 @@ func TestKubernetesWAS_GangSchedules(t *testing.T) {
 	_, err = GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Verifying PodGroupScheduled condition on the whole-cluster PodGroup")
+	LogWithTimestamp(test.T(), "Verifying PodGroupInitiallyScheduled condition on the whole-cluster PodGroup")
 	g.Eventually(PodGroup(test, namespace.Name, rayCluster.Name+"-cluster"), TestTimeoutShort).
-		Should(WithTransform(func(pg *schedulingv1alpha2.PodGroup) bool {
-			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha2.PodGroupScheduled)
+		Should(WithTransform(func(pg *schedulingv1alpha3.PodGroup) bool {
+			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha3.PodGroupInitiallyScheduled)
 		}, BeTrue()))
 }
 
@@ -657,8 +656,8 @@ func TestKubernetesWAS_GangAtomicityIncludesHead(t *testing.T) {
 
 	LogWithTimestamp(test.T(), "Verifying the PodGroup never reports Scheduled")
 	g.Consistently(PodGroup(test, namespace.Name, rayCluster.Name+"-cluster"), 10*time.Second, 2*time.Second).
-		Should(WithTransform(func(pg *schedulingv1alpha2.PodGroup) bool {
-			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha2.PodGroupScheduled)
+		Should(WithTransform(func(pg *schedulingv1alpha3.PodGroup) bool {
+			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha3.PodGroupInitiallyScheduled)
 		}, BeFalse()))
 }
 
@@ -732,8 +731,8 @@ func TestKubernetesWAS_GangHoldsSchedulablePods(t *testing.T) {
 
 	LogWithTimestamp(test.T(), "Verifying the PodGroup never reports Scheduled")
 	g.Consistently(PodGroup(test, namespace.Name, rayCluster.Name+"-cluster"), 10*time.Second, 2*time.Second).
-		Should(WithTransform(func(pg *schedulingv1alpha2.PodGroup) bool {
-			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha2.PodGroupScheduled)
+		Should(WithTransform(func(pg *schedulingv1alpha3.PodGroup) bool {
+			return meta.IsStatusConditionTrue(pg.Status.Conditions, schedulingv1alpha3.PodGroupInitiallyScheduled)
 		}, BeFalse()))
 }
 
@@ -802,7 +801,7 @@ func TestKubernetesWAS_ManyWorkerGroups(t *testing.T) {
 // group of several recomputes the whole-cluster gang minCount and recreates the
 // Workload and PodGroup while the head and the remaining worker group keep
 // running. Per-worker-group suspension requires the RayJobDeletionPolicy feature
-// gate, which the kubernetes-was-v1alpha2 overlay enables.
+// gate, which the kubernetes-was-v1alpha3 overlay enables.
 func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
