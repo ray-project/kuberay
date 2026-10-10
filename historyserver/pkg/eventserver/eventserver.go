@@ -118,7 +118,7 @@ func classifyRayEventFile(relativePath string) rayEventFileKind {
 	}
 
 	nodeName, remainingPath, found := strings.Cut(cleanPath, "/")
-	if !found || nodeName == "" {
+	if !found || nodeName == "" || nodeName == utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME {
 		return invalidRayEventFile
 	}
 

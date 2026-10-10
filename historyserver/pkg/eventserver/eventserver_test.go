@@ -1114,6 +1114,11 @@ func TestClassifyRayEventFile(t *testing.T) {
 			want:         nodeEventFile,
 		},
 		{
+			name:         "fetched endpoints directory",
+			relativePath: "fetched_endpoints/node_events/node-a-2026-01-01-00.gz",
+			want:         invalidRayEventFile,
+		},
+		{
 			name:         "absolute path",
 			relativePath: "/node-a/node_events/node-a-2026-01-01-00.gz",
 			want:         invalidRayEventFile,

@@ -125,7 +125,7 @@ func main() {
 	flag.StringVar(&nodeEventForwarderTypes, "node-event-forwarder-types", "",
 		"Comma-separated list of event types to forward (Warning, Normal). Empty means all types.")
 	flag.StringVar(&allowedNodeLabels, "allowed-node-labels", "",
-		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through topology.labelMappings. If left empty, every mapping is rejected.")
+		"Comma-separated list of node label keys worker groups may deliver as Ray node labels through workerGroupSpecs[].labelRefs. If left empty, every labelRef is rejected.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -165,7 +165,7 @@ func main() {
 		config.AllowedNodeLabels = splitCommaSeparated(allowedNodeLabels)
 	}
 
-	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
+	stdoutEncoder, err := newLogEncoder(config.LogStdoutEncoder)
 	exitOnError(err, "failed to create log encoder for stdout")
 	opts.Encoder = stdoutEncoder
 
@@ -177,7 +177,7 @@ func main() {
 			MaxAge:     30,  // days
 		}
 
-		fileEncoder, err := newLogEncoder(logFileEncoder)
+		fileEncoder, err := newLogEncoder(config.LogFileEncoder)
 		exitOnError(err, "failed to create log encoder for file")
 
 		k8sLogger := k8szap.NewRaw(k8szap.UseFlagOptions(&opts))

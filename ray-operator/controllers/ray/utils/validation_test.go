@@ -2371,6 +2371,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		intervalSeconds   *int32
 		name              string
 		gatewayClassName  string
+		gatewayRef        *rayv1.GatewayReference
 		spec              rayv1.RayServiceSpec
 		enableAutoscaling bool
 		expectError       bool
@@ -2434,19 +2435,20 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name:              "missing GatewayClassName",
+			name:              "valid GatewayRef instead of GatewayClassName",
 			maxSurgePercent:   new(int32(50)),
 			stepSizePercent:   new(int32(50)),
 			intervalSeconds:   new(int32(10)),
+			gatewayRef:        &rayv1.GatewayReference{Name: "shared-gw", Namespace: "gateways"},
 			enableAutoscaling: true,
-			expectError:       true,
+			expectError:       false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
-			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
+			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" || tt.gatewayRef != nil {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
 					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
@@ -2454,6 +2456,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 						StepSizePercent:  tt.stepSizePercent,
 						IntervalSeconds:  tt.intervalSeconds,
 						GatewayClassName: tt.gatewayClassName,
+						GatewayRef:       tt.gatewayRef,
 					},
 				}
 			} else if tt.expectError {
@@ -4274,15 +4277,15 @@ func TestValidateCollectorOptions(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpec_Topology checks the Ray version requirement of a topology group
-func TestValidateRayClusterSpec_Topology(t *testing.T) {
+// TestValidateRayClusterSpec_LabelRefs checks the Ray version requirement of a group with labelRefs
+func TestValidateRayClusterSpec_LabelRefs(t *testing.T) {
 	spec := createBasicRayClusterSpec()
 	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 		GroupName:   "test",
 		MinReplicas: new(int32(1)),
 		MaxReplicas: new(int32(1)),
 		Template:    corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "ray-worker"}}}},
-		Topology:    &rayv1.TopologySpec{LabelMappings: []rayv1.TopologyLabelMapping{{NodeLabel: "topology.kubernetes.io/zone"}}},
+		LabelRefs:   []rayv1.LabelRef{{ValueFrom: rayv1.LabelRefSource{NodeRef: rayv1.NodeFieldRef{FieldPath: "metadata.labels['topology.kubernetes.io/zone']"}}}},
 	}}
 
 	spec.RayVersion = ""

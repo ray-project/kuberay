@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -167,14 +165,17 @@ func podHasArgs(pod corev1.Pod, args []string) bool {
 	return true
 }
 
-// GetHistoryServerURL sets up port-forwarding to the history server and waits for it to be ready.
+// GetHistoryServerURL waits for the history server to be ready and returns its
+// base URL, which routes through the API server's service proxy. Callers must
+// request it with an API-server-authenticated client.
 func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) string {
-	PortForwardService(test, g, namespace.Name, "historyserver", HistoryServerPort)
+	cfg := test.Client().Config()
+	historyServerURL := fmt.Sprintf("%s/api/v1/namespaces/%s/services/historyserver:%d/proxy",
+		cfg.Host, namespace.Name, HistoryServerPort)
 
-	// Wait for port-forward to be ready
-	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
+	client := CreateHTTPClientWithCookieJar(test, g)
 	g.Eventually(func() error {
-		resp, err := http.Get(historyServerURL + "/readz")
+		resp, err := client.Get(historyServerURL + "/readz")
 		if err != nil {
 			return err
 		}
@@ -187,14 +188,14 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 		}
 		return nil
 	}, TestTimeoutMedium).Should(Succeed(), "HistoryServer should be ready")
-	LogWithTimestamp(test.T(), "Port-forwarded HistoryServer API port to %s successfully", historyServerURL)
+	LogWithTimestamp(test.T(), "HistoryServer reachable through the API server proxy at %s", historyServerURL)
 
 	return historyServerURL
 }
 
 // PrepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
 	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, map[string]string{})
 
@@ -206,17 +207,14 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(s3Client.StatObject(S3BucketName, "")).To(Succeed())
 
 	return rayCluster
 }
 
 // PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *S3TestClient) *rayv1.RayCluster {
 
 	InstallGrafanaAndPrometheus(test, g)
 
@@ -237,10 +235,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(s3Client.StatObject(S3BucketName, "")).To(Succeed())
 
 	return rayCluster
 }

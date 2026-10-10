@@ -149,14 +149,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
 			return err
 		}
-		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 {
+		if len(workerGroup.LabelRefs) > 0 {
 			// ray start --labels-file was added in Ray 2.45.0
 			rayVersion, err := version.ParseGeneric(spec.RayVersion)
 			if err != nil {
-				return fmt.Errorf("worker group %s sets topology, but RayVersion %q is unset or invalid. Ray version 2.45.0 or later is required: %w", workerGroup.GroupName, spec.RayVersion, err)
+				return fmt.Errorf("worker group %s sets labelRefs, but RayVersion %q is unset or invalid. Ray version 2.45.0 or later is required: %w", workerGroup.GroupName, spec.RayVersion, err)
 			}
 			if rayVersion.LessThan(version.MustParseGeneric("2.45.0")) {
-				return fmt.Errorf("worker group %s sets topology, but minimum Ray version is 2.45.0, got %s", workerGroup.GroupName, spec.RayVersion)
+				return fmt.Errorf("worker group %s sets labelRefs, but minimum Ray version is 2.45.0, got %s", workerGroup.GroupName, spec.RayVersion)
 			}
 		}
 	}
@@ -577,9 +577,6 @@ func ValidateRayJobMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
-	// KubeRay has some limitations for the suspend operation. The limitations are a subset of the limitations of
-	// Kueue (https://kueue.sigs.k8s.io/docs/tasks/run_rayjobs/#c-limitations). For example, KubeRay allows users
-	// to suspend a RayJob with autoscaling enabled, but Kueue doesn't.
 	if rayJob.Spec.Suspend && !rayJob.Spec.ShutdownAfterJobFinishes {
 		return fmt.Errorf("The RayJob spec is invalid: a RayJob with shutdownAfterJobFinishes set to false is not allowed to be suspended")
 	}
@@ -775,10 +772,6 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 
 	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
-	}
-
-	if options.GatewayClassName == "" {
-		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
 	}
 
 	return nil
