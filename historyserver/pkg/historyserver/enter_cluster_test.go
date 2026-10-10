@@ -37,7 +37,7 @@ func (m *mockStorageReader) ListFiles(prefix string, dir string) []string {
 	return nil
 }
 
-func (m *mockStorageReader) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+func (m *mockStorageReader) ListFilesRecursive(ctx context.Context, prefix string, dir string) ([]string, error) {
 	return nil, nil
 }
 

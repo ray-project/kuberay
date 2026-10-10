@@ -69,8 +69,8 @@ func (m *logEventMockReader) ListFiles(prefix string, dir string) []string {
 	return []string{}
 }
 
-func (m *logEventMockReader) ListFilesRecursive(ctx context.Context, clusterID string, dir string) ([]string, error) {
-	m.recursiveListCalls = append(m.recursiveListCalls, listFilesCall{clusterID: clusterID, dir: dir})
+func (m *logEventMockReader) ListFilesRecursive(ctx context.Context, prefix string, dir string) ([]string, error) {
+	m.recursiveListCalls = append(m.recursiveListCalls, listFilesCall{clusterID: prefix, dir: dir})
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -78,16 +78,16 @@ func (m *logEventMockReader) ListFilesRecursive(ctx context.Context, clusterID s
 		return nil, m.recursiveListErr
 	}
 
-	prefix := strings.TrimSuffix(dir, "/") + "/"
+	dirPrefix := strings.TrimSuffix(dir, "/") + "/"
 	var files []string
-	for dirPath, entries := range m.dirs[clusterID] {
+	for dirPath, entries := range m.dirs[prefix] {
 		dirPath = strings.TrimSuffix(dirPath, "/") + "/"
-		if !strings.HasPrefix(dirPath, prefix) {
+		if !strings.HasPrefix(dirPath, dirPrefix) {
 			continue
 		}
 		for _, entry := range entries {
 			if !strings.HasSuffix(entry, "/") {
-				files = append(files, strings.TrimPrefix(dirPath, prefix)+entry)
+				files = append(files, strings.TrimPrefix(dirPath, dirPrefix)+entry)
 			}
 		}
 	}

@@ -135,8 +135,8 @@ func (h *RayLogsHandler) ListFiles(prefix string, directory string) []string {
 }
 
 // ListFilesRecursive returns all files under directory, relative to directory.
-func (h *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId string, directory string) ([]string, error) {
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/")
+func (h *RayLogsHandler) ListFilesRecursive(ctx context.Context, prefix string, directory string) ([]string, error) {
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, prefix, directory), "/")
 	query := &gstorage.Query{Prefix: pathPrefix + "/"}
 	fileIterator := h.StorageClient.Bucket(h.GCSBucket).Objects(ctx, query)
 

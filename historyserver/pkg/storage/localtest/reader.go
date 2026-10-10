@@ -77,23 +77,23 @@ func (r *MockReader) ListFiles(prefix string, dir string) []string {
 	return []string{}
 }
 
-func (r *MockReader) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
+func (r *MockReader) ListFilesRecursive(ctx context.Context, prefix string, dir string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	clusterData, ok := r.data[clusterId]
+	clusterData, ok := r.data[prefix]
 	if !ok {
 		return []string{}, nil
 	}
 
 	cleanDir := strings.Trim(path.Clean(dir), "/")
-	prefix := cleanDir + "/"
+	dirPrefix := cleanDir + "/"
 	files := make([]string, 0, len(clusterData))
 	for fileName := range clusterData {
 		relativePath := fileName
 		found := cleanDir == "" || cleanDir == "."
 		if !found {
-			relativePath, found = strings.CutPrefix(fileName, prefix)
+			relativePath, found = strings.CutPrefix(fileName, dirPrefix)
 		}
 		if found && relativePath != "" && !strings.HasSuffix(relativePath, "/") {
 			files = append(files, relativePath)

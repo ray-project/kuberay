@@ -153,9 +153,9 @@ func (r *RayLogsHandler) ListFiles(prefix string, dir string) []string {
 }
 
 // ListFilesRecursive returns all files under dir, relative to dir.
-func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId string, dir string) ([]string, error) {
-	prefix := path.Join(r.RootDir, clusterId, dir)
-	prefixWithSlash := prefix + "/"
+func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, prefix string, dir string) ([]string, error) {
+	fullPrefix := path.Join(r.RootDir, prefix, dir)
+	prefixWithSlash := fullPrefix + "/"
 	pager := r.ContainerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
 		Prefix: &prefixWithSlash,
 	})
@@ -164,14 +164,14 @@ func (r *RayLogsHandler) ListFilesRecursive(ctx context.Context, clusterId strin
 	for pager.More() {
 		resp, err := pager.NextPage(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("list blobs under %s: %w", prefix, err)
+			return nil, fmt.Errorf("list blobs under %s: %w", fullPrefix, err)
 		}
 		for _, blob := range resp.Segment.BlobItems {
 			objectPaths = append(objectPaths, *blob.Name)
 		}
 	}
 
-	return storage.RelativeFilePaths(prefix, objectPaths), nil
+	return storage.RelativeFilePaths(fullPrefix, objectPaths), nil
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
