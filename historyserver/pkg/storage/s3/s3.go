@@ -18,6 +18,7 @@ package s3
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,6 +41,8 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+const timeout = 2 * time.Minute
+
 type RayLogsHandler struct {
 	S3Client            *s3.S3
 	LogFiles            chan string
@@ -56,16 +59,19 @@ type RayLogsHandler struct {
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	objectDir := fmt.Sprintf("%s/", path.Clean(d))
 
-	_, err := r.S3Client.HeadObject(&s3.HeadObjectInput{
+	_, err := r.S3Client.HeadObjectWithContext(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(objectDir),
 	})
 	if err != nil {
 		// Directory doesn't exist, create it
 		logrus.Infof("Begin to create s3 dir %s ...", objectDir)
-		_, err = r.S3Client.PutObject(&s3.PutObjectInput{
+		_, err = r.S3Client.PutObjectWithContext(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(r.S3Bucket),
 			Key:    aws.String(objectDir),
 			Body:   bytes.NewReader([]byte("")),
@@ -80,7 +86,10 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 }
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
-	_, err := r.S3Client.PutObject(&s3.PutObjectInput{
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, err := r.S3Client.PutObjectWithContext(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(file),
 		Body:   reader,
@@ -89,6 +98,9 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	files := []string{}
 
 	listInput := &s3.ListObjectsV2Input{
@@ -98,7 +110,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 		Delimiter: aws.String(delimiter),
 	}
 
-	err := r.S3Client.ListObjectsV2Pages(listInput,
+	err := r.S3Client.ListObjectsV2PagesWithContext(ctx, listInput,
 		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 			logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 				prefix+"/", len(page.Contents), len(page.CommonPrefixes))
@@ -156,6 +168,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	prefix := clustermetadata.Prefix(r.S3RootDir)
 
 	getClusters := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
 		listInput := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
 			Prefix:    aws.String(prefix),
@@ -163,7 +178,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			Delimiter: aws.String(""),
 		}
 
-		err := r.S3Client.ListObjectsV2Pages(listInput,
+		err := r.S3Client.ListObjectsV2PagesWithContext(ctx, listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 					prefix, len(page.Contents), len(page.CommonPrefixes))
@@ -194,7 +209,10 @@ func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 	fullPath := path.Join(r.S3RootDir, prefix, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
-	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	result, err := r.S3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(fullPath),
 	})
@@ -210,7 +228,7 @@ func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
-				result, err = r.S3Client.GetObject(&s3.GetObjectInput{
+				result, err = r.S3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 					Bucket: aws.String(r.S3Bucket),
 					Key:    aws.String(f),
 				})
@@ -257,8 +275,11 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 
 // TODO: refactor this
 func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	// Check if bucket exists
-	_, err := s3Client.HeadBucket(&s3.HeadBucketInput{
+	_, err := s3Client.HeadBucketWithContext(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
@@ -268,7 +289,7 @@ func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
 			case s3.ErrCodeNoSuchBucket, "NotFound", "404":
 				// Bucket doesn't exist, create it
 				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-				_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
+				_, createErr := s3Client.CreateBucketWithContext(ctx, &s3.CreateBucketInput{
 					Bucket: aws.String(bucketName),
 				})
 				if createErr != nil {
@@ -294,7 +315,7 @@ func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
 
 		// Try to create the bucket anyway (might be a permission issue for HeadBucket)
 		logrus.Infof("Attempting to create bucket %s...", bucketName)
-		_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
+		_, createErr := s3Client.CreateBucketWithContext(ctx, &s3.CreateBucketInput{
 			Bucket: aws.String(bucketName),
 		})
 		if createErr != nil {
@@ -320,10 +341,6 @@ func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
 
-	httpClient := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
 	// Only use static credentials when explicitly provided; otherwise let the
 	// SDK fall back to the default credential chain (IRSA, instance role, etc.).
 	var creds *credentials.Credentials
@@ -336,7 +353,6 @@ func New(c *config) (*RayLogsHandler, error) {
 		Credentials:      creds,
 		Endpoint:         aws.String(c.S3Endpoint),
 		Region:           aws.String(c.S3Region),
-		HTTPClient:       httpClient,
 		DisableSSL:       c.DisableSSL,
 		S3ForcePathStyle: c.S3ForcePathStyle,
 	})
