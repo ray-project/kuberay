@@ -1,6 +1,7 @@
 package clusterlogs
 
 import (
+	"context"
 	"io"
 	"slices"
 	"testing"
@@ -86,6 +87,10 @@ func (m *mockStorageReader) ListFiles(clusterId string, dir string) []string {
 		return entries
 	}
 	return nil
+}
+
+func (m *mockStorageReader) ListFilesRecursive(context.Context, string, string) ([]string, error) {
+	return nil, nil
 }
 
 func TestListSessionNodeDirs(t *testing.T) {
