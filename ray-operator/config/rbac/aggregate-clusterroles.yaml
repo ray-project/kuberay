@@ -13,6 +13,8 @@ rules:
   resources:
   - rayclusters
   - rayclusters/status
+  - raycronjobs
+  - raycronjobs/status
   - rayjobs
   - rayjobs/status
   - rayservices
@@ -34,6 +36,7 @@ rules:
   - ray.io
   resources:
   - rayclusters
+  - raycronjobs
   - rayjobs
   - rayservices
   verbs:
