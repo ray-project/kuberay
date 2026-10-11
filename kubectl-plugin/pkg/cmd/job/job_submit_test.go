@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"sigs.k8s.io/yaml"
 
 	pluginclient "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
@@ -67,6 +68,42 @@ func TestRayJobSubmitComplete(t *testing.T) {
 			assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
 			assert.Equal(t, tc.expected.image, fakeSubmitJobOptions.image)
 			assert.Equal(t, tc.expected.rayVersion, fakeSubmitJobOptions.rayVersion)
+		})
+	}
+}
+
+func TestRayJobSubmitDryRunOutput(t *testing.T) {
+	for name, submissionID := range map[string]string{
+		"generated submission ID": "",
+		"provided submission ID":  "test-submission",
+	} {
+		t.Run(name, func(t *testing.T) {
+			streams, _, stdout, stderr := genericclioptions.NewTestIOStreams()
+			configFlags := genericclioptions.NewConfigFlags(true)
+			server := "https://127.0.0.1:1"
+			configFlags.APIServer = &server
+			factory := cmdutil.NewFactory(configFlags)
+			cmd := NewJobSubmitCommand(factory, streams)
+			args := []string{"--dry-run", "--name", "dry-run-job", "--working-dir", t.TempDir()}
+			if submissionID != "" {
+				args = append(args, "--submission-id", submissionID)
+			}
+			cmd.SetArgs(append(args, "--", "python", "train.py"))
+			require.NoError(t, cmd.Execute())
+			require.NotEmpty(t, stdout.String())
+
+			var job rayv1.RayJob
+			require.NoError(t, yaml.UnmarshalStrict(stdout.Bytes(), &job))
+			assert.Equal(t, "RayJob", job.Kind)
+			assert.Equal(t, "dry-run-job", job.Name)
+			assert.Equal(t, "python train.py", job.Spec.Entrypoint)
+			if submissionID == "" {
+				assert.NotEmpty(t, job.Spec.JobId)
+				assert.Contains(t, stderr.String(), job.Spec.JobId)
+			} else {
+				assert.Equal(t, submissionID, job.Spec.JobId)
+				assert.Empty(t, stderr.String())
+			}
 		})
 	}
 }
