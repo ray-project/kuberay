@@ -16,6 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -1271,4 +1272,87 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T)
 			}
 		})
 	}
+}
+
+// DeleteSelf should delete the RayJob without deleting its shared RayCluster.
+func TestReconcileRayJobClusterSelectorDeletion(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
+	ctx := context.Background()
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "shared",
+			Namespace: "default",
+			UID:       "shared-cluster",
+		},
+		Spec: rayv1.RayClusterSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "workers",
+					Replicas:  ptr.To[int32](2),
+				},
+			},
+		},
+	}
+	endTime := metav1.NewTime(time.Now().Add(-time.Hour))
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-rayjob",
+			Namespace:  "default",
+			Finalizers: []string{utils.RayJobStopJobFinalizer},
+		},
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:      "echo hello",
+			SubmissionMode:  rayv1.HTTPMode,
+			ClusterSelector: map[string]string{utils.RayJobClusterSelectorKey: rayCluster.Name},
+			DeletionStrategy: &rayv1.DeletionStrategy{
+				DeletionRules: []rayv1.DeletionRule{
+					{
+						Policy: rayv1.DeleteSelf,
+						Condition: rayv1.DeletionCondition{
+							JobStatus:  new(rayv1.JobStatusSucceeded),
+							TTLSeconds: 60,
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			JobStatus:           rayv1.JobStatusSucceeded,
+			JobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			RayClusterName:      rayCluster.Name,
+			EndTime:             &endTime,
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(rayJob, rayCluster).
+		WithStatusSubresource(rayJob).
+		Build()
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: events.NewFakeRecorder(10),
+	}
+	request := reconcile.Request{NamespacedName: client.ObjectKeyFromObject(rayJob)}
+
+	_, err := reconciler.Reconcile(ctx, request)
+	require.NoError(t, err)
+	gotJob := &rayv1.RayJob{}
+	require.NoError(t, fakeClient.Get(ctx, request.NamespacedName, gotJob))
+	require.False(t, gotJob.DeletionTimestamp.IsZero())
+
+	_, err = reconciler.Reconcile(ctx, request)
+	require.NoError(t, err)
+	assert.True(t, apierrors.IsNotFound(fakeClient.Get(ctx, request.NamespacedName, &rayv1.RayJob{})))
+
+	gotCluster := &rayv1.RayCluster{}
+	require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(rayCluster), gotCluster))
+	assert.Equal(t, rayCluster.Spec, gotCluster.Spec)
+	assert.Equal(t, rayCluster.UID, gotCluster.UID)
+	assert.True(t, gotCluster.DeletionTimestamp.IsZero())
+	assert.Empty(t, gotCluster.OwnerReferences)
 }
