@@ -84,6 +84,32 @@ func TestCreateWorkerGroupSpec(t *testing.T) {
 	}
 }
 
+func TestCreateWorkerGroupInvalidResourceFlags(t *testing.T) {
+	for _, flag := range []string{"worker-cpu", "worker-gpu", "worker-memory"} {
+		for _, value := range []string{"invalid", "", "-1"} {
+			t.Run(flag+"="+value, func(t *testing.T) {
+				streams, _, _, _ := genericclioptions.NewTestIOStreams()
+				// Invalid resource flags must be rejected before resolving the kubeconfig or creating a client.
+				cmd := NewCreateWorkerGroupCommand(nil, streams)
+				cmd.SetArgs([]string{"example-group", "--ray-cluster", "sample-cluster", "--" + flag + "=" + value})
+				require.ErrorContains(t, cmd.Execute(), flag)
+			})
+		}
+	}
+}
+
+func TestCreateWorkerGroupValidResources(t *testing.T) {
+	options := &CreateWorkerGroupOptions{
+		workerCPU:    "500m",
+		workerGPU:    "0",
+		workerTPU:    "0",
+		workerMemory: "4Gi",
+		numOfHosts:   1,
+	}
+	require.NoError(t, options.Validate())
+	assert.NotPanics(t, func() { createWorkerGroupSpec(options) })
+}
+
 func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 	tests := []struct {
 		flags         map[string]string
