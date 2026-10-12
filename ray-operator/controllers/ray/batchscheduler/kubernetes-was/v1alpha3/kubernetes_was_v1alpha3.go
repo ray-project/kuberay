@@ -220,6 +220,8 @@ func gangNeedsMinCountPatch(existing *schedulingv1alpha3.GangSchedulingPolicy, d
 }
 
 // workloadClusterGang returns the gang policy of the single whole-cluster template, or nil.
+// A RayCluster currently maps to a single PodGroup, so a template count other than 1 is a
+// shape we don't know how to patch; this will change when composite pod groups land.
 func workloadClusterGang(workload *schedulingv1alpha3.Workload) *schedulingv1alpha3.GangSchedulingPolicy {
 	if len(workload.Spec.PodGroupTemplates) != 1 {
 		return nil
