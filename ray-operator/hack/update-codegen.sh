@@ -44,6 +44,6 @@ kube::codegen::gen_client \
   --output-pkg "${ROOT_PKG}/pkg/client" \
   --with-watch \
   --with-applyconfig \
-  --applyconfig-externals k8s.io/api/core/v1.PodTemplateSpec:k8s.io/client-go/applyconfigurations/core/v1 \
+  --applyconfig-externals k8s.io/api/core/v1.PodTemplateSpec:k8s.io/client-go/applyconfigurations/core/v1,sigs.k8s.io/gateway-api/apis/v1.HTTPRouteSpec:sigs.k8s.io/gateway-api/applyconfiguration/apis/v1 \
   --one-input-api ray/v1 \
   "${SCRIPT_ROOT}/apis"

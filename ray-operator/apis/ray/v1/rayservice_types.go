@@ -3,6 +3,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -81,6 +82,9 @@ type ClusterUpgradeOptions struct {
 	// Exactly one of GatewayClassName or GatewayRef must be set.
 	// +optional
 	GatewayRef *GatewayReference `json:"gatewayRef,omitempty"`
+	// HTTPRouteTemplate customizes the HTTPRoute that KubeRay creates for the incremental upgrade.
+	// +optional
+	HTTPRouteTemplate *HTTPRouteTemplateSpec `json:"httpRouteTemplate,omitempty"`
 }
 
 // GatewayReference identifies the existing Gateway and listener the RayService's
@@ -116,6 +120,19 @@ type GatewayReference struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port *int32 `json:"port,omitempty"`
+}
+
+// HTTPRouteTemplateSpec is merged into the HTTPRoute that KubeRay creates. Only the metadata labels and
+// annotations are used. KubeRay always sets spec.parentRefs and the backendRefs of every rule.
+type HTTPRouteTemplateSpec struct {
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Spec is validated by the HTTPRoute CRD installed in the cluster rather than by the RayService CRD.
+	// +optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Spec gwv1.HTTPRouteSpec `json:"spec,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {
