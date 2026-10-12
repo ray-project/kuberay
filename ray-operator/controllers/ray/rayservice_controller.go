@@ -1182,8 +1182,8 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			return nil, err
 		}
 		desiredHTTPRoute.Labels = maps.Clone(opts.HTTPRouteTemplate.Labels)
-		desiredHTTPRoute.Annotations = map[string]string{utils.HTTPRouteTemplateHashKey: templateHash}
-		maps.Copy(desiredHTTPRoute.Annotations, opts.HTTPRouteTemplate.Annotations)
+		desiredHTTPRoute.Annotations = maps.Clone(opts.HTTPRouteTemplate.Annotations)
+		metav1.SetMetaDataAnnotation(&desiredHTTPRoute.ObjectMeta, utils.HTTPRouteTemplateHashKey, templateHash)
 		spec := opts.HTTPRouteTemplate.Spec.DeepCopy()
 		spec.ParentRefs = desiredHTTPRoute.Spec.ParentRefs
 		if len(spec.Rules) == 0 {

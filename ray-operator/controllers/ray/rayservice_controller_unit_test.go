@@ -1978,7 +1978,8 @@ func TestReconcileHTTPRouteWithTemplate(t *testing.T) {
 					IntervalSeconds:  new(int32(30)),
 					GatewayClassName: "istio",
 					HTTPRouteTemplate: &rayv1.HTTPRouteTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"team": "ml"}, Annotations: map[string]string{"owner": "ml"}},
+						// A template copied from a live HTTPRoute may include the hash, which KubeRay must overwrite.
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"team": "ml"}, Annotations: map[string]string{"owner": "ml", utils.HTTPRouteTemplateHashKey: "stale"}},
 						Spec: gwv1.HTTPRouteSpec{
 							Hostnames: []gwv1.Hostname{"serve.example.com"},
 							Rules: []gwv1.HTTPRouteRule{
@@ -2005,7 +2006,7 @@ func TestReconcileHTTPRouteWithTemplate(t *testing.T) {
 	require.NoError(t, fakeClient.Get(ctx, routeKey, route))
 	assert.Equal(t, map[string]string{"other": "label", "team": "ml"}, route.Labels)
 	assert.Equal(t, "ml", route.Annotations["owner"])
-	assert.NotEmpty(t, route.Annotations[utils.HTTPRouteTemplateHashKey])
+	assert.NotContains(t, []string{"", "stale"}, route.Annotations[utils.HTTPRouteTemplateHashKey])
 	assert.Equal(t, []gwv1.Hostname{"serve.example.com"}, route.Spec.Hostnames)
 	require.Len(t, route.Spec.ParentRefs, 1)
 	assert.Equal(t, gwv1.ObjectName(gateway.Name), route.Spec.ParentRefs[0].Name)
