@@ -338,7 +338,7 @@ func New(c *config) (*RayLogsHandler, error) {
 		Region:           aws.String(c.S3Region),
 		HTTPClient:       httpClient,
 		DisableSSL:       c.DisableSSL,
-		S3ForcePathStyle: c.S3ForcePathStyle, // IMPORTANT: Required for MinIO
+		S3ForcePathStyle: c.S3ForcePathStyle,
 	})
 	if err != nil {
 		logrus.Fatalf("Create aws session error %v", err)
