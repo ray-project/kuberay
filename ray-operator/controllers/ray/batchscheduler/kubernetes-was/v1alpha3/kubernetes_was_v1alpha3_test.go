@@ -75,9 +75,8 @@ func TestDoBatchSchedulingOnSubmissionCreatesWorkloadAndPodGroups(t *testing.T) 
 
 func TestDoBatchSchedulingOnSubmissionGangsFloorWhenAutoscalingEnabled(t *testing.T) {
 	ctx := context.Background()
-	// Autoscaling clusters are no longer skipped: they gang schedule at the floor
-	// (1 head + minReplicas) so the autoscaler can grow above the floor without
-	// deadlocking the gang. minReplicas (2) differs from the desired replicas (5).
+	// minReplicas (2) is deliberately different from replicas (5) so the test can tell
+	// the floor apart from the desired size.
 	rayCluster := newTestRayCluster(newAutoscalingWorkerGroup("workers", 2, 5))
 	enableAutoscaling := true
 	rayCluster.Spec.EnableInTreeAutoscaling = &enableAutoscaling
