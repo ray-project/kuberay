@@ -459,8 +459,6 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
-	// v1alpha3 gang.minCount is mutable, so a rescale patches the existing objects in
-	// place in a single reconcile without deleting or recreating them.
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
 	workload := &schedulingv1alpha3.Workload{}
