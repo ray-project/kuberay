@@ -11,7 +11,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -24,10 +23,10 @@ var podLog = logf.Log.WithName("pod-webhook")
 
 // Registers the pods CREATE mutating webhook with the manager. The webhook mutates Ray worker pods to prepare them for node label delivery.
 func SetupPodWebhookWithManager(mgr ctrl.Manager) error {
-	mgr.GetWebhookServer().Register("/mutate-v1-pod", admission.WithDefaulter(mgr.GetScheme(), &PodWebhook{
-		Client: mgr.GetClient(),
-	}))
-	return nil
+	return ctrl.NewWebhookManagedBy(mgr, &corev1.Pod{}).
+		WithDefaulter(&PodWebhook{Client: mgr.GetClient()}).
+		WithDefaulterCustomPath("/mutate-v1-pod").
+		Complete()
 }
 
 type PodWebhook struct {
@@ -45,11 +44,6 @@ func (w *PodWebhook) Default(ctx context.Context, pod *corev1.Pod) error {
 		return nil
 	}
 	namespace := pod.Namespace
-	if namespace == "" {
-		if req, err := admission.RequestFromContext(ctx); err == nil {
-			namespace = req.Namespace
-		}
-	}
 	groupName := pod.Labels[utils.RayNodeGroupLabelKey]
 
 	cluster := &rayv1.RayCluster{}
@@ -89,21 +83,18 @@ func prepareNodeLabelDelivery(pod *corev1.Pod) error {
 			},
 		},
 	}
-	for _, env := range container.Env {
-		if env.Name != pointer.Name {
-			continue
-		}
+	if env, ok := utils.EnvVarByName(pointer.Name, container.Env); ok {
 		if env.ValueFrom != nil && env.ValueFrom.FieldRef != nil && env.ValueFrom.FieldRef.FieldPath == pointer.ValueFrom.FieldRef.FieldPath {
 			// pointer already exists e.g. on a webhook reinvocation
 			return nil
 		}
 		return fmt.Errorf("%s is managed by KubeRay when labelRefs is set and must not be set in the pod template", pointer.Name)
 	}
-	i := slices.IndexFunc(container.Env, func(e corev1.EnvVar) bool { return e.Name == utils.KUBERAY_GEN_RAY_START_CMD })
-	if i < 0 || container.Env[i].Value == "" {
+	genCmd, ok := utils.EnvVarByName(utils.KUBERAY_GEN_RAY_START_CMD, container.Env)
+	if !ok || genCmd.Value == "" {
 		return fmt.Errorf("the Ray container has no %s env var; node label delivery needs the KubeRay-generated ray start command", utils.KUBERAY_GEN_RAY_START_CMD)
 	}
-	rayStartCmd := container.Env[i].Value
+	rayStartCmd := genCmd.Value
 	if len(container.Args) != 1 {
 		return fmt.Errorf("expected the Ray container to have exactly one args element carrying the generated ray start command, got %d", len(container.Args))
 	}

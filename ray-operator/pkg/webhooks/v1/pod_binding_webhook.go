@@ -26,8 +26,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
-// NodeLabelsWithheldReason is the reason of the Warning event recorded on a pod whose node labels were not delivered
-const NodeLabelsWithheldReason = "RequiredNodeLabelMissing"
+// FailedToDeliverNodeLabels is the reason of the Warning event recorded on a pod whose node labels were not delivered
+const FailedToDeliverNodeLabels = "FailedToDeliverNodeLabels"
 
 var podBindingLog = logf.Log.WithName("pod-binding-webhook")
 
@@ -220,5 +220,5 @@ func (w *PodBindingWebhook) withhold(req admission.Request, podMeta *metav1.Obje
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
 		ObjectMeta: *podMeta,
 	}
-	w.Recorder.Eventf(pod, nil, corev1.EventTypeWarning, NodeLabelsWithheldReason, "DeliverNodeLabels", "%s", message)
+	w.Recorder.Eventf(pod, nil, corev1.EventTypeWarning, FailedToDeliverNodeLabels, "DeliverNodeLabels", "%s", message)
 }

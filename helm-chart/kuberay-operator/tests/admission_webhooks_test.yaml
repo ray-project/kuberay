@@ -63,6 +63,9 @@ tests:
       - equal:
           path: spec.secretName
           value: kuberay-operator-webhook-server-cert
+      - equal:
+          path: spec.subject.organizations
+          value: [kuberay]
 
   - it: Should render the pod webhooks when the NodeLabelDelivery gate is enabled, scoped to Ray worker pods and with the CA injected
     template: admission-webhooks/mutating-webhook.yaml

@@ -7,6 +7,9 @@ metadata:
   labels:
     {{- include "kuberay-operator.labels" . | nindent 4 }}
 spec:
+  # a self-signed cert's issuer DN is its subject DN; without one cert-manager warns "empty Issuer DN"
+  subject:
+    organizations: [kuberay]
   dnsNames:
     - {{ include "kuberay-operator.webhook.serviceName" . }}.{{ .Release.Namespace }}.svc
     - {{ include "kuberay-operator.webhook.serviceName" . }}.{{ .Release.Namespace }}.svc.cluster.local

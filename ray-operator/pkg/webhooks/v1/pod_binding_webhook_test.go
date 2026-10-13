@@ -136,7 +136,7 @@ func TestPodBindingWebhookHandle(t *testing.T) {
 		assert.Nil(t, deliveredLabels(t, resp))
 		recorded := drainEvents(recorder)
 		require.Len(t, recorded, 1)
-		assert.Contains(t, recorded[0], NodeLabelsWithheldReason)
+		assert.Contains(t, recorded[0], FailedToDeliverNodeLabels)
 		assert.Contains(t, recorded[0], cause)
 	}
 

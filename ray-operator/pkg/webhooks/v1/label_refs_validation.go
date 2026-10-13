@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -37,7 +36,7 @@ func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string
 			if strings.Contains(strings.Join(container.Command, " ")+" "+strings.Join(container.Args, " "), "ray start") {
 				return field.Forbidden(path, "cannot be combined with a container command that runs ray start; node label delivery needs the KubeRay-generated ray start command")
 			}
-			if slices.ContainsFunc(container.Env, func(e corev1.EnvVar) bool { return e.Name == utils.RAY_NODE_LABELS_JSON }) {
+			if utils.EnvVarExists(utils.RAY_NODE_LABELS_JSON, container.Env) {
 				return field.Forbidden(path, fmt.Sprintf("cannot be combined with the %s env var in the pod template; it is managed by KubeRay", utils.RAY_NODE_LABELS_JSON))
 			}
 		}
