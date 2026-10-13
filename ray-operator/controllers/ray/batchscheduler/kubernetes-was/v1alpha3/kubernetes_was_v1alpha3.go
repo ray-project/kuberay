@@ -149,7 +149,12 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCl
 	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-	return k.patchGangMinCount(ctx, "Workload", existing, existingGang, desiredMinCount)
+	patch := client.MergeFrom(existing.DeepCopy())
+	existingGang.MinCount = desiredMinCount
+	if err := k.cli.Patch(ctx, existing, patch); err != nil {
+		return fmt.Errorf("failed to patch Workload %s/%s minCount: %w", existing.Namespace, existing.Name, err)
+	}
+	return nil
 }
 
 func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCluster *rayv1.RayCluster, desired *schedulingv1alpha3.PodGroup) error {
@@ -178,7 +183,12 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCl
 	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-	return k.patchGangMinCount(ctx, "PodGroup", existing, existingGang, desiredMinCount)
+	patch := client.MergeFrom(existing.DeepCopy())
+	existingGang.MinCount = desiredMinCount
+	if err := k.cli.Patch(ctx, existing, patch); err != nil {
+		return fmt.Errorf("failed to patch PodGroup %s/%s minCount: %w", existing.Namespace, existing.Name, err)
+	}
+	return nil
 }
 
 func (k *KubernetesWASV1Alpha3Scheduler) deletePodGroup(ctx context.Context, podGroup *schedulingv1alpha3.PodGroup) (bool, error) {
@@ -227,17 +237,6 @@ func workloadClusterGang(workload *schedulingv1alpha3.Workload) *schedulingv1alp
 		return nil
 	}
 	return workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang
-}
-
-// patchGangMinCount patches gang.minCount on a live Workload or PodGroup in place. The caller
-// supplies the object's gang pointer, already confirmed non-nil and differing from desired.
-func (k *KubernetesWASV1Alpha3Scheduler) patchGangMinCount(ctx context.Context, kind string, obj client.Object, gang *schedulingv1alpha3.GangSchedulingPolicy, desiredMinCount int32) error {
-	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
-	gang.MinCount = desiredMinCount
-	if err := k.cli.Patch(ctx, obj, patch); err != nil {
-		return fmt.Errorf("failed to patch %s %s/%s minCount: %w", kind, obj.GetNamespace(), obj.GetName(), err)
-	}
-	return nil
 }
 
 // clusterGangMinCount is the whole-cluster gang floor: the full desired size
