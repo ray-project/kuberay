@@ -431,13 +431,17 @@ func TestBuildClusterSchedulingPolicy(t *testing.T) {
 	}
 }
 
+// TestSyncSchedulingResourcesPatchesStaleResourcesInPlace also locks in that a rescale patches
+// only gang.minCount and leaves the immutable priorityClassName/preemptionPolicy untouched.
 func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	ctx := context.Background()
 	rayCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 5))
+	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
+	livePolicy := schedulingv1alpha3.PreemptNever
 	existingWorkload := &schedulingv1alpha3.Workload{
 		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace, UID: types.UID("stale-workload-uid")},
 		Spec: schedulingv1alpha3.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{
-			{Name: "cluster", SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}}},
+			{Name: "cluster", PriorityClassName: "never-pc", PreemptionPolicy: &livePolicy, SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}}},
 		}},
 	}
 	existingPodGroup := &schedulingv1alpha3.PodGroup{
@@ -448,7 +452,9 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 			Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
-			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}},
+			PriorityClassName: "never-pc",
+			PreemptionPolicy:  &livePolicy,
+			SchedulingPolicy:  schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}},
 		},
 	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
@@ -465,16 +471,24 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	// MinCount = 1 head + 5 worker replicas; patched in place so the UID is preserved.
 	assert.Equal(t, int32(6), workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingWorkload.UID, workload.UID)
+	require.NotNil(t, workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
+	assert.Equal(t, schedulingv1alpha3.PreemptNever, *workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup))
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
 	assert.Equal(t, int32(6), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
+	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
+	require.NotNil(t, podGroup.Spec.PreemptionPolicy)
+	assert.Equal(t, schedulingv1alpha3.PreemptNever, *podGroup.Spec.PreemptionPolicy)
 }
 
+// TestSyncSchedulingResourcesPatchesStalePodGroupInPlace also locks in that the patch never
+// deletes the PodGroup and preserves unrelated finalizers.
 func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	ctx := context.Background()
+	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup()) // 3 replicas -> desired MinCount 4
 
 	// The Workload matches the desired spec (not stale), but the PodGroup drifted
@@ -487,51 +501,14 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	}
 	existingPodGroup := &schedulingv1alpha3.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster-cluster",
-			Namespace: rayCluster.Namespace,
-			UID:       types.UID("stale-podgroup-uid"),
-			Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-		},
-		Spec: schedulingv1alpha3.PodGroupSpec{
-			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 3}},
-		},
-	}
-	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
-	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
-
-	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
-
-	podGroup := &schedulingv1alpha3.PodGroup{}
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup))
-	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
-	// MinCount = 1 head + 3 worker replicas; patched in place so the UID is preserved.
-	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
-	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
-}
-
-func TestSyncPodGroupPatchesInPlaceWithoutDeleting(t *testing.T) {
-	ctx := context.Background()
-	scheme := newTestScheme(t)
-	rayCluster := newTestRayCluster(newWorkerGroup())
-	desiredPolicy := buildClusterSchedulingPolicy(rayCluster)
-	existingWorkload := &schedulingv1alpha3.Workload{
-		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
-		Spec: schedulingv1alpha3.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{
-			{Name: clusterPodGroupTemplateName, SchedulingPolicy: desiredPolicy},
-		}},
-	}
-	existingPodGroup := &schedulingv1alpha3.PodGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       clusterPodGroupName(rayCluster.Name),
+			Name:       "test-cluster-cluster",
 			Namespace:  rayCluster.Namespace,
 			UID:        types.UID("stale-podgroup-uid"),
 			Labels:     map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 			Finalizers: []string{podGroupProtectionFinalizer, "example.com/retain"},
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
-			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{
-				Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: desiredPolicy.Gang.MinCount - 1},
-			},
+			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 3}},
 		},
 	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
@@ -554,9 +531,10 @@ func TestSyncPodGroupPatchesInPlaceWithoutDeleting(t *testing.T) {
 	assert.False(t, deleteCalled, "PodGroup should be patched in place, never deleted, on a rescale")
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
+	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup))
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
-	assert.Equal(t, desiredPolicy.Gang.MinCount, podGroup.Spec.SchedulingPolicy.Gang.MinCount)
+	// MinCount = 1 head + 3 worker replicas; patched in place so the UID is preserved.
+	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
@@ -686,53 +664,6 @@ func TestBuildSchedulingResourcesCopiesPriorityFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
 	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), podGroup.Spec.PreemptionPolicy)
-}
-
-// TestSyncPreservesPriorityFieldsOnRescale locks in that a rescale patches only gang.minCount and
-// leaves the immutable priorityClassName/preemptionPolicy untouched.
-func TestSyncPreservesPriorityFieldsOnRescale(t *testing.T) {
-	ctx := context.Background()
-	rayCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 5)) // desired MinCount 6
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
-	livePolicy := schedulingv1alpha3.PreemptNever
-	existingWorkload := &schedulingv1alpha3.Workload{
-		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace},
-		Spec: schedulingv1alpha3.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{
-			{Name: clusterPodGroupTemplateName, PriorityClassName: "never-pc", PreemptionPolicy: &livePolicy, SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}}},
-		}},
-	}
-	existingPodGroup := &schedulingv1alpha3.PodGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterPodGroupName(rayCluster.Name),
-			Namespace: rayCluster.Namespace,
-			Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-		},
-		Spec: schedulingv1alpha3.PodGroupSpec{
-			PriorityClassName: "never-pc",
-			PreemptionPolicy:  &livePolicy,
-			SchedulingPolicy:  schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}},
-		},
-	}
-	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
-	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
-
-	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
-
-	workload := &schedulingv1alpha3.Workload{}
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayCluster.Name, Namespace: rayCluster.Namespace}, workload))
-	require.Len(t, workload.Spec.PodGroupTemplates, 1)
-	require.NotNil(t, workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang)
-	assert.Equal(t, int32(6), workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount)
-	require.NotNil(t, workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-
-	podGroup := &schedulingv1alpha3.PodGroup{}
-	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: clusterPodGroupName(rayCluster.Name), Namespace: rayCluster.Namespace}, podGroup))
-	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
-	assert.Equal(t, int32(6), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
-	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
-	require.NotNil(t, podGroup.Spec.PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *podGroup.Spec.PreemptionPolicy)
 }
 
 func TestSchedulingV1alpha3Available(t *testing.T) {
