@@ -599,7 +599,6 @@ func TestSyncSchedulingResourcesLeavesTerminatingPodGroupToKubernetes(t *testing
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
 	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
-	// Sync neither blocks on nor strips the finalizer from a terminating PodGroup.
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
