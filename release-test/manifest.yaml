@@ -1,0 +1,6 @@
+# Written by the release-test-plan skill and reviewed like code: one unit per Item in items.yaml.
+# Commands use $KUBERAY_VERSION (the tag under test) and $CHART_VERSION (the same without the
+# leading "v"), so the file carries over from one release to the next. `go run ./release-test stale
+# --kuberay-version <tag>` lists the units whose source changed since they were planned (for a page,
+# its code blocks); only those get re-planned.
+units:
