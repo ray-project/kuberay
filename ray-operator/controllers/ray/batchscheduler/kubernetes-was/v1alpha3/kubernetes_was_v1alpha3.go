@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -110,7 +111,7 @@ func (p *Provider) ConfigureReconciler(b *builder.Builder) *builder.Builder {
 // syncSchedulingResources creates the Workload and PodGroup on the first reconcile and
 // patches gang.minCount in place on later reconciles (v1alpha3 minCount is mutable).
 func (k *KubernetesWASV1Alpha3Scheduler) syncSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) error {
-	workload, podGroup, err := k.buildSchedulingResources(rayCluster)
+	workload, podGroup, err := k.buildSchedulingResources(ctx, rayCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build scheduling resources for RayCluster %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
@@ -250,14 +251,25 @@ func clusterGangMinCount(rayCluster *rayv1.RayCluster) int32 {
 	return int32(1) + utils.CalculateDesiredReplicas(rayCluster)
 }
 
-func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(rayCluster *rayv1.RayCluster) (*schedulingv1alpha3.Workload, *schedulingv1alpha3.PodGroup, error) {
+func (k *KubernetesWASV1Alpha3Scheduler) buildSchedulingResources(ctx context.Context, rayCluster *rayv1.RayCluster) (*schedulingv1alpha3.Workload, *schedulingv1alpha3.PodGroup, error) {
 	policy := buildClusterSchedulingPolicy(rayCluster)
 	// kube-scheduler requires the PodGroup's priority and preemptionPolicy to match its pods'.
 	priorityClassName := rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName
-	// Kubernetes defaults an unset PodGroup preemptionPolicy before admission, rejecting Never classes.
+	// Kubernetes defaults an unset PodGroup preemptionPolicy before admission, rejecting Never
+	// PriorityClasses; derive it here when not set explicitly so it's never left nil.
 	var preemptionPolicy *schedulingv1alpha3.PreemptionPolicy
 	if p := rayCluster.Spec.HeadGroupSpec.Template.Spec.PreemptionPolicy; p != nil {
 		preemptionPolicy = new(schedulingv1alpha3.PreemptionPolicy(*p))
+	} else if priorityClassName != "" {
+		priorityClass := &schedulingv1.PriorityClass{}
+		if err := k.cli.Get(ctx, client.ObjectKey{Name: priorityClassName}, priorityClass); err != nil {
+			return nil, nil, fmt.Errorf("failed to get PriorityClass %s: %w", priorityClassName, err)
+		}
+		policy := schedulingv1alpha3.PreemptLowerPriority
+		if priorityClass.PreemptionPolicy != nil {
+			policy = schedulingv1alpha3.PreemptionPolicy(*priorityClass.PreemptionPolicy)
+		}
+		preemptionPolicy = &policy
 	}
 	workload := &schedulingv1alpha3.Workload{
 		ObjectMeta: metav1.ObjectMeta{
