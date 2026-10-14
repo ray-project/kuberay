@@ -30,10 +30,7 @@ export async function apiServerFetcher(
 
 // a fetcher for the Kubernetes core API (e.g. namespaces) proxied by the
 // apiserver. Returns null when the core API is unavailable (v1 mode).
-export async function coreApiFetcher(
-  endpoint: string,
-  ...args: RequestInit[]
-) {
+export async function coreApiFetcher(endpoint: string, ...args: RequestInit[]) {
   const baseUrl = await config.getCoreApiUrl();
   if (!baseUrl) {
     return null;
