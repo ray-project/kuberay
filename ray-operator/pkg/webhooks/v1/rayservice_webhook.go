@@ -36,13 +36,13 @@ var _ admission.Validator[*rayv1.RayService] = &RayServiceWebhook{}
 // ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (w *RayServiceWebhook) ValidateCreate(_ context.Context, rayService *rayv1.RayService) (admission.Warnings, error) {
 	rayServiceLog.Info("validate create", "name", rayService.Name)
-	return nil, w.validateRayService(rayService)
+	return nil, w.validateRayService(nil, rayService)
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type
-func (w *RayServiceWebhook) ValidateUpdate(_ context.Context, _ *rayv1.RayService, rayService *rayv1.RayService) (admission.Warnings, error) {
+func (w *RayServiceWebhook) ValidateUpdate(_ context.Context, old, rayService *rayv1.RayService) (admission.Warnings, error) {
 	rayServiceLog.Info("validate update", "name", rayService.Name)
-	return nil, w.validateRayService(rayService)
+	return nil, w.validateRayService(&old.Spec.RayClusterSpec, rayService)
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type
@@ -50,14 +50,14 @@ func (w *RayServiceWebhook) ValidateDelete(_ context.Context, _ *rayv1.RayServic
 	return nil, nil
 }
 
-func (w *RayServiceWebhook) validateRayService(rayService *rayv1.RayService) error {
+func (w *RayServiceWebhook) validateRayService(old *rayv1.RayClusterSpec, rayService *rayv1.RayService) error {
 	var allErrs field.ErrorList
 
 	if err := utils.ValidateRayServiceMetadata(rayService.ObjectMeta); err != nil {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("metadata").Child("name"), rayService.Name, err.Error()))
 	}
 
-	if err := validateLabelRefs(&rayService.Spec.RayClusterSpec, rayService.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
+	if err := validateLabelRefs(&rayService.Spec.RayClusterSpec, old, rayService.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterConfig")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 

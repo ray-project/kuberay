@@ -14,15 +14,23 @@ import (
 )
 
 // validateLabelRefs checks the labelRefs of every worker group in spec against the operator allowlist.
+// old is the spec before an update, nil on create. A group whose labelRefs are unchanged skips the gate and allowlist
+// checks so disabling the gate or narrowing the allowlist does not block unrelated updates such as finalizer removal.
 // annotations are the admitted object's metadata annotations, base is the field path of spec in that object
-func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string, allowed []string, base *field.Path) *field.Error {
+func validateLabelRefs(spec, old *rayv1.RayClusterSpec, annotations map[string]string, allowed []string, base *field.Path) *field.Error {
 	for i := range spec.WorkerGroupSpecs {
 		group := &spec.WorkerGroupSpecs[i]
 		if len(group.LabelRefs) == 0 {
 			continue
 		}
 		path := base.Child("workerGroupSpecs").Index(i).Child("labelRefs")
-		if !features.Enabled(features.NodeLabelDelivery) {
+		unchanged := false
+		if old != nil {
+			if oldGroup := findWorkerGroupSpec(old, group.GroupName); oldGroup != nil {
+				unchanged = slices.Equal(oldGroup.LabelRefs, group.LabelRefs)
+			}
+		}
+		if !unchanged && !features.Enabled(features.NodeLabelDelivery) {
 			return field.Forbidden(path, "requires the NodeLabelDelivery feature gate to be enabled")
 		}
 
@@ -58,7 +66,7 @@ func validateLabelRefs(spec *rayv1.RayClusterSpec, annotations map[string]string
 			if errs := validation.IsQualifiedName(nodeLabel); len(errs) > 0 {
 				return field.Invalid(refPath.Child("valueFrom", "nodeRef", "fieldPath"), nodeLabel, strings.Join(errs, "; "))
 			}
-			if !slices.Contains(allowed, nodeLabel) {
+			if !unchanged && !slices.Contains(allowed, nodeLabel) {
 				return field.Forbidden(refPath.Child("valueFrom", "nodeRef", "fieldPath"), fmt.Sprintf("node label %q is not in the operator's allowedNodeLabels", nodeLabel))
 			}
 			// name defaults to the node label key

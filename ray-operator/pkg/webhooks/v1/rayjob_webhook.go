@@ -36,13 +36,13 @@ var _ admission.Validator[*rayv1.RayJob] = &RayJobWebhook{}
 // ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (w *RayJobWebhook) ValidateCreate(_ context.Context, rayJob *rayv1.RayJob) (admission.Warnings, error) {
 	rayJobLog.Info("validate create", "name", rayJob.Name)
-	return nil, w.validateRayJob(rayJob)
+	return nil, w.validateRayJob(nil, rayJob)
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type
-func (w *RayJobWebhook) ValidateUpdate(_ context.Context, _ *rayv1.RayJob, rayJob *rayv1.RayJob) (admission.Warnings, error) {
+func (w *RayJobWebhook) ValidateUpdate(_ context.Context, old, rayJob *rayv1.RayJob) (admission.Warnings, error) {
 	rayJobLog.Info("validate update", "name", rayJob.Name)
-	return nil, w.validateRayJob(rayJob)
+	return nil, w.validateRayJob(old.Spec.RayClusterSpec, rayJob)
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type
@@ -50,7 +50,7 @@ func (w *RayJobWebhook) ValidateDelete(_ context.Context, _ *rayv1.RayJob) (admi
 	return nil, nil
 }
 
-func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
+func (w *RayJobWebhook) validateRayJob(old *rayv1.RayClusterSpec, rayJob *rayv1.RayJob) error {
 	var allErrs field.ErrorList
 
 	if err := utils.ValidateRayJobMetadata(rayJob.ObjectMeta); err != nil {
@@ -58,7 +58,7 @@ func (w *RayJobWebhook) validateRayJob(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
-		if err := validateLabelRefs(rayJob.Spec.RayClusterSpec, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
+		if err := validateLabelRefs(rayJob.Spec.RayClusterSpec, old, rayJob.Annotations, w.AllowedNodeLabels, field.NewPath("spec").Child("rayClusterSpec")); err != nil {
 			allErrs = append(allErrs, err)
 		}
 	}

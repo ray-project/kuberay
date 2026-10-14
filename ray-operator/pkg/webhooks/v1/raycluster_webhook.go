@@ -36,13 +36,13 @@ var _ admission.Validator[*rayv1.RayCluster] = &RayClusterWebhook{}
 // ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (w *RayClusterWebhook) ValidateCreate(_ context.Context, rayCluster *rayv1.RayCluster) (admission.Warnings, error) {
 	rayClusterLog.Info("validate create", "name", rayCluster.Name)
-	return nil, w.validateRayCluster(rayCluster)
+	return nil, w.validateRayCluster(nil, rayCluster)
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type
-func (w *RayClusterWebhook) ValidateUpdate(_ context.Context, _ *rayv1.RayCluster, rayCluster *rayv1.RayCluster) (admission.Warnings, error) {
+func (w *RayClusterWebhook) ValidateUpdate(_ context.Context, old, rayCluster *rayv1.RayCluster) (admission.Warnings, error) {
 	rayClusterLog.Info("validate update", "name", rayCluster.Name)
-	return nil, w.validateRayCluster(rayCluster)
+	return nil, w.validateRayCluster(&old.Spec, rayCluster)
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type
@@ -50,7 +50,7 @@ func (w *RayClusterWebhook) ValidateDelete(_ context.Context, _ *rayv1.RayCluste
 	return nil, nil
 }
 
-func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) error {
+func (w *RayClusterWebhook) validateRayCluster(old *rayv1.RayClusterSpec, rayCluster *rayv1.RayCluster) error {
 	var allErrs field.ErrorList
 
 	if err := utils.ValidateRayClusterMetadata(rayCluster.ObjectMeta); err != nil {
@@ -61,7 +61,7 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
-	if err := validateLabelRefs(&rayCluster.Spec, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
+	if err := validateLabelRefs(&rayCluster.Spec, old, rayCluster.Annotations, w.AllowedNodeLabels, field.NewPath("spec")); err != nil {
 		allErrs = append(allErrs, err)
 	}
 

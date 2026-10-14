@@ -117,7 +117,7 @@ func TestValidateLabelRefs(t *testing.T) {
 			if tt.mutate != nil {
 				tt.mutate(&spec.WorkerGroupSpecs[0])
 			}
-			err := validateLabelRefs(spec, tt.annotations, allowed, field.NewPath("spec"))
+			err := validateLabelRefs(spec, nil, tt.annotations, allowed, field.NewPath("spec"))
 			if tt.errorContains == "" {
 				require.Nil(t, err)
 				return
@@ -130,10 +130,18 @@ func TestValidateLabelRefs(t *testing.T) {
 	t.Run("gate off", func(t *testing.T) {
 		features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, false)
 		spec := newSpec()
-		err := validateLabelRefs(spec, nil, allowed, field.NewPath("spec"))
+		err := validateLabelRefs(spec, nil, nil, allowed, field.NewPath("spec"))
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "requires the NodeLabelDelivery feature gate to be enabled")
 		spec.WorkerGroupSpecs[0].LabelRefs = nil
-		require.Nil(t, validateLabelRefs(spec, nil, allowed, field.NewPath("spec")))
+		require.Nil(t, validateLabelRefs(spec, nil, nil, allowed, field.NewPath("spec")))
+	})
+
+	t.Run("unchanged labelRefs skip the gate and allowlist on update", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, false)
+		old := newSpec()
+		spec := newSpec()
+		spec.WorkerGroupSpecs[0].RayStartParams = map[string]string{"num-cpus": "4"}
+		require.Nil(t, validateLabelRefs(spec, old, nil, nil, field.NewPath("spec")))
 	})
 }
