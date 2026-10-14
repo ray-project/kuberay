@@ -12,7 +12,7 @@ import (
 func TestCommands(t *testing.T) {
 	// Every command checks the tag before using it; main prints nothing, so cobra must print the error.
 	want := `--kuberay-version "../../etc" is not a release tag`
-	for _, command := range []string{"run", "stale"} {
+	for _, command := range []string{"run", "stale", "summary"} {
 		t.Run(command, func(t *testing.T) {
 			cmd := NewReleaseTestCommand()
 			var out bytes.Buffer

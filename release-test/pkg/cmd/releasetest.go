@@ -7,6 +7,7 @@ import (
 	"github.com/ray-project/kuberay/release-test/pkg/cmd/lint"
 	"github.com/ray-project/kuberay/release-test/pkg/cmd/run"
 	"github.com/ray-project/kuberay/release-test/pkg/cmd/stale"
+	"github.com/ray-project/kuberay/release-test/pkg/cmd/summary"
 )
 
 var releaseTestLong = templates.LongDesc(`
@@ -33,6 +34,7 @@ func NewReleaseTestCommand() *cobra.Command {
 	cmd.AddCommand(stale.NewStaleCommand())
 	cmd.AddCommand(lint.NewLintCommand())
 	cmd.AddCommand(run.NewRunCommand())
+	cmd.AddCommand(summary.NewSummaryCommand())
 
 	return cmd
 }
