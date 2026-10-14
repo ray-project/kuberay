@@ -5,6 +5,7 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 
 	"github.com/ray-project/kuberay/release-test/pkg/cmd/lint"
+	"github.com/ray-project/kuberay/release-test/pkg/cmd/run"
 	"github.com/ray-project/kuberay/release-test/pkg/cmd/stale"
 )
 
@@ -31,6 +32,7 @@ func NewReleaseTestCommand() *cobra.Command {
 
 	cmd.AddCommand(stale.NewStaleCommand())
 	cmd.AddCommand(lint.NewLintCommand())
+	cmd.AddCommand(run.NewRunCommand())
 
 	return cmd
 }
