@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-GOLANGCILINT_VERSION ?= v2.11.3
+GOLANGCILINT_VERSION ?= v2.13.1
 GOBIN := $(shell go env GOPATH)/bin
 GOBIN_GOLANGCILINT := $(GOBIN)/golangci-lint
 
@@ -130,11 +130,6 @@ ifeq ($(ENGINE),docker)
 	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE) || ${ENGINE} buildx create --name $(DOCKERBUILDER_INSTANCE)
 	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE)
 endif
-
-# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
-# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
-GOVERSION := $(shell go env GOVERSION)
-export GOTOOLCHAIN := $(GOVERSION)+auto
 
 # Run tests
 .PHONY: test
