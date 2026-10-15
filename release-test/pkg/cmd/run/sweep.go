@@ -27,14 +27,7 @@ func (r *runner) snapshot(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("kubectl get: %w", err)
 	}
 	objs := strings.Fields(out)
-	// Ray resources can be listed only while their CRDs are installed.
-	var kinds []string
-	for _, obj := range objs {
-		if name, ok := strings.CutPrefix(obj, "customresourcedefinition.apiextensions.k8s.io/"); ok && strings.HasSuffix(name, ".ray.io") {
-			kinds = append(kinds, name)
-		}
-	}
-	if len(kinds) > 0 {
+	if kinds := rayCRDs(objs); len(kinds) > 0 {
 		items, err := r.list(ctx, strings.Join(kinds, ","), "-A")
 		if err != nil {
 			return nil, fmt.Errorf("kubectl get ray resources: %w", err)
@@ -116,6 +109,18 @@ func (r *runner) sweep(ctx context.Context, before []string, log *os.File) []str
 	return left
 }
 
+// rayCRDs picks the Ray CRDs out of `kubectl get -o name` output. Ray resources can be listed
+// only while their CRDs are installed, and one missing kind fails the whole get.
+func rayCRDs(objs []string) []string {
+	var kinds []string
+	for _, obj := range objs {
+		if name, ok := strings.CutPrefix(obj, "customresourcedefinition.apiextensions.k8s.io/"); ok && strings.HasSuffix(name, ".ray.io") {
+			kinds = append(kinds, name)
+		}
+	}
+	return kinds
+}
+
 // splitRayObject splits "RayCluster/<namespace>/<name>".
 func splitRayObject(obj string) (kind, namespace, name string, ok bool) {
 	parts := strings.Split(obj, "/")
@@ -136,7 +141,13 @@ func (r *runner) evidence(ctx context.Context, dir string) {
 	save("pods.txt", "get", "pods", "-A", "-o", "wide")
 	save("events.txt", "get", "events", "-A", "--sort-by=.lastTimestamp")
 
-	save("ray-resources.yaml", "get", "rayclusters,rayjobs,rayservices,raycronjobs", "-A", "-o", "yaml")
+	crds, _ := r.output(ctx, "kubectl", "get", "customresourcedefinitions", "-o", "name")
+
+	if kinds := rayCRDs(strings.Fields(crds)); len(kinds) > 0 {
+		// A step that fails right after creating the CRDs can leave some not served yet.
+		_, _ = r.output(ctx, "kubectl", append([]string{"wait", "crd", "--for=condition=Established", "--timeout=30s"}, kinds...)...)
+		save("ray-resources.yaml", "get", strings.Join(kinds, ","), "-A", "-o", "yaml")
+	}
 
 	pods, _ := r.list(ctx, "pods", "-A")
 	var described []string
