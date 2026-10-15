@@ -105,7 +105,21 @@ export const FrontendTable = <T extends { name: string }>(
     name,
     disableSelection = false,
   } = props;
-  const getRowKey = props.getRowKey ?? ((row: T) => row.name);
+  const getRowKey = React.useMemo(
+    () => props.getRowKey ?? ((row: T) => row.name),
+    [props.getRowKey],
+  );
+
+  // Drop selections whose rows are no longer in the data (e.g. deleted, or no
+  // longer visible because the namespace changed) so the delete button count
+  // stays accurate.
+  React.useEffect(() => {
+    setSelected((prev) => {
+      const currentKeys = new Set(data.map(getRowKey));
+      const filtered = prev.filter((key) => currentKeys.has(key));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [data, getRowKey]);
   const [order, setOrder] = React.useState<Order>("desc");
   const [orderBy, setOrderBy] = React.useState<keyof T & string>(
     defaultOrderBy,
