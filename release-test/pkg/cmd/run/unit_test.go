@@ -52,6 +52,7 @@ type fakeCluster struct {
 	pods          []metav1.PartialObjectMetadata // listed for the evidence
 	deleted       []string                       // the delete and uninstall commands run
 	collected     []string                       // the describe and logs commands run
+	onCall        func(call string)              // runs before each call is answered
 }
 
 func inDefault(kind, name string, owners ...metav1.OwnerReference) metav1.PartialObjectMetadata {
@@ -61,8 +62,15 @@ func inDefault(kind, name string, owners ...metav1.OwnerReference) metav1.Partia
 	}
 }
 
-func (c *fakeCluster) cli(_ context.Context, stdout, _ io.Writer, name string, args ...string) error {
+func (c *fakeCluster) cli(ctx context.Context, stdout, _ io.Writer, name string, args ...string) error {
 	call := strings.Join(append([]string{name}, args...), " ")
+	if c.onCall != nil {
+		c.onCall(call)
+	}
+	// Like exec, a canceled ctx fails the call.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	switch {
 	case call == "helm list -A -o json":
 		fmt.Fprint(stdout, "[]")
@@ -180,6 +188,23 @@ func TestRunUnit(t *testing.T) {
 		dir := filepath.Join(results, "stopped")
 		assert.NoFileExists(t, filepath.Join(dir, "report.md"), "an interrupted unit must run again next time")
 		assert.Contains(t, readFile(t, filepath.Join(dir, "steps", "cleanup.log")), "cleaned after interrupt", "cleanup runs even though ctx is canceled")
+	})
+
+	t.Run("interrupted during evidence", func(t *testing.T) {
+		cctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		cluster := &fakeCluster{made: []string{"namespace/leftover"}, onCall: func(call string) {
+			if call == "kubectl get pods -A -o wide" {
+				cancel()
+			}
+		}}
+		unit := util.Unit{ID: "late", SourceSHA: sha, Steps: []util.Step{{Run: "false"}}, Cleanup: []string{"echo cleaned after late interrupt"}}
+		_, err := newRunner(cluster).runUnit(cctx, util.Item{ID: "late", Procedure: "p"}, unit)
+		require.ErrorIs(t, err, errInterrupted)
+		dir := filepath.Join(results, "late")
+		assert.NoFileExists(t, filepath.Join(dir, "report.md"))
+		assert.Contains(t, readFile(t, filepath.Join(dir, "steps", "cleanup.log")), "cleaned after late interrupt")
+		assert.Equal(t, []string{"kubectl delete --timeout=120s namespace/leftover"}, cluster.deleted)
 	})
 }
 

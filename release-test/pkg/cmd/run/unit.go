@@ -26,9 +26,8 @@ type unitRun struct {
 	groups []int  // process groups started, killed when the unit ends
 }
 
-// runUnit runs one unit and returns the step it failed at, 0 for a pass. When ctx is canceled
-// (Ctrl-C, a CI timeout) it still runs the cleanup, under its own deadline, and returns
-// errInterrupted without a report, so the next run repeats the unit.
+// runUnit runs one unit and returns the step it failed at, 0 for a pass. On Ctrl-C it still runs
+// the cleanup, then returns errInterrupted without a report, so the next run repeats the unit.
 func (r *runner) runUnit(ctx context.Context, item util.Item, unit util.Unit) (failed int, err error) {
 	dir := filepath.Join(r.path.Results, unit.ID)
 	if err := os.RemoveAll(dir); err != nil {
@@ -89,23 +88,15 @@ func (r *runner) runUnit(ctx context.Context, item util.Item, unit util.Unit) (f
 			break
 		}
 	}
-	interrupted := ctx.Err() != nil
-	if failed > 0 && !interrupted {
+	if failed > 0 && ctx.Err() == nil {
 		for i, step := range unit.Steps[failed:] {
 			rep.Steps = append(rep.Steps, stepRow{Num: failed + i + 1, Name: cmp.Or(step.Name, step.Run)})
 		}
 		r.evidence(ctx, filepath.Join(dir, "evidence"))
 	}
 
-	cctx := ctx
-	if interrupted {
-		// Cleanup gets a fresh context with a deadline; a second Ctrl-C stops it.
-		var stop, cancel context.CancelFunc
-		cctx, stop = signal.NotifyContext(context.WithoutCancel(ctx), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		cctx, cancel = context.WithTimeout(cctx, 10*time.Minute)
-		defer cancel()
-	}
+	cctx, stop := cleanupContext(ctx)
+	defer stop()
 
 	cleanupLog, err := os.OpenFile(filepath.Join(dir, util.StepsDir, "cleanup.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
@@ -130,8 +121,13 @@ func (r *runner) runUnit(ctx context.Context, item util.Item, unit util.Unit) (f
 	} else {
 		fmt.Fprintf(cleanupLog, "\nsweep skipped: %v\n", snapErr)
 	}
-	if interrupted {
-		fmt.Println("interrupted; cleanup done")
+	// Checked after the cleanup: a cancel during evidence or cleanup leaves no report either.
+	if ctx.Err() != nil {
+		if cctx.Err() != nil {
+			fmt.Println("interrupted; cleanup stopped early, check the cluster for leftovers")
+		} else {
+			fmt.Println("interrupted; cleanup done")
+		}
 		return 0, errInterrupted
 	}
 
@@ -149,6 +145,25 @@ func (r *runner) runUnit(ctx context.Context, item util.Item, unit util.Unit) (f
 		fmt.Printf("pass (%ds)\n", rep.Took)
 	}
 	return failed, nil
+}
+
+// cleanupContext is ctx without its cancel, so the cleanup runs even when ctx is canceled before
+// or during it. From that cancel on, the cleanup has 10 minutes and a second Ctrl-C stops it.
+func cleanupContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	cctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	stopWatch := context.AfterFunc(ctx, func() {
+		// Armed only now, so the Ctrl-C that canceled ctx does not also stop the cleanup.
+		sctx, stop := signal.NotifyContext(cctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		sctx, timeout := context.WithTimeout(sctx, 10*time.Minute)
+		defer timeout()
+		<-sctx.Done()
+		cancel()
+	})
+	return cctx, func() {
+		stopWatch()
+		cancel()
+	}
 }
 
 // countLines of a log, so the triage skill can read its tail without reading it all.
