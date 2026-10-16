@@ -336,7 +336,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 			return fmt.Errorf("failed to generate submission ID: %w", err)
 		}
 		options.submissionID = generatedID
-		fmt.Printf("Generated submission ID for Ray job: %s\n", options.submissionID)
+		fmt.Fprintf(options.ioStreams.ErrOut, "Generated submission ID for Ray job: %s\n", options.submissionID)
 	}
 
 	if options.fileName == "" {
@@ -382,7 +382,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 				return fmt.Errorf("Failed to convert RayJob into yaml format: %w", err)
 			}
 
-			fmt.Printf("%s\n", resultYaml)
+			fmt.Fprintf(options.ioStreams.Out, "%s\n", resultYaml)
 			return nil
 		}
 
