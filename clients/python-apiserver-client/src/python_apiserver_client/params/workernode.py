@@ -42,7 +42,7 @@ class WorkerNodeSpec:
             max_replicas: int,
             replicas: int = 1,
             min_replicas: int = 0,
-            ray_start_params: dict[str, str] = DEFAULT_WORKER_START_PARAMS,
+            ray_start_params: dict[str, str] | None = None,
             volumes: list[BaseVolume] = None,
             service_account: str = None,
             image_pull_secret: str = None,
@@ -79,8 +79,9 @@ class WorkerNodeSpec:
         self.replicas = replicas
         self.min_replicas = min_replicas
         self.max_replicas = max_replicas
-        self.ray_start_params = ray_start_params
-        self.ray_start_params.update(DEFAULT_WORKER_START_PARAMS)
+        self.ray_start_params = DEFAULT_WORKER_START_PARAMS.copy()
+        if ray_start_params is not None:
+            self.ray_start_params.update(ray_start_params)
         self.image = image
         self.volumes = volumes
         self.service_account = service_account
