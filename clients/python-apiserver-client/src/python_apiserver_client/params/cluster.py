@@ -389,7 +389,7 @@ def autoscaling_decoder(dct: dict[str, Any]) -> AutoscalerOptions:
     if "volumes" in dct:
         volumes = [volume_decoder(v) for v in dct["volumes"]]
     environments = None
-    if "environment" in dct and len(dct.get("envs")) > 0:
+    if dct.get("envs") is not None:
         environments = environment_variables_decoder(dct.get("envs"))
     return AutoscalerOptions(
         upscaling_mode=upscaling_mode,

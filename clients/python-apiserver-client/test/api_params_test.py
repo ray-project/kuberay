@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from python_apiserver_client.params import (
     DEFAULT_HEAD_START_PARAMS,
     DEFAULT_WORKER_START_PARAMS,
@@ -425,3 +427,33 @@ def test_submission():
     """
     job_info = RayJobInfo(json.loads(info_json))
     print(job_info.to_string())
+
+
+@pytest.mark.parametrize("envs", [
+    {},
+    {"values": {"RAY_LOG_LEVEL": "debug"}},
+    {"valuesFrom": {"POD_NAME": {"source": 3, "name": "metadata.name", "key": ""}}},
+    {"values": {"RAY_LOG_LEVEL": "debug"},
+     "valuesFrom": {"POD_NAME": {"source": 3, "name": "metadata.name", "key": ""}}},
+])
+def test_autoscaler_environment_survives_cluster_round_trip(envs):
+    payload = {
+        "name": "cluster", "namespace": "default", "user": "user", "version": "2.46.0",
+        "clusterSpec": {
+            "headGroupSpec": {"computeTemplate": "template", "image": "ray:test", "rayStartParams": {}, "serviceType": "ClusterIP"},
+            "enableInTreeAutoscaling": True,
+            "autoscalerOptions": {"upscalingMode": "Default", "envs": envs},
+        },
+    }
+    cluster = cluster_decoder(json.loads(json.dumps(payload)))
+    options = cluster.cluster_spec.autoscaling_options
+    assert options.environment is not None
+    assert options.environment.to_dict() == envs
+    assert cluster.to_dict()["clusterSpec"]["autoscalerOptions"]["envs"] == envs
+
+
+@pytest.mark.parametrize("payload", [{"upscalingMode": "Default"}, {"envs": None}])
+def test_autoscaler_environment_absent(payload):
+    options = autoscaling_decoder(payload)
+    assert options.environment is None
+    assert "envs" not in options.to_dict()
