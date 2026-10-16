@@ -201,7 +201,9 @@ class ClusterUtils:
         try:
             arguments = locals()
             for k, v in arguments.items():
-                if k != "min_replicas" and k != "ray_start_params":
+                if k in ("replicas", "min_replicas", "max_replicas"):
+                    assert v is not None
+                elif k != "ray_start_params":
                     assert v
         except AssertionError as e:
             log.error(
@@ -277,7 +279,9 @@ class ClusterUtils:
         try:
             arguments = locals()
             for k, v in arguments.items():
-                if k != "min_replicas":
+                if k in ("replicas", "min_replicas", "max_replicas"):
+                    assert v is not None
+                else:
                     assert v
         except AssertionError as e:
             log.error(
