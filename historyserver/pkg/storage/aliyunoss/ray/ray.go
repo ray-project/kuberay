@@ -205,11 +205,17 @@ func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
 		allFiles := r._listFiles(dirPath, "", false)
+
+		// Use a fresh context for the retry. The _listFiles above has its own
+		// timeout budget and may have consumed most of the parent ctx.
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), timeout)
+		defer retryCancel()
+
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
-				result, err = r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
+				result, err = r.OssClient.GetObject(retryCtx, &oss.GetObjectRequest{
 					Bucket: new(r.OssBucket),
 					Key:    new(f),
 				})
