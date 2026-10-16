@@ -435,7 +435,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 				fmt.Fprintf(options.ioStreams.Out, "file mode out side of acceptable value %d skipping file\n", header.Mode)
 			}
 			// Create file and write contents
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) //nolint:gosec // overflow is guarded by bounds check above
+			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.FileMode(header.Mode)) //nolint:gosec // overflow is guarded by bounds check above
 			if err != nil {
 				return fmt.Errorf("Error creating file: %w", err)
 			}

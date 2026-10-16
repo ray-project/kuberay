@@ -484,6 +484,47 @@ func TestDownloadRayLogFiles(t *testing.T) {
 	}
 }
 
+func TestDownloadRayLogFilesReplacesExistingContent(t *testing.T) {
+	for name, content := range map[string]string{
+		"shorter log":     "new\n",
+		"empty log":       "",
+		"same length log": "new contents\n",
+		"longer log":      "new contents with more lines\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			outputDir := t.TempDir()
+			pod := v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "ray-head"}}
+			podDir := filepath.Join(outputDir, pod.Name)
+			require.NoError(t, os.MkdirAll(podDir, 0o755))
+			logPath := filepath.Join(podDir, "raylet.out")
+			require.NoError(t, os.WriteFile(logPath, []byte("old contents\n"), 0o600))
+
+			archive := new(bytes.Buffer)
+			writer := tar.NewWriter(archive)
+			require.NoError(t, writer.WriteHeader(&tar.Header{
+				Name:     "raylet.out",
+				Mode:     0o644,
+				Size:     int64(len(content)),
+				Typeflag: tar.TypeReg,
+			}))
+			_, err := writer.Write([]byte(content))
+			require.NoError(t, err)
+			require.NoError(t, writer.Close())
+
+			streams, _, _, _ := genericiooptions.NewTestIOStreams()
+			options := NewClusterLogOptions(nil, streams)
+			options.outputDir = outputDir
+			executor, err := fakeNewSPDYExecutor("GET", &url.URL{}, archive)
+			require.NoError(t, err)
+			require.NoError(t, options.downloadRayLogFiles(context.Background(), executor, pod))
+
+			actual, err := os.ReadFile(logPath)
+			require.NoError(t, err)
+			assert.Equal(t, content, string(actual))
+		})
+	}
+}
+
 // createTempKubeConfigFile creates a temporary kubeconfig file with the given current context.
 func createTempKubeConfigFile(t *testing.T, currentContext string) (string, error) {
 	tmpDir := t.TempDir()
