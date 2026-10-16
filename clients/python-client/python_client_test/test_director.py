@@ -123,9 +123,27 @@ class TestDirector(unittest.TestCase):
 
 
 class TestClusterBuilder(unittest.TestCase):
-    def test_build_worker_without_head_reports_failure(self):
+    def test_build_worker_without_meta_reports_failure(self):
         builder = kuberay_cluster_builder.ClusterBuilder()
 
-        builder.build_worker(group_name="workers")
+        with self.assertLogs(kuberay_cluster_builder.log, level="ERROR") as logs:
+            builder.build_worker(group_name="workers")
 
         self.assertFalse(builder.succeeded)
+        self.assertIn(
+            "call build_meta() and build_head() before build_worker()", logs.output[0]
+        )
+
+    def test_build_worker_with_metadata_but_no_spec_reports_failure(self):
+        # build_meta() also adds the spec, so set up a cluster that has metadata only.
+        builder = kuberay_cluster_builder.ClusterBuilder()
+        builder.cluster = {"metadata": {"name": "raycluster"}}
+
+        with self.assertLogs(kuberay_cluster_builder.log, level="ERROR") as logs:
+            builder.build_worker(group_name="workers")
+
+        self.assertFalse(builder.succeeded)
+        self.assertIn("'name': 'raycluster'", logs.output[0])
+        self.assertIn(
+            "the spec section is missing, did you run build_head()?", logs.output[0]
+        )

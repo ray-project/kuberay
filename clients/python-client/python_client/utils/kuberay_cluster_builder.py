@@ -169,7 +169,7 @@ class ClusterBuilder(IClusterBuilder):
                 )
             else:
                 log.error(
-                    "error building worker group {}: the cluster has no metadata or spec, call build_meta() before build_worker()".format(
+                    "error building worker group {}: the cluster has no metadata or spec, call build_meta() and build_head() before build_worker()".format(
                         group_name
                     )
                 )
