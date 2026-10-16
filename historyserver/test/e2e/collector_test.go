@@ -17,12 +17,11 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -357,14 +356,14 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 		gg.Expect(body).NotTo(BeEmpty(), "Cluster metadata file should not be empty")
 
 		// Verify it is valid JSON
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		err = json.Unmarshal(body, &metadata)
 		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
 
 		// The Ray dashboard returns {"result": true, "data": {"rayVersion": ..., "pythonVersion": ...}}.
 		// Verify the "data" sub-object contains expected fields.
 		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
-		data, ok := metadata["data"].(map[string]interface{})
+		data, ok := metadata["data"].(map[string]any)
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("rayVersion"), "Cluster metadata should contain rayVersion")
 		gg.Expect(data).To(HaveKey("pythonVersion"), "Cluster metadata should contain pythonVersion")
@@ -409,7 +408,7 @@ func assertTimezoneStored(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3C
 		gg.Expect(body).NotTo(BeEmpty(), "Timezone file should not be empty")
 
 		// Verify it is valid JSON
-		var timezone map[string]interface{}
+		var timezone map[string]any
 		err = json.Unmarshal(body, &timezone)
 		gg.Expect(err).NotTo(HaveOccurred(), "Timezone data should be valid JSON")
 
@@ -625,8 +624,7 @@ func listFetchedEndpoints(g Gomega, s3Client *S3TestClient, clusterPrefix, stora
 
 	var keys []string
 	for _, key := range allKeys {
-		idx := strings.Index(key, marker)
-		if idx >= 0 && strings.HasPrefix(key[idx+len(marker):], storageKeyPrefix) {
+		if _, after, ok := strings.Cut(key, marker); ok && strings.HasPrefix(after, storageKeyPrefix) {
 			keys = append(keys, key)
 		}
 	}

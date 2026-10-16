@@ -80,7 +80,7 @@ func (m *mockStorageReader) List() []utils.ClusterInfo {
 	return nil
 }
 
-func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Reader {
+func (m *mockStorageReader) GetContent(_ string, fileName string) io.Reader {
 	m.gets = append(m.gets, fileName)
 	if content, ok := m.content[fileName]; ok {
 		return strings.NewReader(content)
@@ -88,7 +88,7 @@ func (m *mockStorageReader) GetContent(clusterId string, fileName string) io.Rea
 	return nil
 }
 
-func (m *mockStorageReader) ListFiles(clusterId string, dir string) []string {
+func (m *mockStorageReader) ListFiles(_ string, dir string) []string {
 	if entries, ok := m.files[dir]; ok {
 		return entries
 	}

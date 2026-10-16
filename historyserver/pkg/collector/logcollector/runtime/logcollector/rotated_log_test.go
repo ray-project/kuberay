@@ -535,7 +535,7 @@ func TestCollectRotatedLogIsUploadedOnceUnderConcurrency(t *testing.T) {
 func TestScanSessionLogsScansBeforeFirstTick(t *testing.T) {
 	rayRoot := t.TempDir()
 	t.Setenv("RAY_TMP_ROOT", rayRoot)
-	logsDir := linkSessionLatest(t, rayRoot, testSessionID)
+	logsDir := linkSessionLatest(t, rayRoot)
 	id := writeLogFile(t, filepath.Join(logsDir, "raylet.out.1"), "rotated raylet")
 
 	writer := NewMockStorageWriter()
@@ -584,7 +584,7 @@ func TestScanSessionLogsStopsOnSignal(t *testing.T) {
 func TestProcessSessionLatestLogsUsesRotatedName(t *testing.T) {
 	rayRoot := t.TempDir()
 	t.Setenv("RAY_TMP_ROOT", rayRoot)
-	logsDir := linkSessionLatest(t, rayRoot, testSessionID)
+	logsDir := linkSessionLatest(t, rayRoot)
 
 	id := writeLogFile(t, filepath.Join(logsDir, "raylet.out.1"), "rotated raylet")
 	writeLogFile(t, filepath.Join(logsDir, "raylet.out"), "active raylet")
@@ -602,7 +602,7 @@ func TestProcessSessionLatestLogsUsesRotatedName(t *testing.T) {
 func TestProcessSessionLatestLogsSkipsAlreadyUploadedRotation(t *testing.T) {
 	rayRoot := t.TempDir()
 	t.Setenv("RAY_TMP_ROOT", rayRoot)
-	logsDir := linkSessionLatest(t, rayRoot, testSessionID)
+	logsDir := linkSessionLatest(t, rayRoot)
 	id := writeLogFile(t, filepath.Join(logsDir, "raylet.out.1"), "rotated raylet")
 
 	writer := NewMockStorageWriter()
@@ -799,13 +799,13 @@ func assertRotatedUploaded(t *testing.T, handler *RayLogHandler, want []string) 
 	}
 }
 
-func linkSessionLatest(t *testing.T, rayRoot, sessionID string) string {
+func linkSessionLatest(t *testing.T, rayRoot string) string {
 	t.Helper()
-	logsDir := filepath.Join(rayRoot, sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	logsDir := filepath.Join(rayRoot, testSessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) = %v", logsDir, err)
 	}
-	if err := os.Symlink(filepath.Join(rayRoot, sessionID), filepath.Join(rayRoot, "session_latest")); err != nil {
+	if err := os.Symlink(filepath.Join(rayRoot, testSessionID), filepath.Join(rayRoot, "session_latest")); err != nil {
 		t.Fatalf("Symlink() = %v", err)
 	}
 	return logsDir

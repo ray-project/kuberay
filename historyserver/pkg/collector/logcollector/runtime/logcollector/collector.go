@@ -160,7 +160,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	// Process logs in session_latest/logs
 	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	dirExist := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
 			logrus.Warnf("Logs directory does not exist: %s", logsDir)
 			time.Sleep(time.Millisecond * 10)
@@ -532,7 +532,7 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 	logsDir := filepath.Join(sessionNodeDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	dirExist := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
 			logrus.Warnf("Logs directory does not exist: %s", logsDir)
 			time.Sleep(time.Millisecond * 10)
@@ -735,7 +735,8 @@ func (r *RayLogHandler) writeSessionMarker(sessionID string) error {
 			Name:      r.RayClusterName,
 			Namespace: r.RayClusterNamespace,
 			OwnerKind: r.OwnerKind,
-			OwnerName: r.OwnerName},
+			OwnerName: r.OwnerName,
+		},
 		r.RootDir,
 		sessionID,
 	)
