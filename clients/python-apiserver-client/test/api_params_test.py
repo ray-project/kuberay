@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from python_apiserver_client.params import (
     DEFAULT_HEAD_START_PARAMS,
     DEFAULT_WORKER_START_PARAMS,
@@ -425,3 +427,49 @@ def test_submission():
     """
     job_info = RayJobInfo(json.loads(info_json))
     print(job_info.to_string())
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_spec_uses_api_json_field_names(kind):
+    kwargs = {"compute_template": "template", "image": "ray:test", "service_account": "ray-account",
+              "image_pull_secret": "registry-secret"}
+    if kind == "head":
+        node = HeadNodeSpec(**kwargs)
+        decoder = head_node_spec_decoder
+    else:
+        node = WorkerNodeSpec(group_name="workers", max_replicas=1, **kwargs)
+        decoder = worker_node_spec_decoder
+    payload = json.loads(json.dumps(node.to_dict()))
+    assert payload["serviceAccount"] == "ray-account"
+    assert payload["imagePullSecret"] == "registry-secret"
+    assert "service_account" not in payload
+    assert "image_pull_secret" not in payload
+    decoded = decoder(payload)
+    assert decoded.service_account == "ray-account"
+    assert decoded.image_pull_secret == "registry-secret"
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_spec_decodes_api_service_account(kind):
+    payload = {"computeTemplate": "template", "image": "ray:test", "rayStartParams": {},
+               "serviceAccount": "ray-account", "imagePullSecret": "registry-secret"}
+    if kind == "head":
+        node = head_node_spec_decoder(payload)
+    else:
+        payload.update({"groupName": "workers", "maxReplicas": 1})
+        node = worker_node_spec_decoder(payload)
+    assert node.service_account == "ray-account"
+    assert node.image_pull_secret == "registry-secret"
+
+
+@pytest.mark.parametrize("kind", ["head", "worker"])
+def test_node_spec_decodes_legacy_service_account(kind):
+    payload = {"computeTemplate": "template", "image": "ray:test", "rayStartParams": {},
+               "service_account": "ray-account", "image_pull_secret": "registry-secret"}
+    if kind == "head":
+        node = head_node_spec_decoder(payload)
+        assert node.image_pull_secret == "registry-secret"
+    else:
+        payload.update({"groupName": "workers", "maxReplicas": 1})
+        node = worker_node_spec_decoder(payload)
+    assert node.service_account == "ray-account"
