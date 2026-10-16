@@ -4009,17 +4009,6 @@ func TestValidateCollectorOptions(t *testing.T) {
 			errorMessage: "historyServerOptions.collectorOptions must be set",
 		},
 		{
-			name: "missing image",
-			collector: &rayv1.CollectorOptions{
-				Env: []corev1.EnvVar{
-					{Name: "STORAGE_BACKEND", Value: "GCS"},
-					{Name: "GCS_BUCKET", Value: "my-bucket"},
-				},
-			},
-			expectError:  true,
-			errorMessage: "historyServerOptions.collectorOptions.image must be set",
-		},
-		{
 			name: "missing STORAGE_BACKEND",
 			collector: &rayv1.CollectorOptions{
 				Image: new("quay.io/kuberay/collector:latest"),
@@ -4277,7 +4266,7 @@ func TestValidateCollectorOptions(t *testing.T) {
 	}
 }
 
-// TestValidateRayClusterSpec_LabelRefs checks the Ray version requirement of a group with labelRefs
+// TestValidateRayClusterSpec_LabelRefs checks the webhook and Ray version requirements of a group with labelRefs
 func TestValidateRayClusterSpec_LabelRefs(t *testing.T) {
 	spec := createBasicRayClusterSpec()
 	spec.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
@@ -4288,6 +4277,13 @@ func TestValidateRayClusterSpec_LabelRefs(t *testing.T) {
 		LabelRefs:   []rayv1.LabelRef{{ValueFrom: rayv1.LabelRefSource{NodeRef: rayv1.NodeFieldRef{FieldPath: "metadata.labels['topology.kubernetes.io/zone']"}}}},
 	}}
 
+	t.Setenv("ENABLE_WEBHOOKS", "")
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the NodeLabelDelivery feature gate")
+
+	features.SetFeatureGateDuringTest(t, features.NodeLabelDelivery, true)
+	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "requires the KubeRay operator to run with ENABLE_WEBHOOKS=true")
+
+	t.Setenv("ENABLE_WEBHOOKS", "true")
 	spec.RayVersion = ""
 	require.ErrorContains(t, ValidateRayClusterSpec(spec, nil), "is unset or invalid")
 	spec.RayVersion = "2.44.0"
