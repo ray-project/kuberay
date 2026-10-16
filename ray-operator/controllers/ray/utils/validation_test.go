@@ -1599,6 +1599,58 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "headFailurePolicy Fail with ClusterSelector is invalid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				ClusterSelector: map[string]string{
+					"ray.io/cluster": "ray-cluster",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "headFailurePolicy Fail with backoffLimit > 0 is invalid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				BackoffLimit:      ptr.To[int32](1),
+				RayClusterSpec:    createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "headFailurePolicy Fail with head restartPolicy Always is invalid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "headFailurePolicy Fail with backoffLimit 0 and Never restartPolicy is valid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				BackoffLimit:      ptr.To[int32](0),
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "headFailurePolicy Recreate is valid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyRecreate),
+				RayClusterSpec:    createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {

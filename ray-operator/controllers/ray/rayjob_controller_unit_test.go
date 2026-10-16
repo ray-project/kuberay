@@ -1272,3 +1272,129 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T)
 		})
 	}
 }
+
+func TestConstructRayClusterForRayJob_HeadFailurePolicyAnnotation(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	reconciler := &RayJobReconciler{
+		Scheme: newScheme,
+	}
+
+	basicRayClusterSpec := &rayv1.RayClusterSpec{
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray"}},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name              string
+		headFailurePolicy *rayv1.HeadFailurePolicy
+		expectAnnotation  bool
+		expectedValue     string
+	}{
+		{
+			name:              "propagates Fail annotation",
+			headFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+			expectAnnotation:  true,
+			expectedValue:     string(rayv1.HeadFailurePolicyFail),
+		},
+		{
+			name:              "propagates Recreate annotation",
+			headFailurePolicy: ptr.To(rayv1.HeadFailurePolicyRecreate),
+			expectAnnotation:  true,
+			expectedValue:     string(rayv1.HeadFailurePolicyRecreate),
+		},
+		{
+			name:             "omits annotation when unset",
+			expectAnnotation: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayjob", Namespace: "default"},
+				Spec: rayv1.RayJobSpec{
+					HeadFailurePolicy: tc.headFailurePolicy,
+					RayClusterSpec:    basicRayClusterSpec,
+				},
+			}
+			cluster, err := reconciler.constructRayClusterForRayJob(rayJob, "test-cluster")
+			require.NoError(t, err)
+
+			value, ok := cluster.Annotations[utils.HeadFailurePolicyAnnotationKey]
+			assert.Equal(t, tc.expectAnnotation, ok)
+			if tc.expectAnnotation {
+				assert.Equal(t, tc.expectedValue, value)
+			}
+		})
+	}
+}
+
+func TestCheckHeadPodFailedAndUpdateStatusIfNeeded(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name                    string
+		rayCluster              *rayv1.RayCluster
+		initialDeploymentStatus rayv1.JobDeploymentStatus
+		expectUpdate            bool
+		expectedStatus          rayv1.JobDeploymentStatus
+		expectedReason          rayv1.JobFailedReason
+		expectMessageContains   string
+	}{
+		{
+			name: "returns false when condition is not True",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "default"},
+			},
+			initialDeploymentStatus: rayv1.JobDeploymentStatusInitializing,
+			expectUpdate:            false,
+			expectedStatus:          rayv1.JobDeploymentStatusInitializing,
+		},
+		{
+			name: "marks RayJob Failed when HeadPodFailed is True",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "rc", Namespace: "default"},
+				Status: rayv1.RayClusterStatus{
+					Conditions: []metav1.Condition{{
+						Type:   string(rayv1.HeadPodFailed),
+						Status: metav1.ConditionTrue,
+						Reason: string(rayv1.HeadPodFailed),
+					}},
+				},
+			},
+			initialDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			expectUpdate:            true,
+			expectedStatus:          rayv1.JobDeploymentStatusFailed,
+			expectedReason:          rayv1.HeadPodFailedReason,
+			expectMessageContains:   "head Pod failed",
+		},
+		{
+			name:                    "returns false when rayCluster is nil",
+			rayCluster:              nil,
+			initialDeploymentStatus: rayv1.JobDeploymentStatusRunning,
+			expectUpdate:            false,
+			expectedStatus:          rayv1.JobDeploymentStatusRunning,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rayJob := &rayv1.RayJob{
+				Status: rayv1.RayJobStatus{JobDeploymentStatus: tc.initialDeploymentStatus},
+			}
+			assert.Equal(t, tc.expectUpdate, checkHeadPodFailedAndUpdateStatusIfNeeded(ctx, rayJob, tc.rayCluster))
+			assert.Equal(t, tc.expectedStatus, rayJob.Status.JobDeploymentStatus)
+			if tc.expectUpdate {
+				assert.Equal(t, tc.expectedReason, rayJob.Status.Reason)
+				assert.Contains(t, rayJob.Status.Message, tc.expectMessageContains)
+			}
+		})
+	}
+}

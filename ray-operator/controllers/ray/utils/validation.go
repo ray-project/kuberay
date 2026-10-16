@@ -659,6 +659,21 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("The RayJob spec is invalid: backoffLimit must be a positive integer")
 	}
 
+	if rayJob.Spec.HeadFailurePolicy != nil && *rayJob.Spec.HeadFailurePolicy == rayv1.HeadFailurePolicyFail {
+		if isClusterSelectorMode {
+			return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail is incompatible with ClusterSelector")
+		}
+		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+			return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail requires backoffLimit to be 0")
+		}
+		if rayJob.Spec.RayClusterSpec != nil {
+			restartPolicy := rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy
+			if restartPolicy != "" && restartPolicy != corev1.RestartPolicyNever {
+				return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail requires head Pod restartPolicy to be Never or unset")
+			}
+		}
+	}
+
 	return nil
 }
 
