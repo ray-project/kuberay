@@ -136,6 +136,17 @@ func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []str
 }
 
 func (options *CreateWorkerGroupOptions) Validate() error {
+	resourceFields := map[string]string{
+		"worker-cpu":    options.workerCPU,
+		"worker-gpu":    options.workerGPU,
+		"worker-memory": options.workerMemory,
+	}
+	for name, value := range resourceFields {
+		if err := util.ValidateResourceQuantity(value, name); err != nil {
+			return err
+		}
+	}
+
 	if err := util.ValidateTPU(&options.workerTPU, &options.numOfHosts, options.workerNodeSelectors); err != nil {
 		return fmt.Errorf("%w", err)
 	}
