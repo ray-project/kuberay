@@ -90,7 +90,8 @@ class RayjobApi:
         Returns:
             Any: The custom resource status for the specified Ray job, or None if not found or timeout.
         """
-        while timeout > 0:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             try:
                 resource: Any = self.api.get_namespaced_custom_object_status(
                     group=constants.GROUP,
@@ -111,8 +112,9 @@ class RayjobApi:
                 return resource["status"]
             else:
                 log.info("rayjob {} status not set yet, waiting...".format(name))
-                time.sleep(delay_between_attempts)
-                timeout -= delay_between_attempts
+                time.sleep(
+                    min(delay_between_attempts, max(0, deadline - time.monotonic()))
+                )
 
         log.info("rayjob {} status not set yet, timing out...".format(name))
         return None
@@ -138,9 +140,10 @@ class RayjobApi:
         Returns:
             bool: True if the rayjob reaches a terminal status, False otherwise.
         """
-        while timeout > 0:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             status = self.get_job_status(
-                name, k8s_namespace, timeout, delay_between_attempts
+                name, k8s_namespace, deadline - time.monotonic(), delay_between_attempts
             )
 
             if status:
@@ -193,8 +196,9 @@ class RayjobApi:
                         )
                     )
 
-            time.sleep(delay_between_attempts)
-            timeout -= delay_between_attempts
+            time.sleep(
+                min(delay_between_attempts, max(0, deadline - time.monotonic()))
+            )
 
         log.info(
             "rayjob {} has not reached terminal status before timeout".format(name)
@@ -222,9 +226,10 @@ class RayjobApi:
         Returns:
             bool: True if the rayjob reaches Running status, False otherwise.
         """
-        while timeout > 0:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             status = self.get_job_status(
-                name, k8s_namespace, timeout, delay_between_attempts
+                name, k8s_namespace, deadline - time.monotonic(), delay_between_attempts
             )
 
             if status and "jobDeploymentStatus" in status:
@@ -246,8 +251,9 @@ class RayjobApi:
             else:
                 log.info("rayjob {} status not available yet, waiting...".format(name))
 
-            time.sleep(delay_between_attempts)
-            timeout -= delay_between_attempts
+            time.sleep(
+                min(delay_between_attempts, max(0, deadline - time.monotonic()))
+            )
 
         log.info("rayjob {} has not reached running status before timeout".format(name))
         return False
