@@ -521,7 +521,7 @@ type WorkerGroupSpec struct {
 	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
 	// Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.
 	// Empty means no labels are delivered.
-	// Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`).
+	// Requires the `NodeLabelDelivery` feature gate and `ENABLE_WEBHOOKS` enabled on the operator, and Ray 2.45.0 or later (`--labels-file`).
 	// +optional
 	LabelRefs []LabelRef `json:"labelRefs,omitempty"`
 }
