@@ -4,8 +4,10 @@
 ## Release Rules
 
 * Every release tag should be on the release branch, and every version bump should also live in the release
-  branch without updating the KubeRay / KubeRay-helm master / main branch (except for the test version update in
-  Step 7 below).
+  branch without updating the KubeRay master branch (except for the test version update in Step 7 below).
+* In the [kuberay-helm](https://github.com/kuberay-project/kuberay-helm) repo it is the opposite: `main` always
+  holds the newest chart version. The newest version is merged into `main` first and the release branch is cut
+  from it. See Step 6.
 * For PRs merged into `master` after the release branch is cut, open a cherry-pick PR to the release branch if
   they need to be included in the release. Example PR [#5163](https://github.com/ray-project/kuberay/pull/5163).
 * Ideally we will release a release candidate 1 week before the formal minor release for the community to
@@ -36,7 +38,7 @@ The high-level steps for a new minor or patch release are:
 3. Create and push a new git tag based on the target release version (e.g., `v1.4.0`).
 4. Publish container images by running the `release-image-build` GitHub Actions workflow.
 5. Publish kubectl plugin binaries by running the `release-kubectl-plugin` GitHub Actions workflow.
-6. Update the [kuberay-helm](https://github.com/ray-project/kuberay-helm) repository to publish the new Helm chart versions.
+6. Update the [kuberay-helm](https://github.com/kuberay-project/kuberay-helm) repository to publish the new Helm chart versions.
 7. Validate the release artifacts (images, charts).
 8. Generate the CHANGELOG for the release.
 9. Publish the release notes on GitHub Releases.
@@ -195,36 +197,24 @@ Trigger the [`release-kubectl-plugin`](https://github.com/ray-project/kuberay/ac
 ### Step 6: Publish KubeRay Helm Charts
 
 > [!Note]
-> Members of `ray-project` have write access to this repo. Remember to replace `{version}` in the following
+> Members of `kuberay-project` have write access to this repo. Remember to replace `{version}` in the following
 > commands with your target release version.
 
-Helm charts are published via the [ray-project/kuberay-helm](https://github.com/ray-project/kuberay-helm) repository. This repo uses release branches (`release-X.Y`) mirroring the main `kuberay` repo.
-See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below are steps to cut a new release branch in the kuberay-helm repo and publish new charts.
+Helm charts are published via the [kuberay-project/kuberay-helm](https://github.com/kuberay-project/kuberay-helm)
+repository. See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow.
 
-> [!Warning]
-> Skip step 1 below for a patch release (e.g. `v1.4.1`): the `release-1.4` branch already exists in `kuberay-helm`.
-> Only run it when cutting a new minor release.
+In `kuberay-helm`, `main` always holds the newest chart version. Pick the target branch for your PR:
 
-1. **Create Release Branch (if it doesn't exist):**
-    * Clone the `kuberay-helm` repository if you haven't already.
-    * Set up an `upstream` remote: `git remote add upstream git@github.com:ray-project/kuberay-helm.git`
-    * If the branch `release-1.4` does *not* exist in `kuberay-helm`:
+| Release | `main` is on | PR target | After merge |
+| --- | --- | --- | --- |
+| New minor / release candidate (e.g. `v1.4.0-rc.0`) | older minor | `main` | cut `release-1.4` from `main` (step 4a) |
+| Patch of the same minor (e.g. `v1.4.1`) | `1.4.x` | `main` | sync `release-1.4` from `main` (step 4b) |
+| Patch of an older minor (e.g. `v1.4.2`) | `1.5.x` or newer | `release-1.4` | nothing (step 4c) |
 
-        ```bash
-        cd kuberay-helm
-        git fetch upstream
-        # Create the branch from the latest main branch
-        git checkout -b release-1.4 upstream/main
-        # e.g. git push upstream release-1.4
-        git push upstream release-{version}
-        # Set tracking branch
-        git branch --set-upstream-to upstream/release-1.4
-        cd ..
-        ```
+The `chart-release` workflow skips chart versions that already have a GitHub release, so the same version
+landing on both `main` and `release-1.4` is published only once.
 
-    * *Note:* Creating a new release branch might trigger CI in `kuberay-helm`, but it shouldn't publish new chart versions yet as the chart files haven't changed.
-
-2. **Sync Helm Charts:**
+1. **Sync Helm Charts:**
     * Ensure your local `kuberay` repository is on the release branch (`release-1.4`) and up-to-date (including the version bump from Step 2).
 
         ```bash
@@ -238,11 +228,15 @@ See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below
 
         ```bash
         cd kuberay-helm
-        # Ensure you are on the correct release branch
-        git checkout release-1.4
-        git pull --rebase upstream release-1.4
-        # Create a new branch for the PR
-        git checkout -b kuberay-v1.4.0
+        # Set up the upstream remote if you haven't already
+        # git remote add upstream git@github.com:kuberay-project/kuberay-helm.git
+        git fetch upstream
+
+        # Branch from the PR target in the table above. Pick ONE:
+        # (a) new minor, rc, or patch of the same minor
+        git checkout --no-track -b kuberay-v1.4.0 upstream/main
+        # (b) patch of an older minor
+        git checkout --no-track -b kuberay-v1.4.2 upstream/release-1.4
 
         # Remove old charts first to handle deleted files
         rm -rf helm-chart/
@@ -250,30 +244,45 @@ See [helm-chart.md](../release/helm-chart.md) for the end-to-end workflow. Below
         cp -R ../kuberay/helm-chart/ ./helm-chart/
         ```
 
-3. **Commit and Create Pull Request:**
-    * Stage the changes in the `kuberay-helm` repository:
+2. **Commit and Create Pull Request:**
 
-        ```bash
-        git status # Verify changes
-        git add helm-chart/
-        git commit -m "Update Helm charts to KubeRay v1.4.0"
-        ```
+    ```bash
+    git status # Verify changes
+    git add helm-chart/
+    git commit -m "Update Helm charts to KubeRay v1.4.0"
+    # Example assuming 'origin' remote points to your fork
+    # e.g. git push origin kuberay-v1.4.0
+    git push origin kuberay-v{version}
+    ```
 
-    * Push the changes to your fork of `kuberay-helm` (or directly if you have permissions, though PR is safer):
+    Open a Pull Request from your fork against the PR target from the table above (main or release branch). See [example PR #89](https://github.com/ray-project/kuberay-helm/pull/89/files).
 
-        ```bash
-        # Example assuming 'origin' remote points to your fork
-        # e.g. git push origin kuberay-v1.4.0
-        git push origin kuberay-v{version}
-        ```
-
-    * Open a Pull Request from your fork. See [example PR #89](https://github.com/ray-project/kuberay-helm/pull/89/files).
-
-4. **Merge and Verify:**
-    *Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
-        * [`chart-release`](https://github.com/ray-project/kuberay-helm/actions/workflows/chart-release.yaml)
-        *[`pages-build-deployment`](https://github.com/ray-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
+3. **Merge and Verify:**
+    * Once the PR is reviewed and merged, monitor the GitHub Actions workflows in the `kuberay-helm` repository:
+        * [`chart-release`](https://github.com/kuberay-project/kuberay-helm/actions/workflows/chart-release.yaml)
+        * [`pages-build-deployment`](https://github.com/kuberay-project/kuberay-helm/actions/workflows/pages/pages-build-deployment)
     * Verify that both workflows succeed. This indicates the charts have been packaged and added to the Helm repository index hosted via GitHub Pages.
+
+4. **Cut or Sync the Release Branch:** follow the "After merge" column of the table above.
+
+    * 4a. New minor release: cut `release-1.4` from `main`.
+
+        ```bash
+        cd kuberay-helm
+        git fetch upstream
+        git checkout -b release-1.4 upstream/main
+        # e.g. git push upstream release-1.4
+        git push upstream release-{version}
+        cd ..
+        ```
+
+        Pushing the branch triggers `chart-release` again, but it reports "No chart changes detected" and publishes nothing.
+
+    * 4b. Patch of the same minor: bring `release-1.4` up to date with `main`. In `kuberay-helm`, open a PR
+      that merges `main` into `release-1.4`. Merge it once CI passes. `chart-release` runs on `release-1.4` but publishes
+      nothing because the version is already released.
+
+    * 4c. Patch of an older minor: nothing to do.
 
 ---
 
@@ -284,7 +293,7 @@ Perform basic validation to ensure the released artifacts work together.
 1. Update your local Helm repository:
 
     ```bash
-    helm repo add kuberay https://ray-project.github.io/kuberay-helm/
+    helm repo add kuberay https://kuberay-project.github.io/kuberay-helm/
     helm repo update kuberay
     ```
 
