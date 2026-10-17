@@ -133,7 +133,8 @@ _Appears in:_
 | `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
 | `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.<br />StepSizePercent must be less than or equal to MaxSurgePercent. |  |  |
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
-| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
+| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
+| `gatewayRef` _[GatewayReference](#gatewayreference)_ | GatewayRef attaches the HTTPRoute to an existing Gateway instead of creating one per RayService.<br />The referenced Gateway must allow HTTPRoutes from the RayService's namespace.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
 
 
 #### CollectorOptions
@@ -281,6 +282,28 @@ _Appears in:_
 | --- | --- |
 | `DeleteWithCluster` | DeleteWithClusterGCSStorageDeletionPolicy (the default) makes the<br />operator-managed PVC a child of the RayCluster via an ownerReference, so it<br />(and its RocksDB data) is garbage-collected together with the cluster.<br /> |
 | `Retain` | RetainGCSStorageDeletionPolicy keeps the operator-managed PVC (and its data)<br />after the owning RayCluster is deleted: the operator omits the ownerReference<br />so the PVC outlives the cluster. Recover the GCS state by pointing a new<br />cluster's ClaimName at the retained PVC.<br /> |
+
+
+#### GatewayReference
+
+
+
+GatewayReference identifies the existing Gateway and listener the RayService's
+HTTPRoute attaches to. It becomes the HTTPRoute's parentRef. KubeRay never creates,
+updates, or deletes the referenced Gateway; it must already exist and must allow
+HTTPRoutes from the RayService's namespace.
+
+
+
+_Appears in:_
+- [ClusterUpgradeOptions](#clusterupgradeoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the existing Gateway. Must be a valid Gateway resource name<br />(an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
+| `namespace` _string_ | Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.<br />Must be a valid namespace name (an RFC 1123 label). |  | MaxLength: 63 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
+| `sectionName` _string_ | SectionName is the name of a listener on the referenced Gateway to attach the<br />HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the<br />Gateway that accepts it. Useful for a shared Gateway with multiple listeners.<br />Must be a valid Gateway API SectionName (an RFC 1123 subdomain). |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
+| `port` _integer_ | Port is the network port of the referenced Gateway's listener to attach the<br />HTTPRoute to. When both SectionName and Port are set, the selected listener<br />must match both. When omitted, listener selection is not constrained by port. |  | Maximum: 65535 <br />Minimum: 1 <br /> |
 
 
 #### GcsEmbeddedStorage
@@ -983,7 +1006,7 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is a pod template for the worker |  |  |
 | `scaleStrategy` _[ScaleStrategy](#scalestrategy)_ | ScaleStrategy controls scaling of this worker group: which pods to remove,<br />and whether the group can currently be scaled up. |  |  |
 | `numOfHosts` _integer_ | NumOfHosts denotes the number of hosts to create per replica. The default value is 1. | 1 |  |
-| `labelRefs` _[LabelRef](#labelref) array_ | LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.<br />This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).<br />Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.<br />Empty means no labels are delivered.<br />Requires `ENABLE_WEBHOOKS` enabled on the operator and Ray 2.45.0 or later (`--labels-file`). |  |  |
+| `labelRefs` _[LabelRef](#labelref) array_ | LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.<br />This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).<br />Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.<br />Empty means no labels are delivered.<br />Requires the `NodeLabelDelivery` feature gate and `ENABLE_WEBHOOKS` enabled on the operator, and Ray 2.45.0 or later (`--labels-file`). |  |  |
 
 
 
