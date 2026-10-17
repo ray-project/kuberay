@@ -122,6 +122,9 @@ const (
 	GatewayListenerPortName    = "http"
 	DefaultGatewayListenerPort = 80
 
+	// Hash of clusterUpgradeOptions.httpRouteTemplate, set on the HTTPRoute so template changes trigger an update.
+	HTTPRouteTemplateHashKey = "ray.io/httproute-template-hash"
+
 	// The default AppProtocol for Kubernetes service
 	DefaultServiceAppProtocol = "tcp"
 

@@ -22,6 +22,8 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// The referenced Gateway must allow HTTPRoutes from the RayService's namespace.
 	// Exactly one of GatewayClassName or GatewayRef must be set.
 	GatewayRef *GatewayReferenceApplyConfiguration `json:"gatewayRef,omitempty"`
+	// HTTPRouteTemplate customizes the HTTPRoute that KubeRay creates for the incremental upgrade.
+	HTTPRouteTemplate *HTTPRouteTemplateSpecApplyConfiguration `json:"httpRouteTemplate,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -67,5 +69,13 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value str
 // If called multiple times, the GatewayRef field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayRef(value *GatewayReferenceApplyConfiguration) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayRef = value
+	return b
+}
+
+// WithHTTPRouteTemplate sets the HTTPRouteTemplate field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HTTPRouteTemplate field is set to the value of the last call.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRouteTemplate(value *HTTPRouteTemplateSpecApplyConfiguration) *ClusterUpgradeOptionsApplyConfiguration {
+	b.HTTPRouteTemplate = value
 	return b
 }

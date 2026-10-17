@@ -135,6 +135,7 @@ _Appears in:_
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
 | `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
 | `gatewayRef` _[GatewayReference](#gatewayreference)_ | GatewayRef attaches the HTTPRoute to an existing Gateway instead of creating one per RayService.<br />The referenced Gateway must allow HTTPRoutes from the RayService's namespace.<br />Exactly one of GatewayClassName or GatewayRef must be set. |  |  |
+| `httpRouteTemplate` _[HTTPRouteTemplateSpec](#httproutetemplatespec)_ | HTTPRouteTemplate customizes the HTTPRoute that KubeRay creates for the incremental upgrade. |  |  |
 
 
 #### CollectorOptions
@@ -370,6 +371,24 @@ _Appears in:_
 | `redisAddress` _string_ | RedisAddress is the address of the external Redis service. Required when<br />Backend is "redis"; must be empty for "rocksdb". |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
 | `activePassiveHeadOptions` _[ActivePassiveHeadOptions](#activepassiveheadoptions)_ | ActivePassiveHeadOptions configures active-passive high availability for the GCS.<br />It is only supported with the "redis" backend, not with "rocksdb". |  |  |
+
+
+#### HTTPRouteTemplateSpec
+
+
+
+HTTPRouteTemplateSpec is merged into the HTTPRoute that KubeRay creates. Only the metadata labels and
+annotations are used. KubeRay always sets spec.parentRefs and the backendRefs of every rule.
+
+
+
+_Appears in:_
+- [ClusterUpgradeOptions](#clusterupgradeoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[HTTPRouteSpec](https://gateway-api.sigs.k8s.io/reference/spec/#httproutespec)_ | Spec is validated by the HTTPRoute CRD installed in the cluster rather than by the RayService CRD. |  | Schemaless: \{\} <br />Type: object <br /> |
 
 
 #### HeadGroupSpec

@@ -1955,6 +1955,80 @@ func TestCreateHTTPRouteWithGatewayRef(t *testing.T) {
 	assert.Equal(t, gwv1.Namespace(rsNamespace), *backend.Namespace)
 }
 
+func TestReconcileHTTPRouteWithTemplate(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+
+	ctx := context.TODO()
+	namespace := "test-ns"
+	routeKey := client.ObjectKey{Name: "test-rayservice-httproute", Namespace: namespace}
+	activeCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active-ray-cluster", Namespace: namespace}}
+	gateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice-gateway", Namespace: namespace}}
+	// Labels set by another controller on the existing HTTPRoute must be preserved.
+	existingRoute := &gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: routeKey.Name, Namespace: namespace, Labels: map[string]string{"other": "label"}}}
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					StepSizePercent:  new(int32(10)),
+					IntervalSeconds:  new(int32(30)),
+					GatewayClassName: "istio",
+					HTTPRouteTemplate: &rayv1.HTTPRouteTemplateSpec{
+						// A template copied from a live HTTPRoute may include the hash, which KubeRay must overwrite.
+						ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"team": "ml"}, Annotations: map[string]string{"owner": "ml", utils.HTTPRouteTemplateHashKey: "stale"}},
+						Spec: gwv1.HTTPRouteSpec{
+							Hostnames: []gwv1.Hostname{"serve.example.com"},
+							Rules: []gwv1.HTTPRouteRule{
+								{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Value: new("/api")}}}},
+								{Timeouts: &gwv1.HTTPRouteTimeouts{Request: new(gwv1.Duration("10s"))}},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus: rayv1.RayServiceStatus{RayClusterName: activeCluster.Name, TrafficRoutedPercent: new(int32(100)), TargetCapacity: new(int32(100))},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayService, activeCluster, gateway, existingRoute).Build()
+	reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
+	route := &gwv1.HTTPRoute{}
+
+	// The template is merged into the existing HTTPRoute, and every rule routes to the active cluster.
+	_, err := reconciler.reconcileHTTPRoute(ctx, rayService, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeClient.Get(ctx, routeKey, route))
+	assert.Equal(t, map[string]string{"other": "label", "team": "ml"}, route.Labels)
+	assert.Equal(t, "ml", route.Annotations["owner"])
+	assert.NotContains(t, []string{"", "stale"}, route.Annotations[utils.HTTPRouteTemplateHashKey])
+	assert.Equal(t, []gwv1.Hostname{"serve.example.com"}, route.Spec.Hostnames)
+	require.Len(t, route.Spec.ParentRefs, 1)
+	assert.Equal(t, gwv1.ObjectName(gateway.Name), route.Spec.ParentRefs[0].Name)
+	require.Len(t, route.Spec.Rules, 2)
+	assert.Equal(t, "/api", *route.Spec.Rules[0].Matches[0].Path.Value)
+	assert.Equal(t, gwv1.Duration("10s"), *route.Spec.Rules[1].Timeouts.Request)
+	for _, rule := range route.Spec.Rules {
+		require.Len(t, rule.BackendRefs, 1)
+		assert.Equal(t, gwv1.ObjectName(utils.GenerateServeServiceName(activeCluster.Name)), rule.BackendRefs[0].Name)
+	}
+
+	// Removing the template restores the default spec and removes the template hash.
+	rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions.HTTPRouteTemplate = nil
+	_, err = reconciler.reconcileHTTPRoute(ctx, rayService, false)
+	require.NoError(t, err)
+	require.NoError(t, fakeClient.Get(ctx, routeKey, route))
+	assert.NotContains(t, route.Annotations, utils.HTTPRouteTemplateHashKey)
+	assert.Empty(t, route.Spec.Hostnames)
+	require.Len(t, route.Spec.Rules, 1)
+	assert.Equal(t, "/", *route.Spec.Rules[0].Matches[0].Path.Value)
+}
+
 func TestReconcileHTTPRoute(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)

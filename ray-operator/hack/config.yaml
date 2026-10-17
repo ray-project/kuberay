@@ -10,3 +10,7 @@ processor:
 
 render:
   kubernetesVersion: 1.28
+  knownTypes:
+    - name: HTTPRouteSpec
+      package: sigs.k8s.io/gateway-api/apis/v1
+      link: https://gateway-api.sigs.k8s.io/reference/spec/#httproutespec

@@ -1159,12 +1159,19 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		return existing == desired
 	}
 
-	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
-	// caused by renormalization from the API server or the Gateway implementation.
-	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+	// The template hash covers every template field. Template fields compared below are skipped,
+	// since the API server may default them in the HTTPRoute but not in the RayService.
+	if existing.Annotations[HTTPRouteTemplateHashKey] != desired.Annotations[HTTPRouteTemplateHashKey] {
 		return false
 	}
-	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+	_, fromTemplate := desired.Annotations[HTTPRouteTemplateHashKey]
+
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if !fromTemplate && len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if !fromTemplate && len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
 		return false
 	}
 
@@ -1194,16 +1201,16 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		dRule := desired.Spec.Rules[i]
 
 		// Compare Matches
-		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
+		if !fromTemplate && !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
 			return false
 		}
 
 		// Compare Filters. Treat nil and empty slice as equivalent to avoid false positives
 		// caused by renormalization from the API server or the Gateway implementation.
-		if len(eRule.Filters) != len(dRule.Filters) {
+		if !fromTemplate && len(eRule.Filters) != len(dRule.Filters) {
 			return false
 		}
-		if len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
+		if !fromTemplate && len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
 			return false
 		}
 

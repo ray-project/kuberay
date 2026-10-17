@@ -1174,6 +1174,27 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		},
 	}
 
+	// HTTPRouteTemplate provides the base labels, annotations, and spec. KubeRay always manages
+	// parentRefs and the backendRefs of every rule, and keeps the default rule when none is set.
+	if opts := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec); opts != nil && opts.HTTPRouteTemplate != nil {
+		templateHash, err := utils.GenerateJsonHash(opts.HTTPRouteTemplate)
+		if err != nil {
+			return nil, err
+		}
+		desiredHTTPRoute.Labels = maps.Clone(opts.HTTPRouteTemplate.Labels)
+		desiredHTTPRoute.Annotations = maps.Clone(opts.HTTPRouteTemplate.Annotations)
+		metav1.SetMetaDataAnnotation(&desiredHTTPRoute.ObjectMeta, utils.HTTPRouteTemplateHashKey, templateHash)
+		spec := opts.HTTPRouteTemplate.Spec.DeepCopy()
+		spec.ParentRefs = desiredHTTPRoute.Spec.ParentRefs
+		if len(spec.Rules) == 0 {
+			spec.Rules = desiredHTTPRoute.Spec.Rules
+		}
+		for i := range spec.Rules {
+			spec.Rules[i].BackendRefs = backendRefs
+		}
+		desiredHTTPRoute.Spec = *spec
+	}
+
 	return desiredHTTPRoute, nil
 }
 
@@ -1214,6 +1235,16 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 	if !utils.IsHTTPRouteEqual(existingHTTPRoute, desiredHTTPRoute) {
 		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
+		// Merge labels and annotations so that keys set by other controllers are preserved.
+		for k, v := range desiredHTTPRoute.Labels {
+			metav1.SetMetaDataLabel(&existingHTTPRoute.ObjectMeta, k, v)
+		}
+		for k, v := range desiredHTTPRoute.Annotations {
+			metav1.SetMetaDataAnnotation(&existingHTTPRoute.ObjectMeta, k, v)
+		}
+		if _, ok := desiredHTTPRoute.Annotations[utils.HTTPRouteTemplateHashKey]; !ok {
+			delete(existingHTTPRoute.Annotations, utils.HTTPRouteTemplateHashKey)
+		}
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute), string(utils.UpdateAction), "Failed to update the HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
 			return nil, err

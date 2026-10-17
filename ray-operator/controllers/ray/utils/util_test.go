@@ -2290,6 +2290,32 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			name: "Different template hash",
+			existing: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{HTTPRouteTemplateHashKey: "old"}},
+			},
+			desired: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{HTTPRouteTemplateHashKey: "new"}},
+			},
+			expected: false,
+		},
+		{
+			name: "Same template hash ignores API server defaults on template fields",
+			existing: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{HTTPRouteTemplateHashKey: "hash"}},
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: ptr.To(gwv1.PathMatchPathPrefix), Value: new("/api")}}}}},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{HTTPRouteTemplateHashKey: "hash"}},
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Value: new("/api")}}}}},
+				},
+			},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
