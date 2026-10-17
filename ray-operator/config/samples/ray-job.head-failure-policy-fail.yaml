@@ -3,7 +3,7 @@
 # marks the RayJob as Failed instead of recreating the head Pod.
 #
 # Constraints when headFailurePolicy is Fail:
-# - head Pod restartPolicy must be Never (or unset)
+# - head Pod restartPolicy must be Never (Kubernetes defaults an unset policy to Always)
 # - backoffLimit must be 0 (default)
 # - clusterSelector is not supported
 apiVersion: ray.io/v1

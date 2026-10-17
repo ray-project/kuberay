@@ -4866,9 +4866,9 @@ func TestResolveHeadFailurePolicy(t *testing.T) {
 			expected:      rayv1.HeadFailurePolicyFail,
 		},
 		{
-			name:       "Fail with unset restartPolicy",
+			name:       "Fail with unset restartPolicy falls back to Recreate",
 			annotation: string(rayv1.HeadFailurePolicyFail),
-			expected:   rayv1.HeadFailurePolicyFail,
+			expected:   rayv1.HeadFailurePolicyRecreate,
 		},
 		{
 			name:          "Fail with Always restartPolicy falls back to Recreate",

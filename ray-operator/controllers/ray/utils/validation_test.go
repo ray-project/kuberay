@@ -1631,6 +1631,23 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "headFailurePolicy Fail with unset head restartPolicy is invalid",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				RayClusterSpec:    createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "headFailurePolicy Fail with unset restartPolicy is valid in SidecarMode",
+			spec: rayv1.RayJobSpec{
+				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),
+				SubmissionMode:    rayv1.SidecarMode,
+				RayClusterSpec:    createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
 			name: "headFailurePolicy Fail with backoffLimit 0 and Never restartPolicy is valid",
 			spec: rayv1.RayJobSpec{
 				HeadFailurePolicy: ptr.To(rayv1.HeadFailurePolicyFail),

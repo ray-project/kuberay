@@ -1524,11 +1524,16 @@ func (r *RayClusterReconciler) resolveHeadFailurePolicy(ctx context.Context, ins
 		return rayv1.HeadFailurePolicyRecreate
 	}
 	restartPolicy := instance.Spec.HeadGroupSpec.Template.Spec.RestartPolicy
-	if restartPolicy != "" && restartPolicy != corev1.RestartPolicyNever {
+	// Empty restartPolicy is defaulted to Always by the API server, so it is not Fail.
+	if restartPolicy != corev1.RestartPolicyNever {
+		got := string(restartPolicy)
+		if got == "" {
+			got = "unset"
+		}
 		logger.Info("ray.io/head-failure-policy=Fail requires head Pod restartPolicy Never; defaulting to Recreate",
-			"restartPolicy", restartPolicy)
+			"restartPolicy", got)
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, "InvalidHeadFailurePolicy", string(utils.ValidateAction),
-			"ray.io/head-failure-policy=Fail requires head Pod restartPolicy Never (got %s); defaulting to Recreate", restartPolicy)
+			"ray.io/head-failure-policy=Fail requires head Pod restartPolicy Never (got %s); defaulting to Recreate", got)
 		return rayv1.HeadFailurePolicyRecreate
 	}
 	return rayv1.HeadFailurePolicyFail

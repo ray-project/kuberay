@@ -314,6 +314,9 @@ type RayJobSpec struct {
 	// HeadFailurePolicy controls the behavior when the head pod fails.
 	// - If set to Recreate, head pod will be recreated (existing behavior).
 	// - If set to Fail, RayJob will fail directly if head pod fails.
+	//   Fail requires the head Pod restartPolicy to be Never. An unset restartPolicy
+	//   is defaulted to Always by Kubernetes. SidecarMode may omit it because the
+	//   controller sets Never when creating the RayCluster.
 	// Defaults to Recreate if not set.
 	// +kubebuilder:validation:Enum=Recreate;Fail
 	// +optional
