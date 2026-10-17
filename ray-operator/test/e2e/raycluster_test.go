@@ -109,6 +109,16 @@ func TestRayClusterSuspend(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionFalse, rayv1.RayClusterPodsProvisioning)))
 
+	// Suspending releases the quota the Pods hold and takes the Services that expose
+	// them with it. This cluster is single-host and has no serve Service, so the head
+	// Service is the only one to look for - and the only one this selector would match.
+	g.Eventually(Pods(test, namespace.Name,
+		LabelSelector(utils.RayClusterLabelKey+"="+rayCluster.Name)), TestTimeoutMedium).
+		Should(BeEmpty())
+	g.Eventually(Services(test, namespace.Name,
+		LabelSelector(utils.RayClusterLabelKey+"="+rayCluster.Name)), TestTimeoutMedium).
+		Should(BeEmpty())
+
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(false))
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -121,6 +131,11 @@ func TestRayClusterSuspend(t *testing.T) {
 		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+	// Resuming re-creates the Services that were deleted during suspension.
+	g.Eventually(Services(test, namespace.Name,
+		LabelSelector(utils.RayClusterLabelKey+"="+rayCluster.Name)), TestTimeoutMedium).
+		ShouldNot(BeEmpty())
 }
 
 func TestRayClusterWithResourceQuota(t *testing.T) {

@@ -32,6 +32,20 @@ func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func
 	}
 }
 
+func Services(t Test, namespace string, options ...Option[*metav1.ListOptions]) func(g gomega.Gomega) []corev1.Service {
+	return func(g gomega.Gomega) []corev1.Service {
+		listOptions := &metav1.ListOptions{}
+
+		for _, option := range options {
+			g.Expect(option.applyTo(listOptions)).To(gomega.Succeed())
+		}
+
+		services, err := t.Client().Core().CoreV1().Services(namespace).List(t.Ctx(), *listOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		return services.Items
+	}
+}
+
 func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 
