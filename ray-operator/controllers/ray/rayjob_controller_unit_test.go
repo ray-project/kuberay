@@ -489,7 +489,7 @@ func TestPollJobStatusForSidecarFailure(t *testing.T) {
 			if getErr != nil {
 				return nil, getErr
 			}
-			return &utiltypes.RayJobInfo{JobStatus: status}, nil
+			return &utiltypes.RayJobInfo{JobStatus: status, Message: "job failed: user code error"}, nil
 		}
 		fakeClient.GetJobInfoMock.Store(&getJobInfo)
 		return &RayJobReconciler{
@@ -499,13 +499,14 @@ func TestPollJobStatusForSidecarFailure(t *testing.T) {
 		}
 	}
 
-	t.Run("job ran and failed -> JobStatus updated to FAILED (reason becomes AppFailed)", func(t *testing.T) {
+	t.Run("job ran and failed -> JobStatus and Message updated (reason becomes AppFailed)", func(t *testing.T) {
 		reconciler := reconcilerWithJobStatus(rayv1.JobStatusFailed, nil)
 		rayJob := newRayJob()
 
 		reconciler.pollJobStatusForSidecarFailure(ctx, rayJob, rayCluster)
 
 		assert.Equal(t, rayv1.JobStatusFailed, rayJob.Status.JobStatus)
+		assert.Equal(t, "job failed: user code error", rayJob.Status.Message)
 	})
 
 	t.Run("dashboard GetJobInfo error -> JobStatus unchanged (falls back to SubmissionFailed)", func(t *testing.T) {

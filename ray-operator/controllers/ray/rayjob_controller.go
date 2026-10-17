@@ -1213,12 +1213,12 @@ func detectSidecarSubmitterFailure(rayJob *rayv1.RayJob, headPod *corev1.Pod) *c
 }
 
 // pollJobStatusForSidecarFailure does a best-effort poll of the actual Ray job status from the
-// dashboard and updates rayJob.Status.JobStatus. It is used during `Initializing` when the submitter
+// dashboard and updates rayJob.Status.JobStatus and rayJob.Status.Message. It is used during `Initializing` when the submitter
 // sidecar has failed, so that updateStatusForSidecarSubmitterFailure can map a genuine
 // application failure to `AppFailed` rather than always reporting `SubmissionFailed`.
 //
 // This is best-effort: on ANY error (no dashboardClientFunc, empty JobId, URL build failure,
-// dashboard unreachable, or job not found) it leaves rayJob.Status.JobStatus untouched, so the
+// dashboard unreachable, or job not found) it leaves rayJob.Status untouched, so the
 // reason falls back to `SubmissionFailed`.
 func (r *RayJobReconciler) pollJobStatusForSidecarFailure(ctx context.Context, rayJob *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -1252,6 +1252,7 @@ func (r *RayJobReconciler) pollJobStatusForSidecarFailure(ctx context.Context, r
 
 	logger.Info("pollJobStatusForSidecarFailure: polled Ray job status after submitter failure", "JobId", rayJob.Status.JobId, "JobStatus", jobInfo.JobStatus)
 	rayJob.Status.JobStatus = jobInfo.JobStatus
+	rayJob.Status.Message = jobInfo.Message
 }
 
 // updateStatusForSidecarSubmitterFailure transitions the RayJob to `Failed` for a submitter sidecar
