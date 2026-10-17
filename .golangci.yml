@@ -117,21 +117,6 @@ linters:
       - linters: [misspell]
         path: historyserver/
         text: '(?i)`cancelled` is a misspelling'
-      # gosec flags these constants by name. router.go's ATTRIBUTE_AUTH_TOKEN is a
-      # request attribute key, and auth.go's are env var names and a mount path.
-      - linters: [gosec]
-        path: '^historyserver/pkg/(historyserver/router|utils/auth)\.go$'
-        text: '^G101:'
-      # The collector reads its storage backend config from the path given by its
-      # own -storage-backend-config-path flag or STORAGE_BACKEND_CONFIG_PATH env var.
-      - linters: [gosec]
-        path: '^historyserver/cmd/collector/main\.go$'
-        text: '^G703:'
-      # The Dashboard URL is built from FQ_RAY_IP, which the deployment sets to the
-      # head Service address. Same class as #4731.
-      - linters: [gosec]
-        path: '^historyserver/pkg/utils/utils\.go$'
-        text: '^G704:'
       # ---------------------------------------------------------------------
       # historyserver/ lint baseline.
       # TODO(#5271): burn this list down.
