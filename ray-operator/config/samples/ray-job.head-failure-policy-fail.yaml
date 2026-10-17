@@ -14,12 +14,9 @@ spec:
   headFailurePolicy: Fail
   backoffLimit: 0
   entrypoint: python /home/ray/samples/sample_code.py
-  runtimeEnvYAML: |
-    env_vars:
-      counter_name: "test_counter"
 
   rayClusterSpec:
-    rayVersion: "2.52.0"
+    rayVersion: "2.59.0"
     headGroupSpec:
       rayStartParams: {}
       template:
@@ -27,7 +24,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: ray-head
-            image: rayproject/ray:2.52.0
+            image: rayproject/ray:2.59.0
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -62,7 +59,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.52.0
+            image: rayproject/ray:2.59.0
             resources:
               limits:
                 cpu: "1"
@@ -76,14 +73,13 @@ metadata:
 data:
   sample_code.py: |
     import ray
-    import os
 
     ray.init()
 
     @ray.remote
     class Counter:
         def __init__(self):
-            self.name = os.getenv("counter_name")
+            self.name = "test_counter"
             self.counter = 0
 
         def inc(self):
