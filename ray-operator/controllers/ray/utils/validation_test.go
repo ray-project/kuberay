@@ -2926,16 +2926,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -2956,16 +2958,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "invalid cron",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -2987,7 +2991,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule:    "*/5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{},
+					JobTemplate: rayv1.RayJobTemplateSpec{},
 				},
 			},
 			expectError: true,
@@ -3003,13 +3007,15 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{},
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{},
+										},
 									},
 								},
 							},
@@ -3030,16 +3036,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 9 * * *",
 					TimeZone: new("Asia/Taipei"),
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -3061,16 +3069,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 0 * * *",
 					TimeZone: new("UTC"),
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -3092,16 +3102,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
 					TimeZone: new("Invalid/Zone"),
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -3123,16 +3135,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "TZ=UTC */5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -3154,16 +3168,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "CRON_TZ=UTC */5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.52.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.52.0",
+												},
 											},
 										},
 									},
@@ -3185,16 +3201,18 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					JobTemplate: rayv1.RayJobSpec{
-						Entrypoint: "python test.py",
-						RayClusterSpec: &rayv1.RayClusterSpec{
-							HeadGroupSpec: rayv1.HeadGroupSpec{
-								Template: corev1.PodTemplateSpec{
-									Spec: corev1.PodSpec{
-										Containers: []corev1.Container{
-											{
-												Name:  "ray-head",
-												Image: "rayproject/ray:2.9.0",
+					JobTemplate: rayv1.RayJobTemplateSpec{
+						Spec: rayv1.RayJobSpec{
+							Entrypoint: "python test.py",
+							RayClusterSpec: &rayv1.RayClusterSpec{
+								HeadGroupSpec: rayv1.HeadGroupSpec{
+									Template: corev1.PodTemplateSpec{
+										Spec: corev1.PodSpec{
+											Containers: []corev1.Container{
+												{
+													Name:  "ray-head",
+													Image: "rayproject/ray:2.9.0",
+												},
 											},
 										},
 									},
