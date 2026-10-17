@@ -10,6 +10,7 @@ import { useNamespace } from "@/components/NamespaceProvider";
 import { config } from "@/utils/constants";
 import { CreateRayJobConfig } from "@/types/v2/api/rayjob";
 import { ResourceKey } from "@/types/common";
+import { ALL_NAMESPACES } from "@/utils/config-defaults";
 
 // Constants
 const WORKER_GROUP_NAME = "small-wg";
@@ -85,12 +86,10 @@ async function parseErrorResponse(response: Response): Promise<string> {
 }
 
 // Create RayJob using Kubernetes native CRD format
-async function createRayJobRequest(
-  namespace: string,
-  jobConfig: CreateRayJobConfig,
-) {
+async function createRayJobRequest(jobConfig: CreateRayJobConfig) {
   // Use the new proxy endpoint: POST /apis/ray.io/v1/namespaces/{namespace}/rayjobs
   // Note: config.rayApiUrl already includes /apis/ray.io/v1
+  const namespace = jobConfig.namespace;
   const url = `${config.rayApiUrl}/namespaces/${namespace}/rayjobs`;
   console.log(`Creating RayJob at URL: ${url}`);
   console.log(`Job config:`, JSON.stringify(jobConfig, null, 2));
@@ -175,8 +174,8 @@ export const useCreateJob = () => {
         // We don't want to use the result of creation to populate cache.
         // Just fetch from remote.
         await mutate(
-          `/namespaces/${namespace}/rayjobs`,
-          createRayJobRequest(namespace, jobConfig),
+          `${namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`}/rayjobs`,
+          createRayJobRequest(jobConfig),
           { populateCache: false },
         );
 

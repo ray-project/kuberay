@@ -1,5 +1,5 @@
 import { filterCluster } from "@/utils/v2/filter";
-import { Chip, IconButton } from "@mui/joy";
+import { Chip, IconButton, Tooltip } from "@mui/joy";
 import dayjs from "dayjs";
 import Image from "next/image";
 import React from "react";
@@ -25,6 +25,12 @@ const headCells: readonly HeadCell<ClusterRow>[] = [
     id: "name",
     label: "Name",
     width: 200,
+    sortable: true,
+  },
+  {
+    id: "namespace",
+    label: "Namespace",
+    width: 130,
     sortable: true,
   },
   {
@@ -69,6 +75,11 @@ export const ClustersTable = () => {
   const renderRow = (row: ClusterRow) => {
     return (
       <>
+        <td className="truncate">
+          <Tooltip variant="outlined" title={row.namespace}>
+            <span>{row.namespace}</span>
+          </Tooltip>
+        </td>
         <td>
           <Chip
             variant="soft"
@@ -170,6 +181,7 @@ export const ClustersTable = () => {
         renderRow={renderRow}
         defaultOrderBy="createdAt"
         name="clusters"
+        getRowKey={(row) => `${row.namespace}/${row.name}`}
       />
     </>
   );
