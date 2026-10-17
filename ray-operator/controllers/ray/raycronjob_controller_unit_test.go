@@ -559,7 +559,8 @@ func TestConstructRayJob_CopiesTemplateMetadata(t *testing.T) {
 		utils.RayCronJobNameLabelKey: "user-override",
 	}
 	cronJob.Spec.JobTemplate.Annotations = map[string]string{
-		"user-annotation": "copied",
+		"user-annotation":                      "copied",
+		utils.RayCronJobTimestampAnnotationKey: "user-override",
 	}
 
 	reconciler := &RayCronJobReconciler{Scheme: scheme}
@@ -568,8 +569,8 @@ func TestConstructRayJob_CopiesTemplateMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "copied", rayJob.Labels["user-label"])
-	assert.Equal(t, cronJob.Name, rayJob.Labels[utils.RayCronJobNameLabelKey])
 	assert.Equal(t, "copied", rayJob.Annotations["user-annotation"])
+	assert.Equal(t, cronJob.Name, rayJob.Labels[utils.RayCronJobNameLabelKey])
 	assert.Equal(t, scheduledTime.UTC().Format(time.RFC3339), rayJob.Annotations[utils.RayCronJobTimestampAnnotationKey])
 	assert.Equal(t, "python test.py", rayJob.Spec.Entrypoint)
 }

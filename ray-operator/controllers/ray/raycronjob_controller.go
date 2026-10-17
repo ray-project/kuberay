@@ -120,6 +120,8 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := r.Create(ctx, rayJob); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			logger.Error(err, "Failed to create RayJob from RayCronJob")
+			r.Recorder.Eventf(rayCronJobInstance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRayJob), string(utils.CreateAction),
+				"Failed to create RayJob %s/%s: %v", rayJob.Namespace, rayJob.Name, err)
 			return ctrl.Result{}, err
 		}
 		// The deterministic name means a RayJob for this tick already exists, so a previous
