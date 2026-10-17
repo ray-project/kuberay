@@ -341,9 +341,18 @@ func TestCheckIsRestartCountExceeded(t *testing.T) {
 	}
 }
 
-func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
-	reconciler := &RayJobReconciler{}
+func TestDetectAndUpdateStatusForSidecarSubmitterFailure(t *testing.T) {
 	ctx := context.Background()
+
+	// detectAndUpdate mirrors how the controller combines the two helpers.
+	detectAndUpdate := func(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
+		submitterContainerStatus := detectSidecarSubmitterFailure(rayJob, headPod)
+		if submitterContainerStatus == nil {
+			return false
+		}
+		updateStatusForSidecarSubmitterFailure(ctx, rayJob, submitterContainerStatus)
+		return true
+	}
 
 	headPodWithSubmitterState := func(state corev1.ContainerState) *corev1.Pod {
 		return &corev1.Pod{
@@ -367,11 +376,12 @@ func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
 			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
 		})
 
-		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+		shouldUpdate := detectAndUpdate(rayJob, headPod)
 
 		assert.True(t, shouldUpdate)
 		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
 		assert.Equal(t, rayv1.SubmissionFailed, rayJob.Status.Reason)
+		assert.Contains(t, rayJob.Status.Message, "terminated with exit code 1")
 	})
 
 	t.Run("submitter terminated non-zero with JobStatus already Failed -> AppFailed", func(t *testing.T) {
@@ -381,7 +391,7 @@ func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
 			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
 		})
 
-		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+		shouldUpdate := detectAndUpdate(rayJob, headPod)
 
 		assert.True(t, shouldUpdate)
 		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
@@ -394,7 +404,7 @@ func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
 			Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
 		})
 
-		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+		shouldUpdate := detectAndUpdate(rayJob, headPod)
 
 		assert.False(t, shouldUpdate)
 		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
@@ -406,7 +416,7 @@ func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
 			Running: &corev1.ContainerStateRunning{},
 		})
 
-		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+		shouldUpdate := detectAndUpdate(rayJob, headPod)
 
 		assert.False(t, shouldUpdate)
 		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
@@ -428,10 +438,32 @@ func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
 			},
 		}
 
-		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+		shouldUpdate := detectAndUpdate(rayJob, headPod)
 
 		assert.True(t, shouldUpdate)
 		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.SubmissionFailed, rayJob.Status.Reason)
+		assert.Contains(t, rayJob.Status.Message, "exceeding the maximum restart count")
+	})
+
+	t.Run("feature gate enabled with restart count below backoff limit -> no update", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+		rayJob := initializingRayJob()
+		headPod := &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:                 utils.SubmitterContainerName,
+						RestartCount:         1,
+						State:                corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+					},
+				},
+			},
+		}
+
+		assert.Nil(t, detectSidecarSubmitterFailure(rayJob, headPod))
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
 	})
 }
 
