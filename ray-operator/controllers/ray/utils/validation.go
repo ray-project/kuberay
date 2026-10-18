@@ -667,6 +667,24 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		return fmt.Errorf("The RayJob spec is invalid: backoffLimit must be a positive integer")
 	}
 
+	if rayJob.Spec.HeadFailurePolicy != nil && *rayJob.Spec.HeadFailurePolicy == rayv1.HeadFailurePolicyFail {
+		if isClusterSelectorMode {
+			return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail is incompatible with ClusterSelector")
+		}
+		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+			return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail requires backoffLimit to be 0")
+		}
+		if rayJob.Spec.RayClusterSpec != nil {
+			restartPolicy := rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.RestartPolicy
+			// An unset Pod restartPolicy is defaulted to Always by Kubernetes, so Fail would not
+			// fast-fail. SidecarMode is the exception: the RayJob controller sets Never when it creates the RayCluster.
+			sidecarForcesNever := rayJob.Spec.SubmissionMode == rayv1.SidecarMode && restartPolicy == ""
+			if restartPolicy != corev1.RestartPolicyNever && !sidecarForcesNever {
+				return fmt.Errorf("The RayJob spec is invalid: headFailurePolicy Fail requires head Pod restartPolicy to be Never")
+			}
+		}
+	}
+
 	return nil
 }
 
