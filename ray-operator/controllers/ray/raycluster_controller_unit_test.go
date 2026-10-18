@@ -4176,7 +4176,7 @@ func TestBuildPodsCollectorImage(t *testing.T) {
 				options: RayClusterReconcilerOptions{CollectorImage: operatorCollectorImage},
 			}
 
-			headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+			headPod := reconciler.buildHeadPod(context.Background(), *cluster, corev1.IPv4Protocol)
 			assert.Equal(t, tc.expectedImage, collectorContainerImage(t, headPod))
 
 			workerPod := reconciler.buildWorkerPod(context.Background(), *cluster, cluster.Spec.WorkerGroupSpecs[0], "", 0, 0)

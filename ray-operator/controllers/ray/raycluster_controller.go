@@ -1726,7 +1726,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	autoscalingEnabled := utils.IsAutoscalingEnabled(&instance.Spec)
 	podConf := common.DefaultHeadPodTemplate(ctx, instance, instance.Spec.HeadGroupSpec, podName, headPort, headIPFamily)
 	common.SetDefaultCollectorImage(&instance, &podConf, r.options.CollectorImage)
-  if len(r.options.HeadSidecarContainers) > 0 {
+	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
 	if len(r.options.DefaultPodAnnotations) > 0 {
