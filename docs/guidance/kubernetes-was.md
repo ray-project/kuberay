@@ -22,8 +22,6 @@ Unlike Volcano, YuniKorn, or other external schedulers, it keeps pods on the Kub
 - `scheduling.k8s.io/v1beta1=true,scheduling.k8s.io/v1alpha3=true` in the kube-apiserver runtime config. KubeRay uses
   v1alpha3, while kube-scheduler's GenericWorkload integration requires v1beta1 to be served as well.
 - `GenericWorkload=true` on the kube-apiserver, kube-controller-manager, and kube-scheduler.
-- (Optional, only for the [gang preemption policy](#preemption-policy)) `PodGroupPreemptionPolicy=true` on the
-  kube-apiserver and kube-scheduler.
 
 ## Enable Kubernetes WAS
 
@@ -95,38 +93,6 @@ kubectl get pods -n <namespace> -l ray.io/cluster=<raycluster-name> \
   -o custom-columns=NAME:.metadata.name,GROUP:.spec.schedulingGroup.podGroupName
 ```
 
-## Preemption policy
-
-By default a scheduled gang can preempt lower-priority pods to make room (`PreemptLowerPriority`). You can also mark a
-gang as non-preempting (`Never`) so it waits for capacity rather than evicting other workloads.
-
-This is controlled through a Kubernetes `PriorityClass`: KubeRay copies the head pod's `priorityClassName` onto the
-Workload and PodGroup, and the priority admission controller derives the PodGroup's `priority` and `preemptionPolicy`
-from it. To use it:
-
-1. Enable the Kubernetes `PodGroupPreemptionPolicy` feature gate on the kube-apiserver and kube-scheduler
-   (Kubernetes 1.37+).
-2. Create a `PriorityClass` with the desired policy and assign it to **all** Ray pods (the head and every worker group):
-
-   ```yaml
-   apiVersion: scheduling.k8s.io/v1
-   kind: PriorityClass
-   metadata:
-     name: ray-no-preemption
-   value: 1000
-   preemptionPolicy: Never
-   ```
-
-   ```yaml
-   # In each RayCluster pod template (head and workers):
-   spec:
-     priorityClassName: ray-no-preemption
-   ```
-
-All pods in the gang must use the **same** `PriorityClass` — the Kubernetes scheduler requires every pod in a PodGroup
-to have the PodGroup's priority. If the Kubernetes `PodGroupPreemptionPolicy` gate is off, the PodGroup's
-`preemptionPolicy` is left unset and the gang uses the default `PreemptLowerPriority`.
-
 ## Limitations
 
 - This release is tied to the Kubernetes `scheduling.k8s.io/v1alpha3` alpha API served by Kubernetes 1.37.
@@ -134,8 +100,8 @@ to have the PodGroup's priority. If the Kubernetes `PodGroupPreemptionPolicy` ga
   the cluster cannot be scheduled in full, none of its pods are scheduled.
 - `spec.schedulingGroup` on pods is immutable. If you add the opt-in label to an already-running RayCluster, existing
   pods will not get a scheduling group until they are recreated.
-- Only the gang size is updated in place. A PriorityClass is fixed when the Workload and PodGroup are created; to change
-  it, recreate the RayCluster.
+- Custom PriorityClass and preemption-policy support is deferred. KubeRay does not copy these settings from pod
+  templates to the Workload or PodGroup; this integration currently relies on Kubernetes' default priority settings.
 
 ## Troubleshooting
 
@@ -155,10 +121,3 @@ If pods are gated even though there appears to be capacity, confirm the cluster 
 
 The pod scheduling group is set at pod creation and is immutable. If you add the `ray.io/gang-scheduling-enabled` label
 to an already-running RayCluster, existing pods are not affected — they pick up gang scheduling only when recreated.
-
-### The gang's preemption policy is not applied
-
-If a gang still preempts (or the PodGroup's `preemptionPolicy` is unset) when you expected `Never`, check that the
-Kubernetes `PodGroupPreemptionPolicy` gate is enabled on the kube-apiserver and kube-scheduler, and that **every** Ray
-pod (head and all worker groups) references the same `PriorityClass`. If the pods carry different priorities the
-scheduler rejects the gang, since a PodGroup requires a uniform priority.

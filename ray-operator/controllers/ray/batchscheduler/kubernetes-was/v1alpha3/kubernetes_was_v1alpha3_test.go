@@ -13,14 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	schedulingv1 "k8s.io/api/scheduling/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -431,17 +429,13 @@ func TestBuildClusterSchedulingPolicy(t *testing.T) {
 	}
 }
 
-// TestSyncSchedulingResourcesPatchesStaleResourcesInPlace also locks in that a rescale patches
-// only gang.minCount and leaves the immutable priorityClassName/preemptionPolicy untouched.
 func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	ctx := context.Background()
 	rayCluster := newTestRayCluster(newWorkerGroupWithReplicas("workers", 5))
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
-	livePolicy := schedulingv1alpha3.PreemptNever
 	existingWorkload := &schedulingv1alpha3.Workload{
 		ObjectMeta: metav1.ObjectMeta{Name: rayCluster.Name, Namespace: rayCluster.Namespace, UID: types.UID("stale-workload-uid")},
 		Spec: schedulingv1alpha3.WorkloadSpec{PodGroupTemplates: []schedulingv1alpha3.PodGroupTemplate{
-			{Name: "cluster", PriorityClassName: "never-pc", PreemptionPolicy: &livePolicy, SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}}},
+			{Name: "cluster", SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}}},
 		}},
 	}
 	existingPodGroup := &schedulingv1alpha3.PodGroup{
@@ -452,17 +446,11 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 			Labels:    map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
-			PriorityClassName: "never-pc",
-			PreemptionPolicy:  &livePolicy,
-			SchedulingPolicy:  schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}},
+			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 4}},
 		},
 	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
-	priorityClass := &schedulingv1.PriorityClass{
-		ObjectMeta:       metav1.ObjectMeta{Name: "never-pc"},
-		PreemptionPolicy: ptr.To(corev1.PreemptNever),
-	}
-	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup, priorityClass)
+	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 
@@ -473,17 +461,12 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	// MinCount = 1 head + 5 worker replicas; patched in place so the UID is preserved.
 	assert.Equal(t, int32(6), workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingWorkload.UID, workload.UID)
-	require.NotNil(t, workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup))
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
 	assert.Equal(t, int32(6), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
-	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
-	require.NotNil(t, podGroup.Spec.PreemptionPolicy)
-	assert.Equal(t, schedulingv1alpha3.PreemptNever, *podGroup.Spec.PreemptionPolicy)
 }
 
 // TestSyncSchedulingResourcesPatchesStalePodGroupInPlace also locks in that the patch never
@@ -647,46 +630,6 @@ func TestSyncSchedulingResourcesRetriesWhenWorkloadBeingDeleted(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(getErr))
 }
 
-func TestBuildSchedulingResourcesCopiesPriorityFields(t *testing.T) {
-	ctx := context.Background()
-	priorityClass := &schedulingv1.PriorityClass{
-		ObjectMeta:       metav1.ObjectMeta{Name: "never-pc"},
-		PreemptionPolicy: ptr.To(corev1.PreemptNever),
-	}
-	scheduler, _ := newTestScheduler(t, priorityClass)
-	rayCluster := newTestRayCluster(newWorkerGroup())
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "never-pc"
-
-	// No explicit preemptionPolicy on the pod template: derive it from the referenced PriorityClass.
-	workload, podGroup, err := scheduler.buildSchedulingResources(ctx, rayCluster)
-	require.NoError(t, err)
-	require.Len(t, workload.Spec.PodGroupTemplates, 1)
-	assert.Equal(t, "never-pc", workload.Spec.PodGroupTemplates[0].PriorityClassName)
-	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-	assert.Equal(t, "never-pc", podGroup.Spec.PriorityClassName)
-	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptNever), podGroup.Spec.PreemptionPolicy)
-
-	// An explicit preemptionPolicy on the pod template overrides the derived value.
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PreemptionPolicy = ptr.To(corev1.PreemptLowerPriority)
-	workload, podGroup, err = scheduler.buildSchedulingResources(ctx, rayCluster)
-	require.NoError(t, err)
-	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptLowerPriority), workload.Spec.PodGroupTemplates[0].PreemptionPolicy)
-	assert.Equal(t, ptr.To(schedulingv1alpha3.PreemptLowerPriority), podGroup.Spec.PreemptionPolicy)
-}
-
-func TestBuildSchedulingResourcesErrorsWhenPriorityClassMissing(t *testing.T) {
-	ctx := context.Background()
-	scheduler, _ := newTestScheduler(t)
-	rayCluster := newTestRayCluster(newWorkerGroup())
-	rayCluster.Spec.HeadGroupSpec.Template.Spec.PriorityClassName = "missing-pc"
-
-	// The referenced PriorityClass does not exist; this must surface as an error rather
-	// than silently dropping the preemption policy.
-	_, _, err := scheduler.buildSchedulingResources(ctx, rayCluster)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing-pc")
-}
-
 func TestSchedulingV1alpha3Available(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -785,7 +728,6 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))
 	require.NoError(t, rayv1.AddToScheme(scheme))
-	require.NoError(t, schedulingv1.AddToScheme(scheme))
 	require.NoError(t, schedulingv1alpha3.AddToScheme(scheme))
 	return scheme
 }
