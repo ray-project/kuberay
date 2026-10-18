@@ -4836,6 +4836,13 @@ func TestCalculateStatus_HeadPodFailedCondition(t *testing.T) {
 			expectStatus:    metav1.ConditionTrue,
 		},
 		{
+			name:            "Fail policy with Succeeded phase sets True",
+			annotation:      string(rayv1.HeadFailurePolicyFail),
+			headPod:         makeHeadPod(corev1.PodSucceeded, false, false),
+			expectCondition: true,
+			expectStatus:    metav1.ConditionTrue,
+		},
+		{
 			name:            "Fail policy with terminated ray container sets True",
 			annotation:      string(rayv1.HeadFailurePolicyFail),
 			headPod:         makeHeadPod(corev1.PodRunning, true, false),

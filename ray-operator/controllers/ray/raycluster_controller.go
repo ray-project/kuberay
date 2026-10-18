@@ -1541,7 +1541,9 @@ func (r *RayClusterReconciler) resolveHeadFailurePolicy(ctx context.Context, ins
 }
 
 // setHeadPodFailedCondition updates the HeadPodFailed condition based on head pod state.
-// True when the head pod has failed (or the ray container terminated) and is not being deleted.
+// True when the head pod is in a terminal phase (Failed or Succeeded), or the ray container has
+// terminated, and the pod is not being deleted. Succeeded is included because Fail retains the
+// pod, so an exit-0 head would otherwise leave the RayJob waiting on a dead cluster.
 // False when the pod is healthy, missing, or carrying a DeletionTimestamp (e.g. UpgradeStrategy Recreate).
 func (r *RayClusterReconciler) setHeadPodFailedCondition(ctx context.Context, instance *rayv1.RayCluster, headPod *corev1.Pod) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -1554,9 +1556,9 @@ func (r *RayClusterReconciler) setHeadPodFailedCondition(ctx context.Context, in
 	failed := false
 	message := "Head Pod is healthy"
 	if headPod != nil && headPod.DeletionTimestamp.IsZero() {
-		if headPod.Status.Phase == corev1.PodFailed {
+		if headPod.Status.Phase == corev1.PodFailed || headPod.Status.Phase == corev1.PodSucceeded {
 			failed = true
-			message = fmt.Sprintf("Head Pod %s is in Failed phase", headPod.Name)
+			message = fmt.Sprintf("Head Pod %s is in %s phase", headPod.Name, headPod.Status.Phase)
 		} else if headPod.Status.Phase == corev1.PodRunning && getRayContainerStateTerminated(*headPod) != nil {
 			failed = true
 			message = fmt.Sprintf("Head Pod %s Ray container has terminated", headPod.Name)
