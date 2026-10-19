@@ -21,7 +21,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -473,7 +472,6 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 // deletes the PodGroup and preserves its protection finalizer.
 func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	ctx := context.Background()
-	scheme := newTestScheme(t)
 	rayCluster := newTestRayCluster(newWorkerGroup()) // 3 replicas -> desired MinCount 4
 
 	// The Workload matches the desired spec (not stale), but the PodGroup drifted
@@ -497,23 +495,11 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 		},
 	}
 	setRayClusterControllerReference(rayCluster, existingWorkload, existingPodGroup)
-	deleteCalled := false
-	fakeClient := clientFake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(existingWorkload, existingPodGroup).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Delete: func(ctx context.Context, cli client.WithWatch, object client.Object, options ...client.DeleteOption) error {
-				deleteCalled = true
-				return cli.Delete(ctx, object, options...)
-			},
-		}).
-		Build()
-	scheduler := &KubernetesWASV1Alpha3Scheduler{cli: fakeClient}
+	scheduler, fakeClient := newTestScheduler(t, existingWorkload, existingPodGroup)
 
 	// A rescale mutates gang.minCount in place. The PodGroup must not be deleted, and
 	// its UID and protection finalizer must survive.
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
-	assert.False(t, deleteCalled, "PodGroup should be patched in place, never deleted, on a rescale")
 
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, podGroup))
@@ -521,6 +507,7 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	// MinCount = 1 head + 3 worker replicas; patched in place so the UID is preserved.
 	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
+	assert.Nil(t, podGroup.DeletionTimestamp)
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
 }
 
@@ -731,7 +718,7 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 }
 
 // newTestScheduler builds a scheduler backed by a fake client seeded with objects, returning
-// both so tests can assert against the client. Tests needing interceptors build the client inline.
+// both so tests can assert against the client.
 func newTestScheduler(t *testing.T, objects ...client.Object) (*KubernetesWASV1Alpha3Scheduler, client.Client) {
 	t.Helper()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objects...).Build()
