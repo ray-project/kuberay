@@ -240,7 +240,7 @@ func main() {
 	case "snapshot":
 		runSnapshot(factory, jsonData, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, additionalEndpoints)
 	case "sidecar":
-		runSidecar(factory, jsonData, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role, logBatching, eventsPort, pushInterval, enableEventCollector, enableLogCollector, additionalEndpoints, endpointPollInterval, eventDataDir, eventRotationInterval, eventMaxFileSizeMB, eventMaxDiskMB, eventCompressionEnabled)
+		runSidecar(factory, jsonData, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role, logBatching, eventsPort, pushInterval, enableEventCollector, enableLogCollector, additionalEndpoints, endpointPollInterval, eventDataDir, eventRotationInterval, eventMaxFileSizeMB, eventMaxDiskMB, eventCompressionEnabled, rotatedLogScanInterval)
 	}
 }
 
@@ -285,7 +285,7 @@ func runSnapshot(factory func(*types.RayCollectorConfig, map[string]any) (storag
 	}
 }
 
-func runSidecar(factory func(*types.RayCollectorConfig, map[string]any) (storage.StorageWriter, error), jsonData map[string]any, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role string, logBatching, eventsPort int, pushInterval time.Duration, enableEventCollector, enableLogCollector bool, additionalEndpoints []string, endpointPollInterval time.Duration, eventDataDir string, eventRotationInterval time.Duration, eventMaxFileSizeMB, eventMaxDiskMB int, eventCompressionEnabled bool) {
+func runSidecar(factory func(*types.RayCollectorConfig, map[string]any) (storage.StorageWriter, error), jsonData map[string]any, storageBackend, storageRootDir, dashboardAddress, rayClusterName, rayClusterNamespace, ownerKind, ownerName, role string, logBatching, eventsPort int, pushInterval time.Duration, enableEventCollector, enableLogCollector bool, additionalEndpoints []string, endpointPollInterval time.Duration, eventDataDir string, eventRotationInterval time.Duration, eventMaxFileSizeMB, eventMaxDiskMB int, eventCompressionEnabled bool, rotatedLogScanInterval time.Duration) {
 	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
 	if err != nil {
 		logrus.Fatalf("Failed to get ray node id via HTTP endpoint: %v", err)
