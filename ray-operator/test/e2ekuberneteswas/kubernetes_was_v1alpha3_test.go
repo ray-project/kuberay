@@ -193,9 +193,9 @@ func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
 				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 				WithTemplate(HeadPodTemplateApplyConfiguration())).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-				WithReplicas(1).
+				WithReplicas(3).
 				WithMinReplicas(1).
-				WithMaxReplicas(3).
+				WithMaxReplicas(5).
 				WithGroupName("small-group").
 				WithRayStartParams(map[string]string{"num-cpus": "1"}).
 				WithTemplate(WorkerPodTemplateApplyConfiguration())))
@@ -212,7 +212,7 @@ func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
 	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
-	// Floor MinCount = 1 head + 1 minReplica.
+	// Floor MinCount = 1 head + 1 minReplica, not 1 head + 3 desired replicas.
 	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
 
 	clusterPodGroup, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-cluster")
@@ -223,53 +223,6 @@ func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.SchedulerName).To(Equal(corev1.DefaultSchedulerName))
-	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
-}
-
-// TestKubernetesWAS_AutoscalingSchedulesAboveFloor verifies that when an autoscaling
-// cluster's desired replicas exceed minReplicas, the gang is floored at 1+minReplicas
-// (not the desired size) so the cluster still becomes ready with pods above the floor.
-func TestKubernetesWAS_AutoscalingSchedulesAboveFloor(t *testing.T) {
-	test := With(t)
-	g := NewWithT(t)
-
-	namespace := test.NewTestNamespace()
-
-	// minReplicas=1 -> floor minCount=2, but 3 workers are desired (above the floor).
-	rayClusterAC := newWASRayClusterAC("autoscale-above-floor", namespace.Name).
-		WithSpec(rayv1ac.RayClusterSpec().
-			WithRayVersion(GetRayVersion()).
-			WithEnableInTreeAutoscaling(true).
-			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
-				WithTemplate(HeadPodTemplateApplyConfiguration())).
-			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-				WithReplicas(3).
-				WithMinReplicas(1).
-				WithMaxReplicas(5).
-				WithGroupName("small-group").
-				WithRayStartParams(map[string]string{"num-cpus": "1"}).
-				WithTemplate(WorkerPodTemplateApplyConfiguration())))
-
-	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created autoscaling RayCluster %s/%s with 3 desired workers, minReplicas 1", rayCluster.Namespace, rayCluster.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-
-	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(1))
-	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang).NotTo(BeNil())
-	// Floor MinCount = 1 head + 1 minReplica, NOT 1 head + 3 desired replicas. The cluster
-	// reaching Ready above proves the extra pods above the floor still schedule; the exact
-	// running worker count is intentionally not asserted since the autoscaler owns it.
-	g.Expect(workload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
-
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
 	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
 }
 
