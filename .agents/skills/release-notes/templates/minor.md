@@ -40,4 +40,4 @@ See [{{sample file}}](<https://github.com/ray-project/kuberay/blob/master/ray-op
 
 ## Changelog
 
-<!-- paste output of scripts/changelog-generator.py -->
+<!-- Click "Generate release notes" in the GitHub release UI and paste the "What's Changed" list here -->

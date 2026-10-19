@@ -13,6 +13,6 @@
 
 ## Changelog
 
-<!-- paste output of scripts/changelog-generator.py -->
+<!-- Click "Generate release notes" in the GitHub release UI and paste the "What's Changed" list here -->
 
 **Full Changelog**: <https://github.com/ray-project/kuberay/compare/{{prev_tag}}...{{new_tag}}>
