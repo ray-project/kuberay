@@ -82,10 +82,11 @@ func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err := fetchAndStore(ctx, client, cfg.DashboardAddress, endpoint, clusterDir, sessionName, writer); err != nil {
+		stored, err := fetchAndStore(ctx, client, cfg.DashboardAddress, endpoint, clusterDir, sessionName, writer)
+		if err != nil {
 			logrus.Warnf("Failed to fetch endpoint %s: %v", endpoint, err)
 			fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", endpoint, err))
-		} else {
+		} else if stored {
 			storedCount++
 		}
 	}
@@ -126,50 +127,63 @@ func Run(ctx context.Context, cfg Config, writer storage.StorageWriter) error {
 	return nil
 }
 
+const nodesViewSummaryEndpoint = "/nodes?view=summary"
+
 func discoverSessionName(ctx context.Context, client *http.Client, dashboardAddress string) (string, error) {
-	body, err := fetchEndpoint(ctx, client, dashboardAddress, "/api/v0/cluster_metadata")
+	body, err := fetchEndpoint(ctx, client, dashboardAddress, nodesViewSummaryEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("dashboard unreachable: %w", err)
 	}
 
 	var resp struct {
 		Data struct {
-			SessionName string `json:"session_name"`
-			SessionDir  string `json:"session_dir"`
+			Summary []struct {
+				Raylet struct {
+					RayletSocketName string `json:"rayletSocketName"`
+				} `json:"raylet"`
+			} `json:"summary"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse cluster_metadata response: %w", err)
+		return "", fmt.Errorf("failed to parse %s response: %w", nodesViewSummaryEndpoint, err)
 	}
-	if resp.Data.SessionName != "" {
-		return resp.Data.SessionName, nil
-	}
-	if resp.Data.SessionDir != "" {
-		name := filepath.Base(resp.Data.SessionDir)
-		if strings.HasPrefix(name, "session_") {
+
+	for _, node := range resp.Data.Summary {
+		name := sessionNameFromSocketPath(node.Raylet.RayletSocketName)
+		if name != "" {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("cluster_metadata response missing session_name and usable session_dir")
+	return "", fmt.Errorf("no node in %s has a rayletSocketName containing a session_ directory", nodesViewSummaryEndpoint)
 }
 
-func fetchAndStore(ctx context.Context, client *http.Client, dashboardAddress, endpoint, clusterDir, sessionName string, writer storage.StorageWriter) error {
+func sessionNameFromSocketPath(socketPath string) string {
+	for dir := socketPath; dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+		base := filepath.Base(dir)
+		if strings.HasPrefix(base, "session_") {
+			return base
+		}
+	}
+	return ""
+}
+
+func fetchAndStore(ctx context.Context, client *http.Client, dashboardAddress, endpoint, clusterDir, sessionName string, writer storage.StorageWriter) (bool, error) {
 	body, err := fetchEndpoint(ctx, client, dashboardAddress, endpoint)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(body) == 0 {
 		logrus.Debugf("Skipping empty response from %s", endpoint)
-		return nil
+		return false, nil
 	}
 
 	storageKey := utils.EndpointPathToStorageKey(endpoint)
 	objectKey := path.Join(clusterlogs.FetchedEndpointsDir(clusterDir, sessionName), storageKey)
 	if err := writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
-		return fmt.Errorf("failed to store at %s: %w", objectKey, err)
+		return false, fmt.Errorf("failed to store at %s: %w", objectKey, err)
 	}
 	logrus.Infof("Stored %s at %s (%d bytes)", endpoint, objectKey, len(body))
-	return nil
+	return true, nil
 }
 
 func fetchDataDatasets(ctx context.Context, client *http.Client, dashboardAddress, clusterDir, sessionName string, writer storage.StorageWriter) error {
@@ -193,7 +207,7 @@ func fetchDataDatasets(ctx context.Context, client *http.Client, dashboardAddres
 			return ctx.Err()
 		}
 		endpoint := dataDatasetsEndpointPrefix + job.JobID
-		if err := fetchAndStore(ctx, client, dashboardAddress, endpoint, clusterDir, sessionName, writer); err != nil {
+		if _, err := fetchAndStore(ctx, client, dashboardAddress, endpoint, clusterDir, sessionName, writer); err != nil {
 			logrus.Warnf("Failed to fetch dataset for job %s: %v", job.JobID, err)
 		}
 	}

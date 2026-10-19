@@ -45,13 +45,28 @@ func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	require.NoError(t, json.NewEncoder(w).Encode(v))
 }
 
+func nodesViewSummaryResponse(sessionName string) map[string]any {
+	return map[string]any{
+		"result": true,
+		"msg":    "Node summary fetched.",
+		"data": map[string]any{
+			"summary": []any{
+				map[string]any{
+					"raylet": map[string]any{
+						"rayletSocketName": "/tmp/ray/" + sessionName + "/sockets/raylet",
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestRunSnapshot(t *testing.T) {
 	clusterMetadata := map[string]any{
 		"result": true,
 		"data": map[string]any{
-			"ray_version":    "2.54.0",
-			"python_version": "3.11.0",
-			"session_name":   "session_2026-08-17_10-30-00_123456",
+			"rayVersion":    "2.54.0",
+			"pythonVersion": "3.11.0",
 		},
 	}
 	timezone := map[string]any{"timezone": "UTC"}
@@ -65,6 +80,7 @@ func TestRunSnapshot(t *testing.T) {
 	tasks := map[string]any{"result": []any{}}
 	actors := []any{}
 	nodes := []any{}
+	nodesSummary := nodesViewSummaryResponse("session_2026-08-17_10-30-00_123456")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -76,6 +92,8 @@ func TestRunSnapshot(t *testing.T) {
 
 		var resp any
 		switch {
+		case full == "/nodes?view=summary":
+			resp = nodesSummary
 		case full == "/api/v0/cluster_metadata":
 			resp = clusterMetadata
 		case full == "/timezone":
@@ -135,12 +153,10 @@ func TestRunSnapshot(t *testing.T) {
 
 func TestRunSnapshotMissingSessionInfo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v0/cluster_metadata":
-			writeJSON(t, w, map[string]any{"result": true, "data": map[string]any{}})
-		default:
-			writeJSON(t, w, map[string]any{})
-		}
+		writeJSON(t, w, map[string]any{
+			"result": true,
+			"data":   map[string]any{"summary": []any{}},
+		})
 	}))
 	defer srv.Close()
 
@@ -159,13 +175,14 @@ func TestRunSnapshotMissingSessionInfo(t *testing.T) {
 
 func TestRunSnapshotWithOwner(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v0/cluster_metadata":
-			writeJSON(t, w, map[string]any{
-				"result": true,
-				"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
-			})
-		case "/api/jobs/":
+		full := r.URL.Path
+		if r.URL.RawQuery != "" {
+			full += "?" + r.URL.RawQuery
+		}
+		switch {
+		case full == "/nodes?view=summary":
+			writeJSON(t, w, nodesViewSummaryResponse("session_2026-08-17_10-30-00_123456"))
+		case r.URL.Path == "/api/jobs/":
 			writeJSON(t, w, []any{})
 		default:
 			writeJSON(t, w, map[string]any{})
@@ -205,10 +222,7 @@ func TestRunSnapshotWithOwner(t *testing.T) {
 
 func TestRunSnapshotCancelation(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(t, w, map[string]any{
-			"result": true,
-			"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
-		})
+		writeJSON(t, w, nodesViewSummaryResponse("session_2026-08-17_10-30-00_123456"))
 	}))
 	defer srv.Close()
 
@@ -234,32 +248,46 @@ func TestDiscoverSessionName(t *testing.T) {
 		wantName string
 	}{
 		{
-			name: "from session_name field",
-			response: map[string]any{
-				"data": map[string]any{
-					"session_name": "session_2026-01-01_12-00-00_000000",
-				},
-			},
+			name:     "from rayletSocketName",
+			response: nodesViewSummaryResponse("session_2026-01-01_12-00-00_000000"),
 			wantName: "session_2026-01-01_12-00-00_000000",
 		},
 		{
-			name: "from session_dir field",
+			name: "from custom ray tmp root",
 			response: map[string]any{
+				"result": true,
 				"data": map[string]any{
-					"session_dir": "/tmp/ray/session_2026-02-01_13-00-00_111111",
+					"summary": []any{
+						map[string]any{
+							"raylet": map[string]any{
+								"rayletSocketName": "/custom/ray/session_2026-02-01_13-00-00_111111/sockets/raylet",
+							},
+						},
+					},
 				},
 			},
 			wantName: "session_2026-02-01_13-00-00_111111",
 		},
 		{
-			name: "session_name takes precedence over session_dir",
+			name: "picks first node with valid session",
 			response: map[string]any{
+				"result": true,
 				"data": map[string]any{
-					"session_name": "session_2026-01-01_12-00-00_000000",
-					"session_dir":  "/tmp/ray/session_2026-02-01_13-00-00_111111",
+					"summary": []any{
+						map[string]any{
+							"raylet": map[string]any{
+								"rayletSocketName": "/tmp/ray/session_2026-03-01_14-00-00_222222/sockets/raylet",
+							},
+						},
+						map[string]any{
+							"raylet": map[string]any{
+								"rayletSocketName": "/tmp/ray/session_2026-03-01_14-00-00_222222/sockets/raylet",
+							},
+						},
+					},
 				},
 			},
-			wantName: "session_2026-01-01_12-00-00_000000",
+			wantName: "session_2026-03-01_14-00-00_222222",
 		},
 	}
 
@@ -292,28 +320,28 @@ func TestDiscoverSessionNameDashboardUnreachable(t *testing.T) {
 
 func TestDiscoverSessionNameNoSessionInfo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(t, w, map[string]any{"result": true, "data": map[string]any{}})
+		writeJSON(t, w, map[string]any{
+			"result": true,
+			"data":   map[string]any{"summary": []any{}},
+		})
 	}))
 	defer srv.Close()
 
 	client := &http.Client{}
 	_, err := discoverSessionName(context.Background(), client, srv.URL)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing session_name and usable session_dir")
+	assert.Contains(t, err.Error(), "no node in")
 }
 
 func TestRunSnapshotTotalScrapeFailure(t *testing.T) {
-	metadataCalls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v0/cluster_metadata" {
-			metadataCalls++
-			if metadataCalls == 1 {
-				writeJSON(t, w, map[string]any{
-					"result": true,
-					"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
-				})
-				return
-			}
+		full := r.URL.Path
+		if r.URL.RawQuery != "" {
+			full += "?" + r.URL.RawQuery
+		}
+		if full == "/nodes?view=summary" {
+			writeJSON(t, w, nodesViewSummaryResponse("session_2026-08-17_10-30-00_123456"))
+			return
 		}
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}))
@@ -339,13 +367,14 @@ func TestRunSnapshotTotalScrapeFailure(t *testing.T) {
 func TestRunSnapshotLateCancelation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v0/cluster_metadata":
-			writeJSON(t, w, map[string]any{
-				"result": true,
-				"data":   map[string]any{"session_name": "session_2026-08-17_10-30-00_123456"},
-			})
-		case "/api/jobs/":
+		full := r.URL.Path
+		if r.URL.RawQuery != "" {
+			full += "?" + r.URL.RawQuery
+		}
+		switch {
+		case full == "/nodes?view=summary":
+			writeJSON(t, w, nodesViewSummaryResponse("session_2026-08-17_10-30-00_123456"))
+		case r.URL.Path == "/api/jobs/":
 			cancel()
 			writeJSON(t, w, []any{})
 		default:
@@ -386,8 +415,9 @@ func TestFetchAndStore(t *testing.T) {
 	defer srv.Close()
 
 	writer := newMemWriter()
-	err := fetchAndStore(context.Background(), &http.Client{}, srv.URL, "/api/v0/cluster_metadata", "root/cluster-history/raycluster/default/my-cluster", "session_2026-01-01_12-00-00_000000", writer)
+	stored, err := fetchAndStore(context.Background(), &http.Client{}, srv.URL, "/api/v0/cluster_metadata", "root/cluster-history/raycluster/default/my-cluster", "session_2026-01-01_12-00-00_000000", writer)
 	require.NoError(t, err)
+	assert.True(t, stored, "expected stored=true for non-empty response")
 
 	expectedKey := "root/cluster-history/raycluster/default/my-cluster/session_2026-01-01_12-00-00_000000/fetched_endpoints/restful__api__v0__cluster_metadata"
 	data, ok := writer.files[expectedKey]
@@ -401,8 +431,9 @@ func TestFetchAndStoreSkipsEmptyResponse(t *testing.T) {
 	defer srv.Close()
 
 	writer := newMemWriter()
-	err := fetchAndStore(context.Background(), &http.Client{}, srv.URL, "/api/v0/cluster_metadata", "root/cluster-history/raycluster/default/my-cluster", "session_2026-01-01_12-00-00_000000", writer)
+	stored, err := fetchAndStore(context.Background(), &http.Client{}, srv.URL, "/api/v0/cluster_metadata", "root/cluster-history/raycluster/default/my-cluster", "session_2026-01-01_12-00-00_000000", writer)
 	require.NoError(t, err)
+	assert.False(t, stored, "expected stored=false for empty response")
 	assert.Empty(t, writer.files, "should not store empty responses")
 }
 
