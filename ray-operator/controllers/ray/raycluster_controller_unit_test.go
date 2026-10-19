@@ -1948,6 +1948,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 
 func TestRayClusterProvisionedCondition(t *testing.T) {
 	setupTest(t)
+	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
 	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
 
 	newScheme := runtime.NewScheme()
@@ -2042,6 +2043,110 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	rayClusterProvisionedCondition = meta.FindStatusCondition(testRayCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
 	assert.Equal(t, metav1.ConditionTrue, rayClusterProvisionedCondition.Status)
 	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
+}
+
+func TestCalculateStatusAutoscalingMinimumReplicas(t *testing.T) {
+	setupTest(t)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	ctx := context.Background()
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](5)
+	cluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](1)
+	cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](10)
+
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+	require.NoError(t, corev1.AddToScheme(newScheme))
+
+	readyStatus := corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionTrue,
+		}},
+	}
+	makePod := func(name, nodeType, group string, status corev1.PodStatus, deleting bool) *corev1.Pod {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: cluster.Namespace,
+				Labels: map[string]string{
+					utils.RayClusterLabelKey:   cluster.Name,
+					utils.RayNodeTypeLabelKey:  nodeType,
+					utils.RayNodeGroupLabelKey: group,
+				},
+			},
+			Status: status,
+		}
+		if deleting {
+			deletionTimestamp := metav1.Now()
+			pod.DeletionTimestamp = &deletionTimestamp
+		}
+		return pod
+	}
+
+	headPod := makePod("head", string(rayv1.HeadNode), "head-group", readyStatus, false)
+	headPod.Status.PodIP = headNodeIP
+	readyWorker := makePod("worker-ready", string(rayv1.WorkerNode), groupNameStr, readyStatus, false)
+	pendingWorker := makePod("worker-pending", string(rayv1.WorkerNode), groupNameStr, corev1.PodStatus{Phase: corev1.PodPending}, false)
+	terminatingWorker := makePod("worker-terminating", string(rayv1.WorkerNode), groupNameStr, readyStatus, true)
+	headService, err := common.BuildServiceForHeadPod(ctx, *cluster, nil, nil)
+	require.NoError(t, err)
+	headService.Spec.ClusterIP = "10.0.0.1"
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(headPod, readyWorker, pendingWorker, terminatingWorker, headService).
+		Build()
+	r := &RayClusterReconciler{Client: fakeClient, Recorder: &events.FakeRecorder{}, Scheme: scheme.Scheme}
+
+	newInstance, err := r.calculateStatus(ctx, cluster, utils.ErrFailedDeleteWorkerPod)
+	require.NoError(t, err)
+	assert.Equal(t, rayv1.Ready, newInstance.Status.State, "the ready minimum should keep an autoscaling cluster operational during scale transitions")
+	assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)))
+	assert.Equal(t, rayv1.AutoscalingMinReplicasReady, meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)).Reason)
+	assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterReplicaFailure)), "the replica failure should remain visible")
+}
+
+func TestIsAutoscalingClusterOperationalChecksEveryWorkerGroup(t *testing.T) {
+	enableAutoscaling := true
+	cluster := &rayv1.RayCluster{Spec: rayv1.RayClusterSpec{
+		EnableInTreeAutoscaling: &enableAutoscaling,
+		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+			{GroupName: "group-a", NumOfHosts: 1, MinReplicas: ptr.To[int32](1)},
+			{GroupName: "group-b", NumOfHosts: 1, MinReplicas: ptr.To[int32](1)},
+		},
+	}}
+	readyPod := func(name, nodeType, group string) corev1.Pod {
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					utils.RayNodeTypeLabelKey:  nodeType,
+					utils.RayNodeGroupLabelKey: group,
+				},
+			},
+			Status: corev1.PodStatus{
+				Phase:      corev1.PodRunning,
+				Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+			},
+		}
+	}
+
+	pods := corev1.PodList{Items: []corev1.Pod{
+		readyPod("head", string(rayv1.HeadNode), ""),
+		readyPod("worker-a-1", string(rayv1.WorkerNode), "group-a"),
+		readyPod("worker-a-2", string(rayv1.WorkerNode), "group-a"),
+	}}
+	assert.False(t, isAutoscalingClusterOperational(cluster, pods), "extra workers in one group must not satisfy another group's minimum")
+
+	pods.Items = append(pods.Items, readyPod("worker-b-1", string(rayv1.WorkerNode), "group-b"))
+	assert.True(t, isAutoscalingClusterOperational(cluster, pods))
+
+	deletionTimestamp := metav1.Now()
+	pods.Items[len(pods.Items)-1].DeletionTimestamp = &deletionTimestamp
+	assert.False(t, isAutoscalingClusterOperational(cluster, pods), "terminating workers must not count toward a group minimum")
 }
 
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
