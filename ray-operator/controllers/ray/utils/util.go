@@ -386,11 +386,13 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
+// GetWorkerGroupDesiredReplicas returns the desired number of worker Pods, including all hosts.
 func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
-	return getWorkerGroupDesiredReplicaGroups(workerGroupSpec) * workerGroupSpec.NumOfHosts
+	return GetWorkerGroupDesiredReplicaGroups(workerGroupSpec) * workerGroupSpec.NumOfHosts
 }
 
-func getWorkerGroupDesiredReplicaGroups(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
+// GetWorkerGroupDesiredReplicaGroups returns the bounded number of logical replicas, before host multiplication.
+func GetWorkerGroupDesiredReplicaGroups(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	minReplicas := ptr.Deref(workerGroupSpec.MinReplicas, int32(0))
@@ -489,7 +491,7 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
-		replicas := getWorkerGroupDesiredReplicaGroups(nodeGroup)
+		replicas := GetWorkerGroupDesiredReplicaGroups(nodeGroup)
 		calculatePodResources(&podResource, int64(nodeGroup.NumOfHosts)*int64(replicas))
 		desiredResourcesList = append(desiredResourcesList, podResource)
 	}

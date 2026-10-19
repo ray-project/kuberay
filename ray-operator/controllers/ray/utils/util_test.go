@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"testing"
 
@@ -599,6 +600,37 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.MinReplicas = &minReplicas
 	workerGroupSpec.MaxReplicas = &maxReplicas
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas*numOfHosts)
+}
+
+func TestGetWorkerGroupDesiredReplicaGroups(t *testing.T) {
+	tests := []struct {
+		name        string
+		replicas    *int32
+		minReplicas *int32
+		maxReplicas *int32
+		suspend     bool
+		wantGroups  int32
+	}{
+		{name: "unset replicas and bounds"},
+		{name: "unset replicas", minReplicas: ptr.To[int32](2), wantGroups: 2},
+		{name: "below minimum", replicas: ptr.To[int32](1), minReplicas: ptr.To[int32](2), wantGroups: 2},
+		{name: "above maximum", replicas: ptr.To[int32](3), maxReplicas: ptr.To[int32](2), wantGroups: 2},
+		{name: "within bounds", replicas: ptr.To[int32](2), minReplicas: ptr.To[int32](1), maxReplicas: ptr.To[int32](3), wantGroups: 2},
+		{name: "zero replicas", replicas: ptr.To[int32](0)},
+		{name: "suspended", replicas: ptr.To[int32](2), minReplicas: ptr.To[int32](1), suspend: true},
+		{name: "maximum logical replicas", replicas: ptr.To[int32](math.MaxInt32), wantGroups: math.MaxInt32},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, numOfHosts := range []int32{1, 2, math.MaxInt32} {
+				worker := rayv1.WorkerGroupSpec{
+					Replicas: tt.replicas, MinReplicas: tt.minReplicas, MaxReplicas: tt.maxReplicas,
+					NumOfHosts: numOfHosts, Suspend: new(tt.suspend),
+				}
+				assert.Equal(t, tt.wantGroups, GetWorkerGroupDesiredReplicaGroups(worker), "numOfHosts: %d", numOfHosts)
+			}
+		})
+	}
 }
 
 func TestCalculateMinAndMaxReplicas(t *testing.T) {
