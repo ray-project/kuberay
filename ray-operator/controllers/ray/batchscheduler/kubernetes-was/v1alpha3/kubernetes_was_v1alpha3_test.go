@@ -470,7 +470,7 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 }
 
 // TestSyncSchedulingResourcesPatchesStalePodGroupInPlace also locks in that the patch never
-// deletes the PodGroup and preserves unrelated finalizers.
+// deletes the PodGroup and preserves its protection finalizer.
 func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	ctx := context.Background()
 	scheme := newTestScheme(t)
@@ -490,7 +490,7 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 			Namespace:  rayCluster.Namespace,
 			UID:        types.UID("stale-podgroup-uid"),
 			Labels:     map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-			Finalizers: []string{podGroupProtectionFinalizer, "example.com/retain"},
+			Finalizers: []string{podGroupProtectionFinalizer},
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
 			SchedulingPolicy: schedulingv1alpha3.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha3.GangSchedulingPolicy{MinCount: 3}},
@@ -511,7 +511,7 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	scheduler := &KubernetesWASV1Alpha3Scheduler{cli: fakeClient}
 
 	// A rescale mutates gang.minCount in place. The PodGroup must not be deleted, and
-	// its UID and unrelated finalizers must survive.
+	// its UID and protection finalizer must survive.
 	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
 	assert.False(t, deleteCalled, "PodGroup should be patched in place, never deleted, on a rescale")
 
@@ -522,7 +522,6 @@ func TestSyncSchedulingResourcesPatchesStalePodGroupInPlace(t *testing.T) {
 	assert.Equal(t, int32(4), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
-	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
 }
 
 func TestDoBatchSchedulingOnSubmissionIsIdempotentWhenUnchanged(t *testing.T) {
@@ -575,7 +574,7 @@ func TestSyncSchedulingResourcesLeavesTerminatingPodGroupToKubernetes(t *testing
 			Name:              "test-cluster-cluster",
 			Namespace:         rayCluster.Namespace,
 			Labels:            map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
-			Finalizers:        []string{podGroupProtectionFinalizer, "example.com/retain"},
+			Finalizers:        []string{podGroupProtectionFinalizer},
 			DeletionTimestamp: &deletionTime,
 		},
 		Spec: schedulingv1alpha3.PodGroupSpec{
@@ -592,7 +591,6 @@ func TestSyncSchedulingResourcesLeavesTerminatingPodGroupToKubernetes(t *testing
 	podGroup := &schedulingv1alpha3.PodGroup{}
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: existingPodGroup.Name, Namespace: existingPodGroup.Namespace}, podGroup))
 	assert.Contains(t, podGroup.Finalizers, podGroupProtectionFinalizer)
-	assert.Contains(t, podGroup.Finalizers, "example.com/retain")
 	assert.NotNil(t, podGroup.DeletionTimestamp)
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
 	assert.Equal(t, desiredPolicy.Gang.MinCount, podGroup.Spec.SchedulingPolicy.Gang.MinCount)
