@@ -93,6 +93,9 @@ class ClusterUtils:
         try:
             arguments = locals()
             for k, v in arguments.items():
+                # An empty start-parameter map lets Ray use its defaults.
+                if k == "ray_start_params" and isinstance(v, dict):
+                    continue
                 assert v
         except AssertionError as e:
             log.error(

@@ -109,6 +109,24 @@ class TestUtils(unittest.TestCase):
         self.director = kuberay_cluster_builder.Director()
         self.utils = kuberay_cluster_utils.ClusterUtils()
 
+    def test_build_head_empty_start_params(self):
+        builder = kuberay_cluster_builder.ClusterBuilder().build_meta(name="head-defaults")
+        builder.build_head(ray_start_params={})
+
+        self.assertTrue(builder.succeeded)
+        head = builder.get_cluster()["spec"]["headGroupSpec"]
+        self.assertEqual(head["rayStartParams"], {})
+        self.assertEqual(head["template"]["spec"]["containers"][0]["name"], "ray-head")
+
+    def test_build_head_missing_required_parameters(self):
+        for kwargs in ({"ray_start_params": None}, {"ray_start_params": {}, "ray_image": ""}):
+            with self.subTest(kwargs=kwargs):
+                builder = kuberay_cluster_builder.ClusterBuilder().build_meta(name="head-defaults")
+                builder.build_head(**kwargs)
+
+                self.assertFalse(builder.succeeded)
+                self.assertNotIn("headGroupSpec", builder.get_cluster()["spec"])
+
 
     def test_populate_worker_group(self):
         worker_group, succeeded = self.utils.populate_worker_group(
