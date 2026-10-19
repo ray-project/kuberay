@@ -114,19 +114,15 @@ func TestKubernetesWAS_PodSchedulingGroup(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.SchedulerName).To(Equal(corev1.DefaultSchedulerName))
-	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
-	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
 
 	workerPods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workerPods).NotTo(BeEmpty())
 	for _, pod := range workerPods {
 		g.Expect(pod.Spec.SchedulerName).To(Equal(corev1.DefaultSchedulerName))
-		g.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil())
-		g.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-		g.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
 	}
+	expectClusterPodGroupMembership(g, workerPods, rayCluster.Name)
 }
 
 func TestKubernetesWAS_MultipleWorkerGroups(t *testing.T) {
@@ -178,12 +174,7 @@ func TestKubernetesWAS_MultipleWorkerGroups(t *testing.T) {
 
 	allWorkerPods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
-	for _, pod := range allWorkerPods {
-		g.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil(), "pod %s missing schedulingGroup", pod.Name)
-		g.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil(), "pod %s missing podGroupName", pod.Name)
-		g.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name+"-cluster"),
-			"pod %s has wrong podGroupName", pod.Name)
-	}
+	expectClusterPodGroupMembership(g, allWorkerPods, rayCluster.Name)
 }
 
 func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
@@ -232,9 +223,7 @@ func TestKubernetesWAS_AutoscalingGangsFloor(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.SchedulerName).To(Equal(corev1.DefaultSchedulerName))
-	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil(), "head pod should join the whole-cluster PodGroup when autoscaling is enabled")
-	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
 }
 
 // TestKubernetesWAS_AutoscalingSchedulesAboveFloor verifies that when an autoscaling
@@ -281,9 +270,7 @@ func TestKubernetesWAS_AutoscalingSchedulesAboveFloor(t *testing.T) {
 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
-	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
 }
 
 func TestKubernetesWAS_GangSchedules(t *testing.T) {
@@ -484,9 +471,7 @@ func TestKubernetesWAS_ResumeReusesResources(t *testing.T) {
 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
-	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+	expectClusterPodGroupMembership(g, []corev1.Pod{*headPod}, rayCluster.Name)
 }
 
 func TestKubernetesWAS_ScaleUpPatchesWorkloadInPlace(t *testing.T) {
@@ -881,12 +866,7 @@ func TestKubernetesWAS_ManyWorkerGroups(t *testing.T) {
 		allWorkerPods, err := GetWorkerPods(test, rayCluster)
 		inner.Expect(err).NotTo(HaveOccurred())
 		inner.Expect(allWorkerPods).To(HaveLen(workerGroupCount))
-		for _, pod := range allWorkerPods {
-			inner.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil(), "pod %s missing schedulingGroup", pod.Name)
-			inner.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil(), "pod %s missing podGroupName", pod.Name)
-			inner.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name+"-cluster"),
-				"pod %s has wrong podGroupName", pod.Name)
-		}
+		expectClusterPodGroupMembership(inner, allWorkerPods, rayCluster.Name)
 	}, TestTimeoutShort).Should(Succeed())
 }
 
@@ -979,17 +959,13 @@ func TestKubernetesWAS_SuspendSingleWorkerGroup(t *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		inner.Expect(err).NotTo(HaveOccurred())
 		inner.Expect(headPod.Status.Phase).To(Equal(corev1.PodRunning))
-		inner.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
-		inner.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-		inner.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+		expectClusterPodGroupMembership(inner, []corev1.Pod{*headPod}, rayCluster.Name)
 
 		groupAPods, err := GetGroupPods(test, rayCluster, "group-a")
 		inner.Expect(err).NotTo(HaveOccurred())
 		inner.Expect(groupAPods).To(HaveLen(1))
 		inner.Expect(groupAPods[0].Status.Phase).To(Equal(corev1.PodRunning))
-		inner.Expect(groupAPods[0].Spec.SchedulingGroup).NotTo(BeNil())
-		inner.Expect(groupAPods[0].Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
-		inner.Expect(*groupAPods[0].Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-cluster"))
+		expectClusterPodGroupMembership(inner, groupAPods, rayCluster.Name)
 	}, TestTimeoutShort).Should(Succeed())
 }
 
