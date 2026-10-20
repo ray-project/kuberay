@@ -232,11 +232,11 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	var clusterInfo = &utils.ClusterInfo{
-		Name:         r.RayClusterName,
-		OwnerKind:    r.OwnerKind,
-		OwnerName:    r.OwnerName,
-		Namespace:    r.RayClusterNamespace,
+	clusterInfo := &utils.ClusterInfo{
+		Name:        r.RayClusterName,
+		OwnerKind:   r.OwnerKind,
+		OwnerName:   r.OwnerName,
+		Namespace:   r.RayClusterNamespace,
 		SessionName: sessionID,
 	}
 	logDir := clusterlogs.LogsDir(r.RootDir, clusterInfo, nodeID)
@@ -686,11 +686,11 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	var clusterInfo = &utils.ClusterInfo{
-		Name:         r.RayClusterName,
-		OwnerKind:    r.OwnerKind,
-		OwnerName:    r.OwnerName,
-		Namespace:    r.RayClusterNamespace,
+	clusterInfo := &utils.ClusterInfo{
+		Name:        r.RayClusterName,
+		OwnerKind:   r.OwnerKind,
+		OwnerName:   r.OwnerName,
+		Namespace:   r.RayClusterNamespace,
 		SessionName: sessionID,
 	}
 	logDir := clusterlogs.LogsDir(r.RootDir, clusterInfo, nodeID)

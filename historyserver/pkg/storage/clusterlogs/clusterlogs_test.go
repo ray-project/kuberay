@@ -30,10 +30,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantSession := wantPrefix + "/session-1"
 	if got := SessionDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}); got != wantSession {
 		t.Errorf("SessionDir() = %q, want %q", got, wantSession)
@@ -46,10 +46,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantNode := wantSession + "/node-1"
 	if got := NodeDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}, node); got != wantNode {
 		t.Errorf("NodeDir() = %q, want %q", got, wantNode)
@@ -57,10 +57,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantLogs := wantNode + "/logs"
 	if got := LogsDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}, node); got != wantLogs {
 		t.Errorf("LogsDir() = %q, want %q", got, wantLogs)
@@ -68,10 +68,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantNodeEvents := wantNode + "/node_events"
 	if got := NodeEventsDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}, node); got != wantNodeEvents {
 		t.Errorf("NodeEventsDir() = %q, want %q", got, wantNodeEvents)
@@ -79,10 +79,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantJobEvents := wantNode + "/job_events/01000000"
 	if got := JobEventsDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}, node, jobID); got != wantJobEvents {
 		t.Errorf("JobEventsDir() = %q, want %q", got, wantJobEvents)
@@ -90,10 +90,10 @@ func TestClusterLogsPaths(t *testing.T) {
 
 	wantJobEventsNoID := wantNode + "/job_events"
 	if got := JobEventsDir(rootDir, &utils.ClusterInfo{
-		OwnerKind: ownerKind,
-		OwnerName: ownerName,
-		Namespace: ns,
-		Name:      cluster,
+		OwnerKind:   ownerKind,
+		OwnerName:   ownerName,
+		Namespace:   ns,
+		Name:        cluster,
 		SessionName: session,
 	}, node, ""); got != wantJobEventsNoID {
 		t.Errorf("JobEventsDir(no jobID) = %q, want %q", got, wantJobEventsNoID)
