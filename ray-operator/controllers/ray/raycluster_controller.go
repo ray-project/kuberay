@@ -2013,9 +2013,22 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
+	allPodsRunning := false
+	allPodsRunningChecked := false
+	checkAllPodsRunning := func() bool {
+		if !allPodsRunningChecked {
+			allPodsRunning = utils.CheckAllPodsRunning(ctx, runtimePods)
+			allPodsRunningChecked = true
+		}
+		return allPodsRunning
+	}
+	autoscalingOperational, readyAutoscalingWorkers := isAutoscalingClusterOperational(newInstance, runtimePods)
+	// Treat a worker creation failure as transient only while some worker capacity remains available.
+	workerCreateFailedWithoutReadyWorkers := errstd.Is(reconcileErr, utils.ErrFailedCreateWorkerPod) && readyAutoscalingWorkers == 0
+	autoscalingProvisioned := autoscalingOperational && !workerCreateFailedWithoutReadyWorkers
 	allDesiredReplicasReady := reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 && // workers + 1 head
-		utils.CheckAllPodsRunning(ctx, runtimePods)
-	minimumReplicasReady := isAutoscalingClusterOperational(newInstance, runtimePods) &&
+		checkAllPodsRunning()
+	minimumReplicasReady := autoscalingProvisioned &&
 		(reconcileErr == nil || errstd.Is(reconcileErr, utils.ErrFailedCreateWorkerPod) || errstd.Is(reconcileErr, utils.ErrFailedDeleteWorkerPod))
 	if allDesiredReplicasReady || minimumReplicasReady {
 		newInstance.Status.State = rayv1.Ready
@@ -2046,11 +2059,11 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			// RayClusterProvisioned records when the cluster first meets its readiness criteria.
 			// For autoscaling clusters, that means the head and each active worker group's minimum replicas are ready.
 			// It will not be updated afterward unless the cluster has been suspended.
-			provisioned := utils.CheckAllPodsRunning(ctx, runtimePods)
+			provisioned := checkAllPodsRunning()
 			provisionedReason := rayv1.AllPodRunningAndReadyFirstTime
 			provisionedMessage := "All Ray Pods are ready for the first time"
 			if utils.IsAutoscalingEnabled(&newInstance.Spec) {
-				provisioned = isAutoscalingClusterOperational(newInstance, runtimePods)
+				provisioned = autoscalingProvisioned
 				provisionedReason = rayv1.AutoscalingMinReplicasReady
 				provisionedMessage = "The head Pod and minimum worker replicas are ready for the first time"
 			}
@@ -2148,13 +2161,14 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 // isAutoscalingClusterOperational reports whether the head Pod and each active worker group's minimum replicas are ready.
 // It ignores terminating and scale-up Pods because their transient states should not block an autoscaling RayCluster from becoming operational.
-func isAutoscalingClusterOperational(instance *rayv1.RayCluster, pods corev1.PodList) bool {
+func isAutoscalingClusterOperational(instance *rayv1.RayCluster, pods corev1.PodList) (bool, int32) {
 	if !utils.IsAutoscalingEnabled(&instance.Spec) {
-		return false
+		return false, 0
 	}
 
 	headReady := false
 	readyWorkersByGroup := make(map[string]int32)
+	var readyWorkerReplicas int32
 	for i := range pods.Items {
 		pod := &pods.Items[i]
 		if pod.DeletionTimestamp != nil || !utils.IsRunningAndReady(pod) {
@@ -2166,10 +2180,11 @@ func isAutoscalingClusterOperational(instance *rayv1.RayCluster, pods corev1.Pod
 			headReady = true
 		case string(rayv1.WorkerNode):
 			readyWorkersByGroup[pod.Labels[utils.RayNodeGroupLabelKey]]++
+			readyWorkerReplicas++
 		}
 	}
 	if !headReady {
-		return false
+		return false, readyWorkerReplicas
 	}
 
 	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
@@ -2178,10 +2193,10 @@ func isAutoscalingClusterOperational(instance *rayv1.RayCluster, pods corev1.Pod
 		}
 		minReplicas := ptr.Deref(workerGroup.MinReplicas, int32(0))
 		if readyWorkersByGroup[workerGroup.GroupName] < minReplicas*workerGroup.NumOfHosts {
-			return false
+			return false, readyWorkerReplicas
 		}
 	}
-	return true
+	return true, readyWorkerReplicas
 }
 
 func (r *RayClusterReconciler) getHeadServiceIPAndName(ctx context.Context, instance *rayv1.RayCluster) (string, string, error) {
