@@ -223,18 +223,24 @@ class KubeRayAPIs:
             message - only returned if http return code is not equal to 200
             cluster status
         """
+        start = time.monotonic()
         current_wait = 0
-        while True:
+        while current_wait < wait or wait <= 0:
             status, error, c_status = self.get_cluster_status(ns=ns, name=name)
             # Check execution status
             if status // 100 != 2:
                 return status, error
             if c_status == "ready":
                 return status, None
-            if current_wait > wait > 0:
-                return 408, f"Timed out waiting for cluster ready in {current_wait} sec"
-            time.sleep(self.wait_interval)
-            current_wait += self.wait_interval
+            current_wait = time.monotonic() - start
+            if current_wait >= wait > 0:
+                break
+            sleep_time = self.wait_interval
+            if wait > 0:
+                sleep_time = min(sleep_time, wait - current_wait)
+            time.sleep(sleep_time)
+            current_wait = time.monotonic() - start
+        return 408, f"Timed out waiting for cluster ready in {current_wait} sec"
 
     def get_cluster_endpoints(self, ns: str, name: str, wait: int = -1) -> tuple[int, str, str]:
         """
