@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -466,6 +467,61 @@ func TestSyncSchedulingResourcesPatchesStaleResourcesInPlace(t *testing.T) {
 	require.NotNil(t, podGroup.Spec.SchedulingPolicy.Gang)
 	assert.Equal(t, int32(6), podGroup.Spec.SchedulingPolicy.Gang.MinCount)
 	assert.Equal(t, existingPodGroup.UID, podGroup.UID)
+}
+
+func TestSyncSchedulingResourcesRejectsConcurrentUpdates(t *testing.T) {
+	for _, kind := range []string{"Workload", "PodGroup"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			rayCluster := newTestRayCluster(newWorkerGroup())
+			scheduler, _ := newTestScheduler(t)
+			workload, podGroup, err := scheduler.buildSchedulingResources(rayCluster)
+			require.NoError(t, err)
+
+			var existing client.Object
+			var minCount func() int32
+			var syncResource func() error
+			if kind == "Workload" {
+				live := workload.DeepCopy()
+				existing = live
+				live.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount = 3
+				minCount = func() int32 { return live.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount }
+				syncResource = func() error { return scheduler.syncWorkload(ctx, rayCluster, workload) }
+			} else {
+				live := podGroup.DeepCopy()
+				existing = live
+				live.Spec.SchedulingPolicy.Gang.MinCount = 3
+				minCount = func() int32 { return live.Spec.SchedulingPolicy.Gang.MinCount }
+				syncResource = func() error { return scheduler.syncPodGroup(ctx, rayCluster, podGroup) }
+			}
+			updated := false
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newTestScheme(t)).
+				WithObjects(existing).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Patch: func(ctx context.Context, cli client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+						if !updated {
+							// Change the live resource after the scheduler's read, before its patch.
+							require.NoError(t, cli.Get(ctx, client.ObjectKeyFromObject(existing), existing))
+							existing.SetAnnotations(map[string]string{"concurrent-update": "true"})
+							require.NoError(t, cli.Update(ctx, existing))
+							updated = true
+						}
+						return cli.Patch(ctx, obj, patch, opts...)
+					},
+				}).Build()
+			scheduler.cli = fakeClient
+
+			require.True(t, apierrors.IsConflict(syncResource()))
+			require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(existing), existing))
+			assert.Equal(t, int32(3), minCount())
+
+			require.NoError(t, syncResource())
+			require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(existing), existing))
+			assert.Equal(t, "true", existing.GetAnnotations()["concurrent-update"])
+			assert.Equal(t, int32(4), minCount())
+		})
+	}
 }
 
 // TestSyncSchedulingResourcesPatchesStalePodGroupInPlace also locks in that the patch never

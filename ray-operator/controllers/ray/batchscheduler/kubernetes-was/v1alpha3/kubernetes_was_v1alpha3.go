@@ -149,7 +149,7 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncWorkload(ctx context.Context, rayCl
 	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-	patch := client.MergeFrom(existing.DeepCopy())
+	patch := client.MergeFromWithOptions(existing.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	existingGang.MinCount = desiredMinCount
 	if err := k.cli.Patch(ctx, existing, patch); err != nil {
 		return fmt.Errorf("failed to patch Workload %s/%s minCount: %w", existing.Namespace, existing.Name, err)
@@ -183,7 +183,7 @@ func (k *KubernetesWASV1Alpha3Scheduler) syncPodGroup(ctx context.Context, rayCl
 	if !gangNeedsMinCountPatch(existingGang, desiredMinCount) {
 		return nil
 	}
-	patch := client.MergeFrom(existing.DeepCopy())
+	patch := client.MergeFromWithOptions(existing.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	existingGang.MinCount = desiredMinCount
 	if err := k.cli.Patch(ctx, existing, patch); err != nil {
 		return fmt.Errorf("failed to patch PodGroup %s/%s minCount: %w", existing.Namespace, existing.Name, err)
