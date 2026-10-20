@@ -186,6 +186,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			page, err := paginator.NextPage(ctx)
 			if err != nil {
 				logrus.Errorf("Failed to list objects from %s: %v", prefix, err)
+				return
 			}
 
 			logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
@@ -227,11 +228,17 @@ func (r *RayLogsHandler) GetContent(prefix string, fileName string) io.Reader {
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
 		allFiles := r._listFiles(dirPath, "", false)
+
+		// Use a fresh context for the retry. The _listFiles above has its own
+		// timeout budget and may have consumed most of the parent ctx.
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), timeout)
+		defer retryCancel()
+
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
-				result, err = r.S3Client.GetObject(ctx, &s3.GetObjectInput{
+				result, err = r.S3Client.GetObject(retryCtx, &s3.GetObjectInput{
 					Bucket: new(r.S3Bucket),
 					Key:    new(f),
 				})
@@ -291,9 +298,16 @@ func createBucketIfNotExists(s3Client *s3.Client, bucketName string) error {
 
 	// Try to create the bucket
 	logrus.Infof("Attempting to create bucket %s...", bucketName)
-	_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+	createInput := &s3.CreateBucketInput{
 		Bucket: new(bucketName),
-	})
+	}
+
+	if region := s3Client.Options().Region; region != "" && region != "us-east-1" {
+		createInput.CreateBucketConfiguration = &s3types.CreateBucketConfiguration{
+			LocationConstraint: s3types.BucketLocationConstraint(region),
+		}
+	}
+	_, createErr := s3Client.CreateBucket(ctx, createInput)
 	if createErr != nil {
 		// Check if bucket already exists (race condition)
 		_, isExists := errors.AsType[*s3types.BucketAlreadyExists](createErr)
