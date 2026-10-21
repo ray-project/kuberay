@@ -70,19 +70,21 @@ scheduled normally, pod by pod.
 
 Once enabled and opted in, a RayCluster is scheduled as a single gang:
 
-- **All-or-nothing.** The head pod and every worker-group pod are scheduled together. If the cluster cannot fit in
-  full, none of its pods start — they stay `Pending` until there is room for the entire cluster. This avoids partial
-  startups that hold expensive nodes idle.
+- **All-or-nothing.** Without autoscaling, the head pod and every worker-group pod are scheduled together. If the cluster
+  cannot fit in full, none of its pods start — they stay `Pending` until there is room for the entire cluster. This avoids
+  partial startups that hold expensive nodes idle.
 - **What counts toward the gang.** One head pod plus the desired replicas of every worker group. A multi-host group
-  contributes `replicas × numOfHosts` pods. Suspended worker groups contribute nothing.
+  contributes `replicas × numOfHosts` pods. With autoscaling, `minReplicas` is used instead of `replicas`.
+  Suspended worker groups contribute nothing.
 - **Default scheduler.** Pods are placed by the standard Kubernetes scheduler; there is no separate scheduler to
   install or run.
 - **Editing and scaling.** Changing worker groups or replica counts is picked up automatically — the gang size is
   updated in place on the existing Workload and PodGroup (they are not deleted and recreated).
+  With autoscaling, changing only `replicas` within fixed bounds does not change the gang size.
 - **Autoscaling.** Autoscaling RayClusters (`enableInTreeAutoscaling: true`) are gang scheduled at a floor of one head
   pod plus the sum of `minReplicas × numOfHosts` across non-suspended worker groups. Suspended worker groups contribute
   zero. The autoscaler can then add pods above that floor; those extra pods
-  schedule individually without waiting on the gang, so scaling up never deadlocks the cluster.
+  schedule individually once the gang is initially scheduled and capacity is available.
 - **Suspend and resume.** Suspending a RayCluster deletes its pods but keeps the Workload and PodGroup in place;
   resuming reuses them so the recreated pods rejoin the same gang.
 - **Cleanup.** The scheduling resources are garbage collected automatically when the RayCluster is deleted.
@@ -97,10 +99,13 @@ kubectl get pods -n <namespace> -l ray.io/cluster=<raycluster-name> \
 ## Limitations
 
 - This release is tied to the Kubernetes `scheduling.k8s.io/v1alpha3` alpha API served by Kubernetes 1.37.
-- The entire RayCluster is scheduled as one gang. Partial scheduling of a subset of worker groups is not supported; if
-  the cluster cannot be scheduled in full, none of its pods are scheduled.
+- The entire RayCluster is scheduled as one gang. Without autoscaling, partial scheduling of a subset of worker groups
+  is not supported; if the cluster cannot be scheduled in full, none of its pods are scheduled.
 - `spec.schedulingGroup` on pods is immutable. If you add the opt-in label to an already-running RayCluster, existing
   pods will not get a scheduling group until they are recreated.
+- **Alpha upgrade limitation.** Existing autoscaling RayClusters whose pods were created while WAS was skipped are
+  not automatically migrated. Recreate these clusters after upgrading the operator to avoid mixed PodGroup membership
+  that can leave new pods `Pending`.
 - Custom PriorityClass and preemption-policy support is deferred. KubeRay does not copy these settings from pod
   templates to the Workload or PodGroup; this integration currently relies on Kubernetes' default priority settings.
 
@@ -108,8 +113,9 @@ kubectl get pods -n <namespace> -l ray.io/cluster=<raycluster-name> \
 
 ### Pods stay Pending
 
-If a cluster's pods never leave `Pending`, the gang cannot be placed in full. Check that the cluster fits (enough nodes
-and resources for the head plus all workers at once) and inspect pod events:
+If a cluster's pods never leave `Pending`, the gang may not have enough members or capacity to meet `minCount`.
+Check that the cluster fits (enough nodes and resources for the head plus all minimum workers when autoscaling is
+enabled, or all desired workers otherwise) and inspect pod events:
 
 ```bash
 kubectl describe pod <pod-name> -n <namespace>
