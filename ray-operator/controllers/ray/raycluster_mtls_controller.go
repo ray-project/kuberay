@@ -580,7 +580,7 @@ func normalizeIPs(podIPs []string) []string {
 			hasIPv6 = true
 		}
 	}
-	if hasIPv4 || (!hasIPv4 && !hasIPv6) {
+	if hasIPv4 || !hasIPv6 {
 		s.Insert("127.0.0.1")
 	}
 	if hasIPv6 {
