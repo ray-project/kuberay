@@ -320,7 +320,7 @@ type HistoryServerOptions struct {
 
 // CollectorOptions defines settings for the history server collector sidecar.
 type CollectorOptions struct {
-	// Image is the collector container image to be used (e.g. quay.io/kuberay/collector:latest).
+	// Image is the collector container image to be used (e.g. quay.io/kuberay/collector:v1.7.0).
 	// +optional
 	Image *string `json:"image,omitempty"`
 	// ImagePullPolicy is the pull policy for the collector image.
