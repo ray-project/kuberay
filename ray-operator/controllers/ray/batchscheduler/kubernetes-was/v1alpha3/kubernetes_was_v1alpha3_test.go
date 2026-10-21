@@ -95,6 +95,32 @@ func TestDoBatchSchedulingOnSubmissionGangsFloorWhenAutoscalingEnabled(t *testin
 	require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-cluster", Namespace: rayCluster.Namespace}, clusterPodGroup))
 	require.NotNil(t, clusterPodGroup.Spec.SchedulingPolicy.Gang)
 	assert.Equal(t, int32(3), clusterPodGroup.Spec.SchedulingPolicy.Gang.MinCount)
+
+	// Model API-server UIDs and the Kubernetes-managed protection finalizer.
+	workload.UID = types.UID("autoscaling-workload-uid")
+	require.NoError(t, fakeClient.Update(ctx, workload))
+	clusterPodGroup.UID = types.UID("autoscaling-podgroup-uid")
+	clusterPodGroup.Finalizers = []string{podGroupProtectionFinalizer}
+	require.NoError(t, fakeClient.Update(ctx, clusterPodGroup))
+
+	*rayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = 3
+	require.NoError(t, scheduler.DoBatchSchedulingOnSubmission(ctx, rayCluster))
+
+	resizedWorkload := &schedulingv1alpha3.Workload{}
+	require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(workload), resizedWorkload))
+	require.Len(t, resizedWorkload.Spec.PodGroupTemplates, 1)
+	require.NotNil(t, resizedWorkload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang)
+	assert.Equal(t, int32(4), resizedWorkload.Spec.PodGroupTemplates[0].SchedulingPolicy.Gang.MinCount)
+	assert.Equal(t, workload.UID, resizedWorkload.UID)
+	assert.Nil(t, resizedWorkload.DeletionTimestamp)
+
+	resizedPodGroup := &schedulingv1alpha3.PodGroup{}
+	require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(clusterPodGroup), resizedPodGroup))
+	require.NotNil(t, resizedPodGroup.Spec.SchedulingPolicy.Gang)
+	assert.Equal(t, int32(4), resizedPodGroup.Spec.SchedulingPolicy.Gang.MinCount)
+	assert.Equal(t, clusterPodGroup.UID, resizedPodGroup.UID)
+	assert.Contains(t, resizedPodGroup.Finalizers, podGroupProtectionFinalizer)
+	assert.Nil(t, resizedPodGroup.DeletionTimestamp)
 }
 
 func TestDoBatchSchedulingOnSubmissionSkipsAndCleansUpWithoutGangLabel(t *testing.T) {
