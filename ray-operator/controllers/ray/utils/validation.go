@@ -149,6 +149,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateWorkerGroupPriority(workerGroup, spec); err != nil {
 			return err
 		}
+		if scope := workerGroup.Template.Annotations[RayVolcanoSubGroupScopeAnnotationKey]; scope != "" && scope != RayVolcanoSubGroupScopeWorkerGroup && scope != RayVolcanoSubGroupScopeReplica {
+			return fmt.Errorf("worker group %s has invalid %s annotation %q, must be %q or %q", workerGroup.GroupName, RayVolcanoSubGroupScopeAnnotationKey, scope, RayVolcanoSubGroupScopeWorkerGroup, RayVolcanoSubGroupScopeReplica)
+		}
 		if workerGroup.Topology != nil && len(workerGroup.Topology.LabelMappings) > 0 {
 			// ray start --labels-file was added in Ray 2.45.0
 			rayVersion, err := version.ParseGeneric(spec.RayVersion)
