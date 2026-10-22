@@ -1352,6 +1352,7 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
+
 	clusterAutoscalingVersionNotSet := instance.DeepCopy()
 	clusterAutoscalingVersionNotSet.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV1 := instance.DeepCopy()
@@ -1359,6 +1360,8 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV1),
 	}
+
+	// clusterAutoscalingV2 has autoscaler V2 enabled: env var is injected AND RestartPolicy is set to Never.
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1368,12 +1371,18 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	ctx := context.Background()
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 
+	// clusterAutoscalingV2WithCustomRestartPolicy has autoscaler V2 enabled and a custom RestartPolicy
+	// set in the head pod template — used to verify the feature flag preserves the user value.
+	clusterAutoscalingV2WithCustomRestartPolicy := clusterAutoscalingV2.DeepCopy()
+	clusterAutoscalingV2WithCustomRestartPolicy.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyAlways
+
 	tests := map[string]struct {
 		expectedRestartPolicy      corev1.RestartPolicy
 		cluster                    rayv1.RayCluster
 		expectedHeadContainers     int
 		expectedAutoscalerV2EnvVar bool
 		expectedAutoscalerV1EnvVar bool
+		rayVersion                 string
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:                    *clusterNoAutoscaling,
@@ -1389,28 +1398,56 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      "",
 		},
-		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
+		"Pod template with autoscaling v1 enabled should have the correct autoscaler v1 fields": {
 			cluster:                    *clusterAutoscalingV1,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: false,
 			expectedAutoscalerV1EnvVar: true,
 			expectedRestartPolicy:      "",
 		},
-		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
+		"Pod template with autoscaling v2 enabled and no Ray version should set RestartPolicy to Never": {
 			cluster:                    *clusterAutoscalingV2,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: true,
 			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      corev1.RestartPolicyNever,
 		},
+		"Pod template with autoscaling v2 enabled and Ray < 2.56.0 should set RestartPolicy to Never": {
+			cluster:                    *clusterAutoscalingV2,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.55.0",
+			expectedRestartPolicy:      corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should not force RestartPolicy to Never": {
+			cluster:                    *clusterAutoscalingV2,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.56.0",
+			// RestartPolicy is not set in the cluster template, so it should remain empty.
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should preserve user-set RestartPolicy": {
+			cluster:                    *clusterAutoscalingV2WithCustomRestartPolicy,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
+			rayVersion:                 "2.56.0",
+			// RestartPolicy is set to Always in the cluster template and should be kept as-is.
+			expectedRestartPolicy: corev1.RestartPolicyAlways,
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			podTemplateSpec := DefaultHeadPodTemplate(ctx, tc.cluster, tc.cluster.Spec.HeadGroupSpec, podName, "6379")
+			cluster := tc.cluster.DeepCopy()
+			cluster.Spec.RayVersion = tc.rayVersion
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
 			// if autoscaling is enabled, the head pod should have the autoscaler container appended for a total of 2 containers
-			if utils.IsAutoscalingEnabled(&tc.cluster.Spec) {
+			if utils.IsAutoscalingEnabled(&cluster.Spec) {
 				assert.Len(t, podTemplateSpec.Spec.Containers, tc.expectedHeadContainers)
 			}
 
@@ -1639,9 +1676,15 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	podName := strings.ToLower(instance.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + utils.FormatInt32(0))
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, instance, instance.Namespace)
 
+	// clusterAutoscalingV2WithCustomRestartPolicy has a non-Never RestartPolicy set on the first
+	// worker group template — used to verify the feature flag preserves the user value.
+	clusterAutoscalingV2WithWorkerCustomRestartPolicy := clusterAutoscalingV2.DeepCopy()
+	clusterAutoscalingV2WithWorkerCustomRestartPolicy.Spec.WorkerGroupSpecs[0].Template.Spec.RestartPolicy = corev1.RestartPolicyAlways
+
 	tests := map[string]struct {
 		expectedRestartPolicy corev1.RestartPolicy
 		cluster               rayv1.RayCluster
+		rayVersion            string
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:               *clusterNoAutoscaling,
@@ -1655,9 +1698,26 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 			cluster:               *clusterAutoscalingV1WithRestartPolicy,
 			expectedRestartPolicy: corev1.RestartPolicyAlways,
 		},
-		"Pod template with autoscaling v2 enabled should set RestartPolicy to Never": {
+		"Pod template with autoscaling v2 enabled and no Ray version should set RestartPolicy to Never": {
 			cluster:               *clusterAutoscalingV2,
 			expectedRestartPolicy: corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray < 2.56.0 should set RestartPolicy to Never": {
+			cluster:               *clusterAutoscalingV2,
+			rayVersion:            "2.55.0",
+			expectedRestartPolicy: corev1.RestartPolicyNever,
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should not force RestartPolicy to Never": {
+			cluster:    *clusterAutoscalingV2,
+			rayVersion: "2.56.0",
+			// RestartPolicy is not set in the worker template, so it should remain empty.
+			expectedRestartPolicy: "",
+		},
+		"Pod template with autoscaling v2 enabled and Ray >= 2.56.0 should preserve user-set RestartPolicy": {
+			cluster:    *clusterAutoscalingV2WithWorkerCustomRestartPolicy,
+			rayVersion: "2.56.0",
+			// RestartPolicy is set to Always in the worker template and should be kept as-is.
+			expectedRestartPolicy: corev1.RestartPolicyAlways,
 		},
 		"Pod template with autoscaling enabled and version not set should not set RestartPolicy": {
 			cluster:               *clusterAutoscalingVersionNotSet,
@@ -1667,7 +1727,9 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			podTemplateSpec := DefaultWorkerPodTemplate(ctx, tc.cluster, tc.cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379", "", 0, 0)
+			cluster := tc.cluster.DeepCopy()
+			cluster.Spec.RayVersion = tc.rayVersion
+			podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, cluster.Spec.WorkerGroupSpecs[0], podName, fqdnRayIP, "6379", "", 0, 0)
 			assert.Equal(t, tc.expectedRestartPolicy, podTemplateSpec.Spec.RestartPolicy)
 		})
 	}
@@ -3202,5 +3264,106 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 			result := getCustomAcceleratorRayResourceName(tt.key)
 			assert.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+func TestSetDefaultCollectorImage(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+
+	defaultCollectorImage := "quay.io/kuberay/collector:nightly"
+
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			HistoryServerOptions: &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{},
+			},
+		},
+	}
+
+	tests := []struct {
+		name           string
+		collectorImage string
+		expectedImage  string
+	}{
+		{
+			name:           "collector image is inherited from the operator when not set",
+			collectorImage: "",
+			expectedImage:  defaultCollectorImage,
+		},
+		{
+			name:           "collector image set in the RayCluster is not overridden",
+			collectorImage: "my-registry.io/kuberay/collector:v1.7.0",
+			expectedImage:  "my-registry.io/kuberay/collector:v1.7.0",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			podTemplate := corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{Name: "ray-head", Image: "rayproject/ray:latest"},
+						{Name: utils.CollectorContainerName, Image: tc.collectorImage},
+					},
+				},
+			}
+
+			SetDefaultCollectorImage(cluster, &podTemplate, defaultCollectorImage)
+
+			assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
+			assert.Equal(t, tc.expectedImage, podTemplate.Spec.Containers[1].Image)
+		})
+	}
+
+	t.Run("no-op when the collector container is not injected", func(t *testing.T) {
+		podTemplate := corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "ray-head", Image: "rayproject/ray:latest"},
+				},
+			},
+		}
+
+		SetDefaultCollectorImage(cluster, &podTemplate, defaultCollectorImage)
+
+		assert.Len(t, podTemplate.Spec.Containers, 1)
+		assert.Equal(t, "rayproject/ray:latest", podTemplate.Spec.Containers[0].Image)
+	})
+
+	t.Run("no-op when the RayCluster does not set historyServerOptions.collectorOptions", func(t *testing.T) {
+		// A collector container the user added manually is not managed by the operator,
+		// so its empty image is left as is.
+		podTemplate := corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: utils.CollectorContainerName, Image: ""},
+				},
+			},
+		}
+
+		SetDefaultCollectorImage(&rayv1.RayCluster{}, &podTemplate, defaultCollectorImage)
+
+		assert.Empty(t, podTemplate.Spec.Containers[0].Image)
+	})
+}
+
+// TestBuildPod_GeneratedRayStartCmdIsArgsSubstring pins the contract the pods CREATE webhook relies on: the
+// KUBERAY_GEN_RAY_START_CMD value appears exactly once, verbatim, in the Ray container's single args element
+func TestBuildPod_GeneratedRayStartCmdIsArgsSubstring(t *testing.T) {
+	ctx := context.Background()
+	for _, userCommand := range [][]string{nil, {"echo hello"}} {
+		cluster := instance.DeepCopy()
+		worker := cluster.Spec.WorkerGroupSpecs[0]
+		worker.Template.Spec.Containers[utils.RayContainerIndex].Command = userCommand
+		podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+		fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+		podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+		pod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
+
+		container := pod.Spec.Containers[utils.RayContainerIndex]
+		generated := getEnvVar(container, utils.KUBERAY_GEN_RAY_START_CMD)
+		require.NotNil(t, generated)
+		require.Len(t, container.Args, 1)
+		assert.Equal(t, 1, strings.Count(container.Args[0], generated.Value), "args: %q", container.Args[0])
 	}
 }
