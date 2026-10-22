@@ -75,14 +75,15 @@ func NewGetNodesCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IO
 	options := NewGetNodesOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:          "node [NODE] [(-c|--ray-cluster) RAYCLUSTER]",
-		Aliases:      []string{"nodes"},
-		Short:        "Get Ray nodes",
-		Example:      getNodesExample,
-		SilenceUsage: true,
-		Args:         cobra.MaximumNArgs(1),
+		Use:               "node [NODE] [(-c|--ray-cluster) RAYCLUSTER]",
+		Aliases:           []string{"nodes"},
+		Short:             "Get Ray nodes",
+		Example:           getNodesExample,
+		SilenceUsage:      true,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completion.NodeCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args, cmd); err != nil {
+			if err := options.Complete(args); err != nil {
 				return err
 			}
 			k8sClient, err := client.NewClient(cmdFactory)
@@ -104,19 +105,15 @@ func NewGetNodesCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IO
 	return cmd
 }
 
-func (options *GetNodesOptions) Complete(args []string, cmd *cobra.Command) error {
+func (options *GetNodesOptions) Complete(args []string) error {
 	if options.allNamespaces {
 		options.namespace = ""
 	} else {
-		namespace, err := cmd.Flags().GetString("namespace")
+		namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 		if err != nil {
 			return fmt.Errorf("failed to get namespace: %w", err)
 		}
 		options.namespace = namespace
-
-		if options.namespace == "" {
-			options.namespace = "default"
-		}
 	}
 
 	if len(args) > 0 {
@@ -231,7 +228,7 @@ func printNodes(nodes []node, allNamespaces bool, output io.Writer) error {
 		if allNamespaces {
 			row.Cells = append(row.Cells, node.namespace)
 		}
-		row.Cells = append(row.Cells, []interface{}{
+		row.Cells = append(row.Cells, []any{
 			node.name,
 			node.cpus.String(),
 			node.gpus.String(),

@@ -44,7 +44,7 @@ var (
 	grpcTimeout        = flag.Duration("grpc_timeout", util.GRPCServerDefaultTimeout, "gRPC server timeout duration")
 	enableAPIServerV2  = flag.Bool("enable-api-server-v2", true, "Enable API server V2")
 	corsAllowOrigin    = flag.String("cors-allow-origin", "", "Set the Access-Control-Allow-Origin response header for the HTTP proxy.")
-	healthy            int32
+	healthy            atomic.Int32
 )
 
 func main() {
@@ -61,7 +61,7 @@ func main() {
 	clientManager := manager.NewClientManager()
 	resourceManager := manager.NewResourceManager(&clientManager)
 
-	atomic.StoreInt32(&healthy, 1)
+	healthy.Store(1)
 	klog.Infof("Setting gRPC server timeout to %v", *grpcTimeout)
 	go startRPCServer(resourceManager, *grpcTimeout)
 	startHttpProxy()
@@ -73,7 +73,7 @@ func main() {
 	go func() {
 		<-quit
 		klog.Info("Unexpected interrupt")
-		atomic.StoreInt32(&healthy, 0)
+		healthy.Store(0)
 	}()
 }
 
@@ -82,7 +82,8 @@ type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.Serv
 func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.Duration) {
 	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
-	listener, err := net.Listen("tcp", *rpcPortFlag)
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(context.Background(), "tcp", *rpcPortFlag)
 	if err != nil {
 		klog.Fatalf("Failed to start GPRC server: %v", err)
 	}
@@ -155,6 +156,11 @@ func startHttpProxy() {
 		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
 		c := cors.New(cors.Options{
 			AllowedOrigins: []string{*corsAllowOrigin},
+			AllowedMethods: []string{
+				http.MethodGet, http.MethodPost,
+				http.MethodPut, http.MethodPatch,
+				http.MethodDelete, http.MethodOptions,
+			},
 		})
 		corsHandler = c.Handler
 	} else {
@@ -208,7 +214,7 @@ func startHttpProxy() {
 }
 
 func serveHealth(w http.ResponseWriter, _ *http.Request) {
-	if atomic.LoadInt32(&healthy) == 1 {
+	if healthy.Load() == 1 {
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)

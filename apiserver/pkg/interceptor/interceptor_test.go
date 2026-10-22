@@ -27,7 +27,7 @@ type mockHandler struct {
 // If the delay completes before the context expires, it returns "test_response" along with predefined error.
 // If the context is canceled or the deadline is exceeded before the delay completes,
 // it returns a corresponding gRPC status error instead.
-func (h *mockHandler) Handle(ctx context.Context, _ interface{}, delay time.Duration) (interface{}, error) {
+func (h *mockHandler) Handle(ctx context.Context, _ any, delay time.Duration) (any, error) {
 	h.called = true
 
 	select {
@@ -49,7 +49,7 @@ func (h *mockHandler) Handle(ctx context.Context, _ interface{}, delay time.Dura
 
 func TestAPIServerInterceptor(t *testing.T) {
 	tests := []struct {
-		expectedResp  interface{}
+		expectedResp  any
 		expectedError error
 		handler       *mockHandler
 		name          string
@@ -82,7 +82,7 @@ func TestAPIServerInterceptor(t *testing.T) {
 				ctx,
 				req,
 				info,
-				func(ctx context.Context, req interface{}) (interface{}, error) {
+				func(ctx context.Context, req any) (any, error) {
 					return tt.handler.Handle(ctx, req, 0 /*delay*/)
 				},
 			)
@@ -115,7 +115,7 @@ func TestAPIServerInterceptorContextPassing(t *testing.T) {
 		ctx,
 		"test_request",
 		info,
-		func(receivedCtx context.Context, req interface{}) (interface{}, error) {
+		func(receivedCtx context.Context, req any) (any, error) {
 			// Verify context value is passed through
 			assert.Equal(t, "test_value", receivedCtx.Value(testContextKey("test_key")))
 			return handler.Handle(receivedCtx, req, 0 /*delay*/)
@@ -174,7 +174,7 @@ func TestAPIServerInterceptorLogging(t *testing.T) {
 				ctx,
 				"test_request",
 				info,
-				func(receivedCtx context.Context, req interface{}) (interface{}, error) {
+				func(receivedCtx context.Context, req any) (any, error) {
 					return handler.Handle(receivedCtx, req, 0 /*delay*/)
 				},
 			)
@@ -254,7 +254,7 @@ func TestTimeoutInterceptor(t *testing.T) {
 				ctx,
 				req,
 				&grpc.UnaryServerInfo{FullMethod: "TestTimeoutMethod"},
-				func(ctx context.Context, req interface{}) (interface{}, error) {
+				func(ctx context.Context, req any) (any, error) {
 					return handler.Handle(ctx, req, tt.handlerDelay)
 				},
 			)

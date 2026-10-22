@@ -24,11 +24,11 @@ type RayServiceUpgradeType string
 const (
 	// During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale
 	// and migrate traffic to using Gateway API.
-	NewClusterWithIncrementalUpgrade RayServiceUpgradeType = "NewClusterWithIncrementalUpgrade"
+	RayServiceNewClusterWithIncrementalUpgrade RayServiceUpgradeType = "NewClusterWithIncrementalUpgrade"
 	// During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready
-	NewCluster RayServiceUpgradeType = "NewCluster"
+	RayServiceNewCluster RayServiceUpgradeType = "NewCluster"
 	// No new cluster will be created while the strategy is set to None
-	None RayServiceUpgradeType = "None"
+	RayServiceUpgradeNone RayServiceUpgradeType = "None"
 )
 
 // These statuses should match Ray Serve's application statuses
@@ -61,21 +61,65 @@ var DeploymentStatusEnum = struct {
 }
 
 // These options are currently only supported for the IncrementalUpgrade type.
+// +kubebuilder:validation:XValidation:rule="has(self.gatewayRef) != (has(self.gatewayClassName) && size(self.gatewayClassName) != 0)",message="Exactly one of gatewayClassName or gatewayRef must be specified"
 type ClusterUpgradeOptions struct {
 	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
 	// Defaults to 100%.
 	// +kubebuilder:default:=100
 	MaxSurgePercent *int32 `json:"maxSurgePercent,omitempty"`
 	// The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.
+	// StepSizePercent must be less than or equal to MaxSurgePercent.
 	StepSizePercent *int32 `json:"stepSizePercent"`
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
-	GatewayClassName string `json:"gatewayClassName"`
+	// Exactly one of GatewayClassName or GatewayRef must be set.
+	// +optional
+	GatewayClassName string `json:"gatewayClassName,omitempty"`
+	// GatewayRef attaches the HTTPRoute to an existing Gateway instead of creating one per RayService.
+	// The referenced Gateway must allow HTTPRoutes from the RayService's namespace.
+	// Exactly one of GatewayClassName or GatewayRef must be set.
+	// +optional
+	GatewayRef *GatewayReference `json:"gatewayRef,omitempty"`
+}
+
+// GatewayReference identifies the existing Gateway and listener the RayService's
+// HTTPRoute attaches to. It becomes the HTTPRoute's parentRef. KubeRay never creates,
+// updates, or deletes the referenced Gateway; it must already exist and must allow
+// HTTPRoutes from the RayService's namespace.
+type GatewayReference struct {
+	// Name of the existing Gateway. Must be a valid Gateway resource name
+	// (an RFC 1123 subdomain).
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Name string `json:"name"`
+	// Namespace of the existing Gateway. Defaults to the RayService's namespace when omitted.
+	// Must be a valid namespace name (an RFC 1123 label).
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	Namespace string `json:"namespace,omitempty"`
+	// SectionName is the name of a listener on the referenced Gateway to attach the
+	// HTTPRoute to. When omitted, the HTTPRoute attaches to every listener on the
+	// Gateway that accepts it. Useful for a shared Gateway with multiple listeners.
+	// Must be a valid Gateway API SectionName (an RFC 1123 subdomain).
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	SectionName string `json:"sectionName,omitempty"`
+	// Port is the network port of the referenced Gateway's listener to attach the
+	// HTTPRoute to. When both SectionName and Port are set, the selected listener
+	// must match both. When omitted, listener selection is not constrained by port.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {
-	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`.
+	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster`, `NewClusterWithIncrementalUpgrade` and `None`.
 	// +optional
 	Type *RayServiceUpgradeType `json:"type,omitempty"`
 	// ClusterUpgradeOptions defines the behavior of a NewClusterWithIncrementalUpgrade type.
@@ -102,6 +146,16 @@ type RayServiceSpec struct {
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	// +optional
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayService.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayService which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayService with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	// +optional
+	ManagedBy *string `json:"managedBy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	// +optional
@@ -111,6 +165,11 @@ type RayServiceSpec struct {
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
 	// +optional
 	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
+	// Suspend indicates whether the RayService should suspend its execution. When set to true,
+	// all Kubernetes resources owned by the RayService controller will be deleted. Setting it
+	// back to false will allow the RayService controller to recreate the resources.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
@@ -196,6 +255,13 @@ const (
 	RayServiceReady RayServiceConditionType = "Ready"
 	// UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.
 	UpgradeInProgress RayServiceConditionType = "UpgradeInProgress"
+	// RollbackInProgress means the RayService is currently rolling back an in-progress upgrade to the original cluster state.
+	RollbackInProgress RayServiceConditionType = "RollbackInProgress"
+	// RayServiceSuspending means the RayService is in the middle of deleting its owned resources in response to Spec.Suspend.
+	// Once entered, the suspend operation completes atomically regardless of later changes to Spec.Suspend.
+	RayServiceSuspending RayServiceConditionType = "Suspending"
+	// RayServiceSuspended means all resources owned by the RayService controller have been deleted and the RayService is suspended.
+	RayServiceSuspended RayServiceConditionType = "Suspended"
 )
 
 const (
@@ -206,6 +272,12 @@ const (
 	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
+	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
+	DesiredClusterSpecChanged      RayServiceConditionReason = "DesiredClusterSpecChanged"
+	SuspendRequested               RayServiceConditionReason = "SuspendRequested"
+	SuspendInProgress              RayServiceConditionReason = "SuspendInProgress"
+	SuspendComplete                RayServiceConditionReason = "SuspendComplete"
+	RayServiceResumed              RayServiceConditionReason = "RayServiceResumed"
 )
 
 // +kubebuilder:object:root=true
@@ -231,8 +303,4 @@ type RayServiceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayService `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&RayService{}, &RayServiceList{})
 }

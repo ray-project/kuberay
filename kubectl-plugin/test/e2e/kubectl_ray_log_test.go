@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -29,7 +30,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving all ray cluster logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
-		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve both head and worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
+		expectedOutputStringFormat := `Command set to retrieve both head and worker node logs\.\nNo output directory specified, creating dir under current directory using resource name\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
 		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "all")
 		output, err := cmd.CombinedOutput()
@@ -56,9 +57,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 			currentRequiredFileList := make(map[string]string)
 
-			for key, value := range requiredFileSet {
-				currentRequiredFileList[key] = value
-			}
+			maps.Copy(currentRequiredFileList, requiredFileSet)
 
 			for _, logFile := range logList {
 				if checkContent := currentRequiredFileList[logFile.Name()]; checkContent != "" {
@@ -84,7 +83,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving ray cluster head logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
-		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only head node logs\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+`
+		expectedOutputStringFormat := `Command set to retrieve only head node logs\.\nNo output directory specified, creating dir under current directory using resource name\.\nDownloading log for Ray Node raycluster-kuberay-head-\w+`
 
 		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "head")
 		output, err := cmd.CombinedOutput()
@@ -109,9 +108,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 			currentRequiredFileList := make(map[string]string)
 
-			for key, value := range requiredFileSet {
-				currentRequiredFileList[key] = value
-			}
+			maps.Copy(currentRequiredFileList, requiredFileSet)
 
 			for _, logFile := range logList {
 				if checkContent := currentRequiredFileList[logFile.Name()]; checkContent != "" {
@@ -137,7 +134,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 	It("succeed in retrieving ray cluster worker logs", func() {
 		expectedDirPath := "./raycluster-kuberay"
-		expectedOutputStringFormat := `No output directory specified, creating dir under current directory using resource name\.\nCommand set to retrieve only worker node logs\.\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
+		expectedOutputStringFormat := `Command set to retrieve only worker node logs\.\nNo output directory specified, creating dir under current directory using resource name\.\nDownloading log for Ray Node raycluster-kuberay-workergroup-worker-\w+`
 
 		cmd := exec.Command("kubectl", "ray", "log", "--namespace", namespace, "raycluster-kuberay", "--node-type", "worker")
 		output, err := cmd.CombinedOutput()
@@ -163,9 +160,7 @@ var _ = Describe("Calling ray plugin `log` command on Ray Cluster", func() {
 
 			currentRequiredFileList := make(map[string]string)
 
-			for key, value := range requiredFileSet {
-				currentRequiredFileList[key] = value
-			}
+			maps.Copy(currentRequiredFileList, requiredFileSet)
 
 			for _, logFile := range logList {
 				if checkContent := currentRequiredFileList[logFile.Name()]; checkContent != "" {

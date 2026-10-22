@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -80,7 +82,7 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 		Spec: rayv1.RayServiceSpec{
 			ServeConfigV2: serveConfigV2,
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewCluster),
+				Type: ptr.To(rayv1.RayServiceNewCluster),
 			},
 			RayClusterSpec: rayv1.RayClusterSpec{
 				RayVersion: support.GetRayVersion(),
@@ -119,18 +121,29 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 	}
 }
 
-func endpointsTemplate(name string, namespace string) *corev1.Endpoints {
-	return &corev1.Endpoints{
+func endpointSliceTemplate(name string, namespace string) *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: name,
+			},
 		},
-		Subsets: []corev1.EndpointSubset{
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP: "10.9.8.7",
-					},
+				Addresses: []string{"10.9.8.7"},
+				Conditions: discoveryv1.EndpointConditions{
+					Ready: new(true),
+				},
+				// TargetRef should always be set in production to identify the backing Pod.
+				// This allows proper deduplication when a Pod appears in multiple EndpointSlices.
+				TargetRef: &corev1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: namespace,
+					Name:      "test-pod-1",
+					UID:       "test-uid-12345",
 				},
 			},
 		},
@@ -275,7 +288,7 @@ var _ = Context("RayService env tests", func() {
 		ctx := context.Background()
 		var rayService *rayv1.RayService
 		var rayCluster *rayv1.RayCluster
-		var endpoints *corev1.Endpoints
+		var endpointSlice *discoveryv1.EndpointSlice
 		serveAppName := "app1"
 		namespace := "default"
 
@@ -363,9 +376,9 @@ var _ = Context("RayService env tests", func() {
 			// TODO: Verify the serve service by checking labels and annotations.
 
 			By("The RayServiceReady condition should be true when the number of endpoints is greater than 0")
-			endpoints = endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
-			err = k8sClient.Create(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to create Endpoints resource")
+			endpointSlice = endpointSliceTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
+			err = k8sClient.Create(ctx, endpointSlice)
+			Expect(err).NotTo(HaveOccurred(), "failed to create EndpointSlice resource")
 			Eventually(func() int32 {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService); err != nil {
 					return 0
@@ -379,9 +392,9 @@ var _ = Context("RayService env tests", func() {
 			By(fmt.Sprintf("Delete the RayService custom resource %v", rayService.Name))
 			err := k8sClient.Delete(ctx, rayService)
 			Expect(err).NotTo(HaveOccurred(), "failed to delete the test RayService resource")
-			By(fmt.Sprintf("Delete the Endpoints %v", endpoints.Name))
-			err = k8sClient.Delete(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to delete the test Endpoints resource")
+			By(fmt.Sprintf("Delete the EndpointSlice %v", endpointSlice.Name))
+			err = k8sClient.Delete(ctx, endpointSlice)
+			Expect(err).NotTo(HaveOccurred(), "failed to delete the test EndpointSlice resource")
 		})
 
 		When("Testing in-place update: updating the serveConfigV2", Ordered, func() {
@@ -414,17 +427,20 @@ var _ = Context("RayService env tests", func() {
 			})
 
 			It("Should create an UpdatedServeApplications event", func() {
-				var eventList corev1.EventList
-				listOpts := []client.ListOption{
-					client.InNamespace(rayService.Namespace),
-					client.MatchingFields{
-						"involvedObject.uid": string(rayService.UID),
-						"reason":             string(utils.UpdatedServeApplications),
-					},
-				}
-				err := k8sClient.List(ctx, &eventList, listOpts...)
-				Expect(err).NotTo(HaveOccurred(), "failed to list events")
-				Expect(eventList.Items).To(HaveLen(1))
+				Eventually(func() bool {
+					var eventList eventsv1.EventList
+					err := k8sClient.List(ctx, &eventList, client.InNamespace(rayService.Namespace))
+					if err != nil {
+						return false
+					}
+					for _, event := range eventList.Items {
+						if event.Regarding.UID == rayService.UID &&
+							event.Reason == string(utils.UpdatedServeApplications) {
+							return true
+						}
+					}
+					return false
+				}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 			})
 
 			It("Refresh RayService", func() {
@@ -567,6 +583,78 @@ var _ = Context("RayService env tests", func() {
 						time.Second*3, time.Millisecond*500).Should(Equal(pendingClusterName), "Pending RayCluster: %v", rayService.Status.PendingServiceStatus.RayClusterName)
 				})
 			})
+		})
+	})
+
+	Context("ClusterUpgradeOptions gatewayClassName/gatewayRef CEL validation", func() {
+		ctx := context.Background()
+		namespace := "default"
+		serveAppName := "app"
+
+		withIncrementalUpgradeOptions := func(rayService *rayv1.RayService, opts *rayv1.ClusterUpgradeOptions) *rayv1.RayService {
+			rayService.Spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
+				Type:                  ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: opts,
+			}
+			return rayService
+		}
+		baseOpts := func() *rayv1.ClusterUpgradeOptions {
+			return &rayv1.ClusterUpgradeOptions{
+				MaxSurgePercent: new(int32(100)),
+				StepSizePercent: new(int32(10)),
+				IntervalSeconds: new(int32(30)),
+			}
+		}
+
+		It("accepts gatewayRef alone (gatewayClassName absent)", func() {
+			opts := baseOpts()
+			opts.GatewayRef = &rayv1.GatewayReference{Name: "shared-gateway"}
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-gatewayref", namespace, serveAppName), opts)
+			Expect(k8sClient.Create(ctx, rayService)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, rayService)).To(Succeed())
+		})
+
+		It("accepts gatewayClassName alone (gatewayRef absent)", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = "istio"
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-gatewayclass", namespace, serveAppName), opts)
+			Expect(k8sClient.Create(ctx, rayService)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, rayService)).To(Succeed())
+		})
+
+		It("rejects both gatewayClassName and gatewayRef", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = "istio"
+			opts.GatewayRef = &rayv1.GatewayReference{Name: "shared-gateway"}
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-both", namespace, serveAppName), opts)
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Exactly one of gatewayClassName or gatewayRef must be specified"))
+		})
+
+		It("rejects neither gatewayClassName nor gatewayRef", func() {
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-neither", namespace, serveAppName), baseOpts())
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Exactly one of gatewayClassName or gatewayRef must be specified"))
+		})
+
+		It("rejects an explicit empty gatewayClassName with no gatewayRef", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = "" // present but empty must count as "not set"
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-empty-class", namespace, serveAppName), opts)
+			err := k8sClient.Create(ctx, rayService)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Exactly one of gatewayClassName or gatewayRef must be specified"))
+		})
+
+		It("accepts gatewayRef with an explicit empty gatewayClassName", func() {
+			opts := baseOpts()
+			opts.GatewayClassName = ""
+			opts.GatewayRef = &rayv1.GatewayReference{Name: "shared-gateway"}
+			rayService := withIncrementalUpgradeOptions(rayServiceTemplate("cel-ref-empty-class", namespace, serveAppName), opts)
+			Expect(k8sClient.Create(ctx, rayService)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, rayService)).To(Succeed())
 		})
 	})
 })

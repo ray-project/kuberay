@@ -24,7 +24,7 @@ func TestStaticRayService(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, Files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -68,7 +68,7 @@ func TestAutoscalingRayService(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, Files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -132,7 +132,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, Files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
@@ -160,11 +160,8 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 
 	// Start a goroutine to perform zero-downtime upgrade
 	var wg sync.WaitGroup
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		LogWithTimestamp(test.T(), "Waiting several seconds before updating RayService")
 		time.Sleep(30 * time.Second)
 
@@ -179,7 +176,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 
 		waitingForRayClusterSwitch(g, test, newRayService, rayClusterName)
-	}()
+	})
 
 	// Run Locust test
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
@@ -200,7 +197,7 @@ func TestRayServiceGCSFaultTolerance(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Create a ConfigMap with Locust runner script
-	configMapAC := newConfigMap(namespace.Name, files(test, "locust_runner.py"))
+	configMapAC := newConfigMap(namespace.Name, Files(test, "locust_runner.py"))
 	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)

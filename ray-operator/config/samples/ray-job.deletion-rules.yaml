@@ -12,6 +12,12 @@ spec:
   # DeletionStrategy defines the deletion policies for a RayJob.
   # It allows for fine-grained control over resource cleanup after a job finishes.
   # DeletionRules is a list of deletion rules, processed based on their trigger conditions.
+  # Currently, both JobStatus and JobDeploymentStatus are supported as deletion conditions:
+  # - JobStatus (application-level): Match the Ray job execution status.
+  #   - Currently, only "SUCCEEDED" and "FAILED" are supported.
+  # - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
+  #   - Currently, only "Failed" is supported.
+  # For each deletion rule, exactly one of JobStatus and JobDeploymentStatus must be specified.
   # While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),
   # the most impactful rule (e.g., DeleteCluster) will be executed first to prioritize resource cleanup and cost savings.
   deletionStrategy:
@@ -47,14 +53,14 @@ spec:
       policy: DeleteSelf
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -65,8 +71,10 @@ spec:
             resources:
               limits:
                 cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: "200m"
+                cpu: "1"
+                memory: "2Gi"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -77,9 +85,11 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             resources:
               limits:
                 cpu: "1"
+                memory: "1Gi"
               requests:
-                cpu: "200m"
+                cpu: "1"
+                memory: "1Gi"

@@ -1,12 +1,12 @@
 BUILD_TIME      := $(shell date "+%F %T")
 COMMIT_SHA1     := $(shell git rev-parse HEAD )
 
-# Image URL to use all building/pushing image targets
+# Image reference for building, pushing, and deploying the operator.
 IMG ?= controller:latest
 # Golang forbids converting float from Json to struct. Need allowDangerousTypes=true to unblock build.
 CRD_OPTIONS ?= "crd:maxDescLen=0,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set).
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
@@ -19,7 +19,7 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# Container Engine to be used for building images
+# Container Engine for building images.
 ENGINE ?= "docker"
 
 all: build
@@ -49,7 +49,7 @@ generate: manifests api-docs controller-gen ## Generate code containing DeepCopy
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 	./hack/update-codegen.sh
 
-helm: manifests ## Sync the CRDs into the Helm chart
+helm: manifests ## Sync the CRDs into the Helm chart.
 	rm -r ../helm-chart/kuberay-operator/crds/
 	cp -r config/crd/bases/ ../helm-chart/kuberay-operator/crds/
 
@@ -62,8 +62,13 @@ vet: ## Run go vet against code.
 fumpt: gofumpt
 	$(GOFUMPT) -l -w ../
 
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
+
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
-test: ENVTEST_K8S_VERSION ?= 1.24.2
+test: ENVTEST_K8S_VERSION ?= 1.37.0
 test: manifests fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out
 
@@ -76,8 +81,12 @@ test-e2e-autoscaler: manifests fmt vet ## Run e2e autoscaler tests.
 	go test -timeout 30m -v $(WHAT)
 
 test-e2e-rayservice: WHAT ?= ./test/e2erayservice
-test-e2e-rayservice: manifests fmt vet ## Run e2e RayService tests.
-	go test -timeout 30m -v $(WHAT)
+test-e2e-rayservice: manifests fmt vet ## Run e2e RayService tests (excluding suspend tests, which have their own target).
+	go test -timeout 30m -v -skip Suspend $(WHAT)
+
+test-e2e-rayservice-suspend: WHAT ?= ./test/e2erayservice
+test-e2e-rayservice-suspend: manifests fmt vet ## Run e2e RayService suspend tests.
+	go test -timeout 30m -v -run Suspend $(WHAT)
 
 test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
 test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.
@@ -85,7 +94,7 @@ test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.
 
 test-e2e-incremental-upgrade: WHAT ?= ./test/e2eincrementalupgrade
 test-e2e-incremental-upgrade: manifests fmt vet ## Run e2e RayService incremental upgrade tests.
-	go test -timeout 30m -v $(WHAT)
+	go test -timeout 60m -v $(WHAT)
 
 test-e2e-rayjob-submitter: WHAT ?= ./test/e2erayjobsubmitter
 test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e light weight submitter tests.
@@ -97,6 +106,10 @@ test-sampleyaml: manifests fmt vet
 
 test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
+	go test -timeout 30m -v $(WHAT)
+
+test-e2e-kubernetes-was-v1alpha3: WHAT ?= ./test/e2ekuberneteswas
+test-e2e-kubernetes-was-v1alpha3: manifests fmt vet ## Run e2e Kubernetes WAS v1alpha3 tests.
 	go test -timeout 30m -v $(WHAT)
 
 sync: helm api-docs
@@ -129,10 +142,10 @@ docker-build: build docker-image ## Build image with the manager.
 docker-push: ## Push image with the manager.
 	${ENGINE} push ${IMG}
 
-docker-multi-arch-build: # Build multi arch image, amd64 and arm64 currently
+docker-multi-arch-build: ## Build multi-arch images for amd64 and arm64.
 	${ENGINE} buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
-docker-multi-arch-push: ## Build and Push multi arch image, amd64 and arm64 currently
+docker-multi-arch-push: ## Build and push multi-arch images for amd64 and arm64.
 	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 docker-image-rayjob-submitter:
@@ -159,6 +172,10 @@ deploy-with-override: manifests kustomize ## Deploy controller with test-only fe
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/overlays/test-overrides | kubectl apply --server-side=true -f -
 
+deploy-kubernetes-was-v1alpha3: manifests kustomize ## Deploy controller with Kubernetes WAS v1alpha3 batch scheduler enabled (requires K8s 1.37+).
+	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	$(KUSTOMIZE) build config/overlays/kubernetes-was-v1alpha3 | kubectl apply --server-side=true -f -
+
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
@@ -171,7 +188,10 @@ api-docs: crd-ref-docs ## Generate CRD documentation.
     --output-path=../docs/reference/api.md
 
 certmanager:
-	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.4/cert-manager.yaml
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-webhook --timeout=120s
+	kubectl wait --namespace cert-manager --for=condition=Available deployment/cert-manager-cainjector --timeout=120s
 
 deploy-with-webhooks: manifests kustomize certmanager ## Deploy controller with webhooks to the K8s cluster specified in ~/.kube/config.
 	cd config/default-with-webhooks && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
@@ -200,7 +220,7 @@ kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest locally if necessary.
-	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240201105228-4000e996a202
+	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.25
 
 GOFUMPT = $(LOCALBIN)/gofumpt
 $(GOFUMPT): $(LOCALBIN)
@@ -211,7 +231,7 @@ CRD_REF_DOCS = $(LOCALBIN)/crd-ref-docs
 $(CRD_REF_DOCS): $(LOCALBIN)
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
-	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.0.12
+	test -s $(CRD_REF_DOCS) || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@v0.2.0
 
 .PHONY: clean
 clean:

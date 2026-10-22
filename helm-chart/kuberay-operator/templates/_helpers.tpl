@@ -70,6 +70,39 @@ FeatureGates
 {{- end }}
 {{- end }}
 
+{{/*
+Whether the KubernetesWAS feature gate is enabled in .Values.featureGates.
+*/}}
+{{- define "kuberay.kubernetesWASEnabled" -}}
+{{- range .Values.featureGates -}}
+{{- if and (eq .name "KubernetesWAS") .enabled -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Whether the NodeLabelDelivery feature gate is enabled in .Values.featureGates.
+*/}}
+{{- define "kuberay.nodeLabelDeliveryEnabled" -}}
+{{- range .Values.featureGates -}}
+{{- if and (eq .name "NodeLabelDelivery") .enabled -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{- /* Names shared by the admission webhook templates and the Deployment. */ -}}
+{{- define "kuberay-operator.webhook.serviceName" -}}
+{{- include "kuberay-operator.fullname" . -}}-webhook
+{{- end -}}
+{{- define "kuberay-operator.webhook.certName" -}}
+{{- include "kuberay-operator.fullname" . -}}-serving-cert
+{{- end -}}
+{{- define "kuberay-operator.webhook.certSecretName" -}}
+{{- include "kuberay-operator.fullname" . -}}-webhook-server-cert
+{{- end -}}
+
 {{- /* Create the name of the service to use. */ -}}
 {{- define "kuberay-operator.service.name" -}}
 {{- include "kuberay-operator.fullname" . }}
@@ -104,6 +137,54 @@ FeatureGates
 {{- include "kuberay-operator.fullname" . -}}
 {{- end -}}
 
+{{/*
+Validate operator configuration values.
+This template validates reconcileConcurrency, kubeClient.qps, and kubeClient.burst.
+It should be called early in the deployment to ensure invalid values are caught.
+*/}}
+{{- define "kuberay-operator.validateConfig" -}}
+{{- if hasKey .Values "reconcileConcurrency" }}
+{{- $rc := toString .Values.reconcileConcurrency }}
+{{- if not (regexMatch "^[1-9][0-9]*$" $rc) }}
+{{- fail (printf "values.reconcileConcurrency must be a positive integer, got %q" $rc) }}
+{{- end }}
+{{- end }}
+{{- if hasKey .Values "kubeClient" }}
+{{- if hasKey .Values.kubeClient "qps" }}
+{{- $qps := toString .Values.kubeClient.qps }}
+{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?$" $qps) }}
+{{- fail (printf "values.kubeClient.qps must be a valid float number, got %q" $qps) }}
+{{- end }}
+{{- end }}
+{{- if hasKey .Values.kubeClient "burst" }}
+{{- $burst := toString .Values.kubeClient.burst }}
+{{- if not (regexMatch "^[0-9]+$" $burst) }}
+{{- fail (printf "values.kubeClient.burst must be a non-negative integer, got %q" $burst) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $nodeEventForwarderEnabled := false -}}
+{{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") -}}
+  {{- $nodeEventForwarderEnabled = .Values.nodeEventForwarder.enabled -}}
+{{- end -}}
+{{- if and .Values.singleNamespaceInstall $nodeEventForwarderEnabled }}
+{{- fail "nodeEventForwarder is not supported when singleNamespaceInstall is true because Node events are cluster-scoped and recorded in 'default' or 'kube-system', which requires permissions outside a single namespace." }}
+{{- end }}
+{{- if and .Values.singleNamespaceInstall .Values.webhooks.enabled }}
+{{- fail "webhooks are not supported when singleNamespaceInstall is true because the webhook configurations and Node reads are cluster-scoped." }}
+{{- end }}
+{{- end }}
+
+{{- /* Create the name of the node event forwarder role to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderRole.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
+{{- end -}}
+
+{{- /* Create the name of the node event forwarder role binding to use. */ -}}
+{{- define "kuberay-operator.nodeEventForwarderRoleBinding.name" -}}
+{{- include "kuberay-operator.fullname" . -}}-node-event-forwarder
+{{- end -}}
+
 {{- /* Create the name of the leader election role to use. */ -}}
 {{- define "kuberay-operator.leaderElectionRole.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-leader-election
@@ -119,18 +200,19 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
+{{- if .clusterScoped }}
+# the pods/binding webhook reads the bound node's labels; nodes are cluster-scoped so only the ClusterRole carries it
 - apiGroups:
   - ""
   resources:
-  - endpoints
+  - nodes
   verbs:
   - get
-  - list
-  - watch
+{{- end }}
 - apiGroups:
   - ""
   resources:
-  - events
+  - persistentvolumeclaims
   - pods/status
   - services
   verbs:
@@ -172,6 +254,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
@@ -201,6 +294,31 @@ rules:
   - update
   - watch
 - apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates/status
+  verbs:
+  - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
@@ -209,6 +327,21 @@ rules:
   - get
   - list
   - update
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - extensions
   - networking.k8s.io
@@ -229,6 +362,7 @@ rules:
   - httproutes
   verbs:
   - create
+  - delete
   - get
   - list
   - update
@@ -242,9 +376,21 @@ rules:
   - list
   - watch
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ray.io
   resources:
   - rayclusters
+  - raycronjobs
   - rayjobs
   - rayservices
   verbs:
@@ -259,6 +405,7 @@ rules:
   - ray.io
   resources:
   - rayclusters/finalizers
+  - raycronjobs/finalizers
   - rayjobs/finalizers
   - rayservices/finalizers
   verbs:
@@ -267,6 +414,7 @@ rules:
   - ray.io
   resources:
   - rayclusters/status
+  - raycronjobs/status
   - rayjobs/status
   - rayservices/status
   verbs:
@@ -306,6 +454,21 @@ rules:
   - patch
   - update
   - watch
+{{- if .kubernetesWASEnabled }}
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - podgroups
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh

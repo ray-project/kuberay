@@ -19,6 +19,11 @@ else
 endif
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?= http://localhost:31888
+# Export so `go test` subprocesses pick them up via os.Getenv. Without this,
+# the e2e helpers fall back to their hard-coded defaults and disagree with the
+# image preloaded into kind by `load-ray-test-image`.
+export E2E_API_SERVER_RAY_IMAGE
+export E2E_API_SERVER_URL
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (, $(shell go env GOBIN))
@@ -86,8 +91,7 @@ imports: goimports ## Run goimports against code.
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
-	# exclude the SA1019 check which checks the usage of deprecated fields.
-	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
+	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
 
 build: fmt vet fumpt imports ## Build api server binary.
 	go build -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -105,6 +109,11 @@ generate: mockgen # Generate code using command after //go:generate in each file
 	PATH=$(REPO_ROOT_BIN):$$PATH go generate ./...
 
 ##@ Testing
+
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
 
 .PHONY: test
 test: fmt vet fumpt imports generate ## Run all unit tests.
@@ -147,9 +156,6 @@ load-image: ## Load the api server image to the kind cluster created with create
 operator-image: ## Build the operator image to be loaded in your kind cluster.
 	cd ../ray-operator && $(MAKE) docker-image -e IMG=quay.io/kuberay/operator:$(OPERATOR_IMAGE_TAG)
 
-.PHONY: security-proxy-image
-security-proxy-image: ## Build the security proxy image to be loaded in your kind cluster.
-	cd ../experimental && $(MAKE) docker-image -e IMG=quay.io/kuberay/security-proxy:$(SECURITY_IMAGE_TAG)
 
 .PHONY: deploy-operator
 deploy-operator: ## Deploy operator via helm into the K8s cluster specified in ~/.kube/config.
@@ -254,7 +260,7 @@ MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 KUSTOMIZE_VERSION ?= v5.4.3
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT_VERSION ?= v2.11.4
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 MOCKGEN_VERSION ?= v1.6.0

@@ -70,44 +70,47 @@ func (r *rayClusterScaleExpectationImpl) ExpectScalePod(namespace, rayClusterNam
 	}
 }
 
+func (r *rayClusterScaleExpectationImpl) isPodScaled(ctx context.Context, rp *rayPod) bool {
+	pod := &corev1.Pod{}
+	switch rp.action {
+	case Create:
+		if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: rp.namespace}, pod); err == nil {
+			return true
+		}
+		// Tolerating extreme case:
+		//   The first reconciliation created a Pod. If the Pod was quickly deleted from etcd by another component
+		//   before the second reconciliation. This would lead to never satisfying the expected condition.
+		//   Avoid this by setting a timeout.
+		return rp.recordTimestamp.Add(ExpectationsTimeout).Before(time.Now())
+	case Delete:
+		if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: rp.namespace}, pod); err != nil {
+			return errors.IsNotFound(err)
+		}
+	}
+	return false
+}
+
 func (r *rayClusterScaleExpectationImpl) IsSatisfied(ctx context.Context, namespace, rayClusterName, group string) (isSatisfied bool) {
 	items, err := r.itemsCache.ByIndex(GroupIndex, fmt.Sprintf("%s/%s/%s", namespace, rayClusterName, group))
 	if err != nil {
 		// An error occurs when there is no corresponding IndexFunc for GroupIndex. This should be a fatal error.
 		panic(err)
 	}
-	isSatisfied = true
 	for i := range items {
 		rp := items[i].(*rayPod)
-		pod := &corev1.Pod{}
-		isPodSatisfied := false
-		switch rp.action {
-		case Create:
-			if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: namespace}, pod); err == nil {
-				isPodSatisfied = true
-			} else {
-				// Tolerating extreme case:
-				//   The first reconciliation created a Pod. If the Pod was quickly deleted from etcd by another component
-				//   before the second reconciliation. This would lead to never satisfying the expected condition.
-				//   Avoid this by setting a timeout.
-				isPodSatisfied = rp.recordTimestamp.Add(ExpectationsTimeout).Before(time.Now())
-			}
-		case Delete:
-			if err := r.Get(ctx, types.NamespacedName{Name: rp.name, Namespace: namespace}, pod); err != nil {
-				isPodSatisfied = errors.IsNotFound(err)
-			}
+		isPodSatisfied := r.isPodScaled(ctx, rp)
+
+		if !isPodSatisfied {
+			return false
 		}
+
 		// delete satisfied item in cache
-		if isPodSatisfied {
-			if err := r.itemsCache.Delete(items[i]); err != nil {
-				// Fatal error in KeyFunc.
-				panic(err)
-			}
-		} else {
-			isSatisfied = false
+		if err := r.itemsCache.Delete(items[i]); err != nil {
+			// Fatal error in KeyFunc.
+			panic(err)
 		}
 	}
-	return isSatisfied
+	return true
 }
 
 func (r *rayClusterScaleExpectationImpl) Delete(rayClusterName, namespace string) {
@@ -146,17 +149,17 @@ func (p *rayPod) ClusterKey() string {
 }
 
 // rayPodKey is used only for getting rayPod.Key(). The type of obj must be rayPod.
-func rayPodKey(obj interface{}) (string, error) {
+func rayPodKey(obj any) (string, error) {
 	return obj.(*rayPod).Key(), nil
 }
 
 // groupIndexFunc is used only for getting rayPod.GroupKey(). The type of obj must be rayPod.
-func groupIndexFunc(obj interface{}) ([]string, error) {
+func groupIndexFunc(obj any) ([]string, error) {
 	return []string{obj.(*rayPod).GroupKey()}, nil
 }
 
 // rayClusterIndexFunc is used only for getting rayPod.ClusterKey(). The type of obj must be rayPod.
-func rayClusterIndexFunc(obj interface{}) ([]string, error) {
+func rayClusterIndexFunc(obj any) ([]string, error) {
 	return []string{obj.(*rayPod).ClusterKey()}, nil
 }
 

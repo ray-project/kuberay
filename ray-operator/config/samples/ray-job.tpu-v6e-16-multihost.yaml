@@ -10,14 +10,14 @@ spec:
       - jax[tpu]==0.6.1
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0-py310
+            image: rayproject/ray:2.52.0-py310
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -30,10 +30,10 @@ spec:
             resources:
               limits:
                 cpu: "8"
-                memory: 40G
+                memory: "40G"
               requests:
                 cpu: "8"
-                memory: 40G
+                memory: "40G"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -47,16 +47,16 @@ spec:
             runAsUser: 0
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.46.0-py310
+            image: rayproject/ray:2.52.0-py310
             resources:
               limits:
                 cpu: "24"
                 google.com/tpu: "4"
-                memory: 200G
+                memory: "200G"
               requests:
                 cpu: "24"
                 google.com/tpu: "4"
-                memory: 200G
+                memory: "200G"
             env:
             - name: NODE_IP
               valueFrom:

@@ -25,7 +25,7 @@ spec:
               target_ongoing_requests: 64
             max_ongoing_requests: 128
   rayClusterConfig:
-    rayVersion: "2.46.0"
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
@@ -34,7 +34,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray-llm:2.46.0-py311-cu124
+            image: rayproject/ray-llm:2.52.0-py311-cu128
             ports:
             - containerPort: 8000
               name: serve
@@ -53,11 +53,11 @@ spec:
               protocol: TCP
             resources:
               limits:
-                cpu: 2
-                memory: 4Gi
+                cpu: "2"
+                memory: "5Gi"
               requests:
-                cpu: 2
-                memory: 4Gi
+                cpu: "2"
+                memory: "4Gi"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -70,7 +70,7 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray-llm:2.46.0-py311-cu124
+            image: rayproject/ray-llm:2.52.0-py311-cu128
             env:
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
@@ -79,12 +79,12 @@ spec:
                   key: hf_token
             resources:
               limits:
-                cpu: 32
-                memory: 32Gi
+                cpu: "32"
+                memory: "32Gi"
                 nvidia.com/gpu: "4"
               requests:
-                cpu: 32
-                memory: 32Gi
+                cpu: "32"
+                memory: "32Gi"
                 nvidia.com/gpu: "4"
 
 ---

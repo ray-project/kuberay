@@ -13,7 +13,7 @@ spec:
       CPUS_PER_WORKER: "1"
       OMP_NUM_THREADS: "1" # Set OMP_NUM_THREADS to avoid KeyErorr race condition.
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       template:
         spec:
@@ -29,10 +29,10 @@ spec:
                   name: client
               resources:
                 limits:
-                  memory: "4Gi"
+                  memory: "5Gi"
                 requests:
                   cpu: "1"
-                  memory: "4Gi"
+                  memory: "5Gi"
     workerGroupSpecs:
       - replicas: 2
         minReplicas: 1

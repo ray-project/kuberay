@@ -10,8 +10,10 @@ import (
 
 // RayJobApplyConfiguration represents a declarative configuration of the RayJob type for use
 // with apply.
+//
+// RayJob is the Schema for the rayjobs API
 type RayJobApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *RayJobSpecApplyConfiguration   `json:"spec,omitempty"`
 	Status                               *RayJobStatusApplyConfiguration `json:"status,omitempty"`
@@ -27,6 +29,7 @@ func RayJob(name, namespace string) *RayJobApplyConfiguration {
 	b.WithAPIVersion("ray.io/v1")
 	return b
 }
+
 func (b RayJobApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

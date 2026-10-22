@@ -81,7 +81,7 @@ export const ClustersTable = () => {
         </td>
         <td>{dayjs(row.createdAt).format("M/D/YY HH:mm:ss")}</td>
         <td className="flex">
-          {row.clusterState === "READY" && (
+          {row.clusterState === "READY" && row.links.rayHeadDashboardLink && (
             <IconButton
               variant="plain"
               size="sm"

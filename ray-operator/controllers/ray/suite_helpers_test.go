@@ -249,6 +249,36 @@ func checkServeApplicationExists(ctx context.Context, rayService *rayv1.RayServi
 // So Pods are created, but no controller updates them from Pending to Running.
 // See https://book.kubebuilder.io/reference/envtest.html for more details.
 func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, namespace string) {
+	updateHeadPodToPhaseAndConditions(ctx, rayClusterName, namespace, corev1.PodRunning, []corev1.PodCondition{
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionTrue,
+		},
+	})
+}
+
+func updateHeadPodToRunningNotReady(ctx context.Context, rayClusterName string, namespace string) {
+	updateHeadPodToPhaseAndConditions(ctx, rayClusterName, namespace, corev1.PodRunning, []corev1.PodCondition{
+		{
+			Type:   corev1.PodScheduled,
+			Status: corev1.ConditionTrue,
+		},
+		{
+			Type:   corev1.PodInitialized,
+			Status: corev1.ConditionTrue,
+		},
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.ContainersReady,
+			Status: corev1.ConditionFalse,
+		},
+	})
+}
+
+func updateHeadPodToPhaseAndConditions(ctx context.Context, rayClusterName string, namespace string, phase corev1.PodPhase, conditions []corev1.PodCondition) {
 	var instance rayv1.RayCluster
 	gomega.Eventually(
 		getResourceFunc(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, &instance),
@@ -262,19 +292,10 @@ func updateHeadPodToRunningAndReady(ctx context.Context, rayClusterName string, 
 		time.Second*3, time.Millisecond*500).Should(gomega.Equal(1), "Head pod list should have only 1 Pod = %v", headPods.Items)
 
 	headPod := headPods.Items[0]
-	headPod.Status.Phase = corev1.PodRunning
-	headPod.Status.Conditions = []corev1.PodCondition{
-		{
-			Type:   corev1.PodReady,
-			Status: corev1.ConditionTrue,
-		},
-	}
+	headPod.Status.Phase = phase
+	headPod.Status.Conditions = conditions
 	err := k8sClient.Status().Update(ctx, &headPod)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update head Pod status to PodRunning")
-
-	// Make sure the head Pod is updated.
-	gomega.Eventually(
-		isAllPodsRunningByFilters).WithContext(ctx).WithArguments(headPods, headLabels).WithTimeout(time.Second*15).WithPolling(time.Millisecond*500).Should(gomega.BeTrue(), "Head Pod should be running: %v", headPods.Items)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update head Pod status to not ready")
 }
 
 // Update the status of the worker Pods to Running and Ready. Similar to updateHeadPodToRunningAndReady.

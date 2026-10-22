@@ -78,14 +78,11 @@ func NewDeleteCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOSt
 }
 
 func (options *DeleteOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	if options.resources == nil {
 		options.resources = map[util.ResourceType][]string{}
@@ -134,17 +131,17 @@ func (options *DeleteOptions) Run(ctx context.Context, factory cmdutil.Factory) 
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	resources := ""
+	var resources strings.Builder
 	for resourceType, resourceNames := range options.resources {
 		for _, resourceName := range resourceNames {
-			resources += fmt.Sprintf("\n- %s/%s", resourceType, resourceName)
+			fmt.Fprintf(&resources, "\n- %s/%s", resourceType, resourceName)
 		}
 	}
 
 	if !options.yes {
 		// Ask user for confirmation
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Are you sure you want to delete the following resources?%s\n(y/yes/n/no)", resources)
+		fmt.Printf("Are you sure you want to delete the following resources?%s\n(y/yes/n/no)", resources.String())
 		confirmation, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("Failed to read user input: %w", err)

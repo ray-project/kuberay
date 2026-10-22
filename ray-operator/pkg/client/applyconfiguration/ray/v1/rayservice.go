@@ -10,8 +10,10 @@ import (
 
 // RayServiceApplyConfiguration represents a declarative configuration of the RayService type for use
 // with apply.
+//
+// RayService is the Schema for the rayservices API
 type RayServiceApplyConfiguration struct {
-	metav1.TypeMetaApplyConfiguration    `json:",inline"`
+	metav1.TypeMetaApplyConfiguration    `json:""`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                 *RayServiceSpecApplyConfiguration     `json:"spec,omitempty"`
 	Status                               *RayServiceStatusesApplyConfiguration `json:"status,omitempty"`
@@ -27,6 +29,7 @@ func RayService(name, namespace string) *RayServiceApplyConfiguration {
 	b.WithAPIVersion("ray.io/v1")
 	return b
 }
+
 func (b RayServiceApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

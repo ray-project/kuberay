@@ -47,10 +47,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: 8G
+                memory: "8G"
               requests:
                 cpu: "2"
-                memory: 8G
+                memory: "8G"
             volumeMounts:
             - name: gcs-fuse-csi-ephemeral
               mountPath: /data
@@ -96,13 +96,13 @@ spec:
               limits:
                 cpu: "100"
                 google.com/tpu: "8"
-                ephemeral-storage: 40G
-                memory: 200G
+                ephemeral-storage: "40G"
+                memory: "200G"
               requests:
                 cpu: "100"
                 google.com/tpu: "8"
-                ephemeral-storage: 40G
-                memory: 200G
+                ephemeral-storage: "40G"
+                memory: "200G"
             env:
             - name: JAX_PLATFORMS
               value: "tpu"

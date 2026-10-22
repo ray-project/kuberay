@@ -1,6 +1,6 @@
 # RayCluster
 
-![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square)
+![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 A Helm chart for deploying the RayCluster with the kuberay operator.
 
@@ -73,23 +73,28 @@ helm uninstall raycluster
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"rayproject/ray"` | Image repository. |
-| image.tag | string | `"2.46.0"` | Image tag. |
+| image.tag | string | `"2.52.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | nameOverride | string | `"kuberay"` | String to partially override release name. |
 | fullnameOverride | string | `""` | String to fully override release name. |
 | imagePullSecrets | list | `[]` | Secrets with credentials to pull images from a private registry |
+| upgradeStrategy | object | `{}` | Recreate all Pods on RayCluster spec change. Intended for GitOps; running workloads are lost. |
+| authOptions | object | `{}` | Token authentication for the RayCluster. |
 | gcsFaultTolerance.enabled | bool | `false` |  |
 | common.containerEnv | list | `[]` | containerEnv specifies environment variables for the Ray head and worker containers. Follows standard K8s container env schema. |
+| common.envFrom | list | `[]` | envFrom specifies sources used to populate environment variables in the main Ray head and worker containers. Common sources are rendered before group-specific sources. Referenced ConfigMaps and Secrets must already exist. |
 | head.initContainers | list | `[]` | Init containers to add to the head pod |
 | head.labels | object | `{}` | Labels for the head pod |
 | head.serviceAccountName | string | `""` |  |
 | head.restartPolicy | string | `""` |  |
+| head.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the head Pod. |
 | head.containerEnv | list | `[]` |  |
 | head.envFrom | list | `[]` | envFrom to pass to head pod |
 | head.resources.limits.cpu | string | `"1"` |  |
-| head.resources.limits.memory | string | `"2G"` |  |
+| head.resources.limits.memory | string | `"5Gi"` |  |
 | head.resources.requests.cpu | string | `"1"` |  |
-| head.resources.requests.memory | string | `"2G"` |  |
+| head.resources.requests.memory | string | `"5Gi"` |  |
+| head.resourceClaims | list | `[]` | ResourceClaims to allocate with the head pod |
 | head.annotations | object | `{}` | Extra annotations for head pod |
 | head.nodeSelector | object | `{}` | Node labels for head pod assignment |
 | head.tolerations | list | `[]` | Node tolerations for head pod scheduling to nodes with taints |
@@ -109,17 +114,19 @@ helm uninstall raycluster
 | worker.groupName | string | `"workergroup"` | The name of the workergroup |
 | worker.replicas | int | `1` | The number of replicas for the worker pod |
 | worker.minReplicas | int | `1` | The minimum number of replicas for the worker pod |
-| worker.maxReplicas | int | `3` | The maximum number of replicas for the worker pod |
+| worker.maxReplicas | int | `5` | The maximum number of replicas for the worker pod |
 | worker.labels | object | `{}` | Labels for the worker pod |
 | worker.serviceAccountName | string | `""` |  |
 | worker.restartPolicy | string | `""` |  |
+| worker.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the worker Pods. |
 | worker.initContainers | list | `[]` | Init containers to add to the worker pod |
 | worker.containerEnv | list | `[]` |  |
 | worker.envFrom | list | `[]` | envFrom to pass to worker pod |
 | worker.resources.limits.cpu | string | `"1"` |  |
-| worker.resources.limits.memory | string | `"1G"` |  |
+| worker.resources.limits.memory | string | `"1Gi"` |  |
 | worker.resources.requests.cpu | string | `"1"` |  |
-| worker.resources.requests.memory | string | `"1G"` |  |
+| worker.resources.requests.memory | string | `"1Gi"` |  |
+| worker.resourceClaims | list | `[]` | ResourceClaims to allocate with the worker pod |
 | worker.annotations | object | `{}` | Extra annotations for worker pod |
 | worker.nodeSelector | object | `{}` | Node labels for worker pod assignment |
 | worker.tolerations | list | `[]` | Node tolerations for worker pod scheduling to nodes with taints |
@@ -138,16 +145,18 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.disabled | bool | `true` |  |
 | additionalWorkerGroups.smallGroup.replicas | int | `0` | The number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.minReplicas | int | `0` | The minimum number of replicas for the additional worker pod |
-| additionalWorkerGroups.smallGroup.maxReplicas | int | `3` | The maximum number of replicas for the additional worker pod |
+| additionalWorkerGroups.smallGroup.maxReplicas | int | `5` | The maximum number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.labels | object | `{}` | Labels for the additional worker pod |
 | additionalWorkerGroups.smallGroup.serviceAccountName | string | `""` |  |
 | additionalWorkerGroups.smallGroup.restartPolicy | string | `""` |  |
+| additionalWorkerGroups.smallGroup.runtimeClassName | string | `""` | runtimeClassName for this additional worker group. Empty string means default runtime. |
 | additionalWorkerGroups.smallGroup.containerEnv | list | `[]` |  |
 | additionalWorkerGroups.smallGroup.envFrom | list | `[]` | envFrom to pass to additional worker pod |
 | additionalWorkerGroups.smallGroup.resources.limits.cpu | int | `1` |  |
-| additionalWorkerGroups.smallGroup.resources.limits.memory | string | `"1G"` |  |
+| additionalWorkerGroups.smallGroup.resources.limits.memory | string | `"1Gi"` |  |
 | additionalWorkerGroups.smallGroup.resources.requests.cpu | int | `1` |  |
-| additionalWorkerGroups.smallGroup.resources.requests.memory | string | `"1G"` |  |
+| additionalWorkerGroups.smallGroup.resources.requests.memory | string | `"1Gi"` |  |
+| additionalWorkerGroups.smallGroup.resourceClaims | list | `[]` | ResourceClaims to allocate with the additional worker pod |
 | additionalWorkerGroups.smallGroup.annotations | object | `{}` | Extra annotations for additional worker pod |
 | additionalWorkerGroups.smallGroup.nodeSelector | object | `{}` | Node labels for additional worker pod assignment |
 | additionalWorkerGroups.smallGroup.tolerations | list | `[]` | Node tolerations for additional worker pod scheduling to nodes with taints |

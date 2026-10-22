@@ -18,11 +18,3 @@ export const FirstVisitProvider = ({ children }: { children: ReactNode }) => {
     </FirstVisitContext.Provider>
   );
 };
-
-export const useFirstVisit = () => {
-  const context = useContext(FirstVisitContext);
-  if (context === undefined) {
-    throw new Error("useFirstVisit must be used within a FirstVisitProvider");
-  }
-  return context;
-};

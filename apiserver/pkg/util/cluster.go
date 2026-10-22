@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"strings"
@@ -111,9 +112,9 @@ func buildRayClusterSpec(imageVersion string, envs *api.EnvironmentVariables, cl
 
 		workerNodeSpec := rayv1api.WorkerGroupSpec{
 			GroupName:      spec.GroupName,
-			MinReplicas:    intPointer(minReplicas),
-			MaxReplicas:    intPointer(maxReplicas),
-			Replicas:       intPointer(spec.Replicas),
+			MinReplicas:    new(minReplicas),
+			MaxReplicas:    new(maxReplicas),
+			Replicas:       new(spec.Replicas),
 			RayStartParams: spec.RayStartParams,
 			Template:       *workerPodTemplate,
 		}
@@ -287,16 +288,12 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 	// Add specific annotations
 	if spec.Annotations != nil {
-		for k, v := range spec.Annotations {
-			podTemplateSpec.ObjectMeta.Annotations[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Annotations, spec.Annotations)
 	}
 
 	// Add specific labels
 	if spec.Labels != nil {
-		for k, v := range spec.Labels {
-			podTemplateSpec.ObjectMeta.Labels[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Labels, spec.Labels)
 	}
 
 	// Add specific tollerations
@@ -582,16 +579,12 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 	// Add specific annotations
 	if spec.Annotations != nil {
-		for k, v := range spec.Annotations {
-			podTemplateSpec.ObjectMeta.Annotations[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Annotations, spec.Annotations)
 	}
 
 	// Add specific labels
 	if spec.Labels != nil {
-		for k, v := range spec.Labels {
-			podTemplateSpec.ObjectMeta.Labels[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Labels, spec.Labels)
 	}
 
 	// Add specific tollerations
@@ -826,11 +819,6 @@ func buildSecurityContext(securityCtx *api.SecurityContext) *corev1.SecurityCont
 		}
 	}
 	return result
-}
-
-// Init pointer
-func intPointer(value int32) *int32 {
-	return &value
 }
 
 // Get converts this object to a rayv1api.Workflow.

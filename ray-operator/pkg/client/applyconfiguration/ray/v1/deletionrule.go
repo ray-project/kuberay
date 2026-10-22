@@ -8,8 +8,13 @@ import (
 
 // DeletionRuleApplyConfiguration represents a declarative configuration of the DeletionRule type for use
 // with apply.
+//
+// DeletionRule defines a single deletion action and its trigger condition.
+// This is the new, recommended way to define deletion behavior.
 type DeletionRuleApplyConfiguration struct {
-	Policy    *rayv1.DeletionPolicyType            `json:"policy,omitempty"`
+	// Policy is the action to take when the condition is met. This field is required.
+	Policy *rayv1.DeletionPolicyType `json:"policy,omitempty"`
+	// The condition under which this deletion rule is triggered. This field is required.
 	Condition *DeletionConditionApplyConfiguration `json:"condition,omitempty"`
 }
 

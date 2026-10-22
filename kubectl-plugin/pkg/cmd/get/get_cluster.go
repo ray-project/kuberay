@@ -46,7 +46,7 @@ func NewGetClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
 		Args:              cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := options.Complete(args, cmd); err != nil {
+			if err := options.Complete(args); err != nil {
 				return err
 			}
 			// running cmd.Execute or cmd.ExecuteE sets the context, which will be done by root
@@ -61,15 +61,12 @@ func NewGetClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 	return cmd
 }
 
-func (options *GetClusterOptions) Complete(args []string, cmd *cobra.Command) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+func (options *GetClusterOptions) Complete(args []string) error {
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	if len(args) >= 1 {
 		options.cluster = args[0]
@@ -153,7 +150,7 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 			relevantConditionType = relevantCondition.Type
 		}
 		resTable.Rows = append(resTable.Rows, v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				raycluster.GetName(),
 				raycluster.GetNamespace(),
 				raycluster.Status.DesiredWorkerReplicas,

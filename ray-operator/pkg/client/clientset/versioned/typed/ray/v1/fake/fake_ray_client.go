@@ -16,6 +16,10 @@ func (c *FakeRayV1) RayClusters(namespace string) v1.RayClusterInterface {
 	return newFakeRayClusters(c, namespace)
 }
 
+func (c *FakeRayV1) RayCronJobs(namespace string) v1.RayCronJobInterface {
+	return newFakeRayCronJobs(c, namespace)
+}
+
 func (c *FakeRayV1) RayJobs(namespace string) v1.RayJobInterface {
 	return newFakeRayJobs(c, namespace)
 }

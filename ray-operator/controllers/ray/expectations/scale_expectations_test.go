@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -165,4 +166,112 @@ func getTestPod() []corev1.Pod {
 			},
 		},
 	}
+}
+
+func TestIsPodScaled(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		setupFunc      func(client.Client, *corev1.Pod)
+		action         ScaleAction
+		name           string
+		expectedResult bool
+	}{
+		{
+			name:           "Create action - pod exists",
+			action:         Create,
+			expectedResult: true,
+			setupFunc: func(client client.Client, pod *corev1.Pod) {
+				err := client.Create(ctx, pod)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name:           "Create action - pod does not exist",
+			action:         Create,
+			expectedResult: false,
+			setupFunc:      func(_ client.Client, _ *corev1.Pod) {},
+		},
+		{
+			name:           "Delete action - pod exists",
+			action:         Delete,
+			expectedResult: false,
+			setupFunc: func(client client.Client, pod *corev1.Pod) {
+				err := client.Create(ctx, pod)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name:           "Delete action - pod does not exist",
+			action:         Delete,
+			expectedResult: true,
+			setupFunc:      func(_ client.Client, _ *corev1.Pod) {},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
+			exp := &rayClusterScaleExpectationImpl{
+				Client:     fakeClient,
+				itemsCache: nil, // Not used in isPodScaled
+			}
+
+			testPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "default",
+				},
+			}
+
+			rp := &rayPod{
+				name:            testPod.Name,
+				namespace:       testPod.Namespace,
+				action:          tt.action,
+				recordTimestamp: time.Now(),
+			}
+
+			tt.setupFunc(fakeClient, testPod)
+
+			result := exp.isPodScaled(ctx, rp)
+			assert.Equal(t, tt.expectedResult, result)
+		})
+	}
+}
+
+func TestIsPodScaledTimeout(t *testing.T) {
+	ctx := context.Background()
+
+	// Save original timeout and restore after test
+	originalTimeout := ExpectationsTimeout
+	ExpectationsTimeout = 20 * time.Millisecond
+	defer func() { ExpectationsTimeout = originalTimeout }()
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
+	exp := &rayClusterScaleExpectationImpl{
+		Client:     fakeClient,
+		itemsCache: nil,
+	}
+
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "default",
+		},
+	}
+
+	rp := &rayPod{
+		name:            testPod.Name,
+		namespace:       testPod.Namespace,
+		action:          Create,
+		recordTimestamp: time.Now(),
+	}
+
+	// Initially should return false (pod doesn't exist)
+	result := exp.isPodScaled(ctx, rp)
+	assert.False(t, result)
+
+	// After timeout, should return true even though pod doesn't exist
+	time.Sleep(ExpectationsTimeout + 10*time.Millisecond)
+	result = exp.isPodScaled(ctx, rp)
+	assert.True(t, result)
 }

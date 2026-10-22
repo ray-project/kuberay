@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -22,15 +23,12 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestRayWorkerGroupGetComplete(t *testing.T) {
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
-	cmd := &cobra.Command{}
-	flags := cmd.Flags()
-	flags.String("namespace", "", "namespace flag")
 
 	tests := []struct {
 		opts                *GetWorkerGroupsOptions
@@ -87,9 +85,15 @@ func TestRayWorkerGroupGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := flags.Set("namespace", tc.namespace)
-			require.NoError(t, err)
-			err = tc.opts.Complete(tc.args, cmd)
+			configFlags := genericclioptions.NewConfigFlags(true)
+			if tc.namespace != "" {
+				configFlags.Namespace = &tc.namespace
+			}
+			tc.opts.cmdFactory = cmdutil.NewFactory(configFlags)
+			cmd := &cobra.Command{}
+			flags := cmd.Flags()
+			configFlags.AddFlags(flags)
+			err := tc.opts.Complete(tc.args)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, tc.opts.namespace)
 			assert.Equal(t, tc.expectedWorkerGroup, tc.opts.workerGroup)
@@ -139,9 +143,11 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			Spec: rayv1.RayClusterSpec{
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
-						Template:  podTemplate,
+						GroupName:   "group-1",
+						Replicas:    new(int32(1)),
+						MinReplicas: new(int32(1)),
+						MaxReplicas: new(int32(5)),
+						Template:    podTemplate,
 					},
 				},
 			},
@@ -154,9 +160,11 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			Spec: rayv1.RayClusterSpec{
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						GroupName: "group-2",
-						Replicas:  ptr.To(int32(1)),
-						Template:  podTemplate,
+						GroupName:   "group-2",
+						Replicas:    new(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: ptr.To(int32(math.MaxInt32)),
+						Template:    podTemplate,
 					},
 				},
 			},
@@ -169,14 +177,18 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			Spec: rayv1.RayClusterSpec{
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
-						GroupName: "group-1",
-						Replicas:  ptr.To(int32(2)),
-						Template:  podTemplate,
+						GroupName:   "group-1",
+						Replicas:    new(int32(2)),
+						MinReplicas: new(int32(1)),
+						MaxReplicas: new(int32(4)),
+						Template:    podTemplate,
 					},
 					{
-						GroupName: "group-4",
-						Replicas:  ptr.To(int32(0)),
-						Template:  podTemplate,
+						GroupName:   "group-4",
+						Replicas:    new(int32(0)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(3)),
+						Template:    podTemplate,
 					},
 				},
 			},
@@ -263,11 +275,11 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			allNamespaces: true,
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAMESPACE     NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1/1        2      1      1      1Gi      cluster-1
-namespace-1   group-2   1/1        2      1      1      1Gi      cluster-2
-namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
-namespace-2   group-4   0/0        0      0      0      0        cluster-1
+			expected: `NAMESPACE     NAME      MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1   1     5            1/1        2      1      1      1Gi      cluster-1
+namespace-1   group-2   0     2147483647   1/1        2      1      1      1Gi      cluster-2
+namespace-2   group-1   1     4            1/2        4      2      2      2Gi      cluster-1
+namespace-2   group-4   0     3            0/0        0      0      0      0        cluster-1
 `,
 		},
 		{
@@ -279,10 +291,10 @@ namespace-2   group-4   0/0        0      0      0      0        cluster-1
 			// See https://github.com/kubernetes/client-go/issues/326
 			rayClusters: []runtime.Object{rayClusters[0], rayClusters[2]},
 			pods:        pods,
-			expected: `NAMESPACE     NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1/1        2      1      1      1Gi      cluster-1
-namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
-namespace-2   group-4   0/0        0      0      0      0        cluster-1
+			expected: `NAMESPACE     NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1   1     5     1/1        2      1      1      1Gi      cluster-1
+namespace-2   group-1   1     4     1/2        4      2      2      2Gi      cluster-1
+namespace-2   group-4   0     3     0/0        0      0      0      0        cluster-1
 `,
 		},
 		{
@@ -291,9 +303,9 @@ namespace-2   group-4   0/0        0      0      0      0        cluster-1
 			allNamespaces: false,
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-group-1   1/1        2      1      1      1Gi      cluster-1
-group-2   1/1        2      1      1      1Gi      cluster-2
+			expected: `NAME      MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+group-1   1     5            1/1        2      1      1      1Gi      cluster-1
+group-2   0     2147483647   1/1        2      1      1      1Gi      cluster-2
 `,
 		},
 		{
@@ -306,8 +318,8 @@ group-2   1/1        2      1      1      1Gi      cluster-2
 			// See https://github.com/kubernetes/client-go/issues/326
 			rayClusters: rayClusters[:1],
 			pods:        pods,
-			expected: `NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-group-1   1/1        2      1      1      1Gi      cluster-1
+			expected: `NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+group-1   1     5     1/1        2      1      1      1Gi      cluster-1
 `,
 		},
 		{
@@ -316,9 +328,9 @@ group-1   1/1        2      1      1      1Gi      cluster-1
 			workerGroup:   "group-1",
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAMESPACE     NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1/1        2      1      1      1Gi      cluster-1
-namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
+			expected: `NAMESPACE     NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1   1     5     1/1        2      1      1      1Gi      cluster-1
+namespace-2   group-1   1     4     1/2        4      2      2      2Gi      cluster-1
 `,
 		},
 		{
@@ -331,9 +343,9 @@ namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
 			// See https://github.com/kubernetes/client-go/issues/326
 			rayClusters: []runtime.Object{rayClusters[0], rayClusters[2]},
 			pods:        pods,
-			expected: `NAMESPACE     NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1/1        2      1      1      1Gi      cluster-1
-namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
+			expected: `NAMESPACE     NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1   1     5     1/1        2      1      1      1Gi      cluster-1
+namespace-2   group-1   1     4     1/2        4      2      2      2Gi      cluster-1
 `,
 		},
 		{
@@ -343,8 +355,8 @@ namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
 			workerGroup:   "group-1",
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-group-1   1/1        2      1      1      1Gi      cluster-1
+			expected: `NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+group-1   1     5     1/1        2      1      1      1Gi      cluster-1
 `,
 		},
 		{
@@ -358,8 +370,8 @@ group-1   1/1        2      1      1      1Gi      cluster-1
 			// See https://github.com/kubernetes/client-go/issues/326
 			rayClusters: rayClusters[:1],
 			pods:        pods,
-			expected: `NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-group-1   1/1        2      1      1      1Gi      cluster-1
+			expected: `NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+group-1   1     5     1/1        2      1      1      1Gi      cluster-1
 `,
 		},
 		{
@@ -398,7 +410,7 @@ group-1   1/1        2      1      1      1Gi      cluster-1
 			}
 
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewSimpleClientset(tc.rayClusters...)
+			rayClient := clienttesting.NewRayClientset(tc.rayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			err := fakeGetWorkerGroupsOptions.Run(context.Background(), k8sClients)
@@ -580,7 +592,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 					},
 				},
 			},
@@ -595,7 +607,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},
@@ -604,7 +616,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-2",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-2",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},
@@ -613,7 +625,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},
@@ -624,6 +636,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					namespace:       "namespace-1",
 					cluster:         "cluster-1",
 					name:            "group-1",
+					maxReplicas:     math.MaxInt32,
 					readyReplicas:   1,
 					desiredReplicas: 1,
 					totalCPU:        *resources.Cpu(),
@@ -635,6 +648,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					namespace:       "namespace-1",
 					cluster:         "cluster-2",
 					name:            "group-2",
+					maxReplicas:     math.MaxInt32,
 					readyReplicas:   1,
 					desiredReplicas: 1,
 					totalCPU:        *resources.Cpu(),
@@ -646,6 +660,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					namespace:       "namespace-2",
 					cluster:         "cluster-1",
 					name:            "group-1",
+					maxReplicas:     math.MaxInt32,
 					readyReplicas:   1,
 					desiredReplicas: 1,
 					totalCPU:        *resources.Cpu(),
@@ -667,7 +682,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 				})
 			}
 
-			rayClient := rayClientFake.NewSimpleClientset()
+			rayClient := clienttesting.NewRayClientset()
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			workerGroups, err := getWorkerGroupDetails(context.Background(), tc.enrichedWorkerGroupSpecs, k8sClients)
@@ -742,6 +757,8 @@ func TestPrintWorkerGroups(t *testing.T) {
 			name:            "pod-1",
 			readyReplicas:   1,
 			desiredReplicas: 2,
+			minReplicas:     0,
+			maxReplicas:     math.MaxInt32,
 			totalCPU:        *resources.Cpu(),
 			totalGPU:        *resources.Name(util.ResourceNvidiaGPU, resource.DecimalSI),
 			totalTPU:        *resources.Name(util.ResourceGoogleTPU, resource.DecimalSI),
@@ -753,6 +770,8 @@ func TestPrintWorkerGroups(t *testing.T) {
 			name:            "pod-2",
 			readyReplicas:   3,
 			desiredReplicas: 3,
+			minReplicas:     1,
+			maxReplicas:     5,
 			totalCPU:        *resources.Cpu(),
 			totalGPU:        *resources.Name(util.ResourceNvidiaGPU, resource.DecimalSI),
 			totalTPU:        *resources.Name(util.ResourceGoogleTPU, resource.DecimalSI),
@@ -768,17 +787,17 @@ func TestPrintWorkerGroups(t *testing.T) {
 		{
 			name:          "one namespace",
 			allNamespaces: false,
-			expected: `NAME    REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-pod-1   1/2        1      1      1      1Gi      cluster-1
-pod-2   3/3        1      1      1      1Gi      cluster-2
+			expected: `NAME    MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+pod-1   0     2147483647   1/2        1      1      1      1Gi      cluster-1
+pod-2   1     5            3/3        1      1      1      1Gi      cluster-2
 `,
 		},
 		{
 			name:          "all namespaces",
 			allNamespaces: true,
-			expected: `NAMESPACE     NAME    REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   pod-1   1/2        1      1      1      1Gi      cluster-1
-namespace-2   pod-2   3/3        1      1      1      1Gi      cluster-2
+			expected: `NAMESPACE     NAME    MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   pod-1   0     2147483647   1/2        1      1      1      1Gi      cluster-1
+namespace-2   pod-2   1     5            3/3        1      1      1      1Gi      cluster-2
 `,
 		},
 	}
@@ -792,4 +811,29 @@ namespace-2   pod-2   3/3        1      1      1      1Gi      cluster-2
 			assert.Equal(t, tc.expected, output.String())
 		})
 	}
+}
+
+func TestCalculatePodResourceDoesNotMutateInput(t *testing.T) {
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("1"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					},
+				},
+			},
+		},
+	}
+	wantRequests := podSpec.Containers[0].Resources.Requests.DeepCopy()
+
+	got := calculatePodResource(podSpec)
+
+	assert.Equal(t, "1", got.Cpu().String())
+	assert.Equal(t, "200Mi", got.Memory().String())
+	assert.Equal(t, wantRequests, podSpec.Containers[0].Resources.Requests)
 }

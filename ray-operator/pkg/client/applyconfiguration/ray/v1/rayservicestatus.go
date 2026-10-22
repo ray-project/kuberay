@@ -9,12 +9,21 @@ import (
 // RayServiceStatusApplyConfiguration represents a declarative configuration of the RayServiceStatus type for use
 // with apply.
 type RayServiceStatusApplyConfiguration struct {
-	Applications            map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
-	TargetCapacity          *int32                                 `json:"targetCapacity,omitempty"`
-	TrafficRoutedPercent    *int32                                 `json:"trafficRoutedPercent,omitempty"`
-	LastTrafficMigratedTime *metav1.Time                           `json:"lastTrafficMigratedTime,omitempty"`
-	RayClusterName          *string                                `json:"rayClusterName,omitempty"`
-	RayClusterStatus        *RayClusterStatusApplyConfiguration    `json:"rayClusterStatus,omitempty"`
+	// Important: Run "make" to regenerate code after modifying this file
+	Applications map[string]AppStatusApplyConfiguration `json:"applicationStatuses,omitempty"`
+	// TargetCapacity is the `target_capacity` percentage for all Serve replicas
+	// across the cluster for this RayService. The `num_replicas`, `min_replicas`, `max_replicas`,
+	// and `initial_replicas` for each deployment will be scaled by this percentage."
+	TargetCapacity *int32 `json:"targetCapacity,omitempty"`
+	// TrafficRoutedPercent is the percentage of traffic that is routed to the Serve service
+	// for this RayService. TrafficRoutedPercent is updated to reflect the weight on the HTTPRoute
+	// created for this RayService during incremental upgrades to a new cluster.
+	TrafficRoutedPercent *int32 `json:"trafficRoutedPercent,omitempty"`
+	// LastTrafficMigratedTime is the last time that TrafficRoutedPercent was updated to a new value
+	// for this RayService.
+	LastTrafficMigratedTime *metav1.Time                        `json:"lastTrafficMigratedTime,omitempty"`
+	RayClusterName          *string                             `json:"rayClusterName,omitempty"`
+	RayClusterStatus        *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
 }
 
 // RayServiceStatusApplyConfiguration constructs a declarative configuration of the RayServiceStatus type for use with

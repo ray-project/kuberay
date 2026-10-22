@@ -4,6 +4,8 @@ package v1
 
 type RayClusterExpansion interface{}
 
+type RayCronJobExpansion interface{}
+
 type RayJobExpansion interface{}
 
 type RayServiceExpansion interface{}

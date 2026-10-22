@@ -58,10 +58,10 @@ spec:
           - name: ray-head
             image: rayproject/ray:2.51.0
             resources:
-              requests:
-                cpu: "100m"
-                memory: "100Mi"
               limits:
+                cpu: "1"
+                memory: "5Gi"
+              requests:
                 cpu: "1"
                 memory: "2Gi"
             ports:

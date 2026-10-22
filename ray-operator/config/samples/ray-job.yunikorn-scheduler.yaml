@@ -15,14 +15,14 @@ spec:
     env_vars:
       counter_name: "test_counter"
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -33,7 +33,7 @@ spec:
             resources:
               limits:
                 cpu: "1"
-                memory: "2Gi"
+                memory: "5Gi"
               requests:
                 cpu: "1"
                 memory: "2Gi"
@@ -57,15 +57,14 @@ spec:
         spec:
           containers:
           - name: ray-worker
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             resources:
               limits:
                 cpu: "1"
-                memory: "2Gi"
+                memory: "1Gi"
               requests:
                 cpu: "1"
-                memory: "2Gi"
-
+                memory: "1Gi"
 ---
 apiVersion: v1
 kind: ConfigMap

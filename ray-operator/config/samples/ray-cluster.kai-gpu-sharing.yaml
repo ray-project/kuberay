@@ -74,9 +74,12 @@ spec:
       spec:
         containers:
         - name: head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
+              cpu: "1"
+              memory: "5Gi"
+            requests:
               cpu: "1"
               memory: "2Gi"
   # ---- Two workers share one GPU (0.5 each) ----
@@ -91,8 +94,11 @@ spec:
       spec:
         containers:
         - name: worker
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: "1"
-              memory: "2Gi"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"

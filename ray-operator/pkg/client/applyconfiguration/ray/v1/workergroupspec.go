@@ -8,19 +8,51 @@ import (
 
 // WorkerGroupSpecApplyConfiguration represents a declarative configuration of the WorkerGroupSpec type for use
 // with apply.
+//
+// WorkerGroupSpec are the specs for the worker pods
 type WorkerGroupSpecApplyConfiguration struct {
-	Suspend            *bool                                     `json:"suspend,omitempty"`
-	GroupName          *string                                   `json:"groupName,omitempty"`
-	Replicas           *int32                                    `json:"replicas,omitempty"`
-	MinReplicas        *int32                                    `json:"minReplicas,omitempty"`
-	MaxReplicas        *int32                                    `json:"maxReplicas,omitempty"`
-	IdleTimeoutSeconds *int32                                    `json:"idleTimeoutSeconds,omitempty"`
-	Resources          map[string]string                         `json:"resources,omitempty"`
-	Labels             map[string]string                         `json:"labels,omitempty"`
-	RayStartParams     map[string]string                         `json:"rayStartParams,omitempty"`
-	Template           *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
-	ScaleStrategy      *ScaleStrategyApplyConfiguration          `json:"scaleStrategy,omitempty"`
-	NumOfHosts         *int32                                    `json:"numOfHosts,omitempty"`
+	// Suspend indicates whether a worker group should be suspended.
+	// A suspended worker group will have all pods deleted.
+	// This is not a user-facing API and is only used by RayJob DeletionStrategy.
+	Suspend *bool `json:"suspend,omitempty"`
+	// we can have multiple worker groups, we distinguish them by name
+	GroupName *string `json:"groupName,omitempty"`
+	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
+	Replicas *int32 `json:"replicas,omitempty"`
+	// MinReplicas denotes the minimum number of desired Pods for this worker group.
+	MinReplicas *int32 `json:"minReplicas,omitempty"`
+	// MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32.
+	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
+	// IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
+	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
+	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// Priority influences which worker group the autoscaler prefers when multiple
+	// groups can satisfy the same resource demand. Higher priority groups are
+	// preferred for scale-up. Only honored by Ray Autoscaler v2 (Ray >= 2.56).
+	Priority *int32 `json:"priority,omitempty"`
+	// Resources specifies the resource quantities for this worker group.
+	// These values override the resources passed to `rayStartParams` for the group, but
+	// have no effect on the resources set at the K8s Pod container level.
+	Resources map[string]string `json:"resources,omitempty"`
+	// Labels specifies the Ray node labels for this worker group.
+	// These labels will also be added to the Pods of this worker group and override the `--labels`
+	// argument passed to `rayStartParams`.
+	Labels map[string]string `json:"labels,omitempty"`
+	// RayStartParams are the params of the start command: address, object-store-memory, ...
+	RayStartParams map[string]string `json:"rayStartParams,omitempty"`
+	// Template is a pod template for the worker
+	Template *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
+	// ScaleStrategy controls scaling of this worker group: which pods to remove,
+	// and whether the group can currently be scaled up.
+	ScaleStrategy *ScaleStrategyApplyConfiguration `json:"scaleStrategy,omitempty"`
+	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
+	NumOfHosts *int32 `json:"numOfHosts,omitempty"`
+	// LabelRefs delivers labels of the node each worker pod is bound to as Ray node labels.
+	// This enables Ray scheduling based on node attributes, such as topology placement (e.g., rack, zone, or topology domain).
+	// Only allowlisted node labels can be delivered. Every referenced label must exist on the node or pod startup fails.
+	// Empty means no labels are delivered.
+	// Requires the `NodeLabelDelivery` feature gate and `ENABLE_WEBHOOKS` enabled on the operator, and Ray 2.45.0 or later (`--labels-file`).
+	LabelRefs []LabelRefApplyConfiguration `json:"labelRefs,omitempty"`
 }
 
 // WorkerGroupSpecApplyConfiguration constructs a declarative configuration of the WorkerGroupSpec type for use with
@@ -74,6 +106,14 @@ func (b *WorkerGroupSpecApplyConfiguration) WithMaxReplicas(value int32) *Worker
 // If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
 func (b *WorkerGroupSpecApplyConfiguration) WithIdleTimeoutSeconds(value int32) *WorkerGroupSpecApplyConfiguration {
 	b.IdleTimeoutSeconds = &value
+	return b
+}
+
+// WithPriority sets the Priority field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Priority field is set to the value of the last call.
+func (b *WorkerGroupSpecApplyConfiguration) WithPriority(value int32) *WorkerGroupSpecApplyConfiguration {
+	b.Priority = &value
 	return b
 }
 
@@ -140,5 +180,18 @@ func (b *WorkerGroupSpecApplyConfiguration) WithScaleStrategy(value *ScaleStrate
 // If called multiple times, the NumOfHosts field is set to the value of the last call.
 func (b *WorkerGroupSpecApplyConfiguration) WithNumOfHosts(value int32) *WorkerGroupSpecApplyConfiguration {
 	b.NumOfHosts = &value
+	return b
+}
+
+// WithLabelRefs adds the given value to the LabelRefs field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the LabelRefs field.
+func (b *WorkerGroupSpecApplyConfiguration) WithLabelRefs(values ...*LabelRefApplyConfiguration) *WorkerGroupSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithLabelRefs")
+		}
+		b.LabelRefs = append(b.LabelRefs, *values[i])
+	}
 	return b
 }

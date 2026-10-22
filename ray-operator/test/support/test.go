@@ -118,7 +118,7 @@ func (t *T) NewTestNamespace(options ...Option[*corev1.Namespace]) *corev1.Names
 	return namespace
 }
 
-func LogWithTimestamp(t *testing.T, format string, args ...interface{}) {
+func LogWithTimestamp(t *testing.T, format string, args ...any) {
 	t.Helper()
 	t.Logf("[%s] %s", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
 }

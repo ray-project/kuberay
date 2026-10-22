@@ -43,7 +43,7 @@ func ExtractErrorForCLI(err error, isDebugMode bool) error {
 }
 
 func NewInternalServerError(err error, internalMessageFormat string,
-	a ...interface{},
+	a ...any,
 ) *UserError {
 	internalMessage := fmt.Sprintf(internalMessageFormat, a...)
 	return newUserError(
@@ -53,7 +53,7 @@ func NewInternalServerError(err error, internalMessageFormat string,
 }
 
 func NewNotFoundError(err error, externalMessageFormat string,
-	a ...interface{},
+	a ...any,
 ) *UserError {
 	externalMessage := fmt.Sprintf(externalMessageFormat, a...)
 	return newUserError(
@@ -70,7 +70,7 @@ func NewResourceNotFoundError(resourceType string, resourceName string) *UserErr
 		codes.NotFound)
 }
 
-func NewResourcesNotFoundError(resourceTypesFormat string, resourceNames ...interface{}) *UserError {
+func NewResourcesNotFoundError(resourceTypesFormat string, resourceNames ...any) *UserError {
 	externalMessage := fmt.Sprintf("%s not found.", fmt.Sprintf(resourceTypesFormat, resourceNames...))
 	return newUserError(
 		fmt.Errorf("ResourceNotFoundError: %v", externalMessage),
@@ -78,7 +78,7 @@ func NewResourcesNotFoundError(resourceTypesFormat string, resourceNames ...inte
 		codes.NotFound)
 }
 
-func NewInvalidInputError(messageFormat string, a ...interface{}) *UserError {
+func NewInvalidInputError(messageFormat string, a ...any) *UserError {
 	message := fmt.Sprintf(messageFormat, a...)
 	return newUserError(errors.Errorf("Invalid input error: %v", message), message, codes.InvalidArgument)
 }
@@ -90,12 +90,12 @@ func NewInvalidInputErrorWithDetails(err error, externalMessage string) *UserErr
 		codes.InvalidArgument)
 }
 
-func NewAlreadyExistError(messageFormat string, a ...interface{}) *UserError {
+func NewAlreadyExistError(messageFormat string, a ...any) *UserError {
 	message := fmt.Sprintf(messageFormat, a...)
 	return newUserError(errors.Errorf("Already exist error: %v", message), message, codes.AlreadyExists)
 }
 
-func NewBadRequestError(err error, externalFormat string, a ...interface{}) *UserError {
+func NewBadRequestError(err error, externalFormat string, a ...any) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
 		errors.Wrapf(err, "BadRequestError: %v", externalMessage),
@@ -103,7 +103,7 @@ func NewBadRequestError(err error, externalFormat string, a ...interface{}) *Use
 		codes.Aborted)
 }
 
-func NewUnauthenticatedError(err error, externalFormat string, a ...interface{}) *UserError {
+func NewUnauthenticatedError(err error, externalFormat string, a ...any) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
 		errors.Wrapf(err, "Unauthenticated: %v", externalMessage),
@@ -111,7 +111,7 @@ func NewUnauthenticatedError(err error, externalFormat string, a ...interface{})
 		codes.Unauthenticated)
 }
 
-func NewPermissionDeniedError(err error, externalFormat string, a ...interface{}) *UserError {
+func NewPermissionDeniedError(err error, externalFormat string, a ...any) *UserError {
 	externalMessage := fmt.Sprintf(externalFormat, a...)
 	return newUserError(
 		errors.Wrapf(err, "PermissionDenied: %v", externalMessage),
@@ -151,7 +151,7 @@ func (e *UserError) GRPCStatus() *status.Status {
 	return status.New(e.externalStatusCode, e.ErrorStringWithoutStackTrace())
 }
 
-func (e *UserError) wrapf(format string, args ...interface{}) *UserError {
+func (e *UserError) wrapf(format string, args ...any) *UserError {
 	return newUserError(errors.Wrapf(e.internalError, format, args...),
 		e.externalMessage, e.externalStatusCode)
 }
@@ -170,7 +170,7 @@ func (e *UserError) Log() {
 	}
 }
 
-func Wrapf(err error, format string, args ...interface{}) error {
+func Wrapf(err error, format string, args ...any) error {
 	if err == nil {
 		return nil
 	}

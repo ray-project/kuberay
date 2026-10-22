@@ -3,22 +3,22 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v6e-multihost
 spec:
-  rayVersion: '2.46.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0-py310
+          image: rayproject/ray:2.52.0-py310
           imagePullPolicy: IfNotPresent
           resources:
             limits:
               cpu: "8"
-              memory: 40G
+              memory: "40G"
             requests:
               cpu: "8"
-              memory: 40G
+              memory: "40G"
           ports:
           - containerPort: 6379
             name: gcs
@@ -41,17 +41,17 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.46.0-py310
+          image: rayproject/ray:2.52.0-py310
           imagePullPolicy: IfNotPresent
           resources:
             limits:
               cpu: "24"
               google.com/tpu: "4"
-              memory: 200G
+              memory: "200G"
             requests:
               cpu: "24"
               google.com/tpu: "4"
-              memory: 200G
+              memory: "200G"
           env:
           - name: NODE_IP
             valueFrom:

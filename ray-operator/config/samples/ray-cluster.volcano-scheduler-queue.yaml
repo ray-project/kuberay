@@ -5,29 +5,28 @@ metadata:
 spec:
   weight: 1
   capability:
-    cpu: 4
-    memory: 6Gi
+    cpu: "4"
+    memory: "6Gi"
 ---
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: test-cluster-0
   labels:
-    ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.46.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: "1"
-              memory: "2Gi"
+              memory: "5Gi"
             requests:
               cpu: "1"
               memory: "2Gi"
@@ -41,7 +40,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: "1"

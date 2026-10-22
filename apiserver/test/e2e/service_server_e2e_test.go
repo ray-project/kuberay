@@ -238,7 +238,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 	expectedServices := make([]targetService, 0, totalServices)
 
 	// Create services for each namespace
-	for i := 0; i < numberOfNamespaces; i++ {
+	for range numberOfNamespaces {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
 
@@ -247,7 +247,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			tCtx.DeleteComputeTemplate(t)
 		})
 
-		for j := 0; j < numberOfService; j++ {
+		for range numberOfService {
 			testServiceRequest := createTestServiceV2(t, tCtx)
 			t.Cleanup(func() {
 				tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
@@ -272,7 +272,7 @@ func TestGetAllServicesWithPagination(t *testing.T) {
 			gotServices[expectedService] = false
 		}
 
-		for i := 0; i < totalServices; i++ {
+		for i := range totalServices {
 			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllRayServices(&api.ListAllRayServicesRequest{
 				PageToken: pageToken,
 				PageSize:  int32(1),
@@ -398,7 +398,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		tCtx.DeleteComputeTemplate(t)
 	})
 
-	for ii := 0; ii < serviceCount; ii++ {
+	for range serviceCount {
 		testServiceRequest := createTestServiceV2(t, tCtx)
 		t.Cleanup(func() {
 			tCtx.DeleteRayService(t, testServiceRequest.Service.Name)
@@ -412,7 +412,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		gotServices := []bool{false, false}
 
 		pageToken := ""
-		for ii := 0; ii < serviceCount; ii++ {
+		for ii := range serviceCount {
 			response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListRayServices(&api.ListRayServicesRequest{
 				Namespace: tCtx.GetNamespaceName(),
 				PageToken: pageToken,
@@ -426,7 +426,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 			require.Len(t, response.Services, 1)
 
 			for _, curService := range response.Services {
-				for jj := 0; jj < serviceCount; jj++ {
+				for jj := range serviceCount {
 					if expectedServiceNames[jj] == curService.Name {
 						gotServices[jj] = true
 						break
@@ -444,7 +444,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		}
 
 		// Check all services created have been returned.
-		for idx := 0; idx < serviceCount; idx++ {
+		for idx := range serviceCount {
 			require.True(t, gotServices[idx],
 				"ListServices did not return expected services %s",
 				expectedServiceNames[idx])
@@ -470,7 +470,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		require.Len(t, response.Services, serviceCount)
 		require.Empty(t, pageToken, "Page token should be empty")
 		for _, curService := range response.Services {
-			for jj := 0; jj < serviceCount; jj++ {
+			for jj := range serviceCount {
 				if expectedServiceNames[jj] == curService.Name {
 					gotServices[jj] = true
 					break
@@ -479,7 +479,7 @@ func TestGetServicesInNamespaceWithPagination(t *testing.T) {
 		}
 
 		// Check all services created have been returned.
-		for idx := 0; idx < serviceCount; idx++ {
+		for idx := range serviceCount {
 			require.True(t, gotServices[idx],
 				"ListServices did not return expected services %s",
 				expectedServiceNames[idx])

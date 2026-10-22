@@ -1,6 +1,8 @@
-apiVersion: v1
+apiVersion: v2
 
 name: ray-cluster
+
+type: application
 
 description: A Helm chart for deploying the RayCluster with the kuberay operator.
 

@@ -13,6 +13,9 @@
 			"path": "kubectl-plugin"
 		},
 		{
+			"path": "historyserver"
+		},
+		{
 			"path": "proto"
 		},
 		{

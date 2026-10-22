@@ -19,15 +19,12 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestRayNodesGetComplete(t *testing.T) {
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
-	cmd := &cobra.Command{}
-	flags := cmd.Flags()
-	flags.String("namespace", "", "namespace flag")
 
 	tests := []struct {
 		opts              *GetNodesOptions
@@ -83,9 +80,15 @@ func TestRayNodesGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := flags.Set("namespace", tc.namespace)
-			require.NoError(t, err)
-			err = tc.opts.Complete(tc.args, cmd)
+			configFlags := genericclioptions.NewConfigFlags(true)
+			if tc.namespace != "" {
+				configFlags.Namespace = &tc.namespace
+			}
+			tc.opts.cmdFactory = cmdutil.NewFactory(configFlags)
+			cmd := &cobra.Command{}
+			flags := cmd.Flags()
+			configFlags.AddFlags(flags)
+			err := tc.opts.Complete(tc.args)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, tc.opts.namespace)
 			assert.Equal(t, tc.expectedNode, tc.opts.node)
@@ -278,7 +281,7 @@ pod-2   1      1      1      1Gi      cluster-1   worker   group-2        120m
 			}
 
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewSimpleClientset()
+			rayClient := clienttesting.NewRayClientset()
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			err := fakeGetNodesOptions.Run(context.Background(), k8sClients)

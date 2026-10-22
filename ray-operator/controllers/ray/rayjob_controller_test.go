@@ -17,6 +17,7 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -111,6 +113,21 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 			},
 		},
 	}
+}
+
+// updateK8sJobToComplete updates a Kubernetes Job status to mark it as complete.
+// This sets conditions (JobSuccessCriteriaMet and JobComplete) and
+// timestamps (StartTime, CompletionTime) required by Kubernetes 1.33+.
+func updateK8sJobToComplete(ctx context.Context, job *batchv1.Job) {
+	startTime := metav1.Now()
+	completionTime := metav1.NewTime(startTime.Add(time.Second))
+	job.Status.Conditions = []batchv1.JobCondition{
+		{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue, LastTransitionTime: completionTime},
+		{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: completionTime},
+	}
+	job.Status.StartTime = &startTime
+	job.Status.CompletionTime = &completionTime
+	Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
 }
 
 var _ = Context("RayJob with different submission modes", func() {
@@ -241,6 +258,34 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(rayCluster.Annotations).Should(Equal(rayJob.Annotations))
 			})
 
+			It("In Initializing state, the JobStatus should show the RayCluster status", func() {
+				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
+				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
+
+				updateHeadPodToRunningNotReady(ctx, rayJob.Status.RayClusterName, namespace)
+
+				// Now the cluster should have nonzero conditions.
+				Eventually(
+					func() int {
+						status := getClusterStatus(ctx, namespace, rayCluster.Name)()
+						return len(status.Conditions)
+					},
+					time.Second*3, time.Millisecond*500).ShouldNot(Equal(0))
+
+				// We expect the RayJob's RayClusterStatus to eventually mirror the cluster's status.
+				Eventually(
+					func() (int, error) {
+						currentRayJob := &rayv1.RayJob{}
+						err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, currentRayJob)
+						if err != nil {
+							return 0, err
+						}
+						return len(currentRayJob.Status.RayClusterStatus.Conditions), nil
+					},
+					time.Second*3, time.Millisecond*500,
+				).ShouldNot(Equal(0))
+			})
+
 			It("Make RayCluster.Status.State to be rayv1.Ready", func() {
 				// The RayCluster is not 'Ready' yet because Pods are not running and ready.
 				Expect(rayCluster.Status.State).NotTo(Equal(rayv1.Ready))
@@ -288,12 +333,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -400,14 +440,14 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
 				Eventually(
-					func() ([]corev1.Event, error) {
-						events := &corev1.EventList{}
-						if err := k8sClient.List(ctx, events, client.InNamespace(rayJob.Namespace)); err != nil {
+					func() ([]eventsv1.Event, error) {
+						eventList := &eventsv1.EventList{}
+						if err := k8sClient.List(ctx, eventList, client.InNamespace(rayJob.Namespace)); err != nil {
 							return nil, err
 						}
-						return events.Items, nil
+						return eventList.Items, nil
 					},
-					time.Second*3, time.Millisecond*500).Should(ContainElement(HaveField("Message", ContainSubstring("Failed to create new Kubernetes Job default/rayjob-invalid-test"))))
+					time.Second*3, time.Millisecond*500).Should(ContainElement(HaveField("Note", ContainSubstring("Failed to create new Kubernetes Job default/rayjob-invalid-test"))))
 
 				_ = k8sClient.Delete(ctx, rayJob)
 			})
@@ -494,7 +534,15 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 			})
 
-			It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+			It("RayJobs's JobDeploymentStatus transitions from Running to Complete and RayJob is deleted when DELETE_RAYJOB_CR_AFTER_JOB_FINISHES is set.", func() {
+				// Set the env var before the RayJob transitions to Complete so that
+				// handleShutdownAfterJobFinishes sees it on the first reconciliation
+				// after the job finishes. Setting it after the transition is racy because
+				// the reconciler may have already processed the shutdown path without
+				// the env var, returning with no requeue.
+				os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
+				defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+
 				// Update fake dashboard client to return job info with "Succeeded" status.
 				getJobInfo := func(context.Context, string) (*utiltypes.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
 					return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
@@ -513,26 +561,13 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
-				// RayJob transitions to Complete.
-				Eventually(
-					getRayJobDeploymentStatus(ctx, rayJob),
-					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
-			})
-
-			It("If DELETE_RAYJOB_CR_AFTER_JOB_FINISHES environement variable is set, RayJob should be deleted.", func() {
-				os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
-				defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+				// RayJob transitions to Complete and is then deleted because DELETE_RAYJOB_CR_AFTER_JOB_FINISHES is set.
 				Eventually(
 					func() bool {
 						return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)())
-					}, time.Second*3, time.Millisecond*500).Should(BeTrue())
+					}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 			})
 		})
 
@@ -541,7 +576,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			namespace := "default"
 			activeDeadlineSeconds := int32(3)
 			rayJob := rayJobTemplate("rayjob-deadline", namespace)
-			rayJob.Spec.ActiveDeadlineSeconds = ptr.To(activeDeadlineSeconds)
+			rayJob.Spec.ActiveDeadlineSeconds = new(activeDeadlineSeconds)
 
 			It("Verify RayJob spec", func() {
 				// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).
@@ -678,12 +713,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// record the current cluster name
 				oldClusterName := rayJob.Status.RayClusterName
@@ -773,12 +803,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions from Running -> Complete
 				Eventually(
@@ -1000,12 +1025,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -1139,12 +1159,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -1278,12 +1293,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -1434,12 +1444,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -1578,12 +1583,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
@@ -1694,12 +1694,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
@@ -1822,12 +1817,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -1983,12 +1973,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -2043,7 +2028,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusSucceeded,
+							JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 						},
 					},
 				},
@@ -2056,7 +2041,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusSucceeded,
+								JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 							},
 						},
 					},
@@ -2145,12 +2130,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -2200,7 +2180,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusFailed,
+							JobStatus: ptr.To(rayv1.JobStatusFailed),
 						},
 					},
 				},
@@ -2213,7 +2193,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusFailed,
+								JobStatus: ptr.To(rayv1.JobStatusFailed),
 							},
 						},
 					},
@@ -2302,12 +2282,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Failed.
 				Eventually(
@@ -2357,7 +2332,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusSucceeded,
+							JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 						},
 					},
 				},
@@ -2370,7 +2345,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusSucceeded,
+								JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 							},
 						},
 					},
@@ -2459,12 +2434,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -2497,7 +2467,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusFailed,
+							JobStatus: ptr.To(rayv1.JobStatusFailed),
 						},
 					},
 				},
@@ -2510,7 +2480,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusFailed,
+								JobStatus: ptr.To(rayv1.JobStatusFailed),
 							},
 						},
 					},
@@ -2599,12 +2569,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -2637,7 +2602,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusSucceeded,
+							JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 						},
 					},
 				},
@@ -2725,12 +2690,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
@@ -2752,7 +2712,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusFailed,
+							JobStatus: ptr.To(rayv1.JobStatusFailed),
 						},
 					},
 				},
@@ -2840,12 +2800,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("If DeletionStrategy=DeleteSelf, the RayJob is deleted", func() {
@@ -2867,7 +2822,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteNone,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusSucceeded,
+							JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 						},
 					},
 				},
@@ -2880,7 +2835,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteNone,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusSucceeded,
+								JobStatus: ptr.To(rayv1.JobStatusSucceeded),
 							},
 						},
 					},
@@ -2969,12 +2924,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -3029,7 +2979,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteNone,
 						Condition: rayv1.DeletionCondition{
-							JobStatus: rayv1.JobStatusFailed,
+							JobStatus: ptr.To(rayv1.JobStatusFailed),
 						},
 					},
 				},
@@ -3042,7 +2992,7 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteNone,
 							Condition: rayv1.DeletionCondition{
-								JobStatus: rayv1.JobStatusFailed,
+								JobStatus: ptr.To(rayv1.JobStatusFailed),
 							},
 						},
 					},
@@ -3131,12 +3081,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -3192,21 +3137,21 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 0,
 						},
 					},
@@ -3220,21 +3165,21 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 0,
 							},
 						},
@@ -3323,12 +3268,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("Verify RayJob itself is deleted", func() {
@@ -3351,21 +3291,21 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 0,
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 0,
 						},
 					},
@@ -3379,21 +3319,21 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
@@ -3482,12 +3422,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 			})
 
 			By("Verify RayJob itself is deleted", func() {
@@ -3510,21 +3445,21 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 0, // Stage 1: Delete workers after 0 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 5, // Stage 2: Delete cluster after 5 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusSucceeded,
+							JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 							TTLSeconds: 10, // Stage 3: Delete self after 10 seconds
 						},
 					},
@@ -3538,21 +3473,21 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 5,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -3642,12 +3577,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Complete.
 				Eventually(
@@ -3718,21 +3648,21 @@ var _ = Context("RayJob with different submission modes", func() {
 					{
 						Policy: rayv1.DeleteWorkers,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 0, // Stage 1: Delete workers after 0 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteCluster,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 5, // Stage 2: Delete cluster after 5 seconds
 						},
 					},
 					{
 						Policy: rayv1.DeleteSelf,
 						Condition: rayv1.DeletionCondition{
-							JobStatus:  rayv1.JobStatusFailed,
+							JobStatus:  ptr.To(rayv1.JobStatusFailed),
 							TTLSeconds: 10, // Stage 3: Delete self after 10 seconds
 						},
 					},
@@ -3746,21 +3676,21 @@ var _ = Context("RayJob with different submission modes", func() {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 5,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 10,
 							},
 						},
@@ -3850,12 +3780,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				err := k8sClient.Get(ctx, namespacedName, job)
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 
-				// Update the submitter Kubernetes Job to Complete.
-				conditions := []batchv1.JobCondition{
-					{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now()},
-				}
-				job.Status.Conditions = conditions
-				Expect(k8sClient.Status().Update(ctx, job)).Should(Succeed())
+				updateK8sJobToComplete(ctx, job)
 
 				// RayJob transitions to Failed.
 				Eventually(
@@ -3911,6 +3836,163 @@ var _ = Context("RayJob with different submission modes", func() {
 					func() bool {
 						return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob))
 					}, time.Second*5, time.Millisecond*500).Should(BeTrue())
+			})
+		})
+	})
+
+	Context("RayJob job status query timeout", func() {
+		transitionRayJobToRunning := func(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, namespace string) {
+			err := k8sClient.Create(ctx, rayJob)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing))
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed())
+			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning))
+		}
+
+		assertJobStatusCheckTimeoutExceeded := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)).Should(Succeed())
+			pastTime := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+			rayJob.Status.JobStatusCheckFailureStartTime = &pastTime
+			rayJob.Status.JobStatus = rayv1.JobStatusRunning
+			Expect(k8sClient.Status().Update(ctx, rayJob)).Should(Succeed())
+
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed))
+			Eventually(func() (rayv1.JobFailedReason, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return "", err
+				}
+				return rayJob.Status.Reason, nil
+			}, time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobStatusCheckTimeoutExceeded))
+		}
+
+		assertJobStatusCheckFailureStartTimePersisted := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Eventually(func() (*metav1.Time, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return nil, err
+				}
+				return rayJob.Status.JobStatusCheckFailureStartTime, nil
+			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
+		}
+
+		assertJobStatusCheckTimeoutExceededOrganically := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			os.Setenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, "1")
+			defer os.Unsetenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS)
+
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed))
+			Eventually(func() (rayv1.JobFailedReason, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return "", err
+				}
+				return rayJob.Status.Reason, nil
+			}, time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobStatusCheckTimeoutExceeded))
+		}
+
+		Describe("K8sJobMode", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-query-timeout-k8s", namespace)
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create RayJob and transition to Running", func() {
+				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Persists JobStatusCheckFailureStartTime on first status check failure", func() {
+				assertJobStatusCheckFailureStartTimePersisted(ctx, rayJob, namespace)
+			})
+
+			It("Transitions to Failed when job status checks exceed timeout", func() {
+				assertJobStatusCheckTimeoutExceeded(ctx, rayJob, namespace)
+			})
+		})
+
+		Describe("HTTPMode", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-query-timeout-http", namespace)
+			rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create RayJob and transition to Running", func() {
+				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Persists JobStatusCheckFailureStartTime on first status check failure", func() {
+				assertJobStatusCheckFailureStartTimePersisted(ctx, rayJob, namespace)
+			})
+
+			It("Transitions to Failed when job status checks exceed timeout organically", func() {
+				assertJobStatusCheckTimeoutExceededOrganically(ctx, rayJob, namespace)
+			})
+		})
+
+		Describe("HTTPMode recovery", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-recover-timer-http", namespace)
+			rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create RayJob and transition to Running", func() {
+				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Clears JobStatusCheckFailureStartTime after successful HTTP resubmit", func() {
+				getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+					return nil, apierrors.NewBadRequest("job not found")
+				}
+				fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+				defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+				Expect(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)).Should(Succeed())
+				recentTime := metav1.NewTime(time.Now().Add(-30 * time.Second))
+				rayJob.Status.JobStatusCheckFailureStartTime = &recentTime
+				rayJob.Status.JobStatus = rayv1.JobStatusRunning
+				Expect(k8sClient.Status().Update(ctx, rayJob)).Should(Succeed())
+
+				Eventually(func() (*metav1.Time, error) {
+					if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+						return nil, err
+					}
+					return rayJob.Status.JobStatusCheckFailureStartTime, nil
+				}, time.Second*10, time.Millisecond*500).Should(BeNil())
+
+				Consistently(
+					getRayJobDeploymentStatus(ctx, rayJob),
+					time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning))
 			})
 		})
 	})

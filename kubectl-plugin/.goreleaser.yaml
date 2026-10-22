@@ -1,5 +1,8 @@
 version: 2
 
+release:
+  prerelease: auto
+
 before:
   hooks:
     - cp ../LICENSE .

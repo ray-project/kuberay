@@ -9,7 +9,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas | default 1 }}
   strategy:
     type: Recreate
   selector:
@@ -35,7 +35,7 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
-      {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
+      {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled .Values.webhooks.enabled }}
       volumes:
       {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
         - name: kuberay-logs
@@ -50,6 +50,11 @@ spec:
         - name: operator-config
           configMap:
             name: {{ include "kuberay-operator.deployment.name" . }}-config
+      {{- end }}
+      {{- if .Values.webhooks.enabled }}
+        - name: cert
+          secret:
+            secretName: {{ include "kuberay-operator.webhook.certSecretName" . }}
       {{- end }}
       {{- end }}
       {{- with .Values.podSecurityContext }}
@@ -69,7 +74,7 @@ spec:
           {{- with .Values.image.pullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
-          {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
+          {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled .Values.webhooks.enabled }}
           volumeMounts:
           {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
             - name: kuberay-logs
@@ -80,6 +85,11 @@ spec:
               mountPath: /etc/kuberay
               readOnly: true
           {{- end }}
+          {{- if .Values.webhooks.enabled }}
+            - name: cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+          {{- end }}
           {{- end }}
           command:
             - {{ .Values.operatorCommand }}
@@ -88,8 +98,8 @@ spec:
             {{- if .Values.configuration.enabled -}}
             {{- $argList = append $argList "--config" -}}
             {{- $argList = append $argList "/etc/kuberay/config.yaml" -}}
-            {{- end -}}
-            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
+            {{- else -}}
+            {{- include "kuberay-operator.validateConfig" . -}}
             {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
@@ -129,38 +139,56 @@ spec:
             {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
             {{- $argList = append $argList (printf "--enable-metrics=%t" .Values.metrics.enabled) -}}
             {{- end -}}
+            {{- if and (hasKey .Values "nodeEventForwarder") (hasKey .Values.nodeEventForwarder "enabled") }}
+            {{- $argList = append $argList (printf "--enable-node-event-forwarder=%t" .Values.nodeEventForwarder.enabled) -}}
+            {{- if .Values.nodeEventForwarder.enabled }}
+            {{- if .Values.nodeEventForwarder.sources -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-sources=%s" (join "," .Values.nodeEventForwarder.sources)) -}}
+            {{- end -}}
+            {{- if .Values.nodeEventForwarder.reasons -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-reasons=%s" (join "," .Values.nodeEventForwarder.reasons)) -}}
+            {{- end -}}
+            {{- if .Values.nodeEventForwarder.types -}}
+            {{- $argList = append $argList (printf "--node-event-forwarder-types=%s" (join "," .Values.nodeEventForwarder.types)) -}}
+            {{- end -}}
+            {{- end -}}
+            {{- end -}}
             {{- if hasKey .Values "reconcileConcurrency" -}}
-            {{- $rc := toString .Values.reconcileConcurrency }}
-            {{- if not (regexMatch "^[1-9][0-9]*$" $rc) }}
-            {{- fail (printf "values.reconcileConcurrency must be a positive integer, got %q" $rc) }}
-            {{- end }}
             {{- $argList = append $argList (printf "--reconcile-concurrency=%v" .Values.reconcileConcurrency) -}}
             {{- end -}}
             {{- if hasKey .Values "kubeClient" -}}
             {{- if hasKey .Values.kubeClient "qps" -}}
-            {{- $qps := toString .Values.kubeClient.qps }}
-            {{- if not (regexMatch "^[+-]?[0-9]+(\\.[0-9]+)?$" $qps) }}
-            {{- fail (printf "values.kubeClient.qps must be a valid float number, got %q" $qps) }}
-            {{- end }}
             {{- $argList = append $argList (printf "--qps=%v" .Values.kubeClient.qps) -}}
             {{- end -}}
             {{- if hasKey .Values.kubeClient "burst" -}}
-            {{- $burst := toString .Values.kubeClient.burst }}
-            {{- if not (regexMatch "^[0-9]+$" $burst) }}
-            {{- fail (printf "values.kubeClient.burst must be a non-negative integer, got %q" $burst) }}
-            {{- end }}
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
+            {{- if .Values.collectorImage -}}
+            {{- $argList = append $argList (printf "--collector-image=%s" .Values.collectorImage) -}}
+            {{- end -}}
+            {{- end -}}
+            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          {{- with .Values.env }}
+          {{- if .Values.webhooks.enabled }}
+            - name: webhook-server
+              containerPort: 9443
+              protocol: TCP
+          {{- end }}
+          {{- if or .Values.env .Values.webhooks.enabled }}
           env:
+          {{- if .Values.webhooks.enabled }}
+            - name: ENABLE_WEBHOOKS
+              value: "true"
+          {{- end }}
+          {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:

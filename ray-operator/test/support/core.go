@@ -68,7 +68,8 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
 }
 
-func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer) {
+// execPodCmd is the core implementation that always returns the error from the command execution in the pod.
+func execPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer, error) {
 	req := t.Client().Core().CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -99,8 +100,26 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	})
 	LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
 	LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
-	require.NoError(t.T(), err)
+
+	return stdout, stderr, err
+}
+
+// ExecPodCmd is a wrapper that allows the caller to specify whether to allow the command to fail.
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string, allowError ...bool) (bytes.Buffer, bytes.Buffer) {
+	stdout, stderr, err := execPodCmd(t, pod, containerName, cmd)
+
+	shouldAllowError := len(allowError) > 0 && allowError[0]
+	if !shouldAllowError {
+		require.NoError(t.T(), err, "Command failed unexpectedly")
+	}
+
 	return stdout, stderr
+}
+
+// ExecPodCmdWithError is a wrapper that always returns the error from the command execution in the pod.
+// Since it propagates the error, it's safe to call this function from any goroutine,
+func ExecPodCmdWithError(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer, error) {
+	return execPodCmd(t, pod, containerName, cmd)
 }
 
 func SetupPortForward(t Test, podName, namespace string, localPort, remotePort int) (chan struct{}, error) {

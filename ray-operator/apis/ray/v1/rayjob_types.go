@@ -34,11 +34,12 @@ var AllJobStatuses = []JobStatus{
 
 // This function should be synchronized with the function `is_terminal()` in Ray Job.
 func IsJobTerminal(status JobStatus) bool {
-	terminalStatusSet := map[JobStatus]struct{}{
-		JobStatusStopped: {}, JobStatusSucceeded: {}, JobStatusFailed: {},
+	switch status {
+	case JobStatusStopped, JobStatusSucceeded, JobStatusFailed:
+		return true
+	default:
+		return false
 	}
-	_, ok := terminalStatusSet[status]
-	return ok
 }
 
 // JobDeploymentStatus indicates RayJob status including RayCluster lifecycle management and Job submission
@@ -60,11 +61,7 @@ const (
 // IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
 // is in a terminal state. Terminal states are either Complete or Failed.
 func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
-	terminalStatusSet := map[JobDeploymentStatus]struct{}{
-		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
-	}
-	_, ok := terminalStatusSet[status]
-	return ok
+	return status == JobDeploymentStatusComplete || status == JobDeploymentStatusFailed
 }
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -73,8 +70,10 @@ type JobFailedReason string
 const (
 	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
 	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	PreRunningDeadlineExceeded                       JobFailedReason = "PreRunningDeadlineExceeded"
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
+	JobStatusCheckTimeoutExceeded                    JobFailedReason = "JobStatusCheckTimeoutExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
 )
 
@@ -90,8 +89,8 @@ const (
 // DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 // Two mutually exclusive styles are supported:
 //
-//	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
-//	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
+//   - Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
+//   - Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per-rule condition.ttlSeconds instead).
 //
 // Semantics:
 //   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
@@ -140,13 +139,26 @@ type DeletionRule struct {
 }
 
 // DeletionCondition specifies the trigger conditions for a deletion action.
+// Exactly one of JobStatus or JobDeploymentStatus must be specified:
+//   - JobStatus (application-level): Match the Ray job execution status.
+//   - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.jobStatus) && has(self.jobDeploymentStatus))",message="JobStatus and JobDeploymentStatus cannot be used together within the same deletion condition."
+// +kubebuilder:validation:XValidation:rule="has(self.jobStatus) || has(self.jobDeploymentStatus)",message="the deletion condition requires either the JobStatus or the JobDeploymentStatus field."
 type DeletionCondition struct {
-	// JobStatus is the terminal status of the RayJob that triggers this condition. This field is required.
+	// JobStatus is the terminal status of the RayJob that triggers this condition.
 	// For the initial implementation, only "SUCCEEDED" and "FAILED" are supported.
 	// +kubebuilder:validation:Enum=SUCCEEDED;FAILED
-	JobStatus JobStatus `json:"jobStatus"`
+	// +optional
+	JobStatus *JobStatus `json:"jobStatus,omitempty"`
 
-	// TTLSeconds is the time in seconds from when the JobStatus
+	// JobDeploymentStatus is the terminal status of the RayJob deployment that triggers this condition.
+	// For the initial implementation, only "Failed" is supported.
+	// +kubebuilder:validation:Enum=Failed
+	// +optional
+	JobDeploymentStatus *JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
+
+	// TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus
 	// reaches the specified terminal state to when this deletion action should be triggered.
 	// The value must be a non-negative integer.
 	// +kubebuilder:default=0
@@ -176,7 +188,8 @@ const (
 )
 
 type SubmitterConfig struct {
-	// BackoffLimit of the submitter k8s job.
+	// BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.
+	// In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count.
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
@@ -267,6 +280,14 @@ type RayJobSpec struct {
 	// +kubebuilder:default:=0
 	// +optional
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	// PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state
+	// from when it is first initialized (StartTime). If the RayJob does not transition to
+	// Running within this time, it will be marked as Failed.
+	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
+	// If not set, there is no deadline. Value must be a positive integer.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	// +optional
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
@@ -319,6 +340,10 @@ type RayJobStatus struct {
 	// RayClusterStatus is the status of the RayCluster running the job.
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
+	// JobStatusCheckFailureStartTime is set when job status checks via the Ray Dashboard started failing.
+	// Reset on a successful check. JobDeploymentStatus transitions to 'Failed' after RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
+	// +optional
+	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
@@ -354,8 +379,4 @@ type RayJobList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayJob `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&RayJob{}, &RayJobList{})
 }
