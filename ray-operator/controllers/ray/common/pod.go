@@ -1219,6 +1219,9 @@ func BuildAutoscalerPod(ctx context.Context, instance rayv1.RayCluster, headPort
 		if image := os.Getenv(utils.KUBERAY_GCS_FORWARDING_IMAGE_ENV); image != "" {
 			forwardImage = image
 		}
+		if options := instance.Spec.AutoscalerOptions; options != nil && options.GCSForwardingImage != nil && *options.GCSForwardingImage != "" {
+			forwardImage = *options.GCSForwardingImage
+		}
 		// Ray without --gcs-address support hardcodes the GCS address to <pod-ip>:6379, so
 		// the listen port must stay 6379 regardless of the actual head port.
 		pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{

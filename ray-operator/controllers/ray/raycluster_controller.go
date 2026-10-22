@@ -2043,12 +2043,8 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 // mounted during a SAN reissue (e.g. after a pod IP is added). Checking ObservedGeneration
 // on the condition ensures Ready=True reflects the current spec, not a previous generation.
 func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
-	certNames := []string{
-		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
-		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
-		utils.GetTLSCertName(instance.Name, rayv1.AutoscalerNode),
-	}
-	for _, certName := range certNames {
+	for _, nodeType := range tlsCertificateNodeTypes(instance) {
+		certName := utils.GetTLSCertName(instance.Name, nodeType)
 		cert := &certmanagerv1.Certificate{}
 		if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
 			return fmt.Errorf("certificate %s not found: %w", certName, err)
@@ -2058,13 +2054,9 @@ func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instan
 		}
 	}
 
-	secretNames := []string{
-		utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
-		utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
-		utils.GetTLSSecretName(instance.Name, rayv1.AutoscalerNode),
-	}
 	requiredKeys := []string{"tls.crt", "tls.key", "ca.crt"}
-	for _, secretName := range secretNames {
+	for _, nodeType := range tlsCertificateNodeTypes(instance) {
+		secretName := utils.GetTLSSecretName(instance.Name, nodeType)
 		secret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
 			return fmt.Errorf("secret %s not found: %w", secretName, err)

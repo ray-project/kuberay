@@ -428,6 +428,10 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 // usage keeps it from being usable to impersonate a GCS server, unlike the head certificate
 // it replaces as the client credential.
 func (r *RayClusterMTLSController) reconcileAutoscalerCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
+	if !utils.IsAutoscalingEnabled(&instance.Spec) || !utils.IsAutoscalerStandalone(&instance.Spec) {
+		return nil
+	}
+
 	certName := utils.GetTLSCertName(instance.Name, rayv1.AutoscalerNode)
 	secretName := utils.GetTLSSecretName(instance.Name, rayv1.AutoscalerNode)
 
@@ -448,7 +452,9 @@ func (r *RayClusterMTLSController) reconcileAutoscalerCertificate(ctx context.Co
 		},
 		Spec: certmanagerv1.CertificateSpec{
 			SecretName: secretName,
-			CommonName: fmt.Sprintf("ray-autoscaler-%s", instance.Name),
+			// The cluster has its own CA; the client CN need not include the cluster name.
+			// Keep it bounded even when the cluster name would exceed the 64-byte CN limit.
+			CommonName: "ray-autoscaler",
 			// Known limitation: Ray reads TLS files once at startup and does not hot-reload
 			// them. A renewed certificate is only picked up when the autoscaler pod restarts.
 			Duration:    &metav1.Duration{Duration: 2160 * time.Hour},
@@ -495,15 +501,21 @@ func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv
 	return podIPs, nil
 }
 
-// checkTLSCertificatesReady verifies that both head and worker certificates
+// tlsCertificateNodeTypes lists the certificates needed by the cluster's active layout.
+// Sidecar and non-autoscaling clusters do not consume a dedicated autoscaler certificate.
+func tlsCertificateNodeTypes(instance *rayv1.RayCluster) []rayv1.RayNodeType {
+	nodeTypes := []rayv1.RayNodeType{rayv1.HeadNode, rayv1.WorkerNode}
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalerStandalone(&instance.Spec) {
+		nodeTypes = append(nodeTypes, rayv1.AutoscalerNode)
+	}
+	return nodeTypes
+}
+
+// checkTLSCertificatesReady verifies that the certificates needed by the cluster
 // have been issued and are in Ready state.
 func (r *RayClusterMTLSController) checkTLSCertificatesReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	certNames := []string{
-		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
-		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
-		utils.GetTLSCertName(instance.Name, rayv1.AutoscalerNode),
-	}
-	for _, name := range certNames {
+	for _, nodeType := range tlsCertificateNodeTypes(instance) {
+		name := utils.GetTLSCertName(instance.Name, nodeType)
 		cert := &certmanagerv1.Certificate{}
 		if err := r.Get(ctx, client.ObjectKey{Name: name, Namespace: instance.Namespace}, cert); err != nil {
 			return false, err
@@ -520,11 +532,9 @@ func (r *RayClusterMTLSController) checkTLSCertificatesReady(ctx context.Context
 // The Kubernetes event recorder deduplicates identical events, so this is safe to call on
 // every reconcile without flooding the event stream.
 func (r *RayClusterMTLSController) checkTLSCertificateExpiry(ctx context.Context, instance *rayv1.RayCluster) {
-	certNames := []string{
-		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
-		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
-		utils.GetTLSCertName(instance.Name, rayv1.AutoscalerNode),
-		utils.GetCACertName(instance.Name),
+	certNames := []string{utils.GetCACertName(instance.Name)}
+	for _, nodeType := range tlsCertificateNodeTypes(instance) {
+		certNames = append(certNames, utils.GetTLSCertName(instance.Name, nodeType))
 	}
 	for _, name := range certNames {
 		cert := &certmanagerv1.Certificate{}

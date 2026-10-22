@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -131,6 +132,9 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
 
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: new(true)}
+
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
 	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
@@ -211,7 +215,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	require.NoError(t, err, "autoscaler certificate should be created")
 	assert.Empty(t, autoscalerCert.Spec.DNSNames, "autoscaler client certificate needs no DNS SANs")
 	assert.Empty(t, autoscalerCert.Spec.IPAddresses, "autoscaler client certificate needs no IP SANs")
-	assert.Equal(t, fmt.Sprintf("ray-autoscaler-%s", cluster.Name), autoscalerCert.Spec.CommonName)
+	assert.Equal(t, "ray-autoscaler", autoscalerCert.Spec.CommonName)
 	assert.Contains(t, autoscalerCert.Spec.Usages, certmanagerv1.UsageClientAuth)
 	assert.NotContains(t, autoscalerCert.Spec.Usages, certmanagerv1.UsageServerAuth,
 		"autoscaler client certificate must not be usable as a server certificate")
@@ -228,6 +232,9 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: new(true)}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -480,6 +487,9 @@ func TestMTLSController_WorkerCertHasLocalhostOnly(t *testing.T) {
 func TestMTLSController_AutoscalerCertStaysStatic(t *testing.T) {
 	cluster := newMTLSTestCluster("static-client-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: new(true)}
+
 	autoscalerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "static-client-cluster-autoscaler-abcde",
@@ -921,4 +931,102 @@ func TestMTLSController_ClusterNotFound(t *testing.T) {
 	})
 	require.NoError(t, err, "should not error on not found")
 	assert.Equal(t, ctrl.Result{}, result)
+}
+
+func TestMTLSController_AutoscalerCertificateRequiredOnlyForStandalone(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		autoscaling *bool
+		standalone  *bool
+		wantCert    bool
+	}{
+		{name: "autoscaling unset"},
+		{name: "sidecar", autoscaling: new(true)},
+		{name: "explicit sidecar", autoscaling: new(true), standalone: new(false)},
+		{name: "autoscaling disabled", autoscaling: new(false), standalone: new(true)},
+		{name: "standalone", autoscaling: new(true), standalone: new(true), wantCert: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			cluster := newMTLSTestCluster("layout-test")
+			cluster.Spec.TLSOptions = &rayv1.TLSOptions{Enabled: new(true)}
+			cluster.Spec.EnableInTreeAutoscaling = tc.autoscaling
+			cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: tc.standalone}
+			r := newMTLSController(t, cluster)
+			req := ctrl.Request{NamespacedName: client.ObjectKeyFromObject(cluster)}
+			_, err := r.Reconcile(ctx, req)
+			require.NoError(t, err)
+
+			autoscalerCert := &certmanagerv1.Certificate{}
+			certKey := client.ObjectKey{Name: utils.GetTLSCertName(cluster.Name, rayv1.AutoscalerNode), Namespace: cluster.Namespace}
+			err = r.Get(ctx, certKey, autoscalerCert)
+			if tc.wantCert {
+				require.NoError(t, err)
+			} else {
+				require.True(t, errors.IsNotFound(err), "unused autoscaler certificate must not be created")
+			}
+
+			// Head and worker credentials alone must suffice for the existing layouts.
+			for _, nodeType := range []rayv1.RayNodeType{rayv1.HeadNode, rayv1.WorkerNode} {
+				cert := &certmanagerv1.Certificate{}
+				require.NoError(t, r.Get(ctx, client.ObjectKey{Name: utils.GetTLSCertName(cluster.Name, nodeType), Namespace: cluster.Namespace}, cert))
+				cert.Status.Conditions = newReadyCertificate(cert.Name).Status.Conditions
+				cert.Status.Conditions[0].ObservedGeneration = cert.Generation
+				require.NoError(t, r.Status().Update(ctx, cert))
+				require.NoError(t, r.Create(ctx, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, nodeType), Namespace: cluster.Namespace},
+					Data:       map[string][]byte{"tls.crt": []byte("cert"), "tls.key": []byte("key"), "ca.crt": []byte("ca")},
+				}))
+			}
+			mainReconciler := &RayClusterReconciler{Client: r.Client, Scheme: r.Scheme}
+			ready, err := r.checkTLSCertificatesReady(ctx, cluster)
+			require.NoError(t, err)
+			assert.Equal(t, !tc.wantCert, ready)
+			if !tc.wantCert {
+				require.NoError(t, mainReconciler.checkMTLSSecretsReady(ctx, cluster))
+				result, err := r.Reconcile(ctx, req)
+				require.NoError(t, err)
+				assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter)
+				return
+			}
+
+			// The standalone layout must still wait for its client certificate and Secret.
+			require.ErrorContains(t, mainReconciler.checkMTLSSecretsReady(ctx, cluster), "not ready")
+			autoscalerCert.Status.Conditions = newReadyCertificate(autoscalerCert.Name).Status.Conditions
+			autoscalerCert.Status.Conditions[0].ObservedGeneration = autoscalerCert.Generation
+			require.NoError(t, r.Status().Update(ctx, autoscalerCert))
+			require.ErrorContains(t, mainReconciler.checkMTLSSecretsReady(ctx, cluster), "not found")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.AutoscalerNode), Namespace: cluster.Namespace},
+				Data:       map[string][]byte{"tls.crt": []byte("cert"), "tls.key": []byte("key")},
+			}
+			require.NoError(t, r.Create(ctx, secret))
+			require.ErrorContains(t, mainReconciler.checkMTLSSecretsReady(ctx, cluster), "missing required key ca.crt")
+			secret.Data["ca.crt"] = []byte("ca")
+			require.NoError(t, r.Update(ctx, secret))
+			require.NoError(t, mainReconciler.checkMTLSSecretsReady(ctx, cluster))
+			ready, err = r.checkTLSCertificatesReady(ctx, cluster)
+			require.NoError(t, err)
+			assert.True(t, ready)
+		})
+	}
+}
+
+func TestMTLSController_AutoscalerCertificateCommonNameLength(t *testing.T) {
+	for _, nameLength := range []int{49, 50, 57} {
+		t.Run(fmt.Sprintf("cluster-name-length-%d", nameLength), func(t *testing.T) {
+			cluster := newMTLSTestCluster(strings.Repeat("a", nameLength))
+			cluster.Spec.EnableInTreeAutoscaling = new(true)
+			cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: new(true)}
+			r := newMTLSController(t, cluster)
+			ctx := context.Background()
+			require.NoError(t, r.reconcileAutoscalerCertificate(ctx, cluster))
+			cert := &certmanagerv1.Certificate{}
+			require.NoError(t, r.Get(ctx, client.ObjectKey{Name: utils.GetTLSCertName(cluster.Name, rayv1.AutoscalerNode), Namespace: cluster.Namespace}, cert))
+			require.NotEmpty(t, cert.Spec.CommonName, "a SAN-less certificate still needs a subject")
+			assert.LessOrEqual(t, len(cert.Spec.CommonName), 64, "cert-manager rejects longer common names")
+			assert.Contains(t, cert.Spec.Usages, certmanagerv1.UsageClientAuth)
+			assert.NotContains(t, cert.Spec.Usages, certmanagerv1.UsageServerAuth)
+		})
+	}
 }

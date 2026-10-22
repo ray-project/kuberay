@@ -3443,3 +3443,30 @@ func TestGetCustomAcceleratorRayResourceName(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildAutoscalerPodForwardingImage(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		env   string
+		image *string
+		want  string
+	}{
+		{name: "default", want: utils.DefaultGCSForwardingImage},
+		{name: "operator override", env: "operator/socat:custom", want: "operator/socat:custom"},
+		{name: "cluster override", image: new("cluster/socat:custom"), want: "cluster/socat:custom"},
+		{name: "cluster overrides operator", env: "operator/socat:custom", image: new("cluster/socat:custom"), want: "cluster/socat:custom"},
+		{name: "empty cluster falls back to operator", env: "operator/socat:custom", image: new(""), want: "operator/socat:custom"},
+		{name: "empty cluster falls back to default", image: new(""), want: utils.DefaultGCSForwardingImage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(utils.KUBERAY_GCS_FORWARDING_IMAGE_ENV, tc.env)
+			cluster := instance.DeepCopy()
+			cluster.Spec.EnableInTreeAutoscaling = new(true)
+			cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{Standalone: new(true), GCSForwardingImage: tc.image}
+			pod := BuildAutoscalerPod(context.Background(), *cluster, "6379")
+			require.Len(t, pod.Spec.Containers, 2)
+			assert.Equal(t, utils.GCSForwardContainerName, pod.Spec.Containers[1].Name)
+			assert.Equal(t, tc.want, pod.Spec.Containers[1].Image)
+		})
+	}
+}
