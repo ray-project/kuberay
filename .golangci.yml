@@ -108,11 +108,6 @@ linters:
       # ---------------------------------------------------------------------
       # historyserver/ false positives. These rules are meant to stay.
       # ---------------------------------------------------------------------
-      # SessionKey is a Ray session identifier (raycluster_ns_session_<timestamp>),
-      # not a credential; gosec's secret-name heuristic misfires on it.
-      - linters: [gosec]
-        path: historyserver/
-        text: 'G117:.*"SessionKey"'
       # Ray spells it this way in its ErrorType enum and raylet debug_state output.
       - linters: [misspell]
         path: historyserver/

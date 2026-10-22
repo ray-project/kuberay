@@ -428,7 +428,7 @@ func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
 
 	// Marshal freezes an independent copy of the snapshot's state as bytes for
 	// before/after comparison.
-	before, err := json.Marshal(snap)
+	before, err := json.Marshal(snap) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
 	}
 	wg.Wait()
 
-	after, err := json.Marshal(snap)
+	after, err := json.Marshal(snap) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 	s1 := richSnapshot(olderKey)
 
 	// Budget large enough for one richSnapshot but not two.
-	enc1, _ := json.Marshal(s1)
+	enc1, _ := json.Marshal(s1) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
 	maxBytes := len(enc1) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 

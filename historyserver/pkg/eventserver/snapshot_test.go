@@ -15,7 +15,7 @@ func TestEmptyRoundtrip(t *testing.T) {
 		SessionKey: "raycluster-historyserver_default_session_2026-01-11_19-38-40",
 	}
 
-	data, err := json.Marshal(original)
+	data, err := json.Marshal(original) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestFullRoundtrip(t *testing.T) {
 		},
 	}
 
-	data, err := json.Marshal(original)
+	data, err := json.Marshal(original) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
