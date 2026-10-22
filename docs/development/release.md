@@ -80,7 +80,7 @@ See the next section for more details on each step.
 On the release branch (`release-1.4` in this example), update all references to the KubeRay version number (e.g., `1.4.0`, or `1.4.0-rc.0` for a release candidate).
 
 The [`bump-version`](../../.agents/skills/bump-helm-charts/SKILL.md) agent skill lists every file to update and the version format each one takes.
-Run it with a coding agent (for example, `/bump-version 1.4.0` in Claude Code), or make the edits it lists by hand.
+Run it with a coding agent (for example, `/bump-helm-charts 1.4.0` in Claude Code), or make the edits it lists by hand.
 
 Open a PR to the release branch with these changes.
 Refer to a previous version bump PR for guidance, like [PR #5318](https://github.com/ray-project/kuberay/pull/5318/files).
