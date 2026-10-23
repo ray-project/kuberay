@@ -3,15 +3,18 @@ package logcollector
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -20,6 +23,11 @@ type MockStorageWriter struct {
 	mu           sync.Mutex
 	createdDirs  []string
 	writtenFiles map[string]string // path -> content
+	writeOrder   []string          // paths in the order they were written
+	// beforeWrite runs while the caller's file handle is still open, letting a
+	// test disturb the source path mid-upload.
+	beforeWrite func()
+	writeErr    error
 }
 
 func NewMockStorageWriter() *MockStorageWriter {
@@ -37,6 +45,15 @@ func (m *MockStorageWriter) CreateDirectory(path string) error {
 }
 
 func (m *MockStorageWriter) WriteFile(file string, reader io.ReadSeeker) error {
+	m.mu.Lock()
+	beforeWrite, writeErr := m.beforeWrite, m.writeErr
+	m.mu.Unlock()
+	if beforeWrite != nil {
+		beforeWrite()
+	}
+	if writeErr != nil {
+		return writeErr
+	}
 	content, err := io.ReadAll(reader)
 	if err != nil {
 		return err
@@ -44,7 +61,28 @@ func (m *MockStorageWriter) WriteFile(file string, reader io.ReadSeeker) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.writtenFiles[file] = string(content)
+	m.writeOrder = append(m.writeOrder, file)
 	return nil
+}
+
+func (m *MockStorageWriter) written() map[string]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	files := make(map[string]string, len(m.writtenFiles))
+	maps.Copy(files, m.writtenFiles)
+	return files
+}
+
+func (m *MockStorageWriter) order() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.writeOrder)
+}
+
+func (m *MockStorageWriter) setWriteErr(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.writeErr = err
 }
 
 // setupRayTestEnvironment creates test directories under /tmp/ray for realistic testing
@@ -53,7 +91,7 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 	baseDir := filepath.Join("/tmp", "ray-test-"+t.Name())
 
 	// Create base directory
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		t.Fatalf("Failed to create base dir: %v", err)
 	}
 
@@ -61,10 +99,10 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 	prevLogsDir := filepath.Join(baseDir, "prev-logs")
 	persistLogsDir := filepath.Join(baseDir, "persist-complete-logs")
 
-	if err := os.MkdirAll(prevLogsDir, 0755); err != nil {
+	if err := os.MkdirAll(prevLogsDir, 0o755); err != nil {
 		t.Fatalf("Failed to create prev-logs dir: %v", err)
 	}
-	if err := os.MkdirAll(persistLogsDir, 0755); err != nil {
+	if err := os.MkdirAll(persistLogsDir, 0o755); err != nil {
 		t.Fatalf("Failed to create persist-complete-logs dir: %v", err)
 	}
 
@@ -78,11 +116,11 @@ func setupRayTestEnvironment(t *testing.T) (string, func()) {
 // createTestLogFile creates a test log file with given content
 func createTestLogFile(t *testing.T, path string, content string) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("Failed to create directory %s: %v", dir, err)
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("Failed to write file %s: %v", path, err)
 	}
 }
@@ -199,6 +237,7 @@ func TestScanAndProcess(t *testing.T) {
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
 }
+
 // TestProcessLogs_SkipSymlinks verifies that symlinks are skipped during directory scanning in prev-logs (processPrevLogsDir).
 func TestProcessLogs_SkipSymlinks(t *testing.T) {
 	baseDir, cleanup := setupRayTestEnvironment(t)
