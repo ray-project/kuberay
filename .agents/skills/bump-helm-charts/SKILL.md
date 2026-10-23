@@ -56,15 +56,16 @@ make -C helm-chart helm-docs
 
 ## 3. Check
 
-1. `git diff --stat` lists 14 files: the 11 distinct files in the table and the 3 `helm-chart/*/README.md`.
-2. This prints 18 lines: the 17 spots in the table, each with the new version in the format from the table, and
-   `security.proxy.tag`, still `nightly`.
+1. `git diff --stat` lists only the files in the table and the 3 `helm-chart/*/README.md`, and each changed spot
+   uses the format from the table.
+2. This prints the spots that don't hold the new version yet, so it should print only `security.proxy.tag`, still
+   `nightly`. Put the new version, without the `v`, in place of `1\.8\.0-rc\.0`.
 
    ```bash
    git grep -nE -e '^version:|^ +tag:|newTag:|KUBERAY_VERSION =|--version [0-9]|targetRevision:|operator v[0-9]|kuberay-apiserver-[0-9]' -- \
      'helm-chart/*/Chart.yaml' helm-chart/kuberay-operator/values.yaml helm-chart/kuberay-apiserver/values.yaml \
-     'helm-chart/*/README.md.gotmpl' 'ray-operator/config/default*/kustomization.yaml' \
-     ray-operator/controllers/ray/utils/constant.go
+     'helm-chart/*/README.md*' 'ray-operator/config/default*/kustomization.yaml' \
+     ray-operator/controllers/ray/utils/constant.go | grep -vE '1\.8\.0-rc\.0([" .]|$)'
    ```
 
 Show the user the check output and the diff. Don't commit, push or open a PR.
