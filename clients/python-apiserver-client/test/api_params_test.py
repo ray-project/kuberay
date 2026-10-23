@@ -32,10 +32,12 @@ from python_apiserver_client.params import (
     autoscaling_decoder,
     cluster_decoder,
     cluster_spec_decoder,
+    clusters_decoder,
     env_var_from_decoder,
     environment_variables_decoder,
     head_node_spec_decoder,
     template_decoder,
+    templates_decoder,
     toleration_decoder,
     volume_decoder,
     worker_node_spec_decoder,
@@ -141,6 +143,47 @@ def test_volumes():
     vol_json = json.dumps(vol.to_dict())
     print(f"secret volume json: {vol_json}")
     assert volume_decoder(json.loads(vol_json)).to_string() == vol.to_string()
+
+
+def test_cluster_response_with_default_pvc_volume_type():
+    # The API server omits volumeType for PVCs, the zero-valued protobuf enum.
+    cluster = cluster_decoder({
+        "name": "pvc-cluster",
+        "namespace": "default",
+        "clusterSpec": {
+            "headGroupSpec": {
+                "computeTemplate": "head-template",
+                "image": "rayproject/ray:2.56.0",
+                "rayStartParams": {"dashboard-host": "0.0.0.0"},
+                "volumes": [{
+                    "name": "data",
+                    "mountPath": "/mnt/data",
+                    "source": "data-claim",
+                    "readOnly": True,
+                }],
+            },
+        },
+    })
+
+    volume = cluster.cluster_spec.head_node.volumes[0]
+    assert isinstance(volume, PVCVolume)
+    assert volume.to_dict() == {
+        "name": "data",
+        "mountPath": "/mnt/data",
+        "source": "data-claim",
+        "volumeType": 0,
+        "readOnly": True,
+    }
+
+
+def test_empty_cluster_list_response():
+    assert clusters_decoder({}) == []
+    assert clusters_decoder({"clusters": []}) == []
+
+
+def test_empty_compute_template_list_response():
+    assert templates_decoder({}) == []
+    assert templates_decoder({"computeTemplates": []}) == []
 
 
 def test_environment():

@@ -460,4 +460,4 @@ def clusters_decoder(dct: dict[str, any]) -> list[Cluster]:
     :param dct: dictionary representation of a list of clusters
     :return: list of clusters
     """
-    return [cluster_decoder(cluster) for cluster in dct["clusters"]]
+    return [cluster_decoder(cluster) for cluster in dct.get("clusters", [])]

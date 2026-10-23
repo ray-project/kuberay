@@ -218,4 +218,4 @@ def templates_decoder(dct: dict[str, Any]) -> list[Template]:
     :param dct: dictionary representation of list of template
     :return: list of template
     """
-    return [template_decoder(tmp) for tmp in dct["computeTemplates"]]
+    return [template_decoder(tmp) for tmp in dct.get("computeTemplates", [])]

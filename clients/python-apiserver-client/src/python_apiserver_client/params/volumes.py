@@ -383,7 +383,7 @@ def volume_decoder(dst: dict[str, Any]) -> BaseVolume:
             return AccessMode(int(dst.get("accessMode", "0")))
         return None
 
-    match dst["volumeType"]:
+    match dst.get("volumeType", 0):
         case 0:
             # PVC
             return PVCVolume(
