@@ -208,7 +208,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 // Use JSON, not gob since snapshots have map[string]any CustomFields and gob requires
 // registering concrete types and fails to round-trip the arbitrary nested values reliably.
 func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) error {
-	encoded, err := json.Marshal(snap) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
+	encoded, err := json.Marshal(snap)
 	if err != nil {
 		logrus.Errorf("Failed to encode snapshot for session %q: %v", clusterSessionKey, err)
 		return fmt.Errorf("encode snapshot for session %q: %w", clusterSessionKey, err)

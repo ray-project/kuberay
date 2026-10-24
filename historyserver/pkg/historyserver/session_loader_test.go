@@ -121,7 +121,7 @@ func testClusterSessionKeyFor(sessionName string) string {
 // testSnapshot builds a minimal snapshot.
 func testSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
-		SessionKey: clusterSessionKey,
+		ClusterSessionKey: clusterSessionKey,
 	}
 }
 
@@ -309,8 +309,8 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 	if !ok {
 		t.Fatal("GetSnapshot: ok=false")
 	}
-	if got.SessionKey != stored.SessionKey {
-		t.Fatalf("SessionKey: got %q, want %q", got.SessionKey, stored.SessionKey)
+	if got.ClusterSessionKey != stored.ClusterSessionKey {
+		t.Fatalf("ClusterSessionKey: got %q, want %q", got.ClusterSessionKey, stored.ClusterSessionKey)
 	}
 }
 
@@ -428,7 +428,7 @@ func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
 
 	// Marshal freezes an independent copy of the snapshot's state as bytes for
 	// before/after comparison.
-	before, err := json.Marshal(snap) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
+	before, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestSnapshotConsumers_DoNotMutateSharedSnapshot(t *testing.T) {
 	}
 	wg.Wait()
 
-	after, err := json.Marshal(snap) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
+	after, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 	s1 := richSnapshot(olderKey)
 
 	// Budget large enough for one richSnapshot but not two.
-	enc1, _ := json.Marshal(s1) //nolint:gosec // G117: SessionKey is a session identifier, not a credential.
+	enc1, _ := json.Marshal(s1)
 	maxBytes := len(enc1) + 1
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{cacheSize: 1000, maxBytes: maxBytes})
 
@@ -549,7 +549,7 @@ func TestCache_ByteBudgetKeepsOversizedSoleEntry(t *testing.T) {
 // TODO(jiangjiawei1103): Move to test data.
 func richSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
-		SessionKey: clusterSessionKey,
+		ClusterSessionKey: clusterSessionKey,
 		Tasks: []eventtypes.Task{
 			{
 				TaskID: "task-e2e-1111", TaskAttempt: 0, JobID: "job-e2e-aaaa",
