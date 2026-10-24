@@ -30,6 +30,12 @@ const headCells: readonly HeadCell<JobRow>[] = [
     sortable: true,
   },
   {
+    id: "namespace",
+    label: "Namespace",
+    width: 130,
+    sortable: true,
+  },
+  {
     id: "jobStatus",
     label: "Status",
     width: 100,
@@ -77,6 +83,11 @@ export const JobsTable = () => {
   const renderRow = (row: JobRow) => {
     return (
       <>
+        <td className="truncate">
+          <Tooltip variant="outlined" title={row.namespace}>
+            <span>{row.namespace}</span>
+          </Tooltip>
+        </td>
         <td>
           <Tooltip
             variant="outlined"
@@ -199,6 +210,7 @@ export const JobsTable = () => {
         renderRow={renderRow}
         defaultOrderBy="createdAt"
         name="jobs"
+        getRowKey={(row) => `${row.namespace}/${row.name}`}
       />
     </>
   );
